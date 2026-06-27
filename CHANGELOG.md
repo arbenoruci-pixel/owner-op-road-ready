@@ -1,3 +1,12 @@
+
+## v91.3 — SignGuard + Copy for ChatGPT Review
+- Added Pre-Sign DOT Check / SignGuard panel on the Sign tab.
+- Added copyable full log review prompt for ChatGPT.
+- Added per-issue Copy for ChatGPT buttons.
+- Added paste/copy area for ChatGPT fix plans while correcting logs.
+- Improved sign validation for 24-hour coverage, required RODS fields, gaps, shipping docs, and previous 7-day DOT package readiness.
+- Build passed.
+
 # CHANGELOG
 
 

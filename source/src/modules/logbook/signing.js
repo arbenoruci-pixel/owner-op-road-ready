@@ -1,6 +1,6 @@
-import { localDayKey } from '../../shared/utils/date.js';
+import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
-import { timeLabel } from '../../shared/utils/time.js';
+import { durLabel, timeLabel } from '../../shared/utils/time.js';
 
 function hasRealEvents(events = []) {
   return (events || []).some(event => !event.carriedFromPreviousDay && Number(event.endMin || 0) > Number(event.startMin || 0));
@@ -18,6 +18,87 @@ function eventLabel(event = {}) {
   const start = Number(event.startMin || 0);
   const end = Number(event.endMin || 0);
   return `${event.status || 'EVENT'} ${timeLabel(start, true)}-${timeLabel(end, true)}`;
+}
+
+function fullDayTitle(day) {
+  const d = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return day;
+  return d.toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric', year:'numeric' });
+}
+
+function dutyTotals(events = []) {
+  const map = Object.fromEntries(['OFF','SB','D','ON'].map(status => [status, 0]));
+  sortedEvents(events).forEach(event => {
+    if (!(event.status in map)) return;
+    map[event.status] += Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0));
+  });
+  return map;
+}
+
+function totalMinutes(events = []) {
+  const totals = dutyTotals(events);
+  return Object.values(totals).reduce((sum, mins) => sum + Number(mins || 0), 0);
+}
+
+function locationLabel(event = {}) {
+  return [event.city, event.state].filter(Boolean).join(', ') || 'MISSING LOCATION';
+}
+
+function statusLabel(status) {
+  if (status === 'OFF') return 'OFF DUTY';
+  if (status === 'SB') return 'SLEEPER';
+  if (status === 'D') return 'DRIVING';
+  if (status === 'ON') return 'ON DUTY';
+  return status || 'UNKNOWN';
+}
+
+function stateText(state, ...paths) {
+  for (const path of paths) {
+    const value = path.split('.').reduce((obj, key) => obj?.[key], state);
+    const text = value === 0 ? '0' : String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function shippingDocsText(state) {
+  const load = state.loadInfo || {};
+  const equipment = state.equipment || {};
+  const docs = [load.loadNo, load.po, load.bol, load.shippingDocs, equipment.container, equipment.chassis]
+    .filter(Boolean)
+    .map(v => String(v).trim())
+    .filter(Boolean)
+    .join(' ');
+  if (docs) return docs;
+  const dayEvents = state.eventsByDay?.[state.activeDay] || [];
+  const mentionsEmpty = dayEvents.some(e => /empty|bobtail|no trailer|deadhead/i.test(`${e.note || ''} ${e.description || ''}`));
+  return mentionsEmpty ? 'Empty / bobtail noted in log' : '';
+}
+
+function previousSevenDays(day) {
+  return Array.from({ length: 7 }, (_, index) => addDays(day, -(index + 1)));
+}
+
+function issueToCopyLine(issue) {
+  return `${issue.where}: ${issue.title} — ${issue.detail}`;
+}
+
+function issueSeverity(issue = {}) {
+  if (/hos_|drive11|window14|break8|cycle70|violation/i.test(issue.code || issue.title || issue.detail || '')) return 'violation';
+  if (/missing|invalid|overlap|gap|total|active|vehicle|shipping|location|inspection/i.test(issue.code || issue.title || '')) return 'fix';
+  return 'review';
+}
+
+function issueRuleLabel(issue = {}) {
+  const code = String(issue.code || '');
+  if (code.includes('missing_location')) return 'RODS requires location at duty-status changes';
+  if (code.includes('day_total') || code.includes('gap') || code.includes('coverage')) return 'Daily grid must cover the full 24-hour period';
+  if (code.includes('shipping')) return 'RODS requires shipping document number or shipper/commodity information when applicable';
+  if (code.includes('missing_vehicle')) return 'RODS requires truck/tractor and trailer/equipment identification';
+  if (code.includes('inspection')) return 'Vehicle safety/pre-trip record must match the log event in this app';
+  if (code.includes('hos_')) return 'Potential HOS rule issue';
+  if (code.includes('carrier') || code.includes('office') || code.includes('driver')) return 'RODS form header must identify driver/carrier/main office';
+  return 'DOT/RODS readiness check';
 }
 
 export function completedLogDays(state) {
@@ -66,6 +147,67 @@ export function validateLogForSigning(state, day) {
   const vehicle = String(state.driver?.truck || '').trim();
   const hasOnOrDrive = events.some(event => event.status === 'ON' || event.status === 'D');
   const preTrip = events.find(isPreTripEvent);
+  const completedEvents = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+  const total = totalMinutes(completedEvents);
+  const driverName = stateText(state, 'driverProfile.name', 'driver.name');
+  const carrier = stateText(state, 'carrierName', 'driver.carrier');
+  const mainOffice = stateText(state, 'mainOfficeAddress', 'driver.mainOffice');
+  const shipping = shippingDocsText(state);
+
+  if (day < today && completedEvents.length) {
+    const first = completedEvents[0];
+    const last = completedEvents[completedEvents.length - 1];
+    if (Number(first.startMin || 0) > 1) {
+      issues.push({
+        code: 'day_start_gap',
+        title: 'Log does not start at midnight',
+        detail: `First event starts at ${timeLabel(first.startMin, true)}. The daily log needs full 24-hour coverage.`,
+        where: 'Log graph',
+      });
+    }
+    if (Number(last.endMin || 0) < 1439) {
+      issues.push({
+        code: 'day_end_gap',
+        title: 'Log does not reach end of day',
+        detail: `Last event ends at ${timeLabel(last.endMin, true)}. The daily log needs full 24-hour coverage.`,
+        where: 'Log graph',
+      });
+    }
+    if (Math.abs(total - 1440) > 1) {
+      issues.push({
+        code: 'day_total_not_24h',
+        title: 'Daily totals do not equal 24 hours',
+        detail: `This day totals ${durLabel(total)}. The duty-status totals must equal 24 hours.`,
+        where: 'Form tab → Totals',
+      });
+    }
+    completedEvents.forEach((event, index) => {
+      const next = completedEvents[index + 1];
+      if (!next) return;
+      const gap = Number(next.startMin || 0) - Number(event.endMin || 0);
+      if (gap > 1) {
+        issues.push({
+          code: `gap_${event.id || index}`,
+          title: 'Gap between duty-status events',
+          detail: `There is a ${durLabel(gap)} gap between ${timeLabel(event.endMin, true)} and ${timeLabel(next.startMin, true)}.`,
+          where: 'Log graph',
+        });
+      }
+    });
+  }
+
+  if (!driverName) {
+    issues.push({ code:'missing_driver_name', title:'Driver name is missing', detail:'Add the driver name before signing this log.', where:'Form tab → Driver' });
+  }
+  if (!carrier) {
+    issues.push({ code:'missing_carrier', title:'Carrier name is missing', detail:'Add the motor carrier name before signing this log.', where:'Form tab → Carrier' });
+  }
+  if (!mainOffice) {
+    issues.push({ code:'missing_main_office', title:'Main office address is missing', detail:'Add the carrier main office address before signing this log.', where:'Form tab → Carrier' });
+  }
+  if (!shipping) {
+    issues.push({ code:'missing_shipping_docs', title:'Shipping document information is missing', detail:'Add the shipping document number, load reference, shipper/commodity, or note that the truck is empty/bobtail if that is accurate.', where:'Form tab → Shipping Docs' });
+  }
 
   if (day >= today) {
     issues.push({
@@ -199,6 +341,120 @@ export function signBlockMessage(state, day) {
   const issues = validateLogForSigning(state, day);
   if (!issues.length) return '';
   return `Cannot sign this log yet. Fix these items first:\n\n${issues.map(issue => `• ${issue.where}: ${issue.title} — ${issue.detail}`).join('\n')}`;
+}
+
+
+export function buildSignGuardSummary(state, day) {
+  const dayIssues = validateLogForSigning(state, day);
+  const previousDays = previousSevenDays(day);
+  const previousReviews = [];
+
+  previousDays.forEach(prevDay => {
+    const prevEvents = sortedEvents(state.eventsByDay?.[prevDay] || []).filter(e => Number(e.endMin || 0) > Number(e.startMin || 0));
+    if (!prevEvents.length) {
+      previousReviews.push({
+        code: `missing_previous_${prevDay}`,
+        title: `Previous log missing for ${prevDay}`,
+        detail: 'DOT inspection package should have the previous 7 consecutive days available while on duty.',
+        where: 'DOT package',
+      });
+      return;
+    }
+    const prevTotal = totalMinutes(prevEvents);
+    if (Math.abs(prevTotal - 1440) > 1) {
+      previousReviews.push({
+        code: `previous_total_${prevDay}`,
+        title: `Previous log does not total 24h for ${prevDay}`,
+        detail: `This day totals ${durLabel(prevTotal)}. Review before roadside inspection.`,
+        where: 'DOT package',
+      });
+    }
+  });
+
+  const fixRequired = dayIssues.filter(issue => issueSeverity(issue) === 'fix');
+  const hosViolations = dayIssues.filter(issue => issueSeverity(issue) === 'violation');
+  const review = [
+    ...dayIssues.filter(issue => issueSeverity(issue) === 'review'),
+    ...previousReviews,
+  ];
+  const ready = fixRequired.length === 0 && hosViolations.length === 0;
+  const status = ready && review.length === 0 ? 'READY' : fixRequired.length || hosViolations.length ? 'FIX_REQUIRED' : 'REVIEW';
+
+  return {
+    status,
+    ready,
+    fixRequired,
+    hosViolations,
+    review,
+    allIssues: [...fixRequired, ...hosViolations, ...review],
+    previousDays,
+    dayIssues,
+  };
+}
+
+export function buildIssueFixPrompt(state, day, issue) {
+  return [
+    'I am reviewing a CMV driver manual RODS log before certification.',
+    'Do not suggest falsifying or changing accurate records. Only help identify what is missing, inconsistent, or needs review.',
+    '',
+    `Log date: ${day} (${fullDayTitle(day)})`,
+    `Issue: ${issueToCopyLine(issue)}`,
+    `Rule/check: ${issueRuleLabel(issue)}`,
+    '',
+    'Relevant events for this day:',
+    ...sortedEvents(state.eventsByDay?.[day] || []).map((event, index) => `${index + 1}. ${timeLabel(event.startMin, true)} to ${timeLabel(event.endMin, true)} | ${statusLabel(event.status)} | ${locationLabel(event)} | ${event.note || event.description || ''}`),
+    '',
+    'Tell me:',
+    '1. Is this a missing required field, a possible HOS/DOT violation, or only a review item?',
+    '2. Which exact event/field should I open in the app?',
+    '3. What should I enter only if the current record is actually wrong or incomplete?',
+    '4. If the log is accurate and the issue is a real violation, say to certify the accurate log with the violation shown, not to change the time.',
+  ].join('\n');
+}
+
+export function buildChatGptLogReviewPrompt(state, day) {
+  const events = sortedEvents(state.eventsByDay?.[day] || []);
+  const totals = dutyTotals(events);
+  const guard = buildSignGuardSummary(state, day);
+  const inspection = state.inspectionByDay?.[day] || {};
+  const signature = state.signatureByDay?.[day] || {};
+  const previous = guard.previousDays.map(prevDay => {
+    const prevEvents = state.eventsByDay?.[prevDay] || [];
+    return `${prevDay}: ${durLabel(totalMinutes(prevEvents))} total, ${prevEvents.length} event(s), ${state.signatureByDay?.[prevDay]?.signed ? 'signed' : 'not signed'}`;
+  });
+
+  return [
+    'Please review this CMV driver manual RODS / ELD-exempt log before certification.',
+    'Do not suggest falsifying records or changing accurate times. Flag only missing required information, inconsistency, or possible DOT/HOS review issues.',
+    '',
+    'Return your answer in this format:',
+    'A) FIX BEFORE SIGNING',
+    'B) REVIEW / POSSIBLE VIOLATION',
+    'C) DOT PACKAGE READINESS',
+    'D) COPY/PASTE FIX PLAN - exact app field or event to open, and what to enter only if the current record is wrong/incomplete',
+    '',
+    `Driver: ${stateText(state, 'driverProfile.name', 'driver.name') || 'Not set'}`,
+    `Carrier: ${stateText(state, 'carrierName', 'driver.carrier') || 'Not set'}`,
+    `Main office: ${stateText(state, 'mainOfficeAddress', 'driver.mainOffice') || 'Not set'}`,
+    `Truck/unit: ${stateText(state, 'driver.truck') || 'Not set'}`,
+    `Trailer/equipment: ${stateText(state, 'currentTrailer', 'equipment.trailer', 'driver.trailer') || 'Not set'}`,
+    `Shipping docs / load reference: ${shippingDocsText(state) || 'Not set'}`,
+    `Log date: ${day} (${fullDayTitle(day)})`,
+    '24-hour period starts: Midnight',
+    '',
+    `Totals: OFF ${durLabel(totals.OFF)} | SB ${durLabel(totals.SB)} | D ${durLabel(totals.D)} | ON ${durLabel(totals.ON)} | TOTAL ${durLabel(totalMinutes(events))}`,
+    `Inspection: ${inspection.complete ? `Completed${inspection.sourceStartMin != null ? ` at ${timeLabel(inspection.sourceStartMin, true)}` : ''}` : 'Not completed'}`,
+    `Certification: ${signature.signed ? 'Signed' : 'Not signed'}`,
+    '',
+    'Events:',
+    ...(events.length ? events.map((event, index) => `${index + 1}. ${timeLabel(event.startMin, true)} to ${timeLabel(event.endMin, true)} | ${statusLabel(event.status)} | ${locationLabel(event)} | ${event.note || event.description || ''}`) : ['No events recorded']),
+    '',
+    'App-detected issues:',
+    ...(guard.allIssues.length ? guard.allIssues.map(issue => `- ${issueToCopyLine(issue)} (${issueRuleLabel(issue)})`) : ['- None']),
+    '',
+    'Previous 7 days summary:',
+    ...(previous.length ? previous : ['No previous-day summary available']),
+  ].join('\n');
 }
 
 export function dayDisplayTitle(day) {

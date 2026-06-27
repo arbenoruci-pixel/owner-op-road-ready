@@ -8,7 +8,7 @@ import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
-import { logSignState, signingWarnings, validateLogForSigning } from './signing.js';
+import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_CARRIER_NAME = 'Narta express llc';
@@ -296,6 +296,87 @@ function InspectionPanel({ state, events = [], onSaveInspection }) {
   );
 }
 
+
+function SignGuardIssueCard({ issue, state, day, onCopy }) {
+  const type = String(issue.code || '').includes('hos_') ? 'violation' : (/missing|gap|overlap|invalid|total|inspection|vehicle|shipping|location|carrier|office/i.test(`${issue.code || ''} ${issue.title || ''}`) ? 'fix' : 'review');
+  const label = type === 'violation' ? 'POSSIBLE VIOLATION' : type === 'fix' ? 'FIX REQUIRED' : 'REVIEW';
+  return (
+    <div className={`signguard-issue ${type}`}>
+      <div className="signguard-issue-top">
+        <span>{label}</span>
+        <button onClick={() => onCopy(buildIssueFixPrompt(state, day, issue), 'Issue text copied')}>Copy for ChatGPT</button>
+      </div>
+      <b>{issue.title}</b>
+      <p>{issue.detail}</p>
+      <em>{issue.where}</em>
+    </div>
+  );
+}
+
+function SignGuardPanel({ state, day }) {
+  const [copyStatus, setCopyStatus] = useState('');
+  const [reviewText, setReviewText] = useState('');
+  const guard = buildSignGuardSummary(state, day);
+
+  async function copyText(text, message = 'Copied') {
+    try {
+      await navigator.clipboard?.writeText(text);
+      setCopyStatus(message);
+    } catch {
+      setCopyStatus('Copy failed. Select the text and copy manually.');
+    }
+    window.setTimeout(() => setCopyStatus(''), 2200);
+  }
+
+  const headline = guard.status === 'READY'
+    ? 'Ready to sign'
+    : guard.status === 'FIX_REQUIRED'
+      ? 'Fix before signing'
+      : 'Review before signing';
+
+  return (
+    <div className={`signguard-panel ${guard.status.toLowerCase()}`}>
+      <div className="signguard-head">
+        <div>
+          <span>Pre-Sign DOT Check</span>
+          <b>{headline}</b>
+          <p>Checks required log fields, 24-hour coverage, locations, inspection link, and possible HOS issues before certification.</p>
+        </div>
+        <button onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Full log review copied')}>Copy Full Review</button>
+      </div>
+
+      <div className="signguard-score-row">
+        <div className={guard.fixRequired.length ? 'bad' : 'ok'}><b>{guard.fixRequired.length}</b><span>fix required</span></div>
+        <div className={guard.hosViolations.length ? 'bad' : 'ok'}><b>{guard.hosViolations.length}</b><span>HOS review</span></div>
+        <div className={guard.review.length ? 'warn' : 'ok'}><b>{guard.review.length}</b><span>DOT package review</span></div>
+      </div>
+
+      {guard.allIssues.length ? (
+        <div className="signguard-issues">
+          {guard.allIssues.map(issue => <SignGuardIssueCard key={issue.code} issue={issue} state={state} day={day} onCopy={copyText} />)}
+        </div>
+      ) : (
+        <div className="signguard-clean">No blocking issues found for this log day.</div>
+      )}
+
+      <div className="signguard-chatgpt-box">
+        <b>Ask ChatGPT helper</b>
+        <p>Driver can copy the full review, paste it into ChatGPT, then paste the answer here while fixing the log. This does not auto-change records.</p>
+        <textarea
+          value={reviewText}
+          onChange={e => setReviewText(e.target.value)}
+          placeholder="Paste ChatGPT review or copy/paste fix plan here while you fix the log..."
+        />
+        <div className="signguard-copy-row">
+          <button onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Full review copied')}>Click to Copy Review Text</button>
+          <button className="secondary" onClick={() => copyText(reviewText || 'No pasted review text yet.', 'Pasted review copied')}>Copy Pasted Fix Plan</button>
+        </div>
+        {copyStatus ? <span className="signguard-copy-status">{copyStatus}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 function SignaturePanel({ state, onSaveSignature }) {
   const day = state.activeDay;
   const saved = state.signatureByDay?.[day] || {};
@@ -454,6 +535,8 @@ function SignaturePanel({ state, onSaveSignature }) {
         <b>{signState.label}</b>
         <span>{todayActive ? 'Today is active. It is not counted in Unsigned Logs yet.' : signState.reason}</span>
       </div>
+
+      <SignGuardPanel state={state} day={day} />
 
       {blockers.length > 0 && (
         <div className="sign-block-card">
