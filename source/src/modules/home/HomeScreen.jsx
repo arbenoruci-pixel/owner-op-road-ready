@@ -52,7 +52,7 @@ function statusSummary(state) {
   };
 }
 
-export default function LogsList({ state, onOpenDay, onReset, onOpenStatus, onOpenTrailer, onOpenGps, onOpenUnsigned }) {
+export default function LogsList({ state, onOpenDay, onReset, onOpenStatus, onOpenTrailer, onOpenGps, onOpenUnsigned, onOpenDot }) {
   const today = localDayKey();
   const todayEvents = state.eventsByDay?.[today] || [];
   const selectedDay = state.activeDay || today;
@@ -161,10 +161,11 @@ export default function LogsList({ state, onOpenDay, onReset, onOpenStatus, onOp
 
         <section className="home-card messages">
           <div className="home-card-title">
-            <h2>Messages</h2>
-            <button>→</button>
+            <h2>DOT Inspection</h2>
+            <button onClick={onOpenDot}>→</button>
           </div>
-          <p>You’re all caught up.</p>
+          <button className="home-list-row dot-inspection-home-row" onClick={onOpenDot}>DOT Inspection Mode <span>›</span></button>
+          <p>Open an inspection-safe view or prepare the previous 7 days + today log package.</p>
         </section>
 
         <section className="home-card recent-logs">

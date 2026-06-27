@@ -965,6 +965,7 @@ export default function App() {
         onOpenTrailer={()=>setState(s=>({ ...s, sheet:{ type:'equipment' } }))}
         onOpenGps={()=>setState(s=>({ ...s, gpsPanelOpen:true }))}
         onOpenUnsigned={()=>setState(s=>({ ...s, view:'unsigned', sheet:null }))}
+        onOpenDot={()=>setState(s=>({ ...s, view:'dot', sheet:null }))}
       />
       <DriveTrackerSheet state={state} open={!!state.gpsPanelOpen} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       <DrivingFocusScreen open={!state.sheet && liveCurrent.status === 'D'} state={state} liveCurrent={liveCurrent} onStopDriving={stopGpsDriving} onStopToOnDuty={stopDrivingToOnDuty} onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))} />
