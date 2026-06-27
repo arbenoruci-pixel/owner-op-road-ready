@@ -1,0 +1,24 @@
+{
+  "name": "owner-op-road-ready-next",
+  "version": "90.0.3",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start",
+    "test:offline": "node scripts/offline-sync-smoke-test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "dexie": "^4.0.11",
+    "next": "16.2.9",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "engines": {
+    "node": "20.x",
+    "npm": ">=10 <11"
+  },
+  "packageManager": "npm@10.9.2"
+}
