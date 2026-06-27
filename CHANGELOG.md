@@ -1,3 +1,12 @@
+# v92.0 RoadGuard AI Assist / SignGuard Mobile UX
+
+- Improved SignGuard into RoadGuard Check for cleaner mobile use.
+- Removed duplicate warning blocks and made active day a neutral notice.
+- Grouped previous 7-day DOT package issues into compact table.
+- Added quick actions and collapsed ChatGPT helper with bottom-sheet paste flow.
+- Added structured ChatGPT fix-plan parsing and suggested fix cards.
+- Build passed with no route changes.
+
 
 ## v91.3 — SignGuard + Copy for ChatGPT Review
 - Added Pre-Sign DOT Check / SignGuard panel on the Sign tab.

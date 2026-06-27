@@ -24,6 +24,16 @@ import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot } fro
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
 import { installOwnerOpAuthBridge } from '../../../lib/supabase/authBridge.js';
 
+const ROADGUARD_DEFAULT_PROFILE = {
+  driverName: 'Arben Oruci',
+  carrierName: 'Narta Express LLC',
+  mainOffice: '92 201 Lake Drive, Willowbrook, IL 60527',
+};
+
+function findDateInText(text = '') {
+  const match = String(text || '').match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : '';
+}
 
 
 function carryoverNoteForStatus(status) {
@@ -848,6 +858,93 @@ export default function App() {
     signLogDay(state.activeDay, payload);
   }
 
+  function applyRoadGuardFix(action, payload = {}) {
+    if (!action) return;
+
+    if (action === 'OPEN_SHIPPING_DOCS') {
+      const existing = state.loadInfo?.shippingDocs || state.loadInfo?.bol || state.loadInfo?.loadNo || '';
+      const value = window.prompt('Enter BOL / load reference, or type Empty / bobtail / no load only if accurate:', existing || '');
+      if (value == null) return;
+      setState(s => ({
+        ...s,
+        loadInfo: { ...(s.loadInfo || {}), shippingDocs: String(value || '').trim() },
+        roadGuardTabRequest: { tab:'form', at:Date.now() },
+      }));
+      return;
+    }
+
+    if (action === 'APPLY_CHATGPT_FIX') {
+      const fix = payload.fix || {};
+      const appAction = String(fix.appAction || '').trim().toUpperCase();
+      const value = String(fix.value || '').trim();
+      if (!appAction || appAction === 'REVIEW_ONLY' || appAction === 'NO_CHANGE_TRUE_RECORD' || appAction === 'REVIEW_HOS_ONLY') {
+        setState(s => ({ ...s, roadGuardTabRequest:{ tab:'log', at:Date.now() } }));
+        return;
+      }
+      if (/OPEN_DAY|CREATE_MISSING_DAY/.test(appAction)) {
+        const day = findDateInText(value) || findDateInText(fix.raw) || payload.day;
+        if (day) setState(s => ({ ...s, activeDay: day, view:'day', roadGuardTabRequest:{ tab:'log', at:Date.now() } }));
+        return;
+      }
+      if (/SET_DRIVER_NAME/.test(appAction) && value) {
+        setState(s => ({ ...s, driverProfile:{ ...(s.driverProfile || {}), name:value }, roadGuardTabRequest:{ tab:'form', at:Date.now() } }));
+        return;
+      }
+      if (/SET_CARRIER_NAME/.test(appAction) && value) {
+        setState(s => ({ ...s, carrierName:value, roadGuardTabRequest:{ tab:'form', at:Date.now() } }));
+        return;
+      }
+      if (/SET_MAIN_OFFICE/.test(appAction) && value) {
+        setState(s => ({ ...s, mainOfficeAddress:value, roadGuardTabRequest:{ tab:'form', at:Date.now() } }));
+        return;
+      }
+      if (/SET_SHIPPING_DOCS/.test(appAction) && value) {
+        setState(s => ({ ...s, loadInfo:{ ...(s.loadInfo || {}), shippingDocs:value }, roadGuardTabRequest:{ tab:'form', at:Date.now() } }));
+        return;
+      }
+      if (/SET_TRAILER_STATUS/.test(appAction) && value) {
+        setState(s => ({ ...s, currentTrailer:value, driver:{ ...(s.driver || {}), trailer:value }, roadGuardTabRequest:{ tab:'form', at:Date.now() } }));
+        return;
+      }
+      setState(s => ({ ...s, roadGuardTabRequest:{ tab:'log', at:Date.now() } }));
+      return;
+    }
+
+    if (action === 'APPLY_SAVED_PROFILE') {
+      setState(s => ({
+        ...s,
+        driverProfile:{ ...(s.driverProfile || {}), name:s.driverProfile?.name || s.driverSignature?.driverName || ROADGUARD_DEFAULT_PROFILE.driverName },
+        carrierName:s.carrierName || ROADGUARD_DEFAULT_PROFILE.carrierName,
+        mainOfficeAddress:s.mainOfficeAddress || ROADGUARD_DEFAULT_PROFILE.mainOffice,
+        driver:{ ...(s.driver || {}), truck:s.driver?.truck || 'Unit 12' },
+        roadGuardTabRequest:{ tab:'form', at:Date.now() },
+      }));
+      return;
+    }
+
+    if (action === 'OPEN_DAY') {
+      const day = payload.day || payload.issue?.day || findDateInText(payload.issue?.code) || findDateInText(payload.issue?.title);
+      if (!day) return;
+      setState(s => ({ ...s, activeDay:day, view:'day', selectedEventId:null, roadGuardTabRequest:{ tab:'log', at:Date.now() } }));
+      return;
+    }
+
+    if (action === 'OPEN_INSPECTION') {
+      setState(s => ({ ...s, roadGuardTabRequest:{ tab:'inspection', at:Date.now() } }));
+      return;
+    }
+
+    if (action === 'OPEN_EQUIPMENT') {
+      setState(s => ({ ...s, sheet:{ type:'equipment' }, roadGuardTabRequest:{ tab:'form', at:Date.now() } }));
+      return;
+    }
+
+    if (action === 'OPEN_LOG') {
+      setState(s => ({ ...s, roadGuardTabRequest:{ tab:'log', at:Date.now() } }));
+      return;
+    }
+  }
+
   function reset() {
     clearAppSnapshot(APP_STATE_KEY).finally(() => {
       const next = defaultInitialState();
@@ -1012,6 +1109,7 @@ export default function App() {
         onSaveLoad={saveLoadInfo}
         onSaveInspection={saveInspection}
         onSaveSignature={saveSignature}
+        onRoadGuardFix={applyRoadGuardFix}
       />
       <DriveTrackerSheet state={state} open={!!state.gpsPanelOpen} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       <DrivingFocusScreen open={!state.sheet && liveCurrent.status === 'D'} state={state} liveCurrent={liveCurrent} onStopDriving={stopGpsDriving} onStopToOnDuty={stopDrivingToOnDuty} onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))} />

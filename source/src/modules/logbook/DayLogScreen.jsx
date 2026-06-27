@@ -8,7 +8,7 @@ import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
-import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
+import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_CARRIER_NAME = 'Narta express llc';
@@ -297,25 +297,161 @@ function InspectionPanel({ state, events = [], onSaveInspection }) {
 }
 
 
-function SignGuardIssueCard({ issue, state, day, onCopy }) {
-  const type = String(issue.code || '').includes('hos_') ? 'violation' : (/missing|gap|overlap|invalid|total|inspection|vehicle|shipping|location|carrier|office/i.test(`${issue.code || ''} ${issue.title || ''}`) ? 'fix' : 'review');
-  const label = type === 'violation' ? 'POSSIBLE VIOLATION' : type === 'fix' ? 'FIX REQUIRED' : 'REVIEW';
+function actionLabelForIssue(issue = {}) {
+  return issueSuggestedAction(issue).label || 'Open';
+}
+
+function parseChatGptFixPlan(text = '') {
+  const blocks = String(text || '')
+    .split(/(?=FIX_ID\s*:)/i)
+    .map(block => block.trim())
+    .filter(Boolean);
+
+  return blocks.map((block, index) => {
+    const read = (label) => {
+      const match = block.match(new RegExp(`${label}\\s*:\\s*([^\\n]+)`, 'i'));
+      return match ? match[1].trim() : '';
+    };
+    return {
+      id: read('FIX_ID') || `F${index + 1}`,
+      issue: read('ISSUE') || 'Suggested fix',
+      appAction: read('APP_ACTION') || 'REVIEW_ONLY',
+      value: read('VALUE') || 'Review only',
+      applyOnlyIfTrue: read('APPLY_ONLY_IF_TRUE') || 'only if accurate',
+      raw: block,
+    };
+  });
+}
+
+function SignGuardIssueCard({ issue, state, day, onCopy, onQuickFix }) {
+  const suggested = issueSuggestedAction(issue);
+  const code = String(issue.code || '');
+  const type = code.includes('hos_') ? 'violation' : (code.includes('active_day') ? 'notice' : (/missing|gap|overlap|invalid|total|inspection|vehicle|shipping|location|carrier|office|driver/i.test(`${issue.code || ''} ${issue.title || ''}`) ? 'fix' : 'review'));
+  const label = type === 'violation' ? 'HOS REVIEW' : type === 'fix' ? 'FIX REQUIRED' : type === 'notice' ? 'NOTICE' : 'REVIEW';
   return (
-    <div className={`signguard-issue ${type}`}>
-      <div className="signguard-issue-top">
+    <div className={`signguard-issue signguard-issue-v92 ${type}`}>
+      <div className="signguard-issue-main">
         <span>{label}</span>
-        <button onClick={() => onCopy(buildIssueFixPrompt(state, day, issue), 'Issue text copied')}>Copy for ChatGPT</button>
+        <b>{issue.title}</b>
+        <p>{issue.detail}</p>
+        <em>{issue.where}</em>
       </div>
-      <b>{issue.title}</b>
-      <p>{issue.detail}</p>
-      <em>{issue.where}</em>
+      <div className="signguard-issue-actions-v92">
+        {suggested.action !== 'NO_ACTION' && (
+          <button className="mini-primary" onClick={() => onQuickFix?.(suggested.action, { issue, day: suggested.day || issue.day || day })}>
+            {actionLabelForIssue(issue)}
+          </button>
+        )}
+        <button className="mini-secondary" onClick={() => onCopy(buildIssueFixPrompt(state, day, issue), 'Issue copied')}>Copy</button>
+      </div>
     </div>
   );
 }
 
-function SignGuardPanel({ state, day }) {
-  const [copyStatus, setCopyStatus] = useState('');
+function DotPackageTable({ rows = [], onQuickFix, onCopy, state, day }) {
+  if (!rows.length) return null;
+  return (
+    <div className="signguard-dot-table-wrap">
+      <div className="signguard-section-title-row">
+        <b>DOT Package / Previous 7 days</b>
+        <span>Open only the days that are missing or short.</span>
+      </div>
+      <div className="signguard-dot-table">
+        <div className="head"><span>Date</span><span>Total</span><span>Status</span><span></span></div>
+        {rows.map(row => (
+          <div key={row.day} className={row.issue ? 'bad' : 'ok'}>
+            <span>{row.day}</span>
+            <span>{row.total}</span>
+            <span>{row.status}{row.signed ? ' · signed' : row.status === 'Ready' ? '' : ''}</span>
+            <span>
+              {row.issue ? (
+                <>
+                  <button onClick={() => onQuickFix?.('OPEN_DAY', { day: row.day, issue: row.issue })}>Open</button>
+                  <button className="ghost" onClick={() => onCopy(buildIssueFixPrompt(state, day, row.issue), 'DOT day copied')}>Copy</button>
+                </>
+              ) : <em>OK</em>}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChatGptAssistBox({ state, day, onCopy, onQuickFix }) {
+  const [open, setOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const [reviewText, setReviewText] = useState('');
+  const parsedFixes = useMemo(() => parseChatGptFixPlan(reviewText), [reviewText]);
+
+  return (
+    <div className={`signguard-chatgpt-v92 ${open ? 'open' : ''}`}>
+      <button className="chatgpt-collapsed-row" onClick={() => setOpen(value => !value)}>
+        <div>
+          <b>Ask ChatGPT helper</b>
+          <span>Copy the log, ask for review, paste fix plan back here.</span>
+        </div>
+        <em>{open ? 'Hide' : 'Open'}</em>
+      </button>
+
+      {open && (
+        <div className="chatgpt-actions-v92">
+          <button onClick={() => onCopy(buildChatGptLogReviewPrompt(state, day), 'Log review copied')}>Copy Log for ChatGPT</button>
+          <button className="secondary" onClick={() => setPasteOpen(true)}>Paste ChatGPT Answer</button>
+        </div>
+      )}
+
+      {open && parsedFixes.length > 0 && (
+        <div className="parsed-fix-plan-v92">
+          <div className="signguard-section-title-row">
+            <b>Suggested fix plan</b>
+            <span>Apply only if the value is accurate.</span>
+          </div>
+          {parsedFixes.map(fix => (
+            <div className="parsed-fix-card" key={fix.id}>
+              <span>{fix.appAction}</span>
+              <b>{fix.issue}</b>
+              <p>{fix.value}</p>
+              <em>{fix.applyOnlyIfTrue}</em>
+              <div>
+                <button onClick={() => onQuickFix?.('APPLY_CHATGPT_FIX', { fix })}>Apply / Open</button>
+                <button className="secondary" onClick={() => onCopy(fix.raw, 'Fix block copied')}>Copy block</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pasteOpen && (
+        <div className="chatgpt-paste-sheet-v92">
+          <div className="chatgpt-paste-card-v92">
+            <div className="chatgpt-paste-head-v92">
+              <b>Paste ChatGPT fix plan</b>
+              <button onClick={() => setPasteOpen(false)}>Done</button>
+            </div>
+            <textarea
+              value={reviewText}
+              onChange={e => setReviewText(e.target.value)}
+              placeholder="Paste ChatGPT D) COPY/PASTE FIX PLAN here..."
+              autoFocus
+            />
+            <div className="chatgpt-paste-actions-v92">
+              <button onClick={() => onCopy(reviewText || 'No pasted fix plan yet.', 'Fix plan copied')}>Copy Fix Plan</button>
+              <button className="secondary" onClick={() => setReviewText('')}>Clear</button>
+              <button className="secondary" onClick={() => setPasteOpen(false)}>Close</button>
+            </div>
+            <small>This does not auto-change records. Suggested fixes still require driver confirmation.</small>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SignGuardPanel({ state, day, onQuickFix }) {
+  const [copyStatus, setCopyStatus] = useState('');
+  const [showToday, setShowToday] = useState(true);
+  const [showDot, setShowDot] = useState(false);
   const guard = buildSignGuardSummary(state, day);
 
   async function copyText(text, message = 'Copied') {
@@ -335,49 +471,51 @@ function SignGuardPanel({ state, day }) {
       : 'Review before signing';
 
   return (
-    <div className={`signguard-panel ${guard.status.toLowerCase()}`}>
-      <div className="signguard-head">
+    <div className={`signguard-panel signguard-panel-v92 ${guard.status.toLowerCase()}`}>
+      <div className="signguard-head signguard-head-v92">
         <div>
-          <span>Pre-Sign DOT Check</span>
+          <span>RoadGuard Check</span>
           <b>{headline}</b>
-          <p>Checks required log fields, 24-hour coverage, locations, inspection link, and possible HOS issues before certification.</p>
+          <p>Required fields, 24-hour coverage, location, inspection, HOS review, and DOT package readiness.</p>
         </div>
-        <button onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Full log review copied')}>Copy Full Review</button>
+        <button onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Full log review copied')}>Copy Log for ChatGPT</button>
       </div>
 
-      <div className="signguard-score-row">
-        <div className={guard.fixRequired.length ? 'bad' : 'ok'}><b>{guard.fixRequired.length}</b><span>fix required</span></div>
-        <div className={guard.hosViolations.length ? 'bad' : 'ok'}><b>{guard.hosViolations.length}</b><span>HOS review</span></div>
-        <div className={guard.review.length ? 'warn' : 'ok'}><b>{guard.review.length}</b><span>DOT package review</span></div>
+      <div className="signguard-score-row signguard-score-row-v92">
+        <button className={guard.fixRequired.length ? 'bad' : 'ok'} onClick={() => setShowToday(true)}><b>{guard.fixRequired.length}</b><span>fix today</span></button>
+        <button className={guard.hosViolations.length ? 'bad' : 'ok'} onClick={() => setShowToday(true)}><b>{guard.hosViolations.length}</b><span>HOS review</span></button>
+        <button className={guard.dotPackage.length ? 'warn' : 'ok'} onClick={() => setShowDot(value => !value)}><b>{guard.dotPackage.length}</b><span>DOT pack</span></button>
       </div>
 
-      {guard.allIssues.length ? (
-        <div className="signguard-issues">
-          {guard.allIssues.map(issue => <SignGuardIssueCard key={issue.code} issue={issue} state={state} day={day} onCopy={copyText} />)}
+      {guard.notices.length > 0 && (
+        <div className="signguard-notice-v92">
+          {guard.notices.map(issue => <span key={issue.code}>{issue.title}: {issue.detail}</span>)}
+        </div>
+      )}
+
+      <div className="signguard-action-strip-v92">
+        <button onClick={() => onQuickFix?.('APPLY_SAVED_PROFILE', { day })}>Apply saved profile</button>
+        <button onClick={() => onQuickFix?.('OPEN_SHIPPING_DOCS', { day })}>Add BOL / empty</button>
+        <button onClick={() => setShowDot(value => !value)}>{showDot ? 'Hide DOT days' : 'Review DOT days'}</button>
+      </div>
+
+      {showToday && (guard.todayIssues.length ? (
+        <div className="signguard-issues signguard-issues-v92">
+          {guard.todayIssues.map(issue => <SignGuardIssueCard key={issue.code} issue={issue} state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />)}
         </div>
       ) : (
         <div className="signguard-clean">No blocking issues found for this log day.</div>
-      )}
+      ))}
 
-      <div className="signguard-chatgpt-box">
-        <b>Ask ChatGPT helper</b>
-        <p>Driver can copy the full review, paste it into ChatGPT, then paste the answer here while fixing the log. This does not auto-change records.</p>
-        <textarea
-          value={reviewText}
-          onChange={e => setReviewText(e.target.value)}
-          placeholder="Paste ChatGPT review or copy/paste fix plan here while you fix the log..."
-        />
-        <div className="signguard-copy-row">
-          <button onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Full review copied')}>Click to Copy Review Text</button>
-          <button className="secondary" onClick={() => copyText(reviewText || 'No pasted review text yet.', 'Pasted review copied')}>Copy Pasted Fix Plan</button>
-        </div>
-        {copyStatus ? <span className="signguard-copy-status">{copyStatus}</span> : null}
-      </div>
+      {showDot && <DotPackageTable rows={guard.dotRows} onQuickFix={onQuickFix} onCopy={copyText} state={state} day={day} />}
+
+      <ChatGptAssistBox state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />
+      {copyStatus ? <span className="signguard-copy-status">{copyStatus}</span> : null}
     </div>
   );
 }
 
-function SignaturePanel({ state, onSaveSignature }) {
+function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
   const day = state.activeDay;
   const saved = state.signatureByDay?.[day] || {};
   const savedDriverSignature = state.driverSignature || null;
@@ -389,7 +527,6 @@ function SignaturePanel({ state, onSaveSignature }) {
   const drawingRef = useRef(false);
   const lastPointRef = useRef(null);
   const signState = logSignState(state, day);
-  const warnings = signingWarnings(state, day);
   const blockers = validateLogForSigning(state, day);
   const todayActive = day >= localDayKey();
 
@@ -536,21 +673,8 @@ function SignaturePanel({ state, onSaveSignature }) {
         <span>{todayActive ? 'Today is active. It is not counted in Unsigned Logs yet.' : signState.reason}</span>
       </div>
 
-      <SignGuardPanel state={state} day={day} />
+      <SignGuardPanel state={state} day={day} onQuickFix={onQuickFix} />
 
-      {blockers.length > 0 && (
-        <div className="sign-block-card">
-          <b>Fix before signing</b>
-          {blockers.map(issue => <span key={issue.code}>• {issue.where}: {issue.title} — {issue.detail}</span>)}
-        </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className="sign-warning-card">
-          <b>Review before signing</b>
-          {warnings.map(warning => <span key={warning}>• {warning}</span>)}
-        </div>
-      )}
 
       <div className="signature-actions-row">
         <button className="sign-save motive-sign-save" onClick={signLog} disabled={(changeSignature && !hasInk) || blockers.length > 0}>
@@ -571,11 +695,18 @@ export default function DayDetail({
   state, liveCurrent, events, selectedEvent, onBack, onSelect, onOpenAdd, onOpenEdit, onDelete,
   onToggleSelectMode, onToggleSelectedId, onSelectAll, onClearSelection, onOpenShift, onMoveSelected,
   onCertify, onTools, onOpenStatus, onOpenTrailer, onDriverFlow, onSaveLoad, onToggleGps,
-  onSaveInspection, onSaveSignature
+  onSaveInspection, onSaveSignature, onRoadGuardFix
 }) {
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveDelta, setMoveDelta] = useState(0);
   const [activeTab, setActiveTab] = useState('log');
+
+  useEffect(() => {
+    const requested = state.roadGuardTabRequest?.tab;
+    if (requested && ['log', 'form', 'sign', 'inspection'].includes(requested)) {
+      setActiveTab(requested);
+    }
+  }, [state.roadGuardTabRequest?.at, state.roadGuardTabRequest?.tab]);
 
   const rawDayEvents = state.eventsByDay?.[state.activeDay] || [];
   const selectedRawEvent = rawDayEvents.find(event => event.id === state.selectedEventId) || null;
@@ -660,7 +791,7 @@ export default function DayDetail({
       )}
 
       {activeTab === 'form' && <MiniFormPanel state={state} events={events} />}
-      {activeTab === 'sign' && <SignaturePanel state={state} onSaveSignature={onSaveSignature} />}
+      {activeTab === 'sign' && <SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} />}
       {activeTab === 'inspection' && <InspectionPanel state={state} events={events} onSaveInspection={onSaveInspection} />}
 
       {activeTab === 'log' && !selectedEvent && (

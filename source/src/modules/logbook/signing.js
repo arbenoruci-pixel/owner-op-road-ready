@@ -84,8 +84,11 @@ function issueToCopyLine(issue) {
 }
 
 function issueSeverity(issue = {}) {
-  if (/hos_|drive11|window14|break8|cycle70|violation/i.test(issue.code || issue.title || issue.detail || '')) return 'violation';
-  if (/missing|invalid|overlap|gap|total|active|vehicle|shipping|location|inspection/i.test(issue.code || issue.title || '')) return 'fix';
+  const text = `${issue.code || ''} ${issue.title || ''} ${issue.detail || ''}`;
+  if (/active_day/i.test(issue.code || '')) return 'notice';
+  if (/previous_|missing_previous/i.test(issue.code || '')) return 'dot';
+  if (/hos_|drive11|window14|break8|cycle70|violation/i.test(text)) return 'violation';
+  if (/missing|invalid|overlap|gap|total|vehicle|shipping|location|inspection|driver|carrier|office/i.test(text)) return 'fix';
   return 'review';
 }
 
@@ -99,6 +102,36 @@ function issueRuleLabel(issue = {}) {
   if (code.includes('hos_')) return 'Potential HOS rule issue';
   if (code.includes('carrier') || code.includes('office') || code.includes('driver')) return 'RODS form header must identify driver/carrier/main office';
   return 'DOT/RODS readiness check';
+}
+
+export function issueSuggestedAction(issue = {}) {
+  const code = String(issue.code || '');
+  if (code.includes('missing_driver') || code.includes('missing_carrier') || code.includes('missing_main_office')) {
+    return { label:'Apply saved profile', action:'APPLY_SAVED_PROFILE' };
+  }
+  if (code.includes('missing_shipping')) {
+    return { label:'Add BOL / mark empty', action:'OPEN_SHIPPING_DOCS' };
+  }
+  if (code.includes('missing_vehicle')) {
+    return { label:'Open truck / trailer', action:'OPEN_EQUIPMENT' };
+  }
+  if (code.includes('active_day')) {
+    return { label:'Keep driving / sign later', action:'NO_ACTION' };
+  }
+  if (code.includes('missing_inspection') || code.includes('inspection_time')) {
+    return { label:'Open inspection', action:'OPEN_INSPECTION' };
+  }
+  if (code.includes('missing_location') || code.includes('bad_duration') || code.includes('overlap') || code.includes('gap') || code.includes('day_')) {
+    return { label:'Open log', action:'OPEN_LOG' };
+  }
+  if (code.includes('hos_')) {
+    return { label:'Review HOS', action:'OPEN_LOG' };
+  }
+  if (code.includes('previous_') || code.includes('missing_previous')) {
+    const match = code.match(/(\d{4}-\d{2}-\d{2})/);
+    return { label:'Open day', action:'OPEN_DAY', day: match ? match[1] : '' };
+  }
+  return { label:'Review', action:'OPEN_LOG' };
 }
 
 export function completedLogDays(state) {
@@ -212,8 +245,8 @@ export function validateLogForSigning(state, day) {
   if (day >= today) {
     issues.push({
       code: 'active_day',
-      title: 'Active day cannot be signed yet',
-      detail: 'This log day is still active. Sign it after the day is complete.',
+      title: 'Today is active',
+      detail: 'Signing becomes available after the day is complete. This is a notice, not a log defect.',
       where: 'Sign tab',
     });
   }
@@ -347,38 +380,46 @@ export function signBlockMessage(state, day) {
 export function buildSignGuardSummary(state, day) {
   const dayIssues = validateLogForSigning(state, day);
   const previousDays = previousSevenDays(day);
-  const previousReviews = [];
+  const dotPackage = [];
+  const dotRows = [];
 
   previousDays.forEach(prevDay => {
     const prevEvents = sortedEvents(state.eventsByDay?.[prevDay] || []).filter(e => Number(e.endMin || 0) > Number(e.startMin || 0));
+    const signed = !!state.signatureByDay?.[prevDay]?.signed;
     if (!prevEvents.length) {
-      previousReviews.push({
+      const issue = {
         code: `missing_previous_${prevDay}`,
         title: `Previous log missing for ${prevDay}`,
         detail: 'DOT inspection package should have the previous 7 consecutive days available while on duty.',
         where: 'DOT package',
-      });
+        day: prevDay,
+      };
+      dotPackage.push(issue);
+      dotRows.push({ day: prevDay, total: '0m', signed, status: 'Missing', issue });
       return;
     }
     const prevTotal = totalMinutes(prevEvents);
     if (Math.abs(prevTotal - 1440) > 1) {
-      previousReviews.push({
+      const issue = {
         code: `previous_total_${prevDay}`,
         title: `Previous log does not total 24h for ${prevDay}`,
         detail: `This day totals ${durLabel(prevTotal)}. Review before roadside inspection.`,
         where: 'DOT package',
-      });
+        day: prevDay,
+      };
+      dotPackage.push(issue);
+      dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status: 'Incomplete', issue });
+    } else {
+      dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status: signed ? 'Ready' : 'Unsigned', issue: null });
     }
   });
 
   const fixRequired = dayIssues.filter(issue => issueSeverity(issue) === 'fix');
   const hosViolations = dayIssues.filter(issue => issueSeverity(issue) === 'violation');
-  const review = [
-    ...dayIssues.filter(issue => issueSeverity(issue) === 'review'),
-    ...previousReviews,
-  ];
+  const notices = dayIssues.filter(issue => issueSeverity(issue) === 'notice');
+  const review = dayIssues.filter(issue => issueSeverity(issue) === 'review');
   const ready = fixRequired.length === 0 && hosViolations.length === 0;
-  const status = ready && review.length === 0 ? 'READY' : fixRequired.length || hosViolations.length ? 'FIX_REQUIRED' : 'REVIEW';
+  const status = ready && review.length === 0 && dotPackage.length === 0 ? 'READY' : fixRequired.length || hosViolations.length ? 'FIX_REQUIRED' : 'REVIEW';
 
   return {
     status,
@@ -386,7 +427,11 @@ export function buildSignGuardSummary(state, day) {
     fixRequired,
     hosViolations,
     review,
-    allIssues: [...fixRequired, ...hosViolations, ...review],
+    notices,
+    dotPackage,
+    dotRows,
+    allIssues: [...fixRequired, ...hosViolations, ...review, ...notices, ...dotPackage],
+    todayIssues: [...fixRequired, ...hosViolations, ...review, ...notices],
     previousDays,
     dayIssues,
   };
@@ -431,7 +476,14 @@ export function buildChatGptLogReviewPrompt(state, day) {
     'A) FIX BEFORE SIGNING',
     'B) REVIEW / POSSIBLE VIOLATION',
     'C) DOT PACKAGE READINESS',
-    'D) COPY/PASTE FIX PLAN - exact app field or event to open, and what to enter only if the current record is wrong/incomplete',
+    'D) COPY/PASTE FIX PLAN',
+    '',
+    'For D, use ONLY this structured format so the app/driver can copy-paste it back:',
+    'FIX_ID: F1',
+    'ISSUE: short issue name',
+    'APP_ACTION: one of SET_DRIVER_NAME, SET_CARRIER_NAME, SET_MAIN_OFFICE, SET_SHIPPING_DOCS, SET_TRAILER_STATUS, OPEN_EVENT, CHANGE_EVENT_NOTE, ADD_MISSING_OFF_DUTY_TIME, CREATE_MISSING_DAY, CREATE_INSPECTION_FROM_PRETRIP, REVIEW_HOS_ONLY, OPEN_DAY, NO_CHANGE_TRUE_RECORD',
+    'VALUE: exact value to enter, or REVIEW ONLY',
+    'APPLY_ONLY_IF_TRUE: yes / only if accurate / no auto-change',
     '',
     `Driver: ${stateText(state, 'driverProfile.name', 'driver.name') || 'Not set'}`,
     `Carrier: ${stateText(state, 'carrierName', 'driver.carrier') || 'Not set'}`,
