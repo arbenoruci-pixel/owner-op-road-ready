@@ -36,10 +36,22 @@ function rangeColor(r) {
   return '#DC2626';
 }
 
+function continuousPath(events = []) {
+  const sorted = [...events].sort((a,b)=>a.startMin-b.startMin).filter(e => Number(e.endMin || 0) > Number(e.startMin || 0));
+  if (!sorted.length) return '';
+  let d = `M ${xFromMin(sorted[0].startMin)} ${CENTER(sorted[0].status)} H ${xFromMin(sorted[0].endMin)}`;
+  for (let i = 1; i < sorted.length; i += 1) {
+    const e = sorted[i];
+    d += ` V ${CENTER(e.status)} H ${xFromMin(e.endMin)}`;
+  }
+  return d;
+}
+
 export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, editId, onEditTime, violationRanges = [], className = '' }) {
   const svgRef = useRef(null);
   const sorted = [...events].sort((a,b)=>a.startMin-b.startMin);
   const editable = editId ? sorted.find(e => e.id === editId) : null;
+  const bodyPath = continuousPath(sorted);
 
   function startHandleDrag(e, edge, event) {
     if (!onEditTime) return;
@@ -101,6 +113,19 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const mins = sorted.filter(e=>e.status===s).reduce((a,e)=>a+(e.endMin-e.startMin),0);
         return <text key={s} x={W-5} y={CENTER(s)+5} textAnchor="end" className="total-label">{(mins/60).toFixed(2).padStart(5,'0')}</text>;
       })}
+
+      {bodyPath && (
+        <path
+          d={bodyPath}
+          fill="none"
+          stroke="#4b5563"
+          strokeWidth="11"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity=".88"
+          pointerEvents="none"
+        />
+      )}
 
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
@@ -172,7 +197,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const y1 = CENTER(t.from.status);
         const y2 = CENTER(t.to.status);
         const selected = selectedId === t.to.id || selectedId === t.from.id || editId === t.to.id || editId === t.from.id;
-        const strokeW = selected ? 10 : 7;
+        const strokeW = selected ? 8 : 5;
         const cornerR = strokeW / 2;
         return (
           <g key={i} className="smooth-transition">
@@ -189,8 +214,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               strokeLinejoin="round"
               pointerEvents="none"
             />
-            <circle cx={x} cy={y1} r={cornerR} fill="#4b5563" pointerEvents="none" />
-            <circle cx={x} cy={y2} r={cornerR} fill="#4b5563" pointerEvents="none" />
+
           </g>
         );
       })}

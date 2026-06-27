@@ -19,7 +19,7 @@ import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
 import { displayEventsForDay, currentFromEvents } from '../core/timeline/displayTimeline.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
 import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents } from '../core/timeline/timelineEngine.js';
-import { signableLogDays, signConfirmMessage } from '../modules/logbook/signing.js';
+import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
 import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot } from '../../../lib/local-db/appState.js';
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
 import { installOwnerOpAuthBridge } from '../../../lib/supabase/authBridge.js';
@@ -106,11 +106,17 @@ function reconcilePreTripInspectionForDay(inspectionByDay = {}, eventsByDay = {}
   const previous = inspectionByDay?.[day] || {};
 
   if (event) {
-    const nextInspection = inspectionFromPreTripEvent(day, event, previous);
-    const previousJson = JSON.stringify(previous);
-    const nextJson = JSON.stringify(nextInspection);
-    if (previousJson === nextJson) return inspectionByDay;
-    return { ...inspectionByDay, [day]: nextInspection };
+    const linkedToThisEvent = previous.sourceEventId === event.id || previous.sourceEventChainId === (event.event_chain_id || event.eventChainId);
+    // Never create a new inspection silently. Only keep an already accepted/linked
+    // auto sheet synchronized when the driver edits the ON DUTY Pre-trip event.
+    if (isAutoPreTripInspection(previous) && (linkedToThisEvent || !previous.sourceEventId)) {
+      const nextInspection = inspectionFromPreTripEvent(day, event, previous);
+      const previousJson = JSON.stringify(previous);
+      const nextJson = JSON.stringify(nextInspection);
+      if (previousJson === nextJson) return inspectionByDay;
+      return { ...inspectionByDay, [day]: nextInspection };
+    }
+    return inspectionByDay;
   }
 
   if (isAutoPreTripInspection(previous)) {
@@ -147,6 +153,33 @@ function markPreTripComplete(inspectionByDay = {}, day, source = 'auto_on_duty',
       completedAt: previous.completedAt || Date.now(),
       source: previous.source || source,
       updatedAt: Date.now(),
+    },
+  };
+}
+
+function inspectionPromptMessage(event) {
+  const where = [event?.city, event?.state].filter(Boolean).join(', ');
+  return `Complete today’s inspection sheet from this ON DUTY Pre-trip Inspection?${where ? `\n\nLocation: ${where}` : ''}\n\nChoose Yes after you have inspected the truck. The sheet will be auto-filled and linked to this event time.`;
+}
+
+function shouldAskInspectionForDay(state, day, event) {
+  const existing = state.inspectionByDay?.[day] || {};
+  return isPreTripStatus(event?.status, `${event?.note || ''} ${event?.description || ''}`) && !existing.complete;
+}
+
+function maybeAcceptInspectionForEvent(state, day, event) {
+  if (!shouldAskInspectionForDay(state, day, event)) return false;
+  if (typeof window === 'undefined' || !window.confirm) return true;
+  return window.confirm(inspectionPromptMessage(event));
+}
+
+function withAcceptedPreTripInspection(next, day, event, accepted) {
+  if (!accepted || !event) return next;
+  return {
+    ...next,
+    inspectionByDay: {
+      ...(next.inspectionByDay || {}),
+      [day]: inspectionFromPreTripEvent(day, event, (next.inspectionByDay || {})[day] || {}),
     },
   };
 }
@@ -400,19 +433,27 @@ export default function App() {
   }
 
   function addEvent(eventOrEvents) {
+    const incomingForPrompt = Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents];
+    const preTripForPrompt = incomingForPrompt.find(e => isPreTripStatus(e?.status, `${e?.note || ''} ${e?.description || ''}`));
+    const acceptedInspection = preTripForPrompt ? maybeAcceptInspectionForEvent(state, state.activeDay, preTripForPrompt) : false;
     setState(s => {
-      const incoming = Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents];
+      const incoming = incomingForPrompt;
       const stamp = Date.now();
       const toAdd = incoming.map((e,i)=>({ id:`ev_${stamp}_${i}`, city:s.currentLocation?.city || 'GPS', state:s.currentLocation?.state || 'UNK', description:'', note:'Other', source:'manual', ...e }));
       const dayEvents = (s.eventsByDay[s.activeDay] || []).filter(e => !e.carriedFromPreviousDay);
       let merged = normalizeLogEvents(insertManyOverride(dayEvents, toAdd));
       let next = { ...s, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: merged }, selectedEventId: toAdd[toAdd.length-1]?.id || null, sheet:null };
+      const preTripAdded = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
+      next = withAcceptedPreTripInspection(next, s.activeDay, preTripAdded, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
     });
   }
 
   function updateEvent(id, patch) {
+    const currentEvent = (state.eventsByDay?.[state.activeDay] || []).find(event => event.id === id) || {};
+    const previewEventForPrompt = { ...currentEvent, ...patch };
+    const acceptedInspection = maybeAcceptInspectionForEvent(state, state.activeDay, previewEventForPrompt);
     setState(s => {
       const evs = normalizeLogEvents(applyEditOverride((s.eventsByDay[s.activeDay] || []), id, patch));
       let gpsTrip = s.gpsTrip;
@@ -438,6 +479,8 @@ export default function App() {
       }
 
       let next = { ...s, gpsTrip, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: evs } };
+      const editedEvent = evs.find(e => e.id === id);
+      next = withAcceptedPreTripInspection(next, s.activeDay, editedEvent, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
     });
@@ -518,6 +561,9 @@ export default function App() {
   }
 
   function addDriverWorkflowEvents(kind) {
+    const acceptedWorkflowInspection = kind === 'pretrip_drive'
+      ? maybeAcceptInspectionForEvent(state, state.activeDay, { status:'ON', note:'Pre-trip inspection', city:state.currentLocation?.city, state:state.currentLocation?.state })
+      : false;
     setState(s => {
       const day = s.activeDay;
       const existing = [...(s.eventsByDay[day] || [])].sort((a,b)=>a.startMin-b.startMin);
@@ -594,6 +640,8 @@ export default function App() {
         selectedEventId: toAdd[toAdd.length - 1]?.id || s.selectedEventId,
         eventsByDay:{ ...s.eventsByDay, [day]: merged },
       };
+      const workflowPreTrip = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
+      next = withAcceptedPreTripInspection(next, day, workflowPreTrip, acceptedWorkflowInspection);
       next = reconcilePreTripInspections(next, [day]);
       return markDayRecert(next, day);
     });
@@ -746,6 +794,12 @@ export default function App() {
       return;
     }
 
+    const blockMessage = signBlockMessage(state, day);
+    if (blockMessage) {
+      window.alert?.(blockMessage);
+      return;
+    }
+
     const confirmMessage = signConfirmMessage(state, day);
     if (confirmMessage && !window.confirm(confirmMessage)) return;
 
@@ -805,6 +859,7 @@ export default function App() {
 
 
   function closeLastAndAddStatus({ status, reason, city, state: st, description='', droppedTrailer='', hookedTrailer='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual' }) {
+    const acceptedLiveInspection = maybeAcceptInspectionForEvent(state, state.activeDay, { status, note:reason, description, city, state:st });
     setState(s => {
       const changeAt = Math.max(0, Math.min(1439, new Date().getHours() * 60 + new Date().getMinutes()));
       const day = s.activeDay;
@@ -847,6 +902,7 @@ export default function App() {
         sheet: null,
         eventsByDay: { ...s.eventsByDay, [day]: continuous },
       };
+      next = withAcceptedPreTripInspection(next, day, ev, acceptedLiveInspection);
       next = reconcilePreTripInspections(next, [day]);
       return markDayRecert(next, day);
     });
@@ -926,7 +982,7 @@ export default function App() {
     />
   );
 
-  if (state.view === 'dot') return <DotMode events={events} onBack={() => setState(s => ({ ...s, view:'day' }))} />;
+  if (state.view === 'dot') return <DotMode state={state} onBack={() => setState(s => ({ ...s, view:'day' }))} />;
 
   return (
     <>

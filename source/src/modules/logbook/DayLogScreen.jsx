@@ -8,7 +8,7 @@ import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
-import { logSignState, signingWarnings } from './signing.js';
+import { logSignState, signingWarnings, validateLogForSigning } from './signing.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_CARRIER_NAME = 'Narta express llc';
@@ -68,6 +68,39 @@ function minutesLabel(minute) {
   const hour = h % 12 || 12;
   return `${hour}:${String(m).padStart(2, '0')} ${suffix}`;
 }
+
+function isPreTripEvent(event = {}) {
+  return event.status === 'ON' && /pre[- ]?trip|inspection/i.test(`${event.note || ''} ${event.description || ''}`);
+}
+
+function minuteTimestampForDay(day, minute) {
+  const [year, month, date] = String(day || '').split('-').map(Number);
+  if (!year || !month || !date) return Date.now();
+  const d = new Date(year, month - 1, date, 0, 0, 0, 0);
+  d.setMinutes(Math.max(0, Math.min(1440, Number(minute || 0))));
+  return d.getTime();
+}
+
+function inspectionPayloadFromEvent(day, event, saved = {}) {
+  const sourceStartMin = Math.max(0, Math.min(1440, Number(event?.startMin ?? 0)));
+  const sourceEndMin = Math.max(sourceStartMin, Math.min(1440, Number(event?.endMin ?? sourceStartMin)));
+  return {
+    ...saved,
+    type: 'pretrip',
+    checked: INSPECTION_ITEMS.map(([id]) => id),
+    complete: true,
+    completedAt: minuteTimestampForDay(day, sourceStartMin),
+    source: 'auto_on_duty_pretrip_event',
+    sourceEventId: event?.id || null,
+    sourceEventChainId: event?.event_chain_id || event?.eventChainId || null,
+    sourceStartMin,
+    sourceEndMin,
+    city: event?.city || '',
+    state: event?.state || '',
+    locationSource: event?.locationSource || event?.source || 'manual',
+  };
+}
+
 
 function isAutoInspection(saved = {}) {
   return String(saved.source || '').includes('auto_on_duty_pretrip');
@@ -180,12 +213,13 @@ function MiniFormPanel({ state, events }) {
   );
 }
 
-function InspectionPanel({ state, onSaveInspection }) {
+function InspectionPanel({ state, events = [], onSaveInspection }) {
   const day = state.activeDay;
   const saved = state.inspectionByDay?.[day] || {};
   const checked = new Set(saved.checked || []);
   const allChecked = INSPECTION_ITEMS.every(([id]) => checked.has(id));
   const autoDone = allChecked && isAutoInspection(saved);
+  const preTripEvent = [...(events || [])].sort((a,b)=>a.startMin-b.startMin).find(isPreTripEvent) || null;
 
   function saveChecked(ids) {
     onSaveInspection?.({
@@ -207,21 +241,39 @@ function InspectionPanel({ state, onSaveInspection }) {
     saveChecked(INSPECTION_ITEMS.map(([id]) => id));
   }
 
+  function acceptPreTripSheet() {
+    if (!preTripEvent) return;
+    onSaveInspection?.(inspectionPayloadFromEvent(day, preTripEvent, saved));
+  }
+
   return (
     <div className={`inspection-panel ${allChecked ? 'complete' : ''} ${autoDone ? 'auto-complete' : ''}`}>
       <div className="inspection-headline">
         <div>
-          <b>Pre-trip inspection</b>
+          <b>Daily inspection sheet</b>
           <span>
             {autoDone
               ? `Completed from ON DUTY Pre-trip${saved.sourceStartMin != null ? ` · ${minutesLabel(saved.sourceStartMin)}` : ''}${saved.city || saved.state ? ` · ${[saved.city, saved.state].filter(Boolean).join(', ')}` : ''}`
               : allChecked
                 ? `Completed${saved.completedAt ? ` · ${prettyStamp(saved.completedAt)}` : ''}`
-                : 'Will auto-complete when an ON DUTY Pre-trip Inspection event exists.'}
+                : preTripEvent
+                  ? `ON DUTY Pre-trip found · ${minutesLabel(preTripEvent.startMin)} · ${[preTripEvent.city, preTripEvent.state].filter(Boolean).join(', ')}`
+                  : 'One inspection sheet is required per log day when you go ON DUTY / Driving.'}
           </span>
         </div>
-        {!autoDone && <button onClick={selectAll}>{allChecked ? 'All OK' : 'Select all'}</button>}
+        {!autoDone && <button onClick={selectAll}>{allChecked ? 'All OK' : 'Manual OK'}</button>}
       </div>
+
+      {!allChecked && preTripEvent && (
+        <div className="inspection-prompt-card">
+          <b>Complete inspection sheet from ON DUTY Pre-trip?</b>
+          <span>Use this after the driver has actually inspected the truck. The sheet will link to this event time and will move with it if the event is edited.</span>
+          <div className="inspection-prompt-actions">
+            <button onClick={acceptPreTripSheet}>Yes, fill sheet</button>
+            <button className="secondary" onClick={() => saveChecked([])}>No, I will review manually</button>
+          </div>
+        </div>
+      )}
 
       {autoDone ? (
         <div className="inspection-done-note">
@@ -237,7 +289,7 @@ function InspectionPanel({ state, onSaveInspection }) {
               </button>
             ))}
           </div>
-          {allChecked && <div className="inspection-done-note">Saved. You do not need to select these again for this log day.</div>}
+          {allChecked && <div className="inspection-done-note">Saved. This is the inspection sheet for this log day.</div>}
         </>
       )}
     </div>
@@ -257,6 +309,7 @@ function SignaturePanel({ state, onSaveSignature }) {
   const lastPointRef = useRef(null);
   const signState = logSignState(state, day);
   const warnings = signingWarnings(state, day);
+  const blockers = validateLogForSigning(state, day);
   const todayActive = day >= localDayKey();
 
   useEffect(() => {
@@ -402,6 +455,13 @@ function SignaturePanel({ state, onSaveSignature }) {
         <span>{todayActive ? 'Today is active. It is not counted in Unsigned Logs yet.' : signState.reason}</span>
       </div>
 
+      {blockers.length > 0 && (
+        <div className="sign-block-card">
+          <b>Fix before signing</b>
+          {blockers.map(issue => <span key={issue.code}>• {issue.where}: {issue.title} — {issue.detail}</span>)}
+        </div>
+      )}
+
       {warnings.length > 0 && (
         <div className="sign-warning-card">
           <b>Review before signing</b>
@@ -410,8 +470,8 @@ function SignaturePanel({ state, onSaveSignature }) {
       )}
 
       <div className="signature-actions-row">
-        <button className="sign-save motive-sign-save" onClick={signLog} disabled={changeSignature && !hasInk}>
-          {signButtonLabel}
+        <button className="sign-save motive-sign-save" onClick={signLog} disabled={(changeSignature && !hasInk) || blockers.length > 0}>
+          {blockers.length ? 'Fix Issues Before Sign' : signButtonLabel}
         </button>
       </div>
 
@@ -518,7 +578,7 @@ export default function DayDetail({
 
       {activeTab === 'form' && <MiniFormPanel state={state} events={events} />}
       {activeTab === 'sign' && <SignaturePanel state={state} onSaveSignature={onSaveSignature} />}
-      {activeTab === 'inspection' && <InspectionPanel state={state} onSaveInspection={onSaveInspection} />}
+      {activeTab === 'inspection' && <InspectionPanel state={state} events={events} onSaveInspection={onSaveInspection} />}
 
       {activeTab === 'log' && !selectedEvent && (
         <div className="graph-action-rail">

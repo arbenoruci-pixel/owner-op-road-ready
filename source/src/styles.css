@@ -4398,3 +4398,242 @@ body::after{
 .location-editable-v91 input{
   min-width:0;
 }
+
+/* V91.1 DOT inspection + sign validation + iPhone bottom safety */
+.graph-first-screen,
+.dot-inspection-mode{
+  padding-bottom:calc(120px + env(safe-area-inset-bottom));
+}
+.cert-line{
+  padding-bottom:calc(132px + env(safe-area-inset-bottom));
+}
+.selected-duration-live{
+  margin:0 0 12px;
+  border:1px solid #cfd8e3;
+  border-radius:16px;
+  background:#f8fbff;
+  padding:12px 14px;
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:4px 10px;
+  align-items:center;
+}
+.selected-duration-live span{
+  color:#657080;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.9px;
+  text-transform:uppercase;
+}
+.selected-duration-live b{
+  color:#111827;
+  font-size:28px;
+  font-weight:950;
+}
+.selected-duration-live em{
+  grid-column:1 / -1;
+  color:#2563eb;
+  font-size:13px;
+  font-style:normal;
+  font-weight:900;
+}
+.inspection-prompt-card{
+  margin:12px 0;
+  border:1px solid #bfdbfe;
+  border-radius:16px;
+  background:#eff6ff;
+  padding:13px;
+  display:grid;
+  gap:8px;
+}
+.inspection-prompt-card b{
+  color:#1d4ed8;
+  font-size:16px;
+  font-weight:950;
+}
+.inspection-prompt-card span{
+  color:#334155;
+  font-size:13px;
+  font-weight:750;
+  line-height:1.35;
+}
+.inspection-prompt-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.inspection-prompt-actions button{
+  min-height:44px;
+  border:0;
+  border-radius:12px;
+  background:#2563eb;
+  color:#fff;
+  font-weight:950;
+}
+.inspection-prompt-actions button.secondary{
+  background:#fff;
+  color:#2563eb;
+  border:1px solid #bfdbfe;
+}
+.sign-block-card{
+  margin-top:12px;
+  border-radius:14px;
+  padding:12px;
+  display:grid;
+  gap:5px;
+  background:#fef2f2;
+  border:1px solid #fecaca;
+  color:#991b1b;
+}
+.sign-block-card b{
+  font-size:14px;
+  font-weight:950;
+}
+.sign-block-card span{
+  font-size:12px;
+  font-weight:850;
+  line-height:1.35;
+}
+.motive-sign-save:disabled{
+  opacity:.55;
+  background:#64748b!important;
+}
+.dot-hero-card,
+.dot-action-card,
+.dot-header-card,
+.dot-day-status-card{
+  margin:14px 14px 0;
+  border:1px solid #d7dee8;
+  border-radius:18px;
+  background:#fff;
+  padding:14px;
+}
+.dot-hero-card{
+  background:#eff6ff;
+  border-color:#bfdbfe;
+  display:grid;
+  gap:6px;
+}
+.dot-hero-card b{
+  color:#1d4ed8;
+  font-size:20px;
+  font-weight:950;
+}
+.dot-hero-card span,
+.dot-note{
+  color:#4b5563;
+  font-size:13px;
+  font-weight:750;
+  line-height:1.4;
+}
+.dot-action-card{
+  display:grid;
+  gap:10px;
+}
+.dot-action-card input{
+  width:100%;
+  min-height:48px;
+  box-sizing:border-box;
+  border:1px solid #cfd8e3;
+  border-radius:13px;
+  padding:0 12px;
+  font-size:15px;
+  font-weight:750;
+}
+.dot-primary-action,
+.dot-action-row button{
+  min-height:50px;
+  border:0;
+  border-radius:14px;
+  background:#0b7dec;
+  color:#fff;
+  font-size:15px;
+  font-weight:950;
+}
+.dot-action-row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.dot-action-row button:last-child{
+  background:#111827;
+}
+.dot-copy-status{
+  color:#15803d;
+  font-size:13px;
+  font-weight:900;
+}
+.dot-header-card{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.dot-header-card div,
+.dot-day-status-card{
+  display:grid;
+  gap:4px;
+}
+.dot-header-card span,
+.dot-day-status-card span{
+  color:#64748b;
+  font-size:12px;
+  font-weight:850;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+}
+.dot-header-card b,
+.dot-day-status-card b{
+  color:#111827;
+  font-size:15px;
+  font-weight:950;
+}
+.dot-days-strip{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:14px;
+  -webkit-overflow-scrolling:touch;
+}
+.dot-days-strip button{
+  min-width:116px;
+  border:1px solid #d7dee8;
+  border-radius:14px;
+  background:#fff;
+  padding:10px;
+  display:grid;
+  gap:2px;
+  text-align:left;
+}
+.dot-days-strip button.active{
+  border-color:#0b7dec;
+  background:#eff6ff;
+}
+.dot-days-strip b{
+  font-size:13px;
+  font-weight:950;
+  color:#111827;
+}
+.dot-days-strip span{
+  font-size:11px;
+  font-weight:850;
+  color:#64748b;
+}
+.dot-events{
+  margin-top:12px;
+}
+.dot-empty-day{
+  padding:16px;
+  color:#64748b;
+  font-weight:850;
+}
+.dot-note{
+  padding:14px 14px calc(120px + env(safe-area-inset-bottom));
+}
+.tools-sheet .choice-body .choice-card:first-child:last-child{
+  margin-top:8px;
+}
+@media (max-width:390px){
+  .dot-header-card{grid-template-columns:1fr;}
+  .inspection-prompt-actions,
+  .dot-action-row{grid-template-columns:1fr;}
+}

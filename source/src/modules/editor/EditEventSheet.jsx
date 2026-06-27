@@ -4,7 +4,7 @@ import EditorGraphPanel from './components/EditorGraphPanel.jsx';
 import EditorTimeControls from './components/EditorTimeControls.jsx';
 import EditorLocationFields from './components/EditorLocationFields.jsx';
 import EditorNotesField from './components/EditorNotesField.jsx';
-import { fromInput, toInput, timeLabel } from '../../shared/utils/time.js';
+import { durLabel, fromInput, toInput, timeLabel } from '../../shared/utils/time.js';
 import { applyEditOverride } from '../../core/timeline/timelineEngine.js';
 import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
 
@@ -24,6 +24,7 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
 
   const preview = { ...event, status, startMin: fromInput(start), endMin: Math.max(fromInput(start) + 5, fromInput(end)), city, state, description, note, lat, lng, gpsAccuracy, locationSource };
   const previewEvents = applyEditOverride(events, event.id, preview);
+  const durationMinutes = Math.max(0, preview.endMin - preview.startMin);
   const header = `${DUTY_SHORT_LABELS[status]} · ${timeLabel(fromInput(start))} - ${timeLabel(preview.endMin)}`;
 
   function applyGps() {
@@ -83,6 +84,12 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
       />
 
       <div className="form editor-form-v85">
+        <div className="selected-duration-live">
+          <span>Selected event time</span>
+          <b>{durLabel(durationMinutes)}</b>
+          <em>{timeLabel(preview.startMin, true)} – {timeLabel(preview.endMin, true)}</em>
+        </div>
+
         <EditorTimeControls start={start} end={end} onStartChange={setStart} onEndChange={setEnd} />
 
         <EditorLocationFields

@@ -75,7 +75,7 @@ export default function SelectedEventBar({
           )}
           <div className="move-apply-row">
             <button className="move-reset" onClick={onResetMove}>Reset</button>
-            <button className="move-apply" disabled={!moveDelta} onClick={onApplyMove}>Apply move</button>
+            <button className="move-apply" disabled={!moveDelta} onClick={onApplyMove}>Save Move</button>
           </div>
         </div>
       )}
