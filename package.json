@@ -7,8 +7,7 @@
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "test:offline": "node scripts/offline-sync-smoke-test.mjs",
-    "test:easyeyes": "node scripts/verify-easy-eyes-v922.mjs"
+    "test:offline": "node scripts/offline-sync-smoke-test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

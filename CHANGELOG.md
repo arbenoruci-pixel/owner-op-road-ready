@@ -1,53 +1,37 @@
 
-## v92.3 — Aurora Driver UI / Original Calm Design
+## v92.4 — Simple Driver UI (Logs list redesign)
 
-- Rebuilt Home into a compact driver command center.
-- Added an original Apple-like calm visual system distinct from Motive/KeepTruckin.
-- Tightened Day Log, Sign/RoadGuard, DOT Mode, Form, Inspection, and editor UI.
-- Kept continuous timeline, RoadGuard, DOT package, and AI Assist logic intact.
-- Build/offline/easy-eyes tests pass.
+Goal: replace the busy Aurora Home with a calm, row-based driver logbook list, without
+touching any compliance logic. UI structure only; original visual identity (own colors,
+type, spacing, chips). No new routes.
 
+What changed
+- Rewrote the Home screen (`source/src/modules/home/HomeScreen.jsx`) into a simple Logs list:
+  - Dark header titled "Logs" + a compact "DOT" action button (opens DOT Inspection Mode).
+  - Status strip: current duty status (colored marker + label + location) | current vehicle.
+    Tapping the status cell opens the Status workflow (where Start Driving lives); tapping
+    the vehicle cell opens equipment.
+  - Soft "N logs need signing" attention row (only when unsigned > 0 → Unsigned Logs).
+  - TODAY section: one compact day row + a small graph preview (continuous timeline).
+  - LAST 14 DAYS section: compact rows (status marker, weekday + date, total + cert status,
+    a small ✓ when certified or a soft "!" when a completed day still needs attention, chevron).
+  - Single compact "DOT Inspection Mode" row at the bottom.
+- Removed from Home: the hero/greeting block, the compliance grid, the quick tiles, the
+  "today's log / maintenance / messages / recent logs" cards, the fake hardcoded bottom
+  timer ("16:25 · Until cycle restart"), and the destructive data-reset behind the header
+  hamburger. The driver now sees status → today → recent days → open day.
+- Added a self-contained, namespaced CSS block (`lv-*`) at the end of `source/src/styles.css`.
+  It reuses only the existing duty-status colors and introduces no `!important` and no
+  changes to any existing selector, so other screens are visually untouched.
 
-## v92.3 — Orchard UI / Apple-inspired Calm Driver UX
+What was deliberately NOT changed (logic preserved verbatim)
+- Continuous no-gap timeline, RoadGuard/SignGuard checks, DOT previous-7-days package,
+  ChatGPT fix-plan parser, inspection/pre-trip linkage, Dexie/Supabase/offline sync.
+- `source/src/app/App.jsx` and all other screens/sheets are unchanged. The Home screen
+  keeps the exact same props contract (unused props are simply not read).
+- Day Log (Log/Form/Sign/Inspection tabs) already uses the tab + row structure from the
+  spec, so it was left intact in this step.
 
-- Rebuilt Home as a compact command center with current status, vehicle/today/DOT chips, quick actions, RoadGuard summary, and compact recent logs.
-- Added a distinct Apple-inspired Orchard UI layer with translucent chrome, segmented tabs, softer cards, smaller buttons, and calmer colors.
-- Restyled Day Log, event rows, Sign/RoadGuard, AI helper, DOT mode, forms, and inspection screens to reduce screen fatigue.
-- Removed duplicate LogCheckPanel rendering from Day Log.
-- Preserved continuous timeline/no-gap logic and RoadGuard validation behavior.
-- Build, offline sync smoke test, and easy-eyes verification passed.
-
-
-## v92.3 — Native Owner-Op UI Redesign
-- Rebuilt Home into a compact RoadGuard command center.
-- Added Apple-inspired native mobile visual system distinct from Motive-style layouts.
-- Tightened Day Log, RoadGuard, AI helper, Form, Inspection, and DOT Mode spacing.
-- Reduced oversized cards and long visible explanations.
-- Preserved continuous no-gap timeline logic and RoadGuard safety checks.
-- Build/offline/easy-eyes checks passed.
-
-
-
-## v92.2.1 — Package Fix / Proper ZIP
-
-- Repacked v92.2 Easy-Eyes / RoadGuard UI as a proper `.zip` file after uploaded artifact arrived without a `.zip` extension.
-- Re-ran build and verification checks. No route changes and no timeline logic changes.
-
-## v92.2 — Easy-Eyes / RoadGuard UI (compact, calm, professional)
-
-- Visual-only redesign layer appended to `styles.css`: softer semantic palette
-  (calm blue = action, muted red = urgent only, amber = review, neutral = info),
-  tighter spacing, smaller type, calmer corners, finger-friendly compact buttons.
-- Day Log: smaller Log Check card; neutral active-day marker; Certify button now
-  looks unavailable (neutral `not-ready` state) until the log is ready, but still
-  surfaces the block message on tap.
-- Sign / RoadGuard: compact summary; one strong global "Copy Log for ChatGPT";
-  per-issue copy de-emphasised; active-day sign button reads "Sign after day is
-  complete" instead of a red error.
-- DOT Mode, Form, Inspection, Home: compacted; iPhone safe-area spacing kept;
-  reduced-motion respected.
-- No logic, timeline, signing, compliance, or route changes. Verified with
-  TypeScript syntax parse (0 errors), `test:easyeyes` (20/20), and `test:offline`.
 
 ## v92.1 — Continuous Timeline / No-Gap Logbook
 
