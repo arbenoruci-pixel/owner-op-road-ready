@@ -1,4 +1,26 @@
 
+
+## v92.2.1 — Package Fix / Proper ZIP
+
+- Repacked v92.2 Easy-Eyes / RoadGuard UI as a proper `.zip` file after uploaded artifact arrived without a `.zip` extension.
+- Re-ran build and verification checks. No route changes and no timeline logic changes.
+
+## v92.2 — Easy-Eyes / RoadGuard UI (compact, calm, professional)
+
+- Visual-only redesign layer appended to `styles.css`: softer semantic palette
+  (calm blue = action, muted red = urgent only, amber = review, neutral = info),
+  tighter spacing, smaller type, calmer corners, finger-friendly compact buttons.
+- Day Log: smaller Log Check card; neutral active-day marker; Certify button now
+  looks unavailable (neutral `not-ready` state) until the log is ready, but still
+  surfaces the block message on tap.
+- Sign / RoadGuard: compact summary; one strong global "Copy Log for ChatGPT";
+  per-issue copy de-emphasised; active-day sign button reads "Sign after day is
+  complete" instead of a red error.
+- DOT Mode, Form, Inspection, Home: compacted; iPhone safe-area spacing kept;
+  reduced-motion respected.
+- No logic, timeline, signing, compliance, or route changes. Verified with
+  TypeScript syntax parse (0 errors), `test:easyeyes` (20/20), and `test:offline`.
+
 ## v92.1 — Continuous Timeline / No-Gap Logbook
 
 - Fixed critical graph/timeline gap behavior: duty status now carries forward until the next duty-status change.

@@ -5540,3 +5540,240 @@ body::after{
   .signguard-dot-table > div span:last-child { grid-column:1 / -1; justify-content:flex-start; }
   .chatgpt-actions-v92 { grid-template-columns:1fr; }
 }
+
+/* =====================================================================
+   V92.2  EASY-EYES  ·  compact / calm / professional UI override layer
+   ---------------------------------------------------------------------
+   Visual-only layer. Appended last so it wins by source order.
+   No DOM, logic, routing, or timeline changes. Goals:
+   - Reduce vertical spacing and oversized type everywhere.
+   - Softer palette. Blue = primary action. Red = true urgent only.
+     Amber = review/warning. Neutral gray = normal info & notices.
+   - Calmer corners (less "bubbly"), smaller-but-tappable buttons (>=40px).
+   - Active-day / not-certified reads as a neutral notice, never an error.
+   ===================================================================== */
+
+:root{
+  --ee-blue:#2f6db0; --ee-blue-press:#285f99; --ee-blue-soft:#eef3f9; --ee-blue-border:#cdddee;
+  --ee-red:#c14a44; --ee-red-soft:#fbf0ef; --ee-red-border:#ecceca;
+  --ee-amber:#9a6b16; --ee-amber-soft:#fdf6e6; --ee-amber-border:#ecd9a8;
+  --ee-green:#3f8f5f; --ee-green-soft:#eef6f0; --ee-green-border:#cfe6d6;
+  --ee-ink:#1f2937; --ee-ink-2:#5b6573; --ee-muted:#8a93a0;
+  --ee-bg:#f2f4f7; --ee-card:#ffffff; --ee-line:#e4e8ee;
+  --ee-notice:#566173; --ee-notice-soft:#f1f4f8; --ee-notice-border:#dde3ec;
+  --ee-radius:13px; --ee-radius-sm:10px;
+}
+
+html,body,#root{ background:var(--ee-bg); color:var(--ee-ink); }
+.screen{ background:var(--ee-bg); }
+button{ -webkit-tap-highlight-color:transparent; }
+@media (prefers-reduced-motion: reduce){ *{ animation:none!important; transition:none!important; } }
+
+/* ---- 1. Top chrome: shorter header, calmer tabs --------------------- */
+.dark-head,.sheet-head{ min-height:54px!important; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px!important; }
+.dark-head{ min-height:54px!important; padding:calc(env(safe-area-inset-top) + 8px) 14px 8px!important; }
+.dark-title,.sheet-head div{ font-size:17px; font-weight:800; }
+.dark-head button,.sheet-head button{ width:40px; height:40px; font-size:21px; border-radius:11px; }
+.tabs button{ height:42px; font-size:14px; color:#5b6573; }
+.tabs .active{ color:var(--ee-blue); border-bottom-color:var(--ee-blue); }
+
+/* ---- 2. Section labels & list rows: tighter ------------------------- */
+.section{ padding:8px 14px 7px; font-size:11px; letter-spacing:.6px; color:var(--ee-ink-2); }
+.log-day-card,.log-day-row{ padding:11px 14px; gap:9px; }
+.log-day-title{ font-size:16px; font-weight:800; }
+.log-day-meta{ font-size:13px; margin:5px 0; }
+/* active-day marker is a NOTICE, not urgent: neutral, not red */
+.log-day-title em{ width:24px; height:24px; border-color:var(--ee-notice-border); color:var(--ee-notice); }
+.chev{ font-size:26px; }
+
+.event-row{ padding:10px 12px; gap:9px; }
+.event-badge,.event-row .event-badge{ width:30px; height:30px; font-size:13px; }
+.event-time{ font-size:14px; }
+.event-loc,.event-note{ font-size:13px; margin-top:5px; }
+.blue-edit{ color:var(--ee-blue); border-color:var(--ee-blue-border); background:var(--ee-blue-soft); padding:5px 9px; }
+
+/* ---- 3. Day-log action rail + bulk strip: compact ------------------- */
+.graph-action-rail{ gap:6px; padding:7px 10px calc(env(safe-area-inset-bottom) + 7px); }
+.graph-action-rail button{ min-height:40px; font-size:13px; color:var(--ee-blue); border-color:var(--ee-blue-border); }
+.graph-bulk-strip button{ min-height:38px; }
+.graph-bulk-strip .primary,.bulk-strip .primary{ background:var(--ee-blue); border-color:var(--ee-blue); }
+.selected-strip button{ background:var(--ee-blue); }
+.selected-strip .void{ background:var(--ee-red-soft); color:var(--ee-red); border-color:var(--ee-red-border); }
+
+/* ---- 4. Log Check card: smaller --------------------------------------*/
+.logcheck-compact{ margin:8px 10px 0; border-radius:var(--ee-radius); }
+.logcheck-summary{ padding:10px 12px; }
+.logcheck-summary b{ font-size:14px; }
+.logcheck-summary span{ font-size:12px; }
+.logcheck-summary em{ padding:5px 9px; font-size:12px; }
+.logcheck-summary em.ok{ background:var(--ee-green-soft); color:var(--ee-green); }
+.logcheck-summary em.warn{ background:var(--ee-amber-soft); color:var(--ee-amber); }
+.logcheck-summary em.bad{ background:var(--ee-red-soft); color:var(--ee-red); }
+.logcheck-cards div{ min-height:50px; padding:6px; }
+.hos-warning{ font-size:12px; }
+
+/* ---- 5. Certify line: neutral notice + "not ready" looks unavailable -*/
+.cert-line{ padding:11px 14px calc(env(safe-area-inset-bottom) + 84px); }
+.cert-line b{ font-size:13px; font-weight:700; color:var(--ee-ink-2); }
+.cert-line button{ height:40px; background:#111827; }
+.cert-line.not-ready{ }
+.cert-line.not-ready b{ color:var(--ee-notice); }
+.cert-line.not-ready button{ background:#e9edf3; color:#9aa3b0; }
+
+/* ---- 6. Forms / inputs / choice cards: compact --------------------- */
+.choice-card{ padding:12px 14px; border-radius:var(--ee-radius); margin-bottom:9px; }
+.choice-card b{ font-size:16px; }
+.choice-card span{ margin-top:4px; font-size:13px; }
+.form{ padding:12px 14px 36px; }
+.form-section{ margin-bottom:12px; }
+.form input,.form textarea{ min-height:46px; font-size:15px; border-radius:12px; }
+.form textarea{ min-height:64px; }
+.quick-row button,.status-pills button,.motive-loc-actions button,.motive-reasons button{ min-height:42px; border-radius:11px; color:var(--ee-blue); }
+.status-pills button{ font-size:16px; }
+.save-main{ min-height:46px; font-size:16px; background:var(--ee-blue); border-radius:12px; }
+.cancel-main{ min-height:42px; border-radius:12px; }
+.status-choice-grid button,.stop-grid button{ min-height:60px; border-radius:13px; }
+.warning{ padding:9px 11px; font-size:12px; background:var(--ee-amber-soft); border-color:var(--ee-amber-border); color:var(--ee-amber); }
+
+/* ---- 7. RoadGuard / SignGuard: compact summary, calm colors -------- */
+.signguard-panel,.signguard-panel-v92{ margin:12px 10px; border-radius:var(--ee-radius); box-shadow:0 6px 16px rgba(15,23,42,.05); }
+.signguard-head,.signguard-head-v92{ padding:12px 14px; background:linear-gradient(180deg,#fbfdff,#f3f7fc); }
+.signguard-head span{ font-size:11px; margin-bottom:3px; color:var(--ee-blue); }
+.signguard-head b{ font-size:18px; line-height:1.1; }
+.signguard-head p{ font-size:12px; margin-top:5px; color:var(--ee-ink-2); }
+/* one strong global primary: Copy Log for ChatGPT */
+.signguard-head button,.signguard-head-v92 button{ background:var(--ee-blue); border-radius:11px; padding:10px 13px; min-height:40px; }
+.signguard-score-row,.signguard-score-row-v92{ padding:10px 14px 4px; gap:8px; }
+.signguard-score-row div,.signguard-score-row-v92 button{ padding:9px 6px; border-radius:12px; }
+.signguard-score-row b,.signguard-score-row-v92 b{ font-size:19px; }
+.signguard-score-row span,.signguard-score-row-v92 span{ font-size:11px; }
+.signguard-score-row .ok,.signguard-score-row-v92 button.ok{ border-color:var(--ee-green-border); background:var(--ee-green-soft); }
+.signguard-score-row .warn,.signguard-score-row-v92 button.warn{ border-color:var(--ee-amber-border); background:var(--ee-amber-soft); }
+.signguard-score-row .bad,.signguard-score-row-v92 button.bad{ border-color:var(--ee-red-border); background:var(--ee-red-soft); }
+
+.signguard-action-strip-v92{ padding:8px 14px; gap:7px; }
+.signguard-action-strip-v92 button{ background:var(--ee-blue-soft); color:var(--ee-blue); border-radius:11px; padding:9px 10px; min-height:40px; font-weight:800; }
+.signguard-notice-v92{ margin:8px 14px 0; padding:10px 12px; border-radius:12px; background:var(--ee-notice-soft); border-color:var(--ee-notice-border); color:var(--ee-notice); font-weight:700; font-size:13px; }
+
+.signguard-issues,.signguard-issues-v92{ padding:6px 14px 4px; gap:8px; }
+.signguard-issue,.signguard-issue-v92{ padding:10px 12px; border-radius:12px; }
+.signguard-issue.fix,.signguard-issue-v92.fix{ border-color:var(--ee-red-border); background:var(--ee-red-soft); }
+.signguard-issue.violation,.signguard-issue-v92.violation{ border-color:var(--ee-amber-border); background:var(--ee-amber-soft); }
+.signguard-issue.review,.signguard-issue-v92.review{ border-color:var(--ee-blue-border); background:var(--ee-blue-soft); }
+.signguard-issue-v92.notice{ border-color:var(--ee-notice-border); background:var(--ee-notice-soft); }
+.signguard-issue b,.signguard-issue-v92 b{ font-size:14px; }
+.signguard-issue p,.signguard-issue-v92 p{ font-size:12px; margin:3px 0; }
+.signguard-issue-v92 .signguard-issue-main > span{ font-size:10px; color:var(--ee-ink-2); }
+.signguard-issue-actions-v92{ gap:6px; min-width:78px; }
+.signguard-issue-actions-v92 .mini-primary{ background:var(--ee-blue); min-height:38px; }
+/* de-emphasise per-issue copy: keep ONE strong global copy action */
+.signguard-issue-actions-v92 .mini-secondary{ background:transparent; color:var(--ee-ink-2); border:1px solid var(--ee-line); min-height:32px; font-size:12px; padding:6px 9px; }
+
+.signguard-clean{ margin:10px 14px 4px; padding:11px; border-radius:12px; background:var(--ee-green-soft); border-color:var(--ee-green-border); color:var(--ee-green); }
+.signguard-section-title-row b{ font-size:14px; }
+
+/* DOT package: compact table (already a table, just calmer) */
+.signguard-dot-table-wrap{ margin:8px 14px; padding:10px; border-radius:12px; background:#fffdf6; border-color:var(--ee-amber-border); }
+.signguard-dot-table > div{ padding:8px; border-radius:10px; }
+.signguard-dot-table > div.bad{ border-color:var(--ee-red-border); background:var(--ee-red-soft); }
+.signguard-dot-table > div.ok{ border-color:var(--ee-green-border); background:var(--ee-green-soft); }
+.signguard-dot-table button{ background:var(--ee-blue); padding:7px 9px; }
+.signguard-dot-table button.ghost{ background:transparent; color:var(--ee-ink-2); border:1px solid var(--ee-line); }
+.signguard-dot-table em{ color:var(--ee-green); }
+
+/* ---- 8. ChatGPT helper: compact (collapsed by default already) ----- */
+.signguard-chatgpt-v92,.signguard-chatgpt-box{ margin:10px 14px 14px; border-radius:12px; border-color:var(--ee-line); }
+.chatgpt-collapsed-row{ padding:11px 14px; }
+.chatgpt-collapsed-row b{ font-size:14px; }
+.chatgpt-collapsed-row span{ font-size:12px; }
+.chatgpt-collapsed-row em{ color:var(--ee-blue); }
+.chatgpt-actions-v92{ padding:0 14px 12px; gap:7px; }
+.chatgpt-actions-v92 button{ background:var(--ee-blue); min-height:42px; border-radius:11px; }
+.chatgpt-actions-v92 .secondary,.parsed-fix-card .secondary,.chatgpt-paste-actions-v92 .secondary,.signguard-copy-row .secondary{ background:#e8ecf2; color:#374151; }
+.parsed-fix-card{ padding:11px; border-radius:11px; }
+.parsed-fix-card span{ color:var(--ee-blue); }
+.parsed-fix-card p{ font-size:12px; }
+.chatgpt-paste-head-v92 b{ font-size:16px; }
+.chatgpt-paste-head-v92 button{ background:var(--ee-blue-soft); color:var(--ee-blue); }
+.signguard-copy-status{ color:var(--ee-blue); }
+
+/* ---- 9. Signature panel: tidy, sign action green & compact --------- */
+.motive-sign-panel,.signature-panel{ }
+.sign-legal-copy,.motive-sign-panel .sign-legal-copy{ font-size:13px; }
+.signature-canvas-wrap{ min-height:140px; }
+.signature-canvas{ height:170px; }
+.clear-signature-link{ color:var(--ee-blue); font-size:15px; margin-top:12px; }
+.signature-actions-row{ margin-top:12px; }
+.motive-sign-save{ min-height:46px; font-size:16px; background:var(--ee-green); border-radius:12px; }
+.motive-sign-save:disabled{ background:#dfe4ea; color:#8a93a0; }
+/* active-day status reads as neutral notice, not a blue/red alert */
+.sign-status-card{ background:var(--ee-notice-soft); border-color:var(--ee-notice-border); color:var(--ee-notice); border-radius:12px; padding:11px; }
+.sign-status-card b{ font-size:13px; }
+.sign-warning-card{ background:var(--ee-amber-soft); border-color:var(--ee-amber-border); color:var(--ee-amber); border-radius:12px; padding:11px; }
+
+/* ---- 10. Form tab (read-only paper form): compact ----------------- */
+.motive-paper-form{ }
+.motive-form-totals b{ font-size:13px; }
+.motive-form-section-title{ padding:9px 14px; font-size:11px; }
+.motive-form-row,.motive-form-split-row{ padding:10px 14px; }
+.motive-form-label{ font-size:11px; }
+.motive-form-value{ font-size:14px; }
+
+/* ---- 11. Inspection tab: compact ---------------------------------- */
+.inspection-panel{ margin:8px 10px 12px; padding:11px; border-radius:var(--ee-radius); }
+.inspection-headline b,.mini-form-title b,.signature-headline b{ font-size:15px; }
+.inspection-headline button{ min-height:38px; }
+.inspection-check-grid button{ min-height:42px; border-radius:11px; }
+.inspection-prompt-card{ border-radius:12px; }
+.inspection-prompt-card b{ font-size:14px; }
+
+/* ---- 12. Home screen: calmer hero, tighter cards, muted tiles ------ */
+.home-head{ min-height:64px; padding:calc(env(safe-area-inset-top) + 10px) 16px 10px; }
+.home-head>div{ font-size:18px; }
+.home-body{ padding:14px 14px 8px; }
+.home-greeting h1{ font-size:22px; }
+.home-hero{ padding:16px 16px 14px; border-radius:var(--ee-radius); }
+.home-hero h2{ font-size:19px; }
+.home-hero p{ font-size:13px; }
+.home-hero button{ min-height:46px; font-size:15px; border-radius:12px; background:var(--ee-blue); }
+.hero-icon{ font-size:22px; }
+.home-card,.home-compliance{ border-radius:var(--ee-radius); }
+.home-card-title{ min-height:48px; padding:0 14px; }
+.home-card-title h2{ font-size:16px; }
+.home-card-title button{ font-size:24px; }
+.compliance-grid button{ min-height:60px; padding:9px 11px; }
+.compliance-grid b{ font-size:18px; }
+.compliance-grid b.warn{ color:var(--ee-amber); }
+.quick-tiles{ gap:9px; }
+.tile{ min-height:96px; padding:13px; border-radius:var(--ee-radius); }
+.tile span{ font-size:24px; }
+.tile b{ font-size:16px; }
+/* muted, easy-on-eyes tile colors */
+.tile.logs{ background:#3b7fb0; }
+.tile.inspect{ background:#4a9a63; }
+.tile.docs{ background:#3a5fa6; }
+.today-summary b{ font-size:15px; }
+.home-list-row,.recent-log-row{ }
+
+/* ---- 13. DOT Inspection Mode: clean, official, compact ------------- */
+.dot-mode-intro{ }
+.dot-mode-intro h1{ font-size:20px; }
+.dot-mode-intro p,.dot-mode-card p{ font-size:13px; }
+.dot-shield{ }
+.dot-begin-btn{ background:var(--ee-blue); }
+.dot-button-grid button,.dot-report-actions button,.dot-officer-head button{ min-height:46px; border-radius:12px; }
+.dot-button-grid button:first-child{ background:var(--ee-blue); }
+.dot-mode-card h2{ font-size:16px; }
+.dot-mode-card input{ min-height:46px; }
+.dot-mode-badge b{ font-size:14px; }
+.dot-days-strip button{ }
+.dot-day-status-card b{ font-size:15px; }
+.dot-officer-head b{ font-size:16px; }
+.dot-report-actions{ padding-bottom:calc(env(safe-area-inset-bottom) + 14px); }
+
+/* ---- 14. FAB (if shown) softer ------------------------------------ */
+.fab{ background:var(--ee-blue); box-shadow:0 8px 20px rgba(47,109,176,.32); }
+
+/* ---- 15. Tap-target floor: keep small buttons usable -------------- */
+.signguard-issue-actions-v92 .mini-secondary,
+.signguard-dot-table button{ min-height:32px; }

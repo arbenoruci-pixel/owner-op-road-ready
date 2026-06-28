@@ -678,7 +678,9 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
 
       <div className="signature-actions-row">
         <button className="sign-save motive-sign-save" onClick={signLog} disabled={(changeSignature && !hasInk) || blockers.length > 0}>
-          {blockers.length ? 'Fix Issues Before Sign' : signButtonLabel}
+          {blockers.length
+            ? (blockers.every(issue => /active_day/i.test(issue.code || '')) ? 'Sign after day is complete' : 'Fix Issues Before Sign')
+            : signButtonLabel}
         </button>
       </div>
 
@@ -817,7 +819,7 @@ export default function DayDetail({
 
           <LogCheckPanel events={events} state={state} />
 
-          <div className="cert-line">
+          <div className={`cert-line ${validateLogForSigning(state, state.activeDay).length ? 'not-ready' : ''}`}>
             <b>{state.certifyStatus[state.activeDay]}</b>
             <button onClick={onCertify}>{state.certifyStatus[state.activeDay] === 'Needs Recertification' ? 'RECERTIFY' : 'CERTIFY'}</button>
           </div>
