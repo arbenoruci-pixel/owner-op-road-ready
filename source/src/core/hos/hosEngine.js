@@ -1,4 +1,5 @@
 import { durLabel, nowMin } from '../../shared/utils/time.js';
+import { makeContinuousLogEvents } from '../timeline/timelineEngine.js';
 
 const HOUR = 60;
 
@@ -54,7 +55,7 @@ function statusReasonMismatch(e) {
     'inspection', 'fuel', 'loading', 'unloading',
     'pickup', 'pick up', 'delivery', 'drop', 'hook',
     'paperwork', 'waiting', 'dock', 'maintenance', 'repair',
-    'scale', 'washout'
+    'scale', 'washout', 'on duty', 'on-duty', 'working'
   ];
 
   const restWords = [
@@ -134,21 +135,15 @@ export function buildContinuousTimeline(eventsByDay = {}, activeDay) {
   const out = [];
 
   Object.entries(eventsByDay || {}).forEach(([dayKey, rawEvents]) => {
-    const sortedRaw = [...(rawEvents || [])].sort((a,b) => Number(a.startMin || 0) - Number(b.startMin || 0));
+    const continuousEvents = makeContinuousLogEvents(rawEvents || [], {
+      isCurrentDay: dayKey === today && dayKey === activeDay,
+      nowMinute: n,
+    });
 
-    sortedRaw.forEach((raw, idx) => {
-      let start = Number(raw.startMin || 0);
-      let end = Number(raw.endMin ?? start + 1);
-
-      // Important: only the last event of the active current day can be extended to "now".
-      // Extending every event creates false overlaps.
-      const isLastCurrentEvent = dayKey === today && dayKey === activeDay && idx === sortedRaw.length - 1;
-      if (isLastCurrentEvent) {
-        end = Math.max(end, n);
-      }
-
-      if (end <= start) end = start + 1;
-
+    continuousEvents.forEach((raw) => {
+      const start = Number(raw.startMin || 0);
+      const end = Number(raw.endMin ?? start + 1);
+      if (end <= start) return;
       out.push({
         ...raw,
         dayKey,

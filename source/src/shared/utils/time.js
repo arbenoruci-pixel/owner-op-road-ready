@@ -14,7 +14,9 @@ export function fromInput(value) {
   return clamp(Number(h) * 60 + Number(m), 0, 1439);
 }
 export function timeLabel(min, seconds=false) {
-  const m = clamp(min, 0, 1439);
+  const raw = Number(min || 0);
+  if (raw >= 1440) return `12:00${seconds ? ':00' : ''} AM`;
+  const m = clamp(raw, 0, 1439);
   const h = Math.floor(m / 60);
   const mm = m % 60;
   const ap = h >= 12 ? 'PM' : 'AM';

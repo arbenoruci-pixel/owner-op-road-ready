@@ -1,3 +1,13 @@
+
+## v92.1 — Continuous Timeline / No-Gap Logbook
+
+- Fixed critical graph/timeline gap behavior: duty status now carries forward until the next duty-status change.
+- Completed days render to midnight/end-of-day; active day renders to current time.
+- RoadGuard, DOT Mode/report, Home preview, Form totals, SignGuard, and HOS review now use the continuous timeline.
+- Status changes now close the previous raw event even if it ended early.
+- Added review detection for conflicts like OFF DUTY with an “On Duty” note.
+- Build and offline sync smoke test passed.
+
 # v92.0 RoadGuard AI Assist / SignGuard Mobile UX
 
 - Improved SignGuard into RoadGuard Check for cleaner mobile use.

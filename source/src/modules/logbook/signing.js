@@ -1,5 +1,6 @@
 import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
+import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
 
 function hasRealEvents(events = []) {
@@ -175,7 +176,8 @@ export function logSignState(state, day) {
 export function validateLogForSigning(state, day) {
   const issues = [];
   const today = localDayKey();
-  const events = sortedEvents(state.eventsByDay?.[day] || []);
+  const rawEvents = sortedEvents(state.eventsByDay?.[day] || []);
+  const events = sortedEvents(displayEventsForDay(rawEvents, day >= today));
   const inspection = state.inspectionByDay?.[day] || {};
   const vehicle = String(state.driver?.truck || '').trim();
   const hasOnOrDrive = events.some(event => event.status === 'ON' || event.status === 'D');
@@ -251,7 +253,7 @@ export function validateLogForSigning(state, day) {
     });
   }
 
-  if (!hasRealEvents(events)) {
+  if (!completedEvents.length) {
     issues.push({
       code: 'no_events',
       title: 'No completed duty-status events',
@@ -288,12 +290,13 @@ export function validateLogForSigning(state, day) {
         where: 'Event location',
       });
     }
-    const next = events[index + 1];
-    if (next && Number(next.startMin || 0) < end) {
+    const rawEvent = rawEvents[index];
+    const next = rawEvents[index + 1];
+    if (rawEvent && next && Number(next.startMin || 0) < Number(rawEvent.endMin || 0)) {
       issues.push({
-        code: `overlap_${event.id || index}`,
+        code: `overlap_${rawEvent.id || index}`,
         title: 'Events overlap',
-        detail: `${eventLabel(event)} overlaps with ${eventLabel(next)}.`,
+        detail: `${eventLabel(rawEvent)} overlaps with ${eventLabel(next)}.`,
         where: 'Log graph',
       });
     }
@@ -326,7 +329,7 @@ export function validateLogForSigning(state, day) {
       issues.push({
         code: `hos_${violation.type || index}`,
         title: 'HOS rule issue found',
-        detail: `${violation.label || violation.type || 'HOS issue'} around ${timeLabel(violation.startMin, true)}. Review before signing.`,
+        detail: `${violation.text || violation.label || violation.type || 'HOS issue'} Around ${timeLabel(violation.startMin, true)}. Review before signing.`,
         where: 'Log check / graph',
       });
     });
@@ -343,7 +346,7 @@ export function validateLogForSigning(state, day) {
 export function signingWarnings(state, day) {
   const warnings = [];
   const today = localDayKey();
-  const events = state.eventsByDay?.[day] || [];
+  const events = displayEventsForDay(state.eventsByDay?.[day] || [], day >= today);
   const signState = logSignState(state, day);
   const inspection = state.inspectionByDay?.[day] || {};
   const trailer = String(state.currentTrailer || state.driver?.trailer || state.equipment?.trailer || '').trim();
@@ -384,7 +387,7 @@ export function buildSignGuardSummary(state, day) {
   const dotRows = [];
 
   previousDays.forEach(prevDay => {
-    const prevEvents = sortedEvents(state.eventsByDay?.[prevDay] || []).filter(e => Number(e.endMin || 0) > Number(e.startMin || 0));
+    const prevEvents = sortedEvents(displayEventsForDay(state.eventsByDay?.[prevDay] || [], prevDay >= localDayKey())).filter(e => Number(e.endMin || 0) > Number(e.startMin || 0));
     const signed = !!state.signatureByDay?.[prevDay]?.signed;
     if (!prevEvents.length) {
       const issue = {
@@ -447,7 +450,7 @@ export function buildIssueFixPrompt(state, day, issue) {
     `Rule/check: ${issueRuleLabel(issue)}`,
     '',
     'Relevant events for this day:',
-    ...sortedEvents(state.eventsByDay?.[day] || []).map((event, index) => `${index + 1}. ${timeLabel(event.startMin, true)} to ${timeLabel(event.endMin, true)} | ${statusLabel(event.status)} | ${locationLabel(event)} | ${event.note || event.description || ''}`),
+    ...sortedEvents(displayEventsForDay(state.eventsByDay?.[day] || [], day >= localDayKey())).map((event, index) => `${index + 1}. ${timeLabel(event.startMin, true)} to ${timeLabel(event.endMin, true)} | ${statusLabel(event.status)} | ${locationLabel(event)} | ${event.note || event.description || ''}`),
     '',
     'Tell me:',
     '1. Is this a missing required field, a possible HOS/DOT violation, or only a review item?',
@@ -458,13 +461,13 @@ export function buildIssueFixPrompt(state, day, issue) {
 }
 
 export function buildChatGptLogReviewPrompt(state, day) {
-  const events = sortedEvents(state.eventsByDay?.[day] || []);
+  const events = sortedEvents(displayEventsForDay(state.eventsByDay?.[day] || [], day >= localDayKey()));
   const totals = dutyTotals(events);
   const guard = buildSignGuardSummary(state, day);
   const inspection = state.inspectionByDay?.[day] || {};
   const signature = state.signatureByDay?.[day] || {};
   const previous = guard.previousDays.map(prevDay => {
-    const prevEvents = state.eventsByDay?.[prevDay] || [];
+    const prevEvents = displayEventsForDay(state.eventsByDay?.[prevDay] || [], prevDay >= localDayKey());
     return `${prevDay}: ${durLabel(totalMinutes(prevEvents))} total, ${prevEvents.length} event(s), ${state.signatureByDay?.[prevDay]?.signed ? 'signed' : 'not signed'}`;
   });
 

@@ -3,6 +3,7 @@ import LogGraph from '../graph/LogGraph.jsx';
 import { label } from '../../shared/utils/status.js';
 import { localDayKey } from '../../shared/utils/date.js';
 import { signableLogDays } from '../logbook/signing.js';
+import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 
 function titleFromDay(day) {
   const d = new Date(`${day}T12:00:00`);
@@ -54,9 +55,9 @@ function statusSummary(state) {
 
 export default function LogsList({ state, onOpenDay, onReset, onOpenStatus, onOpenTrailer, onOpenGps, onOpenUnsigned, onOpenDot }) {
   const today = localDayKey();
-  const todayEvents = state.eventsByDay?.[today] || [];
+  const todayEvents = displayEventsForDay(state.eventsByDay?.[today] || [], true);
   const selectedDay = state.activeDay || today;
-  const selectedEvents = state.eventsByDay?.[selectedDay] || [];
+  const selectedEvents = displayEventsForDay(state.eventsByDay?.[selectedDay] || [], selectedDay >= today);
   const unsignedDays = signableLogDays(state);
   const unsigned = unsignedDays.length;
   const reviews = Object.values(state.certifyStatus || {}).filter(v => String(v).includes('Review') || String(v).includes('Not certified')).length;
@@ -174,7 +175,7 @@ export default function LogsList({ state, onOpenDay, onReset, onOpenStatus, onOp
             <button onClick={() => onOpenDay(today)}>→</button>
           </div>
           {last14.map(day => {
-            const evs = state.eventsByDay?.[day] || [];
+            const evs = displayEventsForDay(state.eventsByDay?.[day] || [], day >= today);
             const cert = state.certifyStatus?.[day] || 'Not certified';
             return (
               <button key={day} className="recent-log-row" onClick={() => onOpenDay(day)}>

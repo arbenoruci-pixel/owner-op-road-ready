@@ -5,6 +5,7 @@ import { durLabel, timeLabel } from '../../shared/utils/time.js';
 import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { color, label } from '../../shared/utils/status.js';
 import { validateLogForSigning } from '../logbook/signing.js';
+import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_DRIVER_EMAIL = 'arbenoruci@gmail.com';
@@ -46,6 +47,10 @@ function sortEvents(events = []) {
 
 function dayRange(activeDay) {
   return Array.from({ length: 8 }).map((_, index) => addDays(activeDay, -index));
+}
+
+function reportEventsForDay(state, day) {
+  return sortEvents(displayEventsForDay(state.eventsByDay?.[day] || [], day >= localDayKey()));
 }
 
 function dutyTotals(events = []) {
@@ -129,7 +134,7 @@ function dutySummary(events = []) {
 
 function recapDays(days = [], state) {
   return days.slice(1).map(day => {
-    const events = state.eventsByDay?.[day] || [];
+    const events = reportEventsForDay(state, day);
     return { day, total: totalHours(events) };
   });
 }
@@ -203,7 +208,7 @@ function svgGraphMarkup(events = []) {
 }
 
 function dayReportHtml(state, day, days) {
-  const events = sortEvents(state.eventsByDay?.[day] || []);
+  const events = reportEventsForDay(state, day);
   const totals = dutyTotals(events);
   const inspection = state.inspectionByDay?.[day] || {};
   const sig = signatureForDay(state, day);
@@ -295,7 +300,7 @@ function reportHtml(state, days, routingCode = '') {
 }
 
 function DailyPaper({ state, day, days }) {
-  const events = sortEvents(state.eventsByDay?.[day] || []);
+  const events = reportEventsForDay(state, day);
   const totals = dutyTotals(events);
   const inspection = state.inspectionByDay?.[day] || {};
   const sig = signatureForDay(state, day);
@@ -358,7 +363,7 @@ export default function DotMode({ state, onBack }) {
   const [stage, setStage] = useState('home');
   const [status, setStatus] = useState('');
   const days = useMemo(() => dayRange(state.activeDay || localDayKey()), [state.activeDay]);
-  const selectedEvents = sortEvents(state.eventsByDay?.[selectedDay] || []);
+  const selectedEvents = reportEventsForDay(state, selectedDay);
   const selectedInspection = state.inspectionByDay?.[selectedDay] || {};
   const selectedIssues = validateLogForSigning(state, selectedDay).filter(issue => issue.code !== 'active_day');
   const selectedTotals = dutyTotals(selectedEvents);

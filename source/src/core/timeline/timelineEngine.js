@@ -4,7 +4,7 @@ export function sortEvents(events) {
 
 function cleanEvent(e) {
   const start = Math.max(0, Math.min(1439, Math.round(Number(e.startMin || 0))));
-  const end = Math.max(start + 1, Math.min(1439, Math.round(Number(e.endMin ?? start + 1))));
+  const end = Math.max(start + 1, Math.min(1440, Math.round(Number(e.endMin ?? start + 1))));
   return { ...e, startMin: start, endMin: end };
 }
 
@@ -77,6 +77,68 @@ export function normalizeLogEvents(events = []) {
   }
 
   return merged;
+}
+
+
+export function targetEndForDay(isCurrentDay = false, nowMinute = null) {
+  const currentMinute = nowMinute == null ? null : Number(nowMinute);
+  if (!isCurrentDay) return 1440;
+  if (!Number.isFinite(currentMinute)) return 1440;
+  return Math.max(0, Math.min(1440, Math.round(currentMinute)));
+}
+
+export function makeContinuousLogEvents(events = [], options = {}) {
+  const {
+    isCurrentDay = false,
+    nowMinute = null,
+    fillStartWith = null,
+    startLocation = null,
+  } = options || {};
+
+  const evs = normalizeLogEvents(events).map(e => ({ ...e }));
+  if (!evs.length) return evs;
+
+  const targetEnd = targetEndForDay(isCurrentDay, nowMinute);
+  const out = [];
+  const first = evs[0];
+
+  if (fillStartWith && Number(first.startMin || 0) > 0) {
+    out.push({
+      id: `coverage_start_${first.id || 'first'}`,
+      status: fillStartWith,
+      startMin: 0,
+      endMin: Math.max(1, Math.min(1440, Number(first.startMin || 0))),
+      city: startLocation?.city || first.city || '',
+      state: startLocation?.state || first.state || '',
+      note: 'Carry-forward coverage',
+      description: 'Review actual status if this is not correct',
+      source: 'timeline_continuity',
+      syntheticCoverage: true,
+    });
+  }
+
+  for (let i = 0; i < evs.length; i += 1) {
+    const current = { ...evs[i] };
+    const next = evs[i + 1];
+
+    if (next) {
+      // A duty status remains in effect until the next duty-status change.
+      // Raw endMin values that stop early create illegal visual/log gaps, so
+      // the display/compliance timeline carries the current status to next.startMin.
+      const nextStart = Math.max(current.startMin + 1, Math.min(1440, Number(next.startMin || current.endMin || current.startMin + 1)));
+      current.endMin = nextStart;
+    } else {
+      const carriedEnd = Math.max(Number(current.endMin || 0), targetEnd);
+      current.endMin = Math.max(current.startMin + 1, Math.min(1440, carriedEnd));
+      if (isCurrentDay && targetEnd < Number(current.endMin || 0)) {
+        current.endMin = Math.max(current.startMin + 1, targetEnd);
+      }
+    }
+
+    if (current.endMin > current.startMin) out.push(current);
+  }
+
+  return normalizeLogEvents(out);
 }
 
 
@@ -157,14 +219,18 @@ export function applyPatchWithNeighbors(events, id, patch) {
 }
 
 export function closePreviousAndStart(events, newEvent) {
-  const evs = sortEvents(events).map(e => ({ ...e }));
   const insert = cleanEvent(newEvent);
-  if (evs.length) {
-    const last = evs[evs.length - 1];
-    last.endMin = Math.max(last.startMin + 1, insert.startMin);
+  const evs = sortEvents(events).map(e => cleanEvent({ ...e }));
+  const previous = [...evs].reverse().find(e => e.id !== insert.id && Number(e.startMin || 0) < insert.startMin);
+
+  // Status changes are start-time based. If the previous raw event ended early,
+  // carry it forward to the new status start so the stored timeline does not
+  // develop a gap before the new event.
+  if (previous && Number(previous.endMin || 0) < insert.startMin) {
+    previous.endMin = Math.max(previous.startMin + 1, insert.startMin);
   }
-  evs.push(insert);
-  return normalizeLogEvents(evs);
+
+  return normalizeLogEvents(insertEventOverride(evs, insert));
 }
 
 export function previewInsertOverride(events, newEventOrEvents) {
