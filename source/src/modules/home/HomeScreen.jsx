@@ -9,7 +9,7 @@ function titleFromDay(day) {
   const d = new Date(`${day}T12:00:00`);
   if (Number.isNaN(d.getTime())) return day;
   return {
-    weekday: d.toLocaleDateString(undefined, { weekday:'long' }),
+    weekday: d.toLocaleDateString(undefined, { weekday:'short' }),
     month: d.toLocaleDateString(undefined, { month:'short' }),
     day: String(d.getDate()).padStart(2, '0'),
   };
@@ -17,7 +17,7 @@ function titleFromDay(day) {
 
 function dayTitle(day) {
   const t = titleFromDay(day);
-  return `${t.weekday} ${t.month} ${t.day}`;
+  return `${t.weekday}, ${t.month} ${t.day}`;
 }
 
 function duration(events = []) {
@@ -27,7 +27,9 @@ function duration(events = []) {
 function hLabel(mins) {
   const h = Math.floor(mins / 60);
   const m = Math.round(mins % 60);
-  return `${h} hr, ${m} min`;
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
 }
 
 function statusSummary(state) {
@@ -38,7 +40,7 @@ function statusSummary(state) {
   const loc = state.currentLocation || {};
   const source = loc.locationSource || state.homeGpsStatus || 'default';
   const hasRealLocation = source === 'gps' || source === 'manual' || (loc.city && loc.state && !(loc.city === 'Chicago' && loc.state === 'IL' && source === 'default'));
-  let location = 'Getting GPS…';
+  let location = 'Finding GPS';
 
   if (hasRealLocation) location = `${loc.city || 'GPS'}, ${loc.state || 'UNK'}`;
   else if (state.homeGpsStatus === 'blocked') location = 'GPS blocked';
@@ -49,156 +51,130 @@ function statusSummary(state) {
     label: label(status),
     location,
     locationSource: source,
-    vehicle: state.currentTrailer || 'No vehicle selected',
+    vehicle: state.currentTrailer || state.driver?.truck || 'Unit not set',
   };
 }
 
-export default function LogsList({ state, onOpenDay, onReset, onOpenStatus, onOpenTrailer, onOpenGps, onOpenUnsigned, onOpenDot }) {
-  const today = localDayKey();
-  const todayEvents = displayEventsForDay(state.eventsByDay?.[today] || [], true);
-  const selectedDay = state.activeDay || today;
-  const selectedEvents = displayEventsForDay(state.eventsByDay?.[selectedDay] || [], selectedDay >= today);
-  const unsignedDays = signableLogDays(state);
-  const unsigned = unsignedDays.length;
-  const reviews = Object.values(state.certifyStatus || {}).filter(v => String(v).includes('Review') || String(v).includes('Not certified')).length;
-  const s = statusSummary(state);
-  const currentStatusClass = `home-status-pill ${s.status}`;
+function previousDotNeeds(state, today) {
+  const allDays = Object.keys(state.eventsByDay || {}).sort().reverse();
+  const previous = allDays.filter(day => day < today).slice(0, 7);
+  const incomplete = previous.reduce((count, day) => {
+    const events = displayEventsForDay(state.eventsByDay?.[day] || [], false);
+    return count + (duration(events) === 1440 ? 0 : 1);
+  }, 0);
+  return incomplete + Math.max(0, 7 - previous.length);
+}
 
-  const last14 = Object.keys(state.eventsByDay || {})
-    .sort()
-    .reverse()
-    .slice(0, 7);
+export default function HomeScreen({ state, onOpenDay, onReset, onOpenStatus, onOpenTrailer, onOpenGps, onOpenUnsigned, onOpenDot }) {
+  const today = localDayKey();
+  const selectedDay = state.activeDay || today;
+  const todayEvents = displayEventsForDay(state.eventsByDay?.[today] || [], true);
+  const selectedEvents = displayEventsForDay(state.eventsByDay?.[selectedDay] || [], selectedDay >= today);
+  const unsigned = signableLogDays(state).length;
+  const reviews = Object.values(state.certifyStatus || {}).filter(v => String(v).includes('Review') || String(v).includes('Not certified')).length;
+  const dotNeeds = previousDotNeeds(state, today);
+  const s = statusSummary(state);
+  const certification = state.certifyStatus?.[today] || 'Active';
+  const logReady = unsigned === 0 && reviews === 0;
+  const dotReady = dotNeeds === 0;
+  const recentDays = Object.keys(state.eventsByDay || {}).sort().reverse().slice(0, 4);
 
   return (
-    <section className="screen home-screen">
-      <div className="home-head">
-        <button className="home-menu" onClick={onReset}>☰<span /></button>
-        <div>Home</div>
-        <button className="home-tools" onClick={onOpenGps}>◴</button>
+    <section className="screen home-screen aurora-home">
+      <div className="aurora-topbar">
+        <button className="aurora-icon-btn" onClick={onReset} aria-label="Menu">☰</button>
+        <div>
+          <b>Road Ready</b>
+          <span>Owner-op logbook</span>
+        </div>
+        <button className="aurora-icon-btn" onClick={onOpenGps} aria-label="GPS">⌖</button>
       </div>
 
-      <main className="home-body">
-        <div className="home-greeting">
-          <h1>Good evening, Arben.</h1>
-          <div className="home-status-line">
-            <button className={currentStatusClass} onClick={onOpenStatus}>{s.label}</button>
-            <span className={s.locationSource === 'gps' ? 'gps-home-location ok' : 'gps-home-location'}>{s.location}</span>
-            <button onClick={onOpenTrailer}>{s.vehicle}</button>
-          </div>
-          <div className="home-gps-note">
-            {s.locationSource === 'gps' ? 'GPS location' : state.homeGpsStatus === 'blocked' ? 'GPS blocked · tap status to set location' : state.homeGpsStatus === 'unavailable' ? 'GPS unavailable · enter location manually' : 'Getting GPS location…'}
-          </div>
-        </div>
-
-        <section className="home-hero">
-          <div className="hero-icon">✦</div>
-          <h2>{todayEvents.length ? 'Continue your day' : 'Start your day'}</h2>
-          <p>{todayEvents.length ? 'Open today’s log, review events, and certify when ready.' : 'Complete pre-trip, set your vehicle, and open today’s log.'}</p>
-          <button onClick={() => onOpenDay(today)}>{todayEvents.length ? 'Open today’s log' : 'Get started'}</button>
-        </section>
-
-        <section className="home-compliance">
-          <div className="home-card-title">
-            <h2>Compliance</h2>
-            <button onClick={() => onOpenDay(today)}>→</button>
-          </div>
-          <div className="compliance-grid">
-            <button onClick={() => unsigned ? onOpenUnsigned?.() : onOpenDay(today)}>
-              <span>Unsigned logs</span>
-              <b className={unsigned ? 'warn' : ''}>{unsigned}</b>
-            </button>
-            <button onClick={() => onOpenDay(today)}>
-              <span>Reviews</span>
-              <b className={reviews ? 'warn' : ''}>{reviews}</b>
-            </button>
-            <button onClick={() => onOpenDay(today)}>
-              <span>Today</span>
-              <b>{state.certifyStatus?.[today] === 'Certified' ? 'OK' : 'Active'}</b>
-            </button>
-          </div>
-        </section>
-
-        <section className="quick-tiles">
-          <button className="tile logs" onClick={() => onOpenDay(today)}>
-            <span>▤</span>
-            <b>Logs</b>
-          </button>
-          <button className="tile inspect" onClick={() => onOpenDay(today)}>
-            <span>◎</span>
-            <b>Inspection</b>
-          </button>
-          <button className="tile docs" onClick={() => onOpenGps?.()}>
-            <span>▧</span>
-            <b>Tracking</b>
-          </button>
-        </section>
-
-        <section className="home-card day-preview">
-          <div className="home-card-title">
-            <h2>Today’s log</h2>
-            <button onClick={() => onOpenDay(today)}>→</button>
-          </div>
-          <div className="today-summary">
+      <main className="aurora-home-body">
+        <section className="aurora-command-card">
+          <div className="aurora-command-head">
             <div>
-              <b>{dayTitle(today)}</b>
-              <span>{hLabel(duration(selectedEvents))} total · {state.certifyStatus?.[today] || 'Not certified'}</span>
+              <span>Now</span>
+              <h1>{s.label}</h1>
+              <p>{s.location} · {s.vehicle}</p>
             </div>
+            <button className={`aurora-status-orb ${s.status}`} onClick={onOpenStatus}>{s.status}</button>
           </div>
-          <div className="home-graph-preview">
+
+          <div className="aurora-command-actions">
+            <button className="primary" onClick={() => onOpenDay(today)}>{todayEvents.length ? 'Open today' : 'Start day'}</button>
+            <button onClick={onOpenStatus}>Change status</button>
+          </div>
+        </section>
+
+        <section className="aurora-ready-grid" aria-label="Driver readiness">
+          <button className={logReady ? 'ok' : 'warn'} onClick={() => unsigned ? onOpenUnsigned?.() : onOpenDay(today)}>
+            <span>Log</span>
+            <b>{logReady ? 'Ready' : unsigned ? `${unsigned} unsigned` : `${reviews} review`}</b>
+          </button>
+          <button className="ok" onClick={() => onOpenDay(today)}>
+            <span>Today</span>
+            <b>{certification === 'Certified' ? 'Signed' : 'Active'}</b>
+          </button>
+          <button className={dotReady ? 'ok' : 'warn'} onClick={onOpenDot}>
+            <span>DOT</span>
+            <b>{dotReady ? 'Ready' : `${dotNeeds} days`}</b>
+          </button>
+        </section>
+
+        <section className="aurora-today-card">
+          <div className="aurora-card-title">
+            <div>
+              <span>Today’s log</span>
+              <b>{dayTitle(today)}</b>
+            </div>
+            <button onClick={() => onOpenDay(today)}>Open</button>
+          </div>
+          <div className="aurora-log-metrics">
+            <div><span>Total</span><b>{hLabel(duration(selectedEvents))}</b></div>
+            <div><span>Events</span><b>{selectedEvents.length}</b></div>
+            <div><span>Status</span><b>{certification === 'Certified' ? 'Signed' : 'Open'}</b></div>
+          </div>
+          <div className="aurora-graph-shell">
             <LogGraph events={selectedEvents} selectedId={null} />
           </div>
         </section>
 
-        <section className="home-card">
-          <div className="home-card-title">
-            <h2>Maintenance</h2>
-            <button>→</button>
-          </div>
-          <button className="home-list-row" onClick={() => onOpenDay(today)}>Pre-trip vehicle inspection <span>›</span></button>
-          <button className="home-list-row" onClick={() => onOpenDay(today)}>Post-trip vehicle inspection <span>›</span></button>
-          <button className="home-list-row" onClick={() => onOpenDay(today)}>Vehicle inspection <span>›</span></button>
-          <button className="home-list-row" onClick={onOpenTrailer}>Asset inspection <span>›</span></button>
+        <section className="aurora-action-list">
+          <button onClick={() => onOpenDay(today)}><span>Log + Sign</span><em>Open day</em></button>
+          <button onClick={() => onOpenDay(today)}><span>Inspection</span><em>Pre-trip</em></button>
+          <button onClick={onOpenTrailer}><span>Truck / Trailer</span><em>Unit</em></button>
+          <button onClick={onOpenDot}><span>DOT Mode</span><em>Officer view</em></button>
         </section>
 
-        <section className="home-card messages">
-          <div className="home-card-title">
-            <h2>DOT Inspection</h2>
-            <button onClick={onOpenDot}>→</button>
+        <section className="aurora-recent-card">
+          <div className="aurora-card-title compact">
+            <div>
+              <span>Recent</span>
+              <b>Last logs</b>
+            </div>
+            <button onClick={() => onOpenDay(today)}>All</button>
           </div>
-          <button className="home-list-row dot-inspection-home-row" onClick={onOpenDot}>DOT Inspection Mode <span>›</span></button>
-          <p>Open an inspection-safe view or prepare the previous 7 days + today log package.</p>
-        </section>
-
-        <section className="home-card recent-logs">
-          <div className="home-card-title">
-            <h2>Recent logs</h2>
-            <button onClick={() => onOpenDay(today)}>→</button>
-          </div>
-          {last14.map(day => {
+          {recentDays.map(day => {
             const evs = displayEventsForDay(state.eventsByDay?.[day] || [], day >= today);
-            const cert = state.certifyStatus?.[day] || 'Not certified';
+            const cert = state.certifyStatus?.[day] || 'Not signed';
             return (
-              <button key={day} className="recent-log-row" onClick={() => onOpenDay(day)}>
+              <button key={day} className="aurora-recent-row" onClick={() => onOpenDay(day)}>
                 <div>
                   <b>{dayTitle(day)}</b>
                   <span>{hLabel(duration(evs))} · {cert}</span>
                 </div>
-                <em>{cert === 'Certified' ? '✓' : '!'}</em>
+                <em>{cert === 'Certified' ? '✓' : '›'}</em>
               </button>
             );
           })}
         </section>
       </main>
 
-      <button className="bottom-status-bar" onClick={onOpenStatus}>
-        <div>
-          <b>{s.label}</b>
-          <span>{s.vehicle}</span>
-        </div>
-        <div>
-          <b>16:25</b>
-          <span>Until cycle restart</span>
-        </div>
+      <button className="aurora-floating-status" onClick={onOpenStatus}>
+        <span>{s.status}</span>
+        <b>{s.label}</b>
+        <em>{s.vehicle}</em>
       </button>
     </section>
   );

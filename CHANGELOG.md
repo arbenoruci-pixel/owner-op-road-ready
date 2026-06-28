@@ -1,4 +1,32 @@
 
+## v92.3 — Aurora Driver UI / Original Calm Design
+
+- Rebuilt Home into a compact driver command center.
+- Added an original Apple-like calm visual system distinct from Motive/KeepTruckin.
+- Tightened Day Log, Sign/RoadGuard, DOT Mode, Form, Inspection, and editor UI.
+- Kept continuous timeline, RoadGuard, DOT package, and AI Assist logic intact.
+- Build/offline/easy-eyes tests pass.
+
+
+## v92.3 — Orchard UI / Apple-inspired Calm Driver UX
+
+- Rebuilt Home as a compact command center with current status, vehicle/today/DOT chips, quick actions, RoadGuard summary, and compact recent logs.
+- Added a distinct Apple-inspired Orchard UI layer with translucent chrome, segmented tabs, softer cards, smaller buttons, and calmer colors.
+- Restyled Day Log, event rows, Sign/RoadGuard, AI helper, DOT mode, forms, and inspection screens to reduce screen fatigue.
+- Removed duplicate LogCheckPanel rendering from Day Log.
+- Preserved continuous timeline/no-gap logic and RoadGuard validation behavior.
+- Build, offline sync smoke test, and easy-eyes verification passed.
+
+
+## v92.3 — Native Owner-Op UI Redesign
+- Rebuilt Home into a compact RoadGuard command center.
+- Added Apple-inspired native mobile visual system distinct from Motive-style layouts.
+- Tightened Day Log, RoadGuard, AI helper, Form, Inspection, and DOT Mode spacing.
+- Reduced oversized cards and long visible explanations.
+- Preserved continuous no-gap timeline logic and RoadGuard safety checks.
+- Build/offline/easy-eyes checks passed.
+
+
 
 ## v92.2.1 — Package Fix / Proper ZIP
 
