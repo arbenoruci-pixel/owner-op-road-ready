@@ -448,12 +448,190 @@ function ChatGptAssistBox({ state, day, onCopy, onQuickFix }) {
   );
 }
 
-function SignGuardPanel({ state, day, onQuickFix }) {
+
+function isProfileIssue(issue = {}) {
+  return /missing_driver|missing_carrier|missing_main_office/i.test(String(issue.code || ''));
+}
+
+function isNoticeOnlyIssue(issue = {}) {
+  return /active_day/i.test(String(issue.code || ''));
+}
+
+function buildFixWizardSteps(guard, day) {
+  const todayIssues = (guard.todayIssues || []).filter(issue => !isNoticeOnlyIssue(issue));
+  const steps = [];
+  const profileIssues = todayIssues.filter(isProfileIssue);
+
+  if (profileIssues.length) {
+    steps.push({
+      id: 'saved_profile',
+      title: 'Profile info missing',
+      detail: 'Apply saved driver, carrier, main office, and unit info.',
+      where: 'Form tab → Driver / Carrier',
+      action: 'APPLY_SAVED_PROFILE',
+      actionLabel: 'Apply saved profile',
+      kind: 'safe',
+      issue: profileIssues[0],
+      applyOnlyIfTrue: 'Uses the saved profile. Review it after applying.',
+    });
+  }
+
+  todayIssues
+    .filter(issue => !isProfileIssue(issue))
+    .forEach(issue => {
+      const suggested = issueSuggestedAction(issue);
+      const code = String(issue.code || '');
+      const reviewOnly = /hos_|violation|cycle|break|window|drive11/i.test(`${code} ${issue.title || ''} ${issue.detail || ''}`);
+      steps.push({
+        id: issue.code || `${issue.title}-${steps.length}`,
+        title: issue.title || 'Review item',
+        detail: issue.detail || 'Review this item before signing.',
+        where: issue.where || 'Log',
+        action: suggested.action,
+        actionLabel: reviewOnly ? 'Review log' : suggested.label || 'Open',
+        kind: reviewOnly ? 'review' : 'fix',
+        day: suggested.day || issue.day || day,
+        issue,
+        applyOnlyIfTrue: reviewOnly
+          ? 'Review only. Do not change accurate driving/on-duty time.'
+          : 'Apply or edit only if the current record is wrong or incomplete.',
+      });
+    });
+
+  (guard.dotPackage || []).forEach(issue => {
+    const suggested = issueSuggestedAction(issue);
+    steps.push({
+      id: issue.code || `dot-${issue.day}`,
+      title: issue.title || 'Previous day needs review',
+      detail: issue.detail || 'Open this day and complete only with accurate records.',
+      where: issue.where || 'DOT package',
+      action: suggested.action || 'OPEN_DAY',
+      actionLabel: 'Open day',
+      kind: 'dot',
+      day: suggested.day || issue.day || day,
+      issue,
+      applyOnlyIfTrue: 'Open the day. Fill or change time only if you know the true record.',
+    });
+  });
+
+  return steps;
+}
+
+function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCopy }) {
+  const steps = useMemo(() => buildFixWizardSteps(guard, day), [guard, day]);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (open) setIndex(0);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setIndex(current => Math.min(current, steps.length));
+  }, [open, steps.length]);
+
+  if (!open) return null;
+
+  const total = steps.length;
+  const step = steps[index] || null;
+  const done = !step;
+
+  function nextStep() {
+    setIndex(current => Math.min(current + 1, total));
+  }
+
+  function runStep() {
+    if (!step) return;
+    if (!step.action || step.action === 'NO_ACTION') {
+      nextStep();
+      return;
+    }
+
+    const silentApply = step.action === 'APPLY_SAVED_PROFILE' || step.action === 'OPEN_SHIPPING_DOCS';
+    onQuickFix?.(step.action, {
+      issue: step.issue,
+      day: step.day || day,
+      silent: silentApply,
+      wizard: true,
+    });
+
+    if (silentApply) {
+      window.setTimeout(() => setIndex(current => Math.min(current, Math.max(0, steps.length - 1))), 80);
+    } else {
+      onClose?.();
+    }
+  }
+
+  function copyStep() {
+    if (!step) return;
+    const text = buildIssueFixPrompt(state, day, step.issue || {
+      title: step.title,
+      detail: step.detail,
+      where: step.where,
+      code: step.id,
+    });
+    onCopy?.(text, 'Wizard step copied');
+  }
+
+  return (
+    <div className="roadguard-wizard-backdrop" role="dialog" aria-modal="true" aria-label="Fix issues wizard">
+      <div className="roadguard-wizard-card">
+        <div className="roadguard-wizard-head">
+          <div>
+            <span>Fix wizard</span>
+            <b>{done ? 'All fixable items reviewed' : `Step ${Math.min(index + 1, total)} of ${total}`}</b>
+          </div>
+          <button onClick={onClose}>Close</button>
+        </div>
+
+        {done ? (
+          <div className="roadguard-wizard-done">
+            <b>Run Log Check again.</b>
+            <p>If the record is true and complete, the sign button will become available when the day is ready.</p>
+            <div className="roadguard-wizard-actions">
+              <button onClick={onClose}>Done</button>
+              <button className="secondary" onClick={() => onCopy?.(buildChatGptLogReviewPrompt(state, day), 'Log review copied')}>Copy for ChatGPT</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className={`roadguard-wizard-step ${step.kind}`}>
+              <span>{step.kind === 'dot' ? 'DOT package' : step.kind === 'review' ? 'Review only' : 'Fix item'}</span>
+              <b>{step.title}</b>
+              <p>{step.detail}</p>
+              <em>{step.where}</em>
+              <small>{step.applyOnlyIfTrue}</small>
+            </div>
+
+            <div className="roadguard-wizard-progress">
+              <i style={{ width: `${total ? ((index + 1) / total) * 100 : 100}%` }} />
+            </div>
+
+            <div className="roadguard-wizard-actions">
+              <button onClick={runStep}>{step.actionLabel || 'Fix / Open'}</button>
+              <button className="secondary" onClick={nextStep}>Skip</button>
+              <button className="secondary" onClick={copyStep}>Copy</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
   const [copyStatus, setCopyStatus] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [showToday, setShowToday] = useState(true);
   const [showDot, setShowDot] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const guard = buildSignGuardSummary(state, day);
+
+  useEffect(() => {
+    if (!wizardRequestId) return;
+    setExpanded(true);
+    setWizardOpen(true);
+  }, [wizardRequestId]);
 
   async function copyText(text, message = 'Copied') {
     try {
@@ -482,7 +660,10 @@ function SignGuardPanel({ state, day, onQuickFix }) {
           <b>{headline}</b>
           <em>{issueCount ? `${issueCount} item${issueCount === 1 ? '' : 's'}` : 'No open items'}</em>
         </button>
-        <button className="roadguard-copy-mini" onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Log review copied')}>Copy</button>
+        <div className="roadguard-head-actions">
+          <button className="roadguard-copy-mini" onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Log review copied')}>Copy</button>
+          {issueCount > 0 && <button className="roadguard-fix-mini" onClick={() => { setExpanded(true); setWizardOpen(true); }}>Fix</button>}
+        </div>
       </div>
 
       {firstIssue && !expanded && (
@@ -525,6 +706,7 @@ function SignGuardPanel({ state, day, onQuickFix }) {
           <ChatGptAssistBox state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />
         </>
       )}
+      <RoadGuardFixWizard open={wizardOpen} guard={guard} day={day} state={state} onClose={() => setWizardOpen(false)} onQuickFix={onQuickFix} onCopy={copyText} />
       {copyStatus ? <span className="signguard-copy-status">{copyStatus}</span> : null}
     </div>
   );
@@ -538,11 +720,13 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
   const [name, setName] = useState(savedDriverSignature?.driverName || saved.driverName || driverNameForState(state));
   const [hasInk, setHasInk] = useState(!!existingDataUrl);
   const [changeSignature, setChangeSignature] = useState(!existingDataUrl);
+  const [wizardRequestId, setWizardRequestId] = useState(0);
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef(null);
   const signState = logSignState(state, day);
   const blockers = validateLogForSigning(state, day);
+  const fixBlockers = blockers.filter(issue => !/active_day/i.test(String(issue.code || '')));
   const todayActive = day >= localDayKey();
 
   useEffect(() => {
@@ -688,12 +872,16 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
         <span>{todayActive ? 'Today is active. Sign after the day is complete.' : signState.reason}</span>
       </div>
 
-      <SignGuardPanel state={state} day={day} onQuickFix={onQuickFix} />
+      <SignGuardPanel state={state} day={day} onQuickFix={onQuickFix} wizardRequestId={wizardRequestId} />
 
 
       <div className="signature-actions-row">
-        <button className="sign-save road-sign-save" onClick={signLog} disabled={(changeSignature && !hasInk) || blockers.length > 0}>
-          {blockers.length ? 'Fix Issues Before Sign' : signButtonLabel}
+        <button
+          className="sign-save road-sign-save"
+          onClick={fixBlockers.length ? () => setWizardRequestId(Date.now()) : signLog}
+          disabled={fixBlockers.length ? false : ((changeSignature && !hasInk) || todayActive)}
+        >
+          {fixBlockers.length ? 'Fix Issues Before Sign' : todayActive ? 'Sign after day complete' : signButtonLabel}
         </button>
       </div>
 

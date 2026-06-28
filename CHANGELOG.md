@@ -1,3 +1,11 @@
+
+## v92.7 - RoadGuard Fix Wizard
+
+- Added step-by-step RoadGuard Fix Wizard for fix-required items.
+- Sign action now opens Fix Wizard when records need fixes, instead of leaving driver stuck.
+- Safe fixes can apply profile/BOL info with confirmation; HOS/time issues remain review/open-only.
+- Maintained no-gap timeline, DOT package, inspection, ChatGPT parser, offline sync, and route structure.
+
 ## v92.6 — DriverLine Original UI Redesign
 
 - Added a compact original DriverLine UI pass for market testing.

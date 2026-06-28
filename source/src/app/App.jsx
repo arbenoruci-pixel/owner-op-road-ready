@@ -868,7 +868,7 @@ export default function App() {
       setState(s => ({
         ...s,
         loadInfo: { ...(s.loadInfo || {}), shippingDocs: String(value || '').trim() },
-        roadGuardTabRequest: { tab:'form', at:Date.now() },
+        ...(!payload.silent ? { roadGuardTabRequest: { tab:'form', at:Date.now() } } : {}),
       }));
       return;
     }
@@ -917,7 +917,7 @@ export default function App() {
         carrierName:s.carrierName || ROADGUARD_DEFAULT_PROFILE.carrierName,
         mainOfficeAddress:s.mainOfficeAddress || ROADGUARD_DEFAULT_PROFILE.mainOffice,
         driver:{ ...(s.driver || {}), truck:s.driver?.truck || 'Unit 12' },
-        roadGuardTabRequest:{ tab:'form', at:Date.now() },
+        ...(!payload.silent ? { roadGuardTabRequest:{ tab:'form', at:Date.now() } } : {}),
       }));
       return;
     }
