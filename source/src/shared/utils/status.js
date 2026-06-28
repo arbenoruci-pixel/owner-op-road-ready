@@ -1,9 +1,12 @@
 export const STATUS_ORDER = ['OFF', 'SB', 'D', 'ON'];
+// v92.5 Owner-Op Road Ready palette — original duty-status identity.
+// OFF/SB read as graded steel-slate (neutral), D = ready green, ON = Road Ready blue.
+// These hexes are the single source of truth for the graph + every duty chip/badge.
 export const STATUS = {
-  OFF: { label: 'OFF DUTY', color: '#0B7DEC', soft: 'rgba(11,125,236,.10)' },
-  SB: { label: 'SLEEPER', color: '#6B7280', soft: 'rgba(107,114,128,.12)' },
-  D: { label: 'DRIVING', color: '#62B934', soft: 'rgba(98,185,52,.14)' },
-  ON: { label: 'ON DUTY', color: '#4F95D1', soft: 'rgba(79,149,209,.13)' },
+  OFF: { label: 'OFF DUTY', color: '#596677', soft: 'rgba(89,102,119,.13)' },
+  SB: { label: 'SLEEPER', color: '#7a8292', soft: 'rgba(122,130,146,.15)' },
+  D: { label: 'DRIVING', color: '#168980', soft: 'rgba(22,137,128,.14)' },
+  ON: { label: 'ON DUTY', color: '#2156d9', soft: 'rgba(33,86,217,.12)' },
 };
 export function label(status) { return STATUS[status]?.label || 'OFF DUTY'; }
 export function color(status) { return STATUS[status]?.color || STATUS.OFF.color; }

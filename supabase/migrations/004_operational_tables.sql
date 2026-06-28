@@ -1,4 +1,4 @@
--- Owner-Op Road Ready — operational tables for Motive-style foundation.
+-- Owner-Op Road Ready — operational tables for row-based foundation.
 -- Adds pre-trip inspection records, certification history, GPS/IFTA base tables and audit log.
 
 create table if not exists public.inspections (

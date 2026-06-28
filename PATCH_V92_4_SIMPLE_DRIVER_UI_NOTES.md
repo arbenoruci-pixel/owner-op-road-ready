@@ -5,7 +5,7 @@ Replaced the busy Aurora Home screen with a calm, row-based **Logs list** that m
 requested simple-driver structure (status strip → TODAY → LAST 14 DAYS). This is a
 presentation-only change. No compliance logic, no routes, and no other screens were modified.
 
-The Motive screenshots were used only as a structural reference (simple list, row layout,
+The reference screenshots were used only as a structural reference (simple list, row layout,
 short labels). The visual identity here is original: own header style, own status chips, own
 spacing/typography, own warning treatment, calm blue accent (#1a73e8).
 

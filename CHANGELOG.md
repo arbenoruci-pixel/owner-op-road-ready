@@ -1,3 +1,60 @@
+## v92.6 — DriverLine Original UI Redesign
+
+- Added a compact original DriverLine UI pass for market testing.
+- Reworked topbar, tabs, logs list, graph shell, event rows, form rows, Sign/RoadGuard, AI helper, inspection, and DOT Mode styling.
+- Removed legacy reference-named runtime classes from React/CSS and replaced them with `road-*` class names.
+- Form, Sign, and Inspection tabs no longer carry the full graph at the top, keeping those screens calmer.
+- Preserved existing continuous timeline/no-gap, RoadGuard, DOT package, inspection/pre-trip, ChatGPT parser, offline/Dexie, and Supabase logic.
+- Build and offline sync smoke test passed.
+
+
+## v92.5 — Original Driver UI (brand differentiation)
+
+Goal: make the look-and-feel clearly Owner-Op Road Ready and visually distinct, while
+keeping the simple row-based driver workflow and every bit of compliance logic. This pass
+is presentation-only (palette, header, tabs, chips, rows, graph styling). No routes, no
+logic, no schema.
+
+Original visual identity
+- New palette: warm off-white surface (#f5f3ee), deep navy ink (#1b2435), calm blue accent
+  (#2557c7), green = ready/driving (#2f9e60), amber = review (#d68a26), red = fix (#cf4b4b).
+- Duty-status colors re-themed at the single source (`shared/utils/status.js`): OFF/SB read
+  as graded steel-slate, D = green, ON = Road Ready blue. This re-colors the graph and every
+  duty chip/badge consistently.
+
+Header (was a centered dark bar)
+- Day header is now deep navy with a left-aligned title and a 2px blue accent rule.
+- Logs header is a light bar with a "Road Ready · Logs" wordmark + accent mark on the left
+  and a "DOT Mode" pill on the right. No centered title, no red notification dot.
+
+Tabs (was an underline)
+- Log / Form / Sign / Inspection is now a rounded segmented/pill control; the active tab is a
+  filled blue pill instead of an underline.
+
+Logs list (was dot + chevron rows)
+- Rows now use a left status rail (colored by duty status), a status chip, date, total, cert
+  status, inspection status, and a real warning count badge (from `validateLogForSigning`).
+  No checkbox/chevron list style. Today still shows a mini graph.
+
+Graph
+- Softer warm grid, navy rounded duty line, navy/muted labels. Geometry, totals, and the
+  continuous-timeline math are unchanged.
+
+Event list / Form / Sign / Inspection / DOT
+- Event rows use a rounded duty chip (not a circle) and our spacing; the edit control is an
+  outlined accent button.
+- Form sections are subtle rounded containers with our section headers.
+- Sign uses a compact card with an accent-bordered certification statement; the RoadGuard /
+  Log Check panel keeps all its logic, restyled to our card identity.
+- Inspection check tiles and prompt use our borders/greens.
+- DOT Inspection Mode header/badge/buttons use the navy + blue identity.
+
+Unchanged (logic preserved verbatim)
+- Continuous no-gap timeline, RoadGuard/SignGuard, DOT previous-7-days package, ChatGPT
+  fix-plan parser, inspection/pre-trip linkage, Dexie/Supabase/offline sync.
+- `App.jsx`, Chrome.jsx, and all logic/core files are unchanged except `status.js` (hex values
+  only) and `LogGraph.jsx` (grid/line color values only).
+
 
 ## v92.4 — Simple Driver UI (Logs list redesign)
 
@@ -73,8 +130,8 @@ What was deliberately NOT changed (logic preserved verbatim)
 - Preserved existing signed-day recertification behavior when signed logs are edited.
 - Kept HOS, GPS, timeline merge, carryover, DB, service worker/cache, routing root, and Vercel config unchanged.
 
-## v94 - Motive-style form and finger signature
-- Rebuilt the Day Log Form tab into a Motive-style paper form with GENERAL / CARRIER / OTHER sections and row-based fields.
+## v94 - row-based form and finger signature
+- Rebuilt the Day Log Form tab into a row-based paper form with GENERAL / CARRIER / OTHER sections and row-based fields.
 - Added top-line duty totals for OFF / SB / D / ON in the Form tab.
 - Replaced the old text-only signature area with a real finger-signature canvas in the Sign tab.
 - Added clear-and-resign behavior while keeping signature save inside the existing per-day signature storage.

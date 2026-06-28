@@ -1,3 +1,12 @@
+## v92.6 — DriverLine Original UI Redesign
+
+- Added a compact original DriverLine UI pass for market testing.
+- Reworked topbar, tabs, logs list, graph shell, event rows, form rows, Sign/RoadGuard, AI helper, inspection, and DOT Mode styling.
+- Removed legacy reference-named runtime classes from React/CSS and replaced them with `road-*` class names.
+- Form, Sign, and Inspection tabs no longer carry the full graph at the top, keeping those screens calmer.
+- Preserved existing continuous timeline/no-gap, RoadGuard, DOT package, inspection/pre-trip, ChatGPT parser, offline/Dexie, and Supabase logic.
+- Build and offline sync smoke test passed.
+
 # CHANGELOG
 
 ## v95 - Completed-log signing flow
@@ -9,8 +18,8 @@
 - Preserved existing signed-day recertification behavior when signed logs are edited.
 - Kept HOS, GPS, timeline merge, carryover, DB, service worker/cache, routing root, and Vercel config unchanged.
 
-## v94 - Motive-style form and finger signature
-- Rebuilt the Day Log Form tab into a Motive-style paper form with GENERAL / CARRIER / OTHER sections and row-based fields.
+## v94 - row-based form and finger signature
+- Rebuilt the Day Log Form tab into a row-based paper form with GENERAL / CARRIER / OTHER sections and row-based fields.
 - Added top-line duty totals for OFF / SB / D / ON in the Form tab.
 - Replaced the old text-only signature area with a real finger-signature canvas in the Sign tab.
 - Added clear-and-resign behavior while keeping signature save inside the existing per-day signature storage.

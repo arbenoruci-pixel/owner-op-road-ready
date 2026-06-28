@@ -160,14 +160,14 @@ function formSummary(state, events) {
 }
 
 function FormSectionTitle({ children }) {
-  return <div className="motive-form-section-title">{children}</div>;
+  return <div className="road-form-section-title">{children}</div>;
 }
 
 function FormRow({ label, value }) {
   return (
-    <div className="motive-form-row">
-      <div className="motive-form-label">{label}</div>
-      <div className="motive-form-value">{value}</div>
+    <div className="road-form-row">
+      <div className="road-form-label">{label}</div>
+      <div className="road-form-value">{value}</div>
     </div>
   );
 }
@@ -175,8 +175,8 @@ function FormRow({ label, value }) {
 function MiniFormPanel({ state, events }) {
   const form = formSummary(state, events);
   return (
-    <div className="motive-paper-form">
-      <div className="motive-form-totals">
+    <div className="road-paper-form">
+      <div className="road-form-totals">
         <div><b>OFF</b><span>{form.off}</span></div>
         <div><b>SB</b><span>{form.sb}</span></div>
         <div><b>D</b><span>{form.d}</span></div>
@@ -186,14 +186,14 @@ function MiniFormPanel({ state, events }) {
       <FormSectionTitle>GENERAL</FormSectionTitle>
       <FormRow label="Vehicles" value={form.vehicles} />
       <FormRow label="Trailers" value={form.trailers} />
-      <div className="motive-form-split-row">
+      <div className="road-form-split-row">
         <div>
-          <div className="motive-form-label">Distance</div>
-          <div className="motive-form-value">{form.distance}</div>
+          <div className="road-form-label">Distance</div>
+          <div className="road-form-value">{form.distance}</div>
         </div>
         <div>
-          <div className="motive-form-label">Odometers</div>
-          <div className="motive-form-value">{form.odometers}</div>
+          <div className="road-form-label">Odometers</div>
+          <div className="road-form-value">{form.odometers}</div>
         </div>
       </div>
       <FormRow label="Shipping Documents" value={form.shippingDocs} />
@@ -450,6 +450,7 @@ function ChatGptAssistBox({ state, day, onCopy, onQuickFix }) {
 
 function SignGuardPanel({ state, day, onQuickFix }) {
   const [copyStatus, setCopyStatus] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const [showToday, setShowToday] = useState(true);
   const [showDot, setShowDot] = useState(false);
   const guard = buildSignGuardSummary(state, day);
@@ -465,51 +466,65 @@ function SignGuardPanel({ state, day, onQuickFix }) {
   }
 
   const headline = guard.status === 'READY'
-    ? 'Ready to sign'
+    ? 'Ready'
     : guard.status === 'FIX_REQUIRED'
-      ? 'Fix before signing'
-      : 'Review before signing';
+      ? 'Needs fixes'
+      : 'Review needed';
+
+  const firstIssue = guard.todayIssues?.[0] || guard.dotPackage?.[0] || null;
+  const issueCount = guard.fixRequired.length + guard.hosViolations.length + guard.dotPackage.length;
 
   return (
-    <div className={`signguard-panel signguard-panel-v92 ${guard.status.toLowerCase()}`}>
-      <div className="signguard-head signguard-head-v92">
-        <div>
-          <span>RoadGuard Check</span>
+    <div className={`signguard-panel signguard-panel-v92 roadguard-lite ${guard.status.toLowerCase()} ${expanded ? 'expanded' : 'collapsed'}`}>
+      <div className="roadguard-lite-head">
+        <button className="roadguard-lite-main" onClick={() => setExpanded(value => !value)}>
+          <span>Log check</span>
           <b>{headline}</b>
-          <p>Required fields, 24-hour coverage, location, inspection, HOS review, and DOT package readiness.</p>
-        </div>
-        <button onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Full log review copied')}>Copy Log for ChatGPT</button>
+          <em>{issueCount ? `${issueCount} item${issueCount === 1 ? '' : 's'}` : 'No open items'}</em>
+        </button>
+        <button className="roadguard-copy-mini" onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Log review copied')}>Copy</button>
       </div>
 
-      <div className="signguard-score-row signguard-score-row-v92">
-        <button className={guard.fixRequired.length ? 'bad' : 'ok'} onClick={() => setShowToday(true)}><b>{guard.fixRequired.length}</b><span>fix today</span></button>
-        <button className={guard.hosViolations.length ? 'bad' : 'ok'} onClick={() => setShowToday(true)}><b>{guard.hosViolations.length}</b><span>HOS review</span></button>
-        <button className={guard.dotPackage.length ? 'warn' : 'ok'} onClick={() => setShowDot(value => !value)}><b>{guard.dotPackage.length}</b><span>DOT pack</span></button>
-      </div>
-
-      {guard.notices.length > 0 && (
-        <div className="signguard-notice-v92">
-          {guard.notices.map(issue => <span key={issue.code}>{issue.title}: {issue.detail}</span>)}
-        </div>
+      {firstIssue && !expanded && (
+        <button className="roadguard-first-issue" onClick={() => setExpanded(true)}>
+          <span>{firstIssue.title}</span>
+          <em>{firstIssue.where || 'Open review'}</em>
+        </button>
       )}
 
-      <div className="signguard-action-strip-v92">
-        <button onClick={() => onQuickFix?.('APPLY_SAVED_PROFILE', { day })}>Apply saved profile</button>
-        <button onClick={() => onQuickFix?.('OPEN_SHIPPING_DOCS', { day })}>Add BOL / empty</button>
-        <button onClick={() => setShowDot(value => !value)}>{showDot ? 'Hide DOT days' : 'Review DOT days'}</button>
+      <div className="signguard-score-row signguard-score-row-v92 roadguard-score-compact">
+        <button className={guard.fixRequired.length ? 'bad' : 'ok'} onClick={() => { setExpanded(true); setShowToday(true); }}><b>{guard.fixRequired.length}</b><span>Fix</span></button>
+        <button className={guard.hosViolations.length ? 'bad' : 'ok'} onClick={() => { setExpanded(true); setShowToday(true); }}><b>{guard.hosViolations.length}</b><span>HOS</span></button>
+        <button className={guard.dotPackage.length ? 'warn' : 'ok'} onClick={() => { setExpanded(true); setShowDot(value => !value); }}><b>{guard.dotPackage.length}</b><span>DOT</span></button>
       </div>
 
-      {showToday && (guard.todayIssues.length ? (
-        <div className="signguard-issues signguard-issues-v92">
-          {guard.todayIssues.map(issue => <SignGuardIssueCard key={issue.code} issue={issue} state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />)}
-        </div>
-      ) : (
-        <div className="signguard-clean">No blocking issues found for this log day.</div>
-      ))}
+      {expanded && (
+        <>
+          {guard.notices.length > 0 && (
+            <div className="signguard-notice-v92 roadguard-notice-compact">
+              {guard.notices.map(issue => <span key={issue.code}>{issue.title}: {issue.detail}</span>)}
+            </div>
+          )}
 
-      {showDot && <DotPackageTable rows={guard.dotRows} onQuickFix={onQuickFix} onCopy={copyText} state={state} day={day} />}
+          <div className="signguard-action-strip-v92 roadguard-action-row">
+            <button onClick={() => onQuickFix?.('APPLY_SAVED_PROFILE', { day })}>Profile</button>
+            <button onClick={() => onQuickFix?.('OPEN_SHIPPING_DOCS', { day })}>BOL / empty</button>
+            <button onClick={() => setShowDot(value => !value)}>{showDot ? 'Hide DOT' : 'DOT days'}</button>
+          </div>
 
-      <ChatGptAssistBox state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />
+          {showToday && (guard.todayIssues.length ? (
+            <div className="signguard-issues signguard-issues-v92 roadguard-issues-compact">
+              {guard.todayIssues.map(issue => <SignGuardIssueCard key={issue.code} issue={issue} state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />)}
+            </div>
+          ) : (
+            <div className="signguard-clean roadguard-clean">Today looks clean.</div>
+          ))}
+
+          {showDot && <DotPackageTable rows={guard.dotRows} onQuickFix={onQuickFix} onCopy={copyText} state={state} day={day} />}
+
+          <ChatGptAssistBox state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />
+        </>
+      )}
       {copyStatus ? <span className="signguard-copy-status">{copyStatus}</span> : null}
     </div>
   );
@@ -634,9 +649,9 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
         : 'Save Signature + Sign';
 
   return (
-    <div className={`signature-panel motive-sign-panel ${saved.signed ? 'signed' : ''}`}>
+    <div className={`signature-panel road-sign-panel ${saved.signed ? 'signed' : ''}`}>
       <div className="sign-legal-copy">
-        I hereby certify that my data entries and my record of duty status for this day are true and correct
+        I certify this log is true and correct.
       </div>
 
       <div className="sign-driver-row">
@@ -647,7 +662,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
       {existingDataUrl && !changeSignature ? (
         <div className="saved-signature-preview">
           <img src={existingDataUrl} alt="Saved driver signature" />
-          <span>Saved driver signature. Signing this log only needs one tap.</span>
+          <span>Saved signature</span>
         </div>
       ) : (
         <>
@@ -670,14 +685,14 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
 
       <div className="sign-status-card">
         <b>{signState.label}</b>
-        <span>{todayActive ? 'Today is active. It is not counted in Unsigned Logs yet.' : signState.reason}</span>
+        <span>{todayActive ? 'Today is active. Sign after the day is complete.' : signState.reason}</span>
       </div>
 
       <SignGuardPanel state={state} day={day} onQuickFix={onQuickFix} />
 
 
       <div className="signature-actions-row">
-        <button className="sign-save motive-sign-save" onClick={signLog} disabled={(changeSignature && !hasInk) || blockers.length > 0}>
+        <button className="sign-save road-sign-save" onClick={signLog} disabled={(changeSignature && !hasInk) || blockers.length > 0}>
           {blockers.length ? 'Fix Issues Before Sign' : signButtonLabel}
         </button>
       </div>
@@ -685,7 +700,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
       {existingDataUrl && !changeSignature && <button className="clear-signature-link" onClick={() => setChangeSignature(true)}>Change Signature</button>}
 
       <div className="signature-footnote">
-        {saved.signed ? `Signed · ${prettyStamp(saved.signedAt)}` : existingDataUrl ? 'Tap Sign Log to use the saved signature.' : 'Use your finger to save your driver signature once.'}
+        {saved.signed ? `Signed · ${prettyStamp(saved.signedAt)}` : existingDataUrl ? 'Ready with saved signature.' : 'Draw signature once.'}
       </div>
     </div>
   );
@@ -763,15 +778,17 @@ export default function DayDetail({
       <Header title={title(state.activeDay)} onBack={onBack} onRight={onTools} />
       <Tabs active={activeTab} onTab={setActiveTab} />
 
-      <div className="graph-panel graph-first-panel">
-        <LogGraph
-          events={previewGraphEvents}
-          selectedId={state.selectedEventId}
-          violationRanges={previewViolationRanges}
-          onSelect={onSelect}
-          onEmptyTap={() => onSelect(null)}
-        />
-      </div>
+      {activeTab === 'log' && (
+        <div className="graph-panel graph-first-panel">
+          <LogGraph
+            events={previewGraphEvents}
+            selectedId={state.selectedEventId}
+            violationRanges={previewViolationRanges}
+            onSelect={onSelect}
+            onEmptyTap={() => onSelect(null)}
+          />
+        </div>
+      )}
 
       {activeTab === 'log' && (
         <SelectedEventBar

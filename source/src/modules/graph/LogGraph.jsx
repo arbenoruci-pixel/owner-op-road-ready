@@ -78,12 +78,12 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
 
   return (
     <svg ref={svgRef} className={`log-graph ${className}`} viewBox={`0 0 ${W} ${H}`}>
-      <rect x="0" y="0" width={W} height={H} fill="#fff" />
+      <rect x="0" y="0" width={W} height={H} fill="#fcfdfb" />
       {STATUS_ORDER.map((s,i) => (
         <g key={s}>
-          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#fff" stroke="#d5dbe4" strokeWidth="0.8" />
+          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#fcfdfb" stroke="#e4e9e3" strokeWidth="0.8" />
           <text x={LEFT-12} y={CENTER(s)+5} textAnchor="end" className="row-label">{s}</text>
-          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#d5dbe4" strokeWidth="0.8" />
+          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#e4e9e3" strokeWidth="0.8" />
           <rect
             x={LEFT}
             y={TOP+i*ROW_H}
@@ -98,11 +98,11 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           />
         </g>
       ))}
-      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#d5dbe4" strokeWidth="0.8" />
+      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#e4e9e3" strokeWidth="0.8" />
       {Array.from({ length: 97 }).map((_,q) => {
         const x = LEFT + (q/96)*BODY_W;
         const major = q % 4 === 0;
-        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#b8c2cf' : '#e0e5ec'} strokeWidth={major ? 0.95 : 0.45} />;
+        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#d2dbd3' : '#ecf0eb'} strokeWidth={major ? 1 : 0.5} />;
       })}
       {Array.from({ length: 25 }).map((_,h) => {
         const x = LEFT + (h/24)*BODY_W;
@@ -118,11 +118,11 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         <path
           d={bodyPath}
           fill="none"
-          stroke="#4b5563"
-          strokeWidth="11"
+          stroke="#223047"
+          strokeWidth="8"
           strokeLinecap="round"
           strokeLinejoin="round"
-          opacity=".88"
+          opacity=".92"
           pointerEvents="none"
         />
       )}
@@ -208,8 +208,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               x2={x}
               y1={y1}
               y2={y2}
-              stroke="#4b5563"
-              strokeWidth={strokeW}
+              stroke="#223047"
+              strokeWidth={Math.max(4, strokeW - 1)}
               strokeLinecap="round"
               strokeLinejoin="round"
               pointerEvents="none"
