@@ -1,4 +1,10 @@
 
+## v93.3 — Start Gap Visual Fix + Thinner Graph Line
+- Fixed Log tab start-of-day visual gap by forcing DayLogScreen to render from normalized display timeline and adding a defensive graph-level start-gap guard.
+- Made duty-status graph line approximately 10% thinner.
+- Build and offline sync smoke test passed.
+
+
 ## v93.1 - Day-Start No-Gap Coverage
 - Fixed remaining graph gap before the first event of the day.
 - Day display now bridges 00:00 to first event start using carry-forward coverage.

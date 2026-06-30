@@ -6,7 +6,7 @@ import LogCheckPanel from './LogCheckPanel.jsx';
 import SelectedEventBar from './SelectedEventBar.jsx';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
-import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
+import { displayEventsForDay, displayEventsForDayFromState } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
 import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
 
@@ -912,6 +912,11 @@ export default function DayDetail({
   }, [state.roadGuardTabRequest?.at, state.roadGuardTabRequest?.tab]);
 
   const rawDayEvents = state.eventsByDay?.[state.activeDay] || [];
+  const displayEvents = useMemo(
+    () => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay),
+    [state.eventsByDay, state.activeDay]
+  );
+  const displaySelectedEvent = displayEvents.find(event => event.id === state.selectedEventId) || selectedEvent || null;
   const selectedRawEvent = rawDayEvents.find(event => event.id === state.selectedEventId) || null;
   const boundedMoveDelta = selectedRawEvent ? clampDelta(selectedRawEvent, moveDelta) : 0;
   const moveWasClamped = selectedRawEvent && moveDelta !== boundedMoveDelta;
@@ -933,8 +938,8 @@ export default function DayDetail({
   );
 
   const previewGraphEvents = useMemo(
-    () => (isMoving ? displayEventsForDay(previewRawEvents, isToday(state.activeDay)) : events),
-    [isMoving, previewRawEvents, state.activeDay, events]
+    () => (isMoving ? displayEventsForDay(previewRawEvents, isToday(state.activeDay)) : displayEvents),
+    [isMoving, previewRawEvents, state.activeDay, displayEvents]
   );
 
   const previewViolationRanges = useMemo(
@@ -944,7 +949,7 @@ export default function DayDetail({
     [isMoving, state.eventsByDay, state.activeDay, previewRawEvents, baseViolationRanges]
   );
 
-  const selectedPreviewEvent = previewGraphEvents.find(event => event.id === state.selectedEventId) || selectedEvent;
+  const selectedPreviewEvent = previewGraphEvents.find(event => event.id === state.selectedEventId) || displaySelectedEvent;
   const violationsChanged = isMoving && violationSignature(baseViolationRanges) !== violationSignature(previewViolationRanges);
   const moveHasWarning = violationsChanged && previewViolationRanges.length > 0;
 
@@ -995,9 +1000,9 @@ export default function DayDetail({
         />
       )}
 
-      {activeTab === 'form' && <MiniFormPanel state={state} events={events} />}
+      {activeTab === 'form' && <MiniFormPanel state={state} events={displayEvents} />}
       {activeTab === 'sign' && <SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} />}
-      {activeTab === 'inspection' && <InspectionPanel state={state} events={events} onSaveInspection={onSaveInspection} />}
+      {activeTab === 'inspection' && <InspectionPanel state={state} events={displayEvents} onSaveInspection={onSaveInspection} />}
 
       {activeTab === 'log' && !selectedEvent && (
         <div className="graph-action-rail">
@@ -1018,9 +1023,9 @@ export default function DayDetail({
 
       {activeTab === 'log' && (
         <>
-          <EventList events={events} selectedId={state.selectedEventId} selectMode={state.selectMode} selectedIds={state.selectedIds} onSelect={onSelect} onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />
+          <EventList events={displayEvents} selectedId={state.selectedEventId} selectMode={state.selectMode} selectedIds={state.selectedIds} onSelect={onSelect} onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />
 
-          <LogCheckPanel events={events} state={state} />
+          <LogCheckPanel events={displayEvents} state={state} />
 
           <div className="cert-line cert-line-status-only">
             <span>Certification</span>

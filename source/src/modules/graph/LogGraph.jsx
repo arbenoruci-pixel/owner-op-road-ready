@@ -45,7 +45,10 @@ function minFromClientX(e, svg) {
   return clamp(round5(((x - LEFT) / BODY_W) * 1440), 0, 1439);
 }
 function transitions(events) {
-  const sorted = [...events].sort((a,b)=>a.startMin-b.startMin);
+  const inputSorted = [...events].sort((a,b)=>a.startMin-b.startMin);
+  const sorted = inputSorted.length && Number(inputSorted[0].startMin || 0) > 0
+    ? [{ ...inputSorted[0], startMin: 0 }, ...inputSorted.slice(1)]
+    : inputSorted;
   const out = [];
   for (let i=0;i<sorted.length-1;i++) {
     const a = sorted[i], b = sorted[i+1];
@@ -74,7 +77,10 @@ function continuousPath(events = []) {
 
 export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, editId, onEditTime, violationRanges = [], className = '' }) {
   const svgRef = useRef(null);
-  const sorted = [...events].sort((a,b)=>a.startMin-b.startMin);
+  const inputSorted = [...events].sort((a,b)=>a.startMin-b.startMin);
+  const sorted = inputSorted.length && Number(inputSorted[0].startMin || 0) > 0
+    ? [{ ...inputSorted[0], startMin: 0 }, ...inputSorted.slice(1)]
+    : inputSorted;
   const editable = editId ? sorted.find(e => e.id === editId) : null;
   const graphHeight = editable && onEditTime ? EDIT_H : BASE_H;
   const bodyPath = continuousPath(sorted);
@@ -178,14 +184,14 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               y1={y}
               y2={y}
               stroke={color(event.status)}
-              strokeWidth={selected ? 14 : 9}
+              strokeWidth={selected ? 12.6 : 8.1}
               strokeLinecap="butt"
               pointerEvents="none"
             />
             {span.short && (
               <g className="short-event-marker" pointerEvents="none">
                 <circle cx={(span.x1 + span.x2) / 2} cy={y} r={selected ? 7 : 5} fill={color(event.status)} stroke="#fff" strokeWidth="2" />
-                <line x1={(span.x1 + span.x2) / 2} x2={(span.x1 + span.x2) / 2} y1={y-15} y2={y+15} stroke={color(event.status)} strokeWidth="3" strokeLinecap="round" opacity=".92" />
+                <line x1={(span.x1 + span.x2) / 2} x2={(span.x1 + span.x2) / 2} y1={y-15} y2={y+15} stroke={color(event.status)} strokeWidth="2.7" strokeLinecap="round" opacity=".92" />
               </g>
             )}
             {selected && (
@@ -219,7 +225,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const y1 = CENTER(t.from.status);
         const y2 = CENTER(t.to.status);
         const selected = selectedId === t.to.id || selectedId === t.from.id || editId === t.to.id || editId === t.from.id;
-        const strokeW = selected ? 6 : 4;
+        const strokeW = selected ? 5.4 : 3.6;
         const cornerR = strokeW / 2;
         return (
           <g key={i} className="smooth-transition">
