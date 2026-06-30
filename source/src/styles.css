@@ -1053,7 +1053,7 @@ body{
 .load-mini button{
   border:1px solid #d7dce3;
   background:#f8fafc;
-  color:#2563eb;
+  color:var(--driver-accent);
   font-weight:900;
   border-radius:12px;
   padding:8px 10px;
@@ -6469,7 +6469,7 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .tiny-link{
   border:0;
   background:transparent;
-  color:#2563eb;
+  color:var(--driver-accent);
   font-weight:900;
   font-size:13px;
   padding:3px 0;
@@ -6490,6 +6490,10 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   gap:4px;
   box-shadow:none!important;
 }
+.driver-duty-grid button[data-status="OFF"]{background:rgba(89,102,119,.07)!important;border-color:rgba(89,102,119,.18)!important;color:#596677!important;}
+.driver-duty-grid button[data-status="SB"]{background:rgba(122,130,146,.08)!important;border-color:rgba(122,130,146,.2)!important;color:#6f7787!important;}
+.driver-duty-grid button[data-status="D"]{background:rgba(22,137,128,.08)!important;border-color:rgba(22,137,128,.18)!important;color:#168980!important;}
+.driver-duty-grid button[data-status="ON"]{background:rgba(33,86,217,.08)!important;border-color:rgba(33,86,217,.18)!important;color:#2156d9!important;}
 .driver-duty-grid button span{
   font-size:22px!important;
   line-height:1;
@@ -6498,19 +6502,20 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 }
 .driver-duty-grid button small{
   display:block!important;
-  color:#8a94a3;
+  color:inherit;
+  opacity:.72;
   font-size:9px!important;
   font-weight:950;
   text-transform:uppercase;
   letter-spacing:.05em;
 }
 .driver-duty-grid button.picked{
-  background:#111827!important;
+  background:var(--driver-accent)!important;
   color:#fff!important;
-  border-color:#111827!important;
-  box-shadow:0 8px 18px rgba(17,24,39,.16)!important;
+  border-color:var(--driver-accent)!important;
+  box-shadow:0 8px 18px rgba(15,23,42,.16)!important;
 }
-.driver-duty-grid button.picked small{color:rgba(255,255,255,.74)!important;}
+.driver-duty-grid button.picked small{color:rgba(255,255,255,.82)!important;opacity:1!important;}
 .driver-reason-grid{
   display:grid!important;
   grid-template-columns:repeat(2,minmax(0,1fr));
@@ -6531,9 +6536,9 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 }
 .driver-reason-grid button.picked{
   color:#fff!important;
-  background:#2563eb!important;
-  border-color:#2563eb!important;
-  box-shadow:0 8px 16px rgba(37,99,235,.16);
+  background:var(--driver-accent)!important;
+  border-color:var(--driver-accent)!important;
+  box-shadow:0 8px 16px rgba(15,23,42,.12);
 }
 .driver-location-row{
   grid-template-columns:46px 1fr 46px!important;
@@ -6545,7 +6550,7 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .driver-location-row button{
   border:0!important;
   background:#f8fafc!important;
-  color:#2563eb!important;
+  color:var(--driver-accent)!important;
   font-size:21px!important;
 }
 .driver-location-row button:first-child{border-right:1px solid #e5eaf0!important;}
@@ -6597,8 +6602,8 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   min-height:58px!important;
   margin:0!important;
   border-radius:18px!important;
-  background:#2563eb!important;
-  box-shadow:0 14px 28px rgba(37,99,235,.22);
+  background:var(--driver-accent)!important;
+  box-shadow:0 14px 28px rgba(15,23,42,.18);
   font-size:19px!important;
   font-weight:950!important;
   z-index:10001;

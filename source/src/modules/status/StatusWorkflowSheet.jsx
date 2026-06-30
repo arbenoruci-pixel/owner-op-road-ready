@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { label } from '../../shared/utils/status.js';
+import { color, label, soft } from '../../shared/utils/status.js';
 import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
 
 const onReasons = ['Pre-trip inspection', 'Fuel', 'Pickup / Loading', 'Delivery / Unloading', 'Waiting', 'Drop Trailer', 'Drop & Hook'];
@@ -136,8 +136,11 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
     }
   }
 
+  const accent = color(status);
+  const accentSoft = soft(status);
+
   return (
-    <div className="status-page status-driver-picker-v934">
+    <div className="status-page status-driver-picker-v934" style={{ '--driver-accent': accent, '--driver-accent-soft': accentSoft }}>
       <div className="status-page-head driver-picker-head">
         <button type="button" onClick={onClose} aria-label="Back">‹</button>
         <div>
@@ -151,11 +154,11 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
         <section className="picker-section picker-section-tight">
           <div className="picker-label-row">
             <label>Status</label>
-            <span>{label(status)}</span>
+            <span style={{ color: accent }}>{label(status)}</span>
           </div>
           <div className="duty-grid driver-duty-grid" role="group" aria-label="Duty status">
             {['OFF','SB','D','ON'].map(s => (
-              <button key={s} type="button" className={status === s ? 'picked' : ''} onClick={() => choose(s)}>
+              <button key={s} type="button" data-status={s} className={status === s ? 'picked' : ''} onClick={() => choose(s)}>
                 <span>{s}</span>
                 <small>{label(s)}</small>
               </button>
