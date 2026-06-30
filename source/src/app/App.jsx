@@ -451,6 +451,19 @@ export default function App() {
     return { ...state, eventsByDay: { ...state.eventsByDay, [day]: normalizeLogEvents(eventsNext) } };
   }
 
+  function continuousBaseForDay(s, day = s.activeDay) {
+    const raw = (s.eventsByDay?.[day] || []).filter(e => !e.carriedFromPreviousDay);
+    return displayEventsForDay(raw, isToday(day));
+  }
+
+  function commitTimelineForDay(eventsNext, day, s) {
+    const normalized = normalizeLogEvents(eventsNext);
+    // Store the normalized split timeline. Display code still extends the final
+    // status to now/current-day or midnight/completed-day, but writing the
+    // split segments prevents stale gaps after insert/edit/delete/shift.
+    return normalized.map(event => ({ ...event }));
+  }
+
   function markDayRecert(next, day = next.activeDay) {
     if (next.certifyStatus?.[day] === 'Certified') {
       next = { ...next, certifyStatus: { ...next.certifyStatus, [day]: 'Needs Recertification' } };
@@ -490,8 +503,8 @@ export default function App() {
       const incoming = incomingForPrompt;
       const stamp = Date.now();
       const toAdd = incoming.map((e,i)=>sanitizeDutyEventForStatus({ id:`ev_${stamp}_${i}`, city:s.currentLocation?.city || 'GPS', state:s.currentLocation?.state || 'UNK', description:'', note:statusDefaultNote(e?.status || 'OFF'), source:'manual', ...e }));
-      const dayEvents = (s.eventsByDay[s.activeDay] || []).filter(e => !e.carriedFromPreviousDay);
-      let merged = normalizeLogEvents(insertManyOverride(dayEvents, toAdd));
+      const dayEvents = continuousBaseForDay(s, s.activeDay);
+      let merged = commitTimelineForDay(insertManyOverride(dayEvents, toAdd), s.activeDay, s);
       let next = { ...s, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: merged }, selectedEventId: toAdd[toAdd.length-1]?.id || null, sheet:null };
       const preTripAdded = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
       next = withAcceptedPreTripInspection(next, s.activeDay, preTripAdded, acceptedInspection);
@@ -508,7 +521,8 @@ export default function App() {
     setState(s => {
       const beforeEdit = (s.eventsByDay[s.activeDay] || []).find(event => event.id === id) || currentEvent || {};
       const patchForSave = sanitizeDutyEventForStatus({ ...beforeEdit, ...patch }, beforeEdit.status);
-      const evs = normalizeLogEvents(applyEditOverride((s.eventsByDay[s.activeDay] || []), id, patchForSave));
+      const baseEvents = continuousBaseForDay(s, s.activeDay);
+      const evs = commitTimelineForDay(applyEditOverride(baseEvents, id, patchForSave), s.activeDay, s);
       let gpsTrip = s.gpsTrip;
 
       // If the driver edits the GPS-created DRIVING event time, keep the raw GPS points,
@@ -541,7 +555,8 @@ export default function App() {
 
   function deleteEvent(id) {
     setState(s => {
-      const evs = normalizeLogEvents((s.eventsByDay[s.activeDay] || []).filter(e => e.id !== id));
+      const baseEvents = continuousBaseForDay(s, s.activeDay);
+      const evs = commitTimelineForDay(baseEvents.filter(e => e.id !== id), s.activeDay, s);
       let next = { ...s, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: evs }, selectedEventId:null, sheet:null };
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
@@ -551,7 +566,18 @@ export default function App() {
   function applyShift(delta) {
     setState(s => {
       const selected = new Set(s.selectedIds);
-      const evs = normalizeLogEvents((s.eventsByDay[s.activeDay] || []).map(e => selected.has(e.id) ? { ...e, startMin:e.startMin+delta, endMin:e.endMin+delta } : e));
+      const baseEvents = continuousBaseForDay(s, s.activeDay);
+      const selectedEvents = baseEvents.filter(e => selected.has(e.id));
+      if (!selectedEvents.length || !delta) return { ...s, sheet:null };
+
+      const minStart = Math.min(...selectedEvents.map(e => Number(e.startMin || 0)));
+      const maxEnd = Math.max(...selectedEvents.map(e => Number(e.endMin || 0)));
+      const boundedDelta = Math.max(-minStart, Math.min(1440 - maxEnd, delta));
+      if (!boundedDelta) return { ...s, sheet:null };
+
+      const shifted = selectedEvents.map(e => ({ ...e, startMin:e.startMin + boundedDelta, endMin:e.endMin + boundedDelta }));
+      const remaining = baseEvents.filter(e => !selected.has(e.id));
+      const evs = commitTimelineForDay(insertManyOverride(remaining, shifted), s.activeDay, s);
       let next = { ...s, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: sorted(evs) }, sheet:null };
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
@@ -559,10 +585,10 @@ export default function App() {
   }
 
   function moveSelectedEventInline(id, delta) {
-    const dayEvents = state.eventsByDay?.[state.activeDay] || [];
+    const dayEvents = displayEventsForDay(state.eventsByDay?.[state.activeDay] || [], isToday(state.activeDay));
     const event = dayEvents.find(e => e.id === id);
     if (!event || !delta) return;
-    const boundedDelta = Math.max(-event.startMin, Math.min(1439 - event.endMin, delta));
+    const boundedDelta = Math.max(-event.startMin, Math.min(1440 - event.endMin, delta));
     if (!boundedDelta) return;
     updateEvent(id, { startMin:event.startMin + boundedDelta, endMin:event.endMin + boundedDelta });
   }

@@ -6032,3 +6032,11 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .roadguard-wizard-progress{height:7px;border-radius:999px;background:#e9edf0;overflow:hidden}.roadguard-wizard-progress i{display:block;height:100%;border-radius:999px;background:var(--fb-blue,#2156d9);transition:width .18s ease}
 .roadguard-wizard-actions{display:grid;grid-template-columns:1fr .72fr .72fr;gap:8px}.roadguard-wizard-actions button{min-height:42px;border-radius:14px;border:0;background:var(--fb-blue,#2156d9);color:#fff;font-size:13px;font-weight:900}.roadguard-wizard-actions button.secondary{background:#f1f4f6;color:var(--fb-ink,#101828);border:1px solid var(--fb-line,#e0e5df)}.roadguard-wizard-done .roadguard-wizard-actions{grid-template-columns:1fr 1fr}
 @media (max-width:640px){.roadguard-lite-head{grid-template-columns:1fr 116px!important}.roadguard-head-actions{grid-template-columns:1fr 1fr!important}.roadguard-wizard-card{border-radius:22px 22px 16px 16px;padding:13px;max-height:82vh}.roadguard-wizard-actions{grid-template-columns:1fr 72px 72px;gap:7px}.roadguard-wizard-actions button{font-size:12px;min-height:40px}.roadguard-wizard-head b{font-size:18px}}
+
+/* v92.9 log usability: use available graph width, remove empty graph bottom, keep bulk action readable */
+.graph-first-panel{padding:8px 6px 8px!important;background:#f8faf8!important;}
+.graph-first-panel .log-graph{width:100%!important;max-width:100%!important;min-height:0!important;height:auto!important;border-radius:16px!important;}
+.road-log-graph-shell,.v30-graph-card,.v79-graph-card{padding-left:6px!important;padding-right:6px!important;}
+.graph-bulk-compact .primary,.bulk-strip .primary{background:#2156d9!important;color:#fff!important;border-color:#2156d9!important;opacity:1!important;}
+.graph-bulk-compact .primary:disabled,.bulk-strip .primary:disabled{background:#eef2f7!important;color:#667085!important;border-color:#d7dde6!important;}
+.log-graph .short-event-dot{filter:drop-shadow(0 1px 2px rgba(15,23,42,.18));}

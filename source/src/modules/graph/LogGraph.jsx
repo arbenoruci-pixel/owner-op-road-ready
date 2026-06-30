@@ -3,16 +3,31 @@ import { clamp, round5, timeLabel } from '../../shared/utils/time.js';
 import { STATUS_ORDER, rowIndex, color, soft } from '../../shared/utils/status.js';
 
 const W = 1000;
-const H = 540;
-const LEFT = 64;
-const RIGHT = 50;
+const EDIT_H = 540;
+const BASE_H = 420;
+const LEFT = 44;
+const RIGHT = 34;
 const TOP = 18;
 const ROW_H = 96;
 const BODY_W = W - LEFT - RIGHT;
+const MIN_SHORT_EVENT_PX = 14;
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
   return LEFT + (Math.max(0, Math.min(1440, m)) / 1440) * BODY_W;
+}
+function visualSpan(event) {
+  const startX = xFromMin(event.startMin);
+  const endX = xFromMin(event.endMin);
+  const width = Math.max(0, endX - startX);
+  if (width >= MIN_SHORT_EVENT_PX) return { x1:startX, x2:endX, short:false };
+  const mid = (startX + endX) / 2;
+  const half = MIN_SHORT_EVENT_PX / 2;
+  return {
+    x1: Math.max(LEFT, mid - half),
+    x2: Math.min(W - RIGHT, mid + half),
+    short:true,
+  };
 }
 function minFromClientX(e, svg) {
   const rect = svg.getBoundingClientRect();
@@ -51,6 +66,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
   const svgRef = useRef(null);
   const sorted = [...events].sort((a,b)=>a.startMin-b.startMin);
   const editable = editId ? sorted.find(e => e.id === editId) : null;
+  const graphHeight = editable && onEditTime ? EDIT_H : BASE_H;
   const bodyPath = continuousPath(sorted);
 
   function startHandleDrag(e, edge, event) {
@@ -77,8 +93,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
   }
 
   return (
-    <svg ref={svgRef} className={`log-graph ${className}`} viewBox={`0 0 ${W} ${H}`}>
-      <rect x="0" y="0" width={W} height={H} fill="#fcfdfb" />
+    <svg ref={svgRef} className={`log-graph ${className}`} viewBox={`0 0 ${W} ${graphHeight}`}>
+      <rect x="0" y="0" width={W} height={graphHeight} fill="#fcfdfb" />
       {STATUS_ORDER.map((s,i) => (
         <g key={s}>
           <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#fcfdfb" stroke="#e4e9e3" strokeWidth="0.8" />
@@ -130,12 +146,13 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
         const y = CENTER(event.status);
+        const span = visualSpan(event);
         return (
           <g key={event.id}>
-            {selected && <rect x={xFromMin(event.startMin)} y={TOP+rowIndex(event.status)*ROW_H+3} width={Math.max(4,xFromMin(event.endMin)-xFromMin(event.startMin))} height={ROW_H-6} rx="10" fill={soft(event.status)} />}
+            {selected && <rect x={span.x1} y={TOP+rowIndex(event.status)*ROW_H+3} width={Math.max(4,span.x2-span.x1)} height={ROW_H-6} rx="10" fill={soft(event.status)} />}
             <line
-              x1={xFromMin(event.startMin)}
-              x2={xFromMin(event.endMin)}
+              x1={span.x1}
+              x2={span.x2}
               y1={y}
               y2={y}
               stroke="transparent"
@@ -145,8 +162,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
             />
             {selected && (
               <line
-                x1={xFromMin(event.startMin)}
-                x2={xFromMin(event.endMin)}
+                x1={span.x1}
+                x2={span.x2}
                 y1={y}
                 y2={y}
                 stroke="#111827"
@@ -157,8 +174,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               />
             )}
             <line
-              x1={xFromMin(event.startMin)}
-              x2={xFromMin(event.endMin)}
+              x1={span.x1}
+              x2={span.x2}
               y1={y}
               y2={y}
               stroke={color(event.status)}
@@ -166,6 +183,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               strokeLinecap="round"
               pointerEvents="none"
             />
+            {span.short && (
+              <circle className="short-event-dot" cx={(span.x1 + span.x2) / 2} cy={y} r={selected ? 8 : 5} fill={color(event.status)} stroke="#fff" strokeWidth="2" pointerEvents="none" />
+            )}
             {selected && (
               <>
                 <circle cx={xFromMin(event.startMin)} cy={y} r="13" fill="#fff" stroke={color(event.status)} strokeWidth="4.5" pointerEvents="none" />

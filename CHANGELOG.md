@@ -1,4 +1,14 @@
 
+## v92.9 — Log Timeline / Graph Usability Fix
+
+- Fixed insert/edit/delete override to split continuous duty-status blocks correctly.
+- Added clearer graph rendering for 1-minute duty events without changing real log time.
+- Expanded graph grid usage inside the card and removed extra bottom whitespace in non-edit mode.
+- Clamped Shift Selected Events inside the log day and fixed false cross-day preview messaging.
+- Fixed bulk Shift button readability.
+- Build and offline sync smoke test passed.
+
+
 ## v92.8 — Override Cleanup / Stale Pre-trip Link Fix
 - Cleaned stale note/description artifacts when overriding an event with another status.
 - Prevented old ON DUTY Pre-trip/inspection text from remaining on OFF DUTY or other replacement events.
