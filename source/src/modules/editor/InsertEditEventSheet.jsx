@@ -9,6 +9,21 @@ import { label as statusLabel } from '../../shared/utils/status.js';
 import { previewInsertOverride, applyEditOverride } from '../../core/timeline/timelineEngine.js';
 import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
 
+function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
+  const value = String(text || '').toLowerCase();
+  if (!value.trim()) return false;
+  if (status !== 'ON' && /(pre[- ]?trip|inspection|on duty|pickup|loading|delivery|unloading)/i.test(value)) return true;
+  if (status !== 'D' && /driving started|manual driving|\bdriving\b/i.test(value)) return true;
+  if (status !== 'SB' && /sleeper/i.test(value)) return true;
+  if (status !== 'OFF' && /off duty|parked|parking/i.test(value)) return true;
+  if (/\s\/\s/.test(value) && /(pre[- ]?trip|inspection|on duty|driving|new event)/i.test(value)) return true;
+  return false;
+}
+
+function defaultNoteForStatus(status) {
+  return statusLabel(status);
+}
+
 function clampMin(v) {
   return Math.max(0, Math.min(1439, Number(v || 0)));
 }
@@ -122,7 +137,16 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
 
   function updateForm(patch) {
     setForm(prev => {
-      const next = { ...prev, ...patch };
+      let next = { ...prev, ...patch };
+      if (patch.status && patch.status !== prev.status) {
+        next = {
+          ...next,
+          note: defaultNoteForStatus(patch.status),
+          description: textLooksLikeStatusArtifact(prev.description, patch.status) ? '' : '',
+        };
+      } else if (patch.status && (textLooksLikeStatusArtifact(next.note, patch.status) || /^new event$/i.test(String(next.note || '').trim()))) {
+        next = { ...next, note: defaultNoteForStatus(patch.status), description: textLooksLikeStatusArtifact(next.description, patch.status) ? '' : next.description };
+      }
       if (mode === 'insert') {
         const s = fromInput(next.start);
         const e = fromInput(next.end);
@@ -283,8 +307,8 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
       endMin: cleanEnd(s, fromInput(form.end)),
       city: form.city || 'GPS',
       state: form.state || 'UNK',
-      description: form.description,
-      note: form.note || (form.status === 'D' ? 'Driving' : statusLabel(form.status)),
+      description: textLooksLikeStatusArtifact(form.description, form.status) ? '' : form.description,
+      note: (textLooksLikeStatusArtifact(form.note, form.status) || /^new event$/i.test(String(form.note || '').trim())) ? defaultNoteForStatus(form.status) : (form.note || defaultNoteForStatus(form.status)),
       lat: form.lat,
       lng: form.lng,
       gpsAccuracy: form.gpsAccuracy,
@@ -316,7 +340,7 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
 
       <EditorDutyStatusControls
         status={form.status}
-        onChange={(st) => updateForm({ status: st, note: form.note || statusLabel(st) })}
+        onChange={(st) => updateForm({ status: st })}
       />
 
       <EditorGraphPanel

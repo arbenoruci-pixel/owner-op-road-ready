@@ -12,9 +12,28 @@ function hasText(v) {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
-function combineText(a, b) {
-  const parts = [a, b].filter(hasText).map(v => v.trim());
-  return [...new Set(parts)].join(' / ');
+function sameText(a, b) {
+  const aa = typeof a === 'string' ? a.trim().toLowerCase() : '';
+  const bb = typeof b === 'string' ? b.trim().toLowerCase() : '';
+  return aa === bb;
+}
+
+function mergeableSameStatus(last, current) {
+  if (!last || !current || last.status !== current.status) return false;
+  const touches = Number(current.startMin || 0) === Number(last.endMin || 0);
+  const overlaps = Number(current.startMin || 0) < Number(last.endMin || 0);
+  if (!touches && !overlaps) return false;
+
+  // Only auto-merge adjacent/touching same-status rows when their text is
+  // effectively the same or one side is blank. This prevents stale notes from
+  // a replaced ON DUTY Pre-trip event being glued onto a new OFF DUTY block.
+  const notesCompatible = !hasText(last.note) || !hasText(current.note) || sameText(last.note, current.note);
+  const descriptionsCompatible = !hasText(last.description) || !hasText(current.description) || sameText(last.description, current.description);
+  return notesCompatible && descriptionsCompatible;
+}
+
+function latestText(lastText, currentText) {
+  return hasText(currentText) ? currentText.trim() : (hasText(lastText) ? lastText.trim() : '');
 }
 
 function latestLocation(last, current) {
@@ -40,23 +59,7 @@ export function normalizeLogEvents(events = []) {
 
     // Same duty status and touching/overlapping time should be one continuous block.
     // This removes exact duplicates too.
-    if (
-      last &&
-      last.status === ev.status &&
-      !last.voided &&
-      !ev.voided &&
-      ev.startMin <= last.endMin
-    ) {
-      const notes = [last.note, ev.note]
-        .filter(Boolean)
-        .filter((v, i, arr) => arr.indexOf(v) === i)
-        .join(' / ');
-
-      const descriptions = [last.description, ev.description]
-        .filter(Boolean)
-        .filter((v, i, arr) => arr.indexOf(v) === i)
-        .join(' / ');
-
+    if (mergeableSameStatus(last, ev)) {
       merged[merged.length - 1] = {
         ...last,
         endMin: Math.max(last.endMin, ev.endMin),
@@ -66,8 +69,8 @@ export function normalizeLogEvents(events = []) {
         lng: ev.lng ?? last.lng,
         gpsAccuracy: ev.gpsAccuracy ?? last.gpsAccuracy,
         locationSource: ev.locationSource || last.locationSource,
-        note: notes || last.note || ev.note || '',
-        description: descriptions || last.description || ev.description || '',
+        note: latestText(last.note, ev.note),
+        description: latestText(last.description, ev.description),
         source: last.source === ev.source ? last.source : (ev.source || last.source),
       };
       continue;

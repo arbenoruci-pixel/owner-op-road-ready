@@ -1,4 +1,12 @@
 
+## v92.8 — Override Cleanup / Stale Pre-trip Link Fix
+- Cleaned stale note/description artifacts when overriding an event with another status.
+- Prevented old ON DUTY Pre-trip/inspection text from remaining on OFF DUTY or other replacement events.
+- Prevented non-ON events from retaining pre-trip/inspection link metadata.
+- Adjusted same-status merge behavior so old notes are not blindly concatenated into new events.
+- Build and offline sync smoke test passed.
+
+
 ## v92.7 - RoadGuard Fix Wizard
 
 - Added step-by-step RoadGuard Fix Wizard for fix-required items.

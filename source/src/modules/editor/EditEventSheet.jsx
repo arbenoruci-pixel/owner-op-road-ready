@@ -5,8 +5,20 @@ import EditorTimeControls from './components/EditorTimeControls.jsx';
 import EditorLocationFields from './components/EditorLocationFields.jsx';
 import EditorNotesField from './components/EditorNotesField.jsx';
 import { durLabel, fromInput, toInput, timeLabel } from '../../shared/utils/time.js';
+import { label as statusLabel } from '../../shared/utils/status.js';
 import { applyEditOverride } from '../../core/timeline/timelineEngine.js';
 import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
+
+function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
+  const value = String(text || '').toLowerCase();
+  if (!value.trim()) return false;
+  if (status !== 'ON' && /(pre[- ]?trip|inspection|on duty|pickup|loading|delivery|unloading)/i.test(value)) return true;
+  if (status !== 'D' && /driving started|manual driving|\bdriving\b/i.test(value)) return true;
+  if (status !== 'SB' && /sleeper/i.test(value)) return true;
+  if (status !== 'OFF' && /off duty|parked|parking/i.test(value)) return true;
+  if (/\s\/\s/.test(value) && /(pre[- ]?trip|inspection|on duty|driving|new event)/i.test(value)) return true;
+  return false;
+}
 
 export default function EditEventSheet({ event, events, onClose, onSave, onDelete }) {
   const [status, setStatus] = useState(event.status);
@@ -64,8 +76,21 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
     setGpsStatus(c || s ? 'Manual location' : 'Location cleared');
   }
 
+  function changeStatus(nextStatus) {
+    const previousStatus = status;
+    setStatus(nextStatus);
+    if (previousStatus !== nextStatus || textLooksLikeStatusArtifact(note, nextStatus) || /^new event$/i.test(String(note || '').trim())) {
+      setNote(statusLabel(nextStatus));
+    }
+    if (previousStatus !== nextStatus || textLooksLikeStatusArtifact(description, nextStatus) || /^new event$/i.test(String(description || '').trim())) {
+      setDescription('');
+    }
+  }
+
   function save() {
-    onSave({ status, startMin: preview.startMin, endMin: preview.endMin, city, state, description, note, lat, lng, gpsAccuracy, locationSource });
+    const cleanNote = textLooksLikeStatusArtifact(note, status) || /^new event$/i.test(String(note || '').trim()) ? statusLabel(status) : note;
+    const cleanDescription = textLooksLikeStatusArtifact(description, status) || /^new event$/i.test(String(description || '').trim()) ? '' : description;
+    onSave({ status, startMin: preview.startMin, endMin: preview.endMin, city, state, description: cleanDescription, note: cleanNote, lat, lng, gpsAccuracy, locationSource });
     onClose();
   }
 
@@ -73,7 +98,7 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
     <div className="sheet active editor-clean-v85">
       <div className="sheet-head"><button onClick={onClose}>‹</button><div>Edit Duty Status</div><button onClick={onDelete}>⋮</button></div>
 
-      <EditorDutyStatusControls status={status} onChange={setStatus} />
+      <EditorDutyStatusControls status={status} onChange={changeStatus} />
 
       <EditorGraphPanel
         events={previewEvents}

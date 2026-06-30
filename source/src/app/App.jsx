@@ -43,6 +43,46 @@ function carryoverNoteForStatus(status) {
   return 'Off Duty';
 }
 
+function statusDefaultNote(status) {
+  if (status === 'SB') return 'Sleeper';
+  if (status === 'D') return 'Driving';
+  if (status === 'ON') return 'On Duty';
+  return 'Off Duty';
+}
+
+function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
+  const value = String(text || '').toLowerCase();
+  if (!value.trim()) return false;
+  if (status !== 'ON' && /(pre[- ]?trip|inspection|on duty|pickup|loading|delivery|unloading)/i.test(value)) return true;
+  if (status !== 'D' && /driving started|manual driving|\bdriving\b/i.test(value)) return true;
+  if (status !== 'SB' && /sleeper/i.test(value)) return true;
+  if (status !== 'OFF' && /off duty|parked|parking/i.test(value)) return true;
+  // Combined notes are usually evidence that an overridden event kept stale text.
+  if (/\s\/\s/.test(value) && /(pre[- ]?trip|inspection|on duty|driving|new event)/i.test(value)) return true;
+  return false;
+}
+
+function sanitizeDutyEventForStatus(event = {}, previousStatus = null) {
+  const status = event.status || 'OFF';
+  const statusChanged = previousStatus && previousStatus !== status;
+  const next = { ...event };
+  const noteStale = statusChanged || textLooksLikeStatusArtifact(next.note, status) || /^new event$/i.test(String(next.note || '').trim());
+  const descStale = statusChanged || textLooksLikeStatusArtifact(next.description, status) || /^new event$/i.test(String(next.description || '').trim());
+
+  if (noteStale) next.note = statusDefaultNote(status);
+  if (descStale) next.description = '';
+
+  // A non-ON event must never keep the identity of an ON DUTY Pre-trip / inspection event.
+  if (status !== 'ON') {
+    delete next.sourceEventId;
+    delete next.sourceEventChainId;
+    delete next.inspectionId;
+    delete next.inspectionLinkId;
+  }
+
+  return next;
+}
+
 function sanitizeCarryoverEvent(event) {
   if (!event?.carriedFromPreviousDay) return event;
   return {
@@ -251,7 +291,7 @@ function normalizeState(s) {
 
   // sanitize stale carryover notes copied from previous day
   Object.keys(eventsByDay).forEach(day => {
-    eventsByDay[day] = normalizeLogEvents((eventsByDay[day] || []).map(sanitizeCarryoverEvent));
+    eventsByDay[day] = normalizeLogEvents((eventsByDay[day] || []).map(event => sanitizeDutyEventForStatus(sanitizeCarryoverEvent(event))));
   });
 
   ensureTodayCarryover(eventsByDay, certifyStatus, today);
@@ -449,7 +489,7 @@ export default function App() {
     setState(s => {
       const incoming = incomingForPrompt;
       const stamp = Date.now();
-      const toAdd = incoming.map((e,i)=>({ id:`ev_${stamp}_${i}`, city:s.currentLocation?.city || 'GPS', state:s.currentLocation?.state || 'UNK', description:'', note:'Other', source:'manual', ...e }));
+      const toAdd = incoming.map((e,i)=>sanitizeDutyEventForStatus({ id:`ev_${stamp}_${i}`, city:s.currentLocation?.city || 'GPS', state:s.currentLocation?.state || 'UNK', description:'', note:statusDefaultNote(e?.status || 'OFF'), source:'manual', ...e }));
       const dayEvents = (s.eventsByDay[s.activeDay] || []).filter(e => !e.carriedFromPreviousDay);
       let merged = normalizeLogEvents(insertManyOverride(dayEvents, toAdd));
       let next = { ...s, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: merged }, selectedEventId: toAdd[toAdd.length-1]?.id || null, sheet:null };
@@ -462,10 +502,13 @@ export default function App() {
 
   function updateEvent(id, patch) {
     const currentEvent = (state.eventsByDay?.[state.activeDay] || []).find(event => event.id === id) || {};
-    const previewEventForPrompt = { ...currentEvent, ...patch };
+    const cleanPatch = sanitizeDutyEventForStatus({ ...currentEvent, ...patch }, currentEvent.status);
+    const previewEventForPrompt = cleanPatch;
     const acceptedInspection = maybeAcceptInspectionForEvent(state, state.activeDay, previewEventForPrompt);
     setState(s => {
-      const evs = normalizeLogEvents(applyEditOverride((s.eventsByDay[s.activeDay] || []), id, patch));
+      const beforeEdit = (s.eventsByDay[s.activeDay] || []).find(event => event.id === id) || currentEvent || {};
+      const patchForSave = sanitizeDutyEventForStatus({ ...beforeEdit, ...patch }, beforeEdit.status);
+      const evs = normalizeLogEvents(applyEditOverride((s.eventsByDay[s.activeDay] || []), id, patchForSave));
       let gpsTrip = s.gpsTrip;
 
       // If the driver edits the GPS-created DRIVING event time, keep the raw GPS points,
