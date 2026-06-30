@@ -144,9 +144,17 @@ export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer
           </span>
         </span>
       </button>
-      <div className="rr-today-graph">
-        <LogGraph events={todayEvents} selectedId={null} />
-      </div>
+      <button
+        type="button"
+        className="rr-today-graph-btn"
+        onClick={() => onOpenDay(today)}
+        aria-label="Open today's log"
+      >
+        <span className="rr-today-graph-go" aria-hidden="true">Open</span>
+        <div className="rr-today-graph">
+          <LogGraph events={todayEvents} selectedId={null} className="rr-home-graph-svg" />
+        </div>
+      </button>
 
       <div className="rr-sec">Last 14 days</div>
       {previousDays.length === 0 ? (

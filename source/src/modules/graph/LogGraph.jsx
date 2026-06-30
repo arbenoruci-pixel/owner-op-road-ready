@@ -84,6 +84,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
   const editable = editId ? sorted.find(e => e.id === editId) : null;
   const graphHeight = editable && onEditTime ? EDIT_H : BASE_H;
   const bodyPath = continuousPath(sorted);
+  const shortEvents = sorted
+    .map((event, index) => ({ event, index, span: exactSpan(event) }))
+    .filter(item => item.span.short);
 
   function startHandleDrag(e, edge, event) {
     if (!onEditTime) return;
@@ -163,7 +166,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               stroke="transparent"
               strokeWidth="32"
               strokeLinecap="butt"
-              onClick={(e)=>{e.stopPropagation(); onSelect?.(event.id);}}
+              onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
             />
             {selected && (
               <line
@@ -230,7 +233,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return (
           <g key={i} className="smooth-transition">
             {selected && <rect x={x-14} y={Math.min(y1,y2)-11} width="28" height={Math.abs(y2-y1)+22} rx="14" fill="rgba(95,99,104,.13)" />}
-            <line x1={x} x2={x} y1={y1} y2={y2} stroke="transparent" strokeWidth="36" strokeLinecap="butt" onClick={(e)=>{e.stopPropagation(); onSelect?.(t.to.id);}} />
+            <line x1={x} x2={x} y1={y1} y2={y2} stroke="transparent" strokeWidth="36" strokeLinecap="butt" onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(t.to.id); } }} />
             <line
               x1={x}
               x2={x}
@@ -245,6 +248,43 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
             <circle cx={x} cy={y1} r="3.2" fill="#223047" pointerEvents="none" />
             <circle cx={x} cy={y2} r="3.2" fill="#223047" pointerEvents="none" />
 
+          </g>
+        );
+      })}
+
+      {/* Short-event boundary masks: when a 1-15 minute event sits between
+          two same-row blocks, thick strokes can look like the old status
+          continues through it. These display-only masks cut the adjacent row
+          and then redraw a clear marker for the true short segment. */}
+      {shortEvents.map(({ event, index, span }) => {
+        const mid = (span.x1 + span.x2) / 2;
+        const neighborStatuses = new Set();
+        const prev = sorted[index - 1];
+        const next = sorted[index + 1];
+        if (prev && prev.status !== event.status) neighborStatuses.add(prev.status);
+        if (next && next.status !== event.status) neighborStatuses.add(next.status);
+        return Array.from(neighborStatuses).map(status => (
+          <rect
+            key={`${event.id || index}_cut_${status}`}
+            x={mid - 9}
+            y={CENTER(status) - 8}
+            width="18"
+            height="16"
+            rx="4"
+            fill="#fcfdfb"
+            pointerEvents="none"
+          />
+        ));
+      })}
+      {shortEvents.map(({ event, span }, index) => {
+        const selected = selectedId === event.id || editId === event.id;
+        const mid = (span.x1 + span.x2) / 2;
+        const y = CENTER(event.status);
+        const c = color(event.status);
+        return (
+          <g key={`${event.id || index}_short_clear`} className="short-event-clear-marker" pointerEvents="none">
+            <circle cx={mid} cy={y} r={selected ? 8 : 6} fill={c} stroke="#fff" strokeWidth="2.5" />
+            <line x1={mid} x2={mid} y1={y-17} y2={y+17} stroke={c} strokeWidth="3" strokeLinecap="round" opacity=".96" />
           </g>
         );
       })}
