@@ -245,3 +245,11 @@ What was deliberately NOT changed (logic preserved verbatim)
 - Removed visual overlap artifact that made OFF DUTY appear to continue through short ON DUTY segments.
 - Compact event rows and Log Check display.
 - Removed duplicate certification action from Log tab; Sign tab remains the certification path.
+
+
+## v93.4 — Driver Action Picker
+- Redesigned Change Duty Status as a compact driver action picker.
+- Focused the screen on status + reason/action + location + save.
+- Collapsed optional notes and fixed reason chips wrapping on mobile.
+- Preserved timeline, RoadGuard, DOT, inspection, ChatGPT parser, and routes.
+- Build and offline sync test passed.

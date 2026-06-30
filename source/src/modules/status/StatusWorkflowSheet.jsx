@@ -28,12 +28,20 @@ function reasonList(status) {
   return dReasons;
 }
 
+function actionHeading(status) {
+  if (status === 'ON') return 'What are you doing on duty?';
+  if (status === 'OFF') return 'Why are you off duty?';
+  if (status === 'SB') return 'Sleeper status';
+  return 'Driving status';
+}
+
 export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onStartDriving }) {
   const [status, setStatus] = useState(state.currentStatus || 'OFF');
   const [city, setCity] = useState(state.currentLocation?.city || 'Chicago');
   const [st, setSt] = useState(state.currentLocation?.state || 'IL');
   const [reason, setReason] = useState(reasonList(state.currentStatus || 'OFF')[0]);
   const [notes, setNotes] = useState('');
+  const [showNotes, setShowNotes] = useState(false);
   const [gpsFix, setGpsFix] = useState(null);
   const [gpsStatus, setGpsStatus] = useState('');
   const askedOffGps = useRef(false);
@@ -129,73 +137,96 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   }
 
   return (
-    <div className="status-page">
-      <div className="status-page-head">
-        <button onClick={onClose}>‹</button>
-        <b>Change duty status</b>
+    <div className="status-page status-driver-picker-v934">
+      <div className="status-page-head driver-picker-head">
+        <button type="button" onClick={onClose} aria-label="Back">‹</button>
+        <div>
+          <b>Change Status</b>
+          <small>Now · {[city, st].filter(Boolean).join(', ') || 'location needed'}</small>
+        </div>
         <span />
       </div>
 
-      <div className="status-page-body">
-        <label>Duty Status *</label>
-        <div className="duty-grid">
-          {['OFF','SB','D','ON'].map(s => (
-            <button key={s} className={status === s ? 'picked' : ''} onClick={() => choose(s)}>
-              <span>{s}</span>
-              <small>{label(s)}</small>
-            </button>
-          ))}
-        </div>
+      <div className="status-page-body driver-picker-body">
+        <section className="picker-section picker-section-tight">
+          <div className="picker-label-row">
+            <label>Status</label>
+            <span>{label(status)}</span>
+          </div>
+          <div className="duty-grid driver-duty-grid" role="group" aria-label="Duty status">
+            {['OFF','SB','D','ON'].map(s => (
+              <button key={s} type="button" className={status === s ? 'picked' : ''} onClick={() => choose(s)}>
+                <span>{s}</span>
+                <small>{label(s)}</small>
+              </button>
+            ))}
+          </div>
+        </section>
 
-        <div className="special-grid">
-          <button className={reason === 'Personal Conveyance' ? 'picked' : ''} onClick={() => saveSpecial('OFF','Personal Conveyance')}>Personal Conveyance</button>
-          <button className={reason === 'Yard Move' ? 'picked' : ''} onClick={() => saveSpecial('D','Yard Move')}>Yard Move</button>
-        </div>
+        <section className="picker-section">
+          <div className="picker-label-row">
+            <label>{actionHeading(status)}</label>
+          </div>
+          <div className="reason-pills driver-reason-grid">
+            {reasonList(status).map(r => (
+              <button key={r} type="button" className={reason === r ? 'picked' : ''} onClick={() => setReason(r)}>{r}</button>
+            ))}
+          </div>
+        </section>
 
-        <label>Location *</label>
-        <div className="location-row gps-location-row location-editable-v91">
-          <button type="button" className="gps-locate-btn" onClick={() => useGps(false)} aria-label="Use GPS location">⌖</button>
-          <input
-            value={[city, st].filter(Boolean).join(', ')}
-            onFocus={(e) => e.currentTarget.select()}
-            onClick={(e) => e.currentTarget.select()}
-            onChange={(e) => {
-              const parsed = parseLocationText(e.target.value, st);
-              setCity(parsed.city);
-              setSt(parsed.state);
-              setGpsFix(null);
-              setGpsStatus(parsed.city || parsed.state ? 'Manual location' : 'Location cleared');
-            }}
-            placeholder="City, ST"
-            autoComplete="off"
-          />
-          <button
-            type="button"
-            className="location-clear-btn"
-            onClick={() => {
-              setCity('');
-              setSt('');
-              setGpsFix(null);
-              setGpsStatus('Location cleared');
-            }}
-            aria-label="Clear location"
-          >×</button>
-        </div>
-        <div className={`gps-hint ${gpsFix ? 'ok' : ''}`}>
-          {gpsStatus || (status === 'OFF' ? 'OFF duty will try GPS automatically.' : 'Tap target to use GPS.')}
-        </div>
+        <section className="picker-section">
+          <div className="picker-label-row">
+            <label>Location</label>
+            <button type="button" className="tiny-link" onClick={() => useGps(false)}>Use GPS</button>
+          </div>
+          <div className="location-row gps-location-row location-editable-v91 driver-location-row">
+            <button type="button" className="gps-locate-btn" onClick={() => useGps(false)} aria-label="Use GPS location">⌖</button>
+            <input
+              value={[city, st].filter(Boolean).join(', ')}
+              onFocus={(e) => e.currentTarget.select()}
+              onClick={(e) => e.currentTarget.select()}
+              onChange={(e) => {
+                const parsed = parseLocationText(e.target.value, st);
+                setCity(parsed.city);
+                setSt(parsed.state);
+                setGpsFix(null);
+                setGpsStatus(parsed.city || parsed.state ? 'Manual location' : 'Location cleared');
+              }}
+              placeholder="City, ST"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              className="location-clear-btn"
+              onClick={() => {
+                setCity('');
+                setSt('');
+                setGpsFix(null);
+                setGpsStatus('Location cleared');
+              }}
+              aria-label="Clear location"
+            >×</button>
+          </div>
+          <div className={`gps-hint ${gpsFix ? 'ok' : ''}`}>
+            {gpsStatus || 'Tap GPS or type city/state.'}
+          </div>
+        </section>
 
-        <label>Reason</label>
-        <div className="reason-pills">
-          {reasonList(status).map(r => (
-            <button key={r} className={reason === r ? 'picked' : ''} onClick={() => setReason(r)}>{r}</button>
-          ))}
-        </div>
+        <section className="picker-section note-section">
+          {!showNotes && !notes ? (
+            <button type="button" className="add-note-row" onClick={() => setShowNotes(true)}>+ Add note optional</button>
+          ) : (
+            <>
+              <div className="picker-label-row">
+                <label>Note</label>
+                <button type="button" className="tiny-link" onClick={() => { setNotes(''); setShowNotes(false); }}>Clear</button>
+              </div>
+              <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional note" />
+            </>
+          )}
+        </section>
 
-        <label>Notes</label>
-        <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional notes" />
-
-        <button className="status-save" onClick={save}>Save</button>
+        <button className="status-save driver-status-save" onClick={save}>Save {status}</button>
       </div>
     </div>
   );
