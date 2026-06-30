@@ -1022,9 +1022,9 @@ export default function DayDetail({
 
           <LogCheckPanel events={events} state={state} />
 
-          <div className="cert-line">
+          <div className="cert-line cert-line-status-only">
+            <span>Certification</span>
             <b>{state.certifyStatus[state.activeDay]}</b>
-            <button onClick={onCertify}>{state.certifyStatus[state.activeDay] === 'Needs Recertification' ? 'RECERTIFY' : 'CERTIFY'}</button>
           </div>
         </>
       )}

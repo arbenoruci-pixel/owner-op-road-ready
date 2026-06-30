@@ -232,3 +232,10 @@ What was deliberately NOT changed (logic preserved verbatim)
 - Added compact signature panel that signs/certifies the day and stores signature state in the existing local app state.
 - Automatically marks pre-trip inspection complete when ON DUTY is saved with the Pre-trip inspection reason or when the pretrip-drive flow runs.
 - Kept HOS, GPS, timeline merge, carryover, DB, service worker/cache, routing, and Vercel config unchanged.
+
+## v93.2 — Pro Log Readability
+- Made the Log tab flatter, cleaner, and more readable.
+- Expanded graph usability while keeping labels/totals visible.
+- Removed visual overlap artifact that made OFF DUTY appear to continue through short ON DUTY segments.
+- Compact event rows and Log Check display.
+- Removed duplicate certification action from Log tab; Sign tab remains the certification path.

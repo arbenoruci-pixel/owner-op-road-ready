@@ -5,8 +5,8 @@ import { STATUS_ORDER, rowIndex, color, soft } from '../../shared/utils/status.j
 const W = 1000;
 const EDIT_H = 540;
 const BASE_H = 420;
-const LEFT = 36;
-const RIGHT = 30;
+const LEFT = 48;
+const RIGHT = 48;
 const TOP = 18;
 const ROW_H = 96;
 const BODY_W = W - LEFT - RIGHT;
@@ -140,18 +140,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return <text key={s} x={W-5} y={CENTER(s)+5} textAnchor="end" className="total-label">{(mins/60).toFixed(2).padStart(5,'0')}</text>;
       })}
 
-      {bodyPath && (
-        <path
-          d={bodyPath}
-          fill="none"
-          stroke="#223047"
-          strokeWidth="8"
-          strokeLinecap="butt"
-          strokeLinejoin="miter"
-          opacity=".92"
-          pointerEvents="none"
-        />
-      )}
+      {/* Horizontal status segments and transition joints are rendered separately so each event ends exactly at the next event boundary. */}
 
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
@@ -230,7 +219,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const y1 = CENTER(t.from.status);
         const y2 = CENTER(t.to.status);
         const selected = selectedId === t.to.id || selectedId === t.from.id || editId === t.to.id || editId === t.from.id;
-        const strokeW = selected ? 8 : 5;
+        const strokeW = selected ? 6 : 4;
         const cornerR = strokeW / 2;
         return (
           <g key={i} className="smooth-transition">
@@ -242,13 +231,13 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               y1={y1}
               y2={y2}
               stroke="#223047"
-              strokeWidth={Math.max(4, strokeW - 1)}
+              strokeWidth={strokeW}
               strokeLinecap="butt"
               strokeLinejoin="miter"
               pointerEvents="none"
             />
-            <circle cx={x} cy={y1} r="4.5" fill="#223047" pointerEvents="none" />
-            <circle cx={x} cy={y2} r="4.5" fill="#223047" pointerEvents="none" />
+            <circle cx={x} cy={y1} r="3.2" fill="#223047" pointerEvents="none" />
+            <circle cx={x} cy={y2} r="3.2" fill="#223047" pointerEvents="none" />
 
           </g>
         );
