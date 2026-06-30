@@ -35,10 +35,6 @@ function actionHeading(status) {
   return 'Driving status';
 }
 
-function reasonNeedsLoadLink(status, reason) {
-  return status === 'ON' && /pickup|loading|delivery|unloading/i.test(String(reason || ''));
-}
-
 export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onStartDriving }) {
   const [status, setStatus] = useState(state.currentStatus || 'OFF');
   const [city, setCity] = useState(state.currentLocation?.city || 'Chicago');
@@ -48,8 +44,6 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   const [showNotes, setShowNotes] = useState(false);
   const [gpsFix, setGpsFix] = useState(null);
   const [gpsStatus, setGpsStatus] = useState('');
-  const [shippingDocs, setShippingDocs] = useState(state.loadInfo?.shippingDocs || state.loadInfo?.loadNo || '');
-  const [destination, setDestination] = useState([state.loadInfo?.deliveryCity, state.loadInfo?.deliveryState].filter(Boolean).join(', '));
   const askedOffGps = useRef(false);
 
   function applyFix(position) {
@@ -117,9 +111,6 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
       description: notes,
       droppedTrailer: '',
       hookedTrailer: '',
-      shippingDocs: shippingDocs.trim(),
-      loadNo: shippingDocs.trim(),
-      destination: destination.trim(),
       lat: gpsFix?.lat ?? null,
       lng: gpsFix?.lng ?? null,
       gpsAccuracy: gpsFix?.accuracy ?? null,
@@ -185,35 +176,6 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
             ))}
           </div>
         </section>
-
-        {reasonNeedsLoadLink(status, reason) && (
-          <section className="picker-section load-link-section">
-            <div className="picker-label-row">
-              <label>{/delivery|unloading/i.test(reason) ? 'Delivery info' : 'Pickup info'}</label>
-              <span>linked to this event</span>
-            </div>
-            <div className="driver-load-grid">
-              <label>
-                <span>BOL / Shipping #</span>
-                <input
-                  value={shippingDocs}
-                  onChange={(e) => setShippingDocs(e.target.value)}
-                  placeholder="Load or BOL #"
-                  autoComplete="off"
-                />
-              </label>
-              <label>
-                <span>{/delivery|unloading/i.test(reason) ? 'Delivery location' : 'Going to'}</span>
-                <input
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="City, ST"
-                  autoComplete="off"
-                />
-              </label>
-            </div>
-          </section>
-        )}
 
         <section className="picker-section">
           <div className="picker-label-row">

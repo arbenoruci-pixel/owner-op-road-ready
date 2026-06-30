@@ -556,14 +556,8 @@ export default function App() {
   function deleteEvent(id) {
     setState(s => {
       const baseEvents = continuousBaseForDay(s, s.activeDay);
-      const deleted = baseEvents.find(e => e.id === id) || null;
       const evs = commitTimelineForDay(baseEvents.filter(e => e.id !== id), s.activeDay, s);
-      let loadInfo = s.loadInfo || {};
-      if (loadInfo.sourceEventId === id || deleted?.loadLinkId === id) {
-        const { sourceEventId, sourceEventReason, shippingDocs, loadNo, pickupCity, pickupState, deliveryCity, deliveryState, updatedAt, ...rest } = loadInfo;
-        loadInfo = { ...rest, shippingDocs:'', loadNo:'', pickupCity:'', pickupState:'', deliveryCity:'', deliveryState:'' };
-      }
-      let next = { ...s, loadInfo, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: evs }, selectedEventId:null, sheet:null };
+      let next = { ...s, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: evs }, selectedEventId:null, sheet:null };
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
     });
@@ -643,67 +637,6 @@ export default function App() {
       };
     }
     return { city:s.currentLocation?.city || 'Chicago', state:s.currentLocation?.state || 'IL' };
-  }
-
-  function parseCityStateInput(value = '', fallbackState = '') {
-    const raw = String(value || '').trim();
-    if (!raw) return { city:'', state:'' };
-    const parts = raw.split(',');
-    if (parts.length >= 2) {
-      const state = parts.pop().trim().toUpperCase().slice(0, 2);
-      return { city:parts.join(',').trim(), state };
-    }
-    const trailing = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
-    if (trailing) return { city:trailing[1].trim(), state:trailing[2].toUpperCase() };
-    return { city:raw, state:fallbackState || '' };
-  }
-
-  function buildLoadPatchForStatusPayload(payload = {}, eventId = '') {
-    const reason = String(payload.reason || '');
-    const pickupLike = /pickup|loading/i.test(reason);
-    const deliveryLike = /delivery|unloading/i.test(reason);
-    if (!pickupLike && !deliveryLike) return null;
-
-    const shippingDocs = String(payload.shippingDocs || payload.loadNo || '').trim();
-    const destination = parseCityStateInput(payload.destination || '', payload.destinationState || '');
-    const origin = { city:payload.city || '', state:payload.state || '' };
-    const patch = {
-      sourceEventId:eventId,
-      sourceEventReason:reason,
-      updatedAt:Date.now(),
-    };
-
-    if (shippingDocs) {
-      patch.shippingDocs = shippingDocs;
-      patch.loadNo = shippingDocs;
-    }
-    if (pickupLike) {
-      patch.pickupCity = origin.city || payload.pickupCity || '';
-      patch.pickupState = origin.state || payload.pickupState || '';
-      if (destination.city) patch.deliveryCity = destination.city;
-      if (destination.state) patch.deliveryState = destination.state;
-    }
-    if (deliveryLike) {
-      if (destination.city || destination.state) {
-        patch.deliveryCity = destination.city || origin.city || '';
-        patch.deliveryState = destination.state || origin.state || '';
-      } else {
-        patch.deliveryCity = origin.city || payload.deliveryCity || '';
-        patch.deliveryState = origin.state || payload.deliveryState || '';
-      }
-    }
-    return patch;
-  }
-
-  function loadDescriptionForStatusPayload(payload = {}) {
-    const reason = String(payload.reason || '');
-    const parts = [];
-    const ref = String(payload.shippingDocs || payload.loadNo || '').trim();
-    const dest = parseCityStateInput(payload.destination || '', payload.destinationState || '');
-    if (ref) parts.push(`BOL ${ref}`);
-    if (/pickup|loading/i.test(reason) && (dest.city || dest.state)) parts.push(`To ${[dest.city, dest.state].filter(Boolean).join(', ')}`);
-    if (/delivery|unloading/i.test(reason) && (dest.city || dest.state)) parts.push(`At ${[dest.city, dest.state].filter(Boolean).join(', ')}`);
-    return parts.join(' · ');
   }
 
   function addDriverWorkflowEvents(kind) {
@@ -793,34 +726,15 @@ export default function App() {
     });
   }
 
-  function saveLoadInfo(payload = {}) {
-    setState(s => {
-      const next = {
-        ...s,
-        loadInfo: { ...(s.loadInfo || {}), ...payload },
-      };
-      if (payload.driverName !== undefined) {
-        next.driverProfile = { ...(s.driverProfile || {}), name:String(payload.driverName || '').trim() };
-      }
-      if (payload.carrierName !== undefined) next.carrierName = String(payload.carrierName || '').trim();
-      if (payload.mainOfficeAddress !== undefined) next.mainOfficeAddress = String(payload.mainOfficeAddress || '').trim();
-      if (payload.homeTerminalAddress !== undefined) next.homeTerminalAddress = String(payload.homeTerminalAddress || '').trim();
-      if (payload.coDrivers !== undefined) next.coDrivers = String(payload.coDrivers || '').trim();
-      if (payload.truck !== undefined) next.driver = { ...(s.driver || {}), truck:String(payload.truck || '').trim() };
-      if (payload.trailer !== undefined) {
-        const trailer = String(payload.trailer || '').trim();
-        next.driver = { ...(next.driver || s.driver || {}), trailer };
-        next.currentTrailer = trailer || 'No trailer';
-      }
-      if (payload.pickupCity || payload.pickupState) {
-        next.currentLocation = {
-          city: payload.pickupCity || s.currentLocation?.city || 'Chicago',
-          state: payload.pickupState || s.currentLocation?.state || 'IL',
-          locationSource: s.currentLocation?.locationSource || 'manual',
-        };
-      }
-      return next;
-    });
+  function saveLoadInfo(payload) {
+    setState(s => ({
+      ...s,
+      loadInfo: { ...(s.loadInfo || {}), ...payload },
+      currentLocation: {
+        city: payload.pickupCity || s.currentLocation?.city || 'Chicago',
+        state: payload.pickupState || s.currentLocation?.state || 'IL',
+      },
+    }));
   }
 
   function startDrivingFromMotion(fix) {
@@ -1110,7 +1024,7 @@ export default function App() {
   }
 
 
-  function closeLastAndAddStatus({ status, reason, city, state: st, description='', droppedTrailer='', hookedTrailer='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual', shippingDocs='', loadNo='', destination='', destinationState='' }) {
+  function closeLastAndAddStatus({ status, reason, city, state: st, description='', droppedTrailer='', hookedTrailer='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual' }) {
     const acceptedLiveInspection = maybeAcceptInspectionForEvent(state, state.activeDay, { status, note:reason, description, city, state:st });
     setState(s => {
       const changeAt = Math.max(0, Math.min(1439, new Date().getHours() * 60 + new Date().getMinutes()));
@@ -1127,30 +1041,22 @@ export default function App() {
         note = `Drop & Hook · dropped ${droppedTrailer || trailer}${hookedTrailer ? ` / hooked ${hookedTrailer}` : ''}`;
         trailer = hookedTrailer || 'New trailer';
       }
-      const eventId = `live_${Date.now()}`;
-      const loadDescription = loadDescriptionForStatusPayload({ status, reason, city, state:st, shippingDocs, loadNo, destination, destinationState });
       const ev = {
-        id: eventId,
+        id: `live_${Date.now()}`,
         status,
         specialMode: reason === 'Yard Move' ? 'yard_move' : (reason === 'Personal Conveyance' ? 'personal_conveyance' : 'none'),
         startMin: changeAt,
         endMin: Math.min(1439, changeAt + 1),
         city,
         state: st,
-        description: description || loadDescription,
+        description,
         note,
-        shippingDocs: String(shippingDocs || loadNo || '').trim(),
-        loadNo: String(loadNo || shippingDocs || '').trim(),
-        destination,
-        destinationState,
-        loadLinkId: eventId,
         lat,
         lng,
         gpsAccuracy,
         locationSource,
         source: 'live_status',
       };
-      const loadInfoPatch = buildLoadPatchForStatusPayload({ status, reason, city, state:st, shippingDocs, loadNo, destination, destinationState }, eventId);
       const continuous = normalizeLogEvents(closePreviousAndStart(existing, ev));
       let next = {
         ...s,
@@ -1161,7 +1067,6 @@ export default function App() {
         selectedEventId: ev.id,
         sheet: null,
         eventsByDay: { ...s.eventsByDay, [day]: continuous },
-        ...(loadInfoPatch ? { loadInfo:{ ...(s.loadInfo || {}), ...loadInfoPatch } } : {}),
       };
       next = withAcceptedPreTripInspection(next, day, ev, acceptedLiveInspection);
       next = reconcilePreTripInspections(next, [day]);

@@ -133,7 +133,7 @@ function formSummary(state, events) {
   const dutyMap = Object.fromEntries(dutyTotals);
   const load = state.loadInfo || {};
   const equipment = state.equipment || {};
-  const shippingDocs = [load.shippingDocs || load.loadNo, equipment.container, equipment.chassis].filter(Boolean).join(' ');
+  const shippingDocs = [load.loadNo, equipment.container, equipment.chassis].filter(Boolean).join(' ');
   const trailers = state.currentTrailer && state.currentTrailer !== 'No trailer'
     ? state.currentTrailer
     : (equipment.trailer || state.driver?.trailer || 'None');
@@ -163,58 +163,17 @@ function FormSectionTitle({ children }) {
   return <div className="road-form-section-title">{children}</div>;
 }
 
-function parseCityStateEdit(value = '') {
-  const raw = String(value || '').trim();
-  if (!raw) return { city:'', state:'' };
-  const parts = raw.split(',');
-  if (parts.length >= 2) {
-    const state = parts.pop().trim().toUpperCase().slice(0, 2);
-    return { city:parts.join(',').trim(), state };
-  }
-  const trailing = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
-  if (trailing) return { city:trailing[1].trim(), state:trailing[2].toUpperCase() };
-  return { city:raw, state:'' };
-}
-
-function FormRow({ label, value, onClick }) {
-  const Tag = onClick ? 'button' : 'div';
+function FormRow({ label, value }) {
   return (
-    <Tag type={onClick ? 'button' : undefined} className={`road-form-row ${onClick ? 'editable' : ''}`} onClick={onClick}>
+    <div className="road-form-row">
       <div className="road-form-label">{label}</div>
       <div className="road-form-value">{value}</div>
-    </Tag>
+    </div>
   );
 }
 
-function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
+function MiniFormPanel({ state, events }) {
   const form = formSummary(state, events);
-  const load = state.loadInfo || {};
-  function editText(title, current, key) {
-    if (typeof window === 'undefined') return;
-    const value = window.prompt(title, current === 'None' ? '' : current);
-    if (value == null) return;
-    onSaveLoad?.({ [key]: String(value || '').trim() });
-  }
-  function editPickup() {
-    if (typeof window === 'undefined') return;
-    const value = window.prompt('Pickup / From location (City, ST)', joinCityState(load.pickupCity, load.pickupState) === 'None' ? '' : joinCityState(load.pickupCity, load.pickupState));
-    if (value == null) return;
-    const parsed = parseCityStateEdit(value);
-    onSaveLoad?.({ pickupCity: parsed.city, pickupState: parsed.state });
-  }
-  function editDelivery() {
-    if (typeof window === 'undefined') return;
-    const value = window.prompt('Delivery / To location (City, ST)', joinCityState(load.deliveryCity, load.deliveryState) === 'None' ? '' : joinCityState(load.deliveryCity, load.deliveryState));
-    if (value == null) return;
-    const parsed = parseCityStateEdit(value);
-    onSaveLoad?.({ deliveryCity: parsed.city, deliveryState: parsed.state });
-  }
-  function editShipping() {
-    if (typeof window === 'undefined') return;
-    const value = window.prompt('BOL / shipping document / load reference', form.shippingDocs === 'None' ? '' : form.shippingDocs);
-    if (value == null) return;
-    onSaveLoad?.({ shippingDocs: String(value || '').trim(), loadNo: String(value || '').trim() });
-  }
   return (
     <div className="road-paper-form">
       <div className="road-form-totals">
@@ -225,8 +184,8 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
       </div>
 
       <FormSectionTitle>GENERAL</FormSectionTitle>
-      <FormRow label="Vehicles" value={form.vehicles} onClick={() => editText('Truck / unit number', form.vehicles, 'truck')} />
-      <FormRow label="Trailers" value={form.trailers} onClick={onOpenTrailer || (() => editText('Trailer / equipment', form.trailers, 'trailer'))} />
+      <FormRow label="Vehicles" value={form.vehicles} />
+      <FormRow label="Trailers" value={form.trailers} />
       <div className="road-form-split-row">
         <div>
           <div className="road-form-label">Distance</div>
@@ -237,18 +196,18 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
           <div className="road-form-value">{form.odometers}</div>
         </div>
       </div>
-      <FormRow label="Shipping Documents" value={form.shippingDocs} onClick={editShipping} />
-      <FormRow label="Driver" value={form.driverName} onClick={() => editText('Driver name', form.driverName, 'driverName')} />
+      <FormRow label="Shipping Documents" value={form.shippingDocs} />
+      <FormRow label="Driver" value={form.driverName} />
 
       <FormSectionTitle>CARRIER</FormSectionTitle>
-      <FormRow label="Carrier" value={form.carrierName} onClick={() => editText('Carrier name', form.carrierName, 'carrierName')} />
-      <FormRow label="Main Office Address" value={form.mainOffice} onClick={() => editText('Main office address', form.mainOffice, 'mainOfficeAddress')} />
-      <FormRow label="Home Terminal Address" value={form.homeTerminal} onClick={() => editText('Home terminal address', form.homeTerminal, 'homeTerminalAddress')} />
+      <FormRow label="Carrier" value={form.carrierName} />
+      <FormRow label="Main Office Address" value={form.mainOffice} />
+      <FormRow label="Home Terminal Address" value={form.homeTerminal} />
 
       <FormSectionTitle>OTHER</FormSectionTitle>
-      <FormRow label="Co-Drivers" value={form.coDrivers} onClick={() => editText('Co-drivers', form.coDrivers, 'coDrivers')} />
-      <FormRow label="From" value={form.from} onClick={editPickup} />
-      <FormRow label="To" value={form.to} onClick={editDelivery} />
+      <FormRow label="Co-Drivers" value={form.coDrivers} />
+      <FormRow label="From" value={form.from} />
+      <FormRow label="To" value={form.to} />
       <FormRow label="Notes" value={form.notes} />
     </div>
   );
@@ -1041,7 +1000,7 @@ export default function DayDetail({
         />
       )}
 
-      {activeTab === 'form' && <MiniFormPanel state={state} events={displayEvents} onSaveLoad={onSaveLoad} onOpenTrailer={onOpenTrailer} />}
+      {activeTab === 'form' && <MiniFormPanel state={state} events={displayEvents} />}
       {activeTab === 'sign' && <SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} />}
       {activeTab === 'inspection' && <InspectionPanel state={state} events={displayEvents} onSaveInspection={onSaveInspection} />}
 
