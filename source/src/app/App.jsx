@@ -16,7 +16,7 @@ import TrailerSheet from '../modules/equipment/TrailerSheet.jsx';
 import StatusWorkflowSheet from '../modules/status/StatusWorkflowSheet.jsx';
 import { initialCertifyStatus, initialEventsByDay } from '../state/mockData.js';
 import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
-import { displayEventsForDay, currentFromEvents } from '../core/timeline/displayTimeline.js';
+import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
 import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents } from '../core/timeline/timelineEngine.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
@@ -443,7 +443,7 @@ export default function App() {
   }, []);
 
   const rawEvents = useMemo(() => normalizeLogEvents(state.eventsByDay[state.activeDay] || []), [state.eventsByDay, state.activeDay]);
-  const events = useMemo(() => displayEventsForDay(rawEvents, isToday(state.activeDay)), [rawEvents, state.activeDay]);
+  const events = useMemo(() => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);
   const liveCurrent = useMemo(() => currentFromEvents(events, state.currentStatus || 'OFF', state.currentLocation || { city:'GPS', state:'UNK' }, state.currentReason || 'Off Duty'), [events, state.currentStatus, state.currentLocation, state.currentReason]);
   const selectedEvent = events.find(e => e.id === state.selectedEventId) || null;
 
@@ -453,7 +453,7 @@ export default function App() {
 
   function continuousBaseForDay(s, day = s.activeDay) {
     const raw = (s.eventsByDay?.[day] || []).filter(e => !e.carriedFromPreviousDay);
-    return displayEventsForDay(raw, isToday(day));
+    return displayEventsForDayFromState(s.eventsByDay || {}, day);
   }
 
   function commitTimelineForDay(eventsNext, day, s) {

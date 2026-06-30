@@ -106,17 +106,21 @@ export function makeContinuousLogEvents(events = [], options = {}) {
   const first = evs[0];
 
   if (fillStartWith && Number(first.startMin || 0) > 0) {
+    const sameAsFirst = fillStartWith === first.status;
     out.push({
-      id: `coverage_start_${first.id || 'first'}`,
+      id: sameAsFirst ? (first.id || 'coverage_start_first') : `coverage_start_${first.id || 'first'}`,
       status: fillStartWith,
       startMin: 0,
       endMin: Math.max(1, Math.min(1440, Number(first.startMin || 0))),
       city: startLocation?.city || first.city || '',
       state: startLocation?.state || first.state || '',
-      note: 'Carry-forward coverage',
-      description: 'Review actual status if this is not correct',
-      source: 'timeline_continuity',
-      syntheticCoverage: true,
+      // If the start-of-day bridge is the same duty status as the first real
+      // event, use the same text so normalizeLogEvents merges it into one clean
+      // continuous row instead of showing an artificial duplicate segment.
+      note: sameAsFirst ? (first.note || '') : 'Carry-forward coverage',
+      description: sameAsFirst ? (first.description || '') : 'Review actual status if this is not correct',
+      source: sameAsFirst ? (first.source || 'timeline_continuity') : 'timeline_continuity',
+      syntheticCoverage: !sameAsFirst,
     });
   }
 

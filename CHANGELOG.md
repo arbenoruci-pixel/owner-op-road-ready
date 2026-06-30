@@ -1,4 +1,11 @@
 
+## v93.1 - Day-Start No-Gap Coverage
+- Fixed remaining graph gap before the first event of the day.
+- Day display now bridges 00:00 to first event start using carry-forward coverage.
+- Same-status bridge merges into a single clean row.
+- Build and offline sync smoke test passed.
+
+
 ## v93.0 — Pro Log Clarity / Exact Cutoff Graph
 - Expanded the Log graph into the available screen width and removed the extra instruction row.
 - Changed graph rendering so adjacent events cut off exactly at the status-change minute.
