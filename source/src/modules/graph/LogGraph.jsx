@@ -1,32 +1,42 @@
 import React, { useRef } from 'react';
-import { clamp, round5, timeLabel } from '../../shared/utils/time.js';
+import { clamp, round5 } from '../../shared/utils/time.js';
 import { STATUS_ORDER, rowIndex, color, soft } from '../../shared/utils/status.js';
 
 const W = 1000;
 const EDIT_H = 540;
 const BASE_H = 420;
-const LEFT = 44;
-const RIGHT = 34;
+const LEFT = 36;
+const RIGHT = 30;
 const TOP = 18;
 const ROW_H = 96;
 const BODY_W = W - LEFT - RIGHT;
-const MIN_SHORT_EVENT_PX = 14;
+const SHORT_EVENT_MARKER_PX = 12;
+const HIT_MIN_PX = 24;
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
   return LEFT + (Math.max(0, Math.min(1440, m)) / 1440) * BODY_W;
 }
-function visualSpan(event) {
-  const startX = xFromMin(event.startMin);
-  const endX = xFromMin(event.endMin);
-  const width = Math.max(0, endX - startX);
-  if (width >= MIN_SHORT_EVENT_PX) return { x1:startX, x2:endX, short:false };
-  const mid = (startX + endX) / 2;
-  const half = MIN_SHORT_EVENT_PX / 2;
+function exactSpan(event) {
+  const x1 = xFromMin(event.startMin);
+  const x2 = xFromMin(event.endMin);
   return {
-    x1: Math.max(LEFT, mid - half),
-    x2: Math.min(W - RIGHT, mid + half),
-    short:true,
+    x1,
+    x2,
+    width: Math.max(0, x2 - x1),
+    short: Math.max(0, x2 - x1) < SHORT_EVENT_MARKER_PX,
+  };
+}
+
+function hitSpan(event) {
+  const span = exactSpan(event);
+  if (span.width >= HIT_MIN_PX) return span;
+  const mid = (span.x1 + span.x2) / 2;
+  const half = HIT_MIN_PX / 2;
+  return {
+    ...span,
+    hitX1: Math.max(LEFT, mid - half),
+    hitX2: Math.min(W - RIGHT, mid + half),
   };
 }
 function minFromClientX(e, svg) {
@@ -136,8 +146,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           fill="none"
           stroke="#223047"
           strokeWidth="8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          strokeLinecap="butt"
+          strokeLinejoin="miter"
           opacity=".92"
           pointerEvents="none"
         />
@@ -146,18 +156,18 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
         const y = CENTER(event.status);
-        const span = visualSpan(event);
+        const span = hitSpan(event);
         return (
           <g key={event.id}>
-            {selected && <rect x={span.x1} y={TOP+rowIndex(event.status)*ROW_H+3} width={Math.max(4,span.x2-span.x1)} height={ROW_H-6} rx="10" fill={soft(event.status)} />}
+            {selected && <rect x={span.x1} y={TOP+rowIndex(event.status)*ROW_H+3} width={Math.max(3, span.width)} height={ROW_H-6} rx="8" fill={soft(event.status)} />}
             <line
-              x1={span.x1}
-              x2={span.x2}
+              x1={span.hitX1 ?? span.x1}
+              x2={span.hitX2 ?? span.x2}
               y1={y}
               y2={y}
               stroke="transparent"
-              strokeWidth="30"
-              strokeLinecap="round"
+              strokeWidth="32"
+              strokeLinecap="butt"
               onClick={(e)=>{e.stopPropagation(); onSelect?.(event.id);}}
             />
             {selected && (
@@ -167,9 +177,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
                 y1={y}
                 y2={y}
                 stroke="#111827"
-                strokeWidth="22"
-                strokeLinecap="round"
-                opacity=".18"
+                strokeWidth="20"
+                strokeLinecap="butt"
+                opacity=".14"
                 pointerEvents="none"
               />
             )}
@@ -179,12 +189,15 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               y1={y}
               y2={y}
               stroke={color(event.status)}
-              strokeWidth={selected ? 15 : 10}
-              strokeLinecap="round"
+              strokeWidth={selected ? 14 : 9}
+              strokeLinecap="butt"
               pointerEvents="none"
             />
             {span.short && (
-              <circle className="short-event-dot" cx={(span.x1 + span.x2) / 2} cy={y} r={selected ? 8 : 5} fill={color(event.status)} stroke="#fff" strokeWidth="2" pointerEvents="none" />
+              <g className="short-event-marker" pointerEvents="none">
+                <circle cx={(span.x1 + span.x2) / 2} cy={y} r={selected ? 7 : 5} fill={color(event.status)} stroke="#fff" strokeWidth="2" />
+                <line x1={(span.x1 + span.x2) / 2} x2={(span.x1 + span.x2) / 2} y1={y-15} y2={y+15} stroke={color(event.status)} strokeWidth="3" strokeLinecap="round" opacity=".92" />
+              </g>
             )}
             {selected && (
               <>
@@ -222,7 +235,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return (
           <g key={i} className="smooth-transition">
             {selected && <rect x={x-14} y={Math.min(y1,y2)-11} width="28" height={Math.abs(y2-y1)+22} rx="14" fill="rgba(95,99,104,.13)" />}
-            <line x1={x} x2={x} y1={y1} y2={y2} stroke="transparent" strokeWidth="36" strokeLinecap="round" onClick={(e)=>{e.stopPropagation(); onSelect?.(t.to.id);}} />
+            <line x1={x} x2={x} y1={y1} y2={y2} stroke="transparent" strokeWidth="36" strokeLinecap="butt" onClick={(e)=>{e.stopPropagation(); onSelect?.(t.to.id);}} />
             <line
               x1={x}
               x2={x}
@@ -230,10 +243,12 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               y2={y2}
               stroke="#223047"
               strokeWidth={Math.max(4, strokeW - 1)}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              strokeLinecap="butt"
+              strokeLinejoin="miter"
               pointerEvents="none"
             />
+            <circle cx={x} cy={y1} r="4.5" fill="#223047" pointerEvents="none" />
+            <circle cx={x} cy={y2} r="4.5" fill="#223047" pointerEvents="none" />
 
           </g>
         );
