@@ -3118,7 +3118,7 @@ body{
 .insert-form-modern .v30-status-grid button,
 .insert-form-modern .full-day-row button{
   border-radius:16px!important;
-  background:#f8fafc!important;
+  background:linear-gradient(180deg,#ffffff 0%,#f7f9fc 100%)!important;
   border-color:#dbe2ea!important;
 }
 .insert-form-modern .v30-status-grid button{
@@ -3131,7 +3131,7 @@ body{
 }
 .insert-form-modern input,
 .insert-form-modern textarea{
-  background:#f8fafc!important;
+  background:linear-gradient(180deg,#ffffff 0%,#f7f9fc 100%)!important;
   border-color:#dbe2ea!important;
   border-radius:16px!important;
 }
@@ -3581,7 +3581,7 @@ body::after{
   width:40px!important;
   height:40px!important;
   border-radius:11px!important;
-  font-size:22px!important;
+  font-size:21px!important;
 }
 .editor-clean-v85 .sheet-head div{
   font-size:20px!important;
@@ -6478,10 +6478,10 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   gap:8px!important;
 }
 .driver-duty-grid button{
-  min-height:58px!important;
-  border-radius:16px!important;
+  min-height:52px!important;
+  border-radius:14px!important;
   border:1px solid #dfe5ec!important;
-  background:#f6f8fb!important;
+  background:linear-gradient(180deg,#ffffff 0%,#f4f7fb 100%)!important;
   color:#1f2937!important;
   display:flex!important;
   flex-direction:column;
@@ -6490,12 +6490,12 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   gap:4px;
   box-shadow:none!important;
 }
-.driver-duty-grid button[data-status="OFF"]{background:rgba(89,102,119,.07)!important;border-color:rgba(89,102,119,.18)!important;color:#596677!important;}
-.driver-duty-grid button[data-status="SB"]{background:rgba(122,130,146,.08)!important;border-color:rgba(122,130,146,.2)!important;color:#6f7787!important;}
-.driver-duty-grid button[data-status="D"]{background:rgba(22,137,128,.08)!important;border-color:rgba(22,137,128,.18)!important;color:#168980!important;}
-.driver-duty-grid button[data-status="ON"]{background:rgba(33,86,217,.08)!important;border-color:rgba(33,86,217,.18)!important;color:#2156d9!important;}
+.driver-duty-grid button[data-status="OFF"]{background:linear-gradient(180deg,#fff 0%,rgba(89,102,119,.08) 100%)!important;border-color:rgba(89,102,119,.18)!important;color:#596677!important;}
+.driver-duty-grid button[data-status="SB"]{background:linear-gradient(180deg,#fff 0%,rgba(122,130,146,.09) 100%)!important;border-color:rgba(122,130,146,.2)!important;color:#6f7787!important;}
+.driver-duty-grid button[data-status="D"]{background:linear-gradient(180deg,#fff 0%,rgba(22,137,128,.10) 100%)!important;border-color:rgba(22,137,128,.18)!important;color:#168980!important;}
+.driver-duty-grid button[data-status="ON"]{background:linear-gradient(180deg,#fff 0%,rgba(33,86,217,.10) 100%)!important;border-color:rgba(33,86,217,.18)!important;color:#2156d9!important;}
 .driver-duty-grid button span{
-  font-size:22px!important;
+  font-size:21px!important;
   line-height:1;
   font-weight:950!important;
   letter-spacing:.02em;
@@ -6510,10 +6510,10 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   letter-spacing:.05em;
 }
 .driver-duty-grid button.picked{
-  background:var(--driver-accent)!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,.06) 34%,rgba(0,0,0,.06) 100%),var(--driver-accent)!important;
   color:#fff!important;
   border-color:var(--driver-accent)!important;
-  box-shadow:0 8px 18px rgba(15,23,42,.16)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.26), inset 0 -1px 0 rgba(0,0,0,.10), 0 6px 14px rgba(15,23,42,.12)!important;
 }
 .driver-duty-grid button.picked small{color:rgba(255,255,255,.82)!important;opacity:1!important;}
 .driver-reason-grid{
@@ -6523,11 +6523,11 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   overflow:visible!important;
 }
 .driver-reason-grid button{
-  min-height:46px;
-  border-radius:14px!important;
+  min-height:42px;
+  border-radius:13px!important;
   padding:8px 10px!important;
   color:#111827!important;
-  background:#f8fafc!important;
+  background:linear-gradient(180deg,#ffffff 0%,#f7f9fc 100%)!important;
   border:1px solid #dfe5ec!important;
   font-size:14px;
   font-weight:900!important;
@@ -6536,9 +6536,9 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 }
 .driver-reason-grid button.picked{
   color:#fff!important;
-  background:var(--driver-accent)!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.05) 35%,rgba(0,0,0,.05) 100%),var(--driver-accent)!important;
   border-color:var(--driver-accent)!important;
-  box-shadow:0 8px 16px rgba(15,23,42,.12);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(0,0,0,.08), 0 5px 12px rgba(15,23,42,.10);
 }
 .driver-location-row{
   grid-template-columns:46px 1fr 46px!important;
@@ -6549,7 +6549,7 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 }
 .driver-location-row button{
   border:0!important;
-  background:#f8fafc!important;
+  background:linear-gradient(180deg,#ffffff 0%,#f7f9fc 100%)!important;
   color:var(--driver-accent)!important;
   font-size:21px!important;
 }
@@ -6599,19 +6599,19 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   bottom:calc(env(safe-area-inset-bottom) + 12px);
   transform:translateX(-50%);
   width:min(398px, calc(100vw - 32px))!important;
-  min-height:58px!important;
+  min-height:54px!important;
   margin:0!important;
-  border-radius:18px!important;
-  background:var(--driver-accent)!important;
-  box-shadow:0 14px 28px rgba(15,23,42,.18);
+  border-radius:16px!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.04) 34%,rgba(0,0,0,.07) 100%),var(--driver-accent)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(0,0,0,.10), 0 10px 20px rgba(15,23,42,.14);
   font-size:19px!important;
   font-weight:950!important;
   z-index:10001;
 }
 @media(max-width:390px){
   .driver-picker-body{padding-left:12px!important;padding-right:12px!important;}
-  .driver-duty-grid button{min-height:54px!important;}
-  .driver-duty-grid button span{font-size:20px!important;}
+  .driver-duty-grid button{min-height:48px!important;}
+  .driver-duty-grid button span{font-size:19px!important;}
   .driver-reason-grid{grid-template-columns:1fr 1fr;gap:7px!important;}
-  .driver-reason-grid button{font-size:13px;min-height:44px;}
+  .driver-reason-grid button{font-size:13px;min-height:40px;}
 }
