@@ -1,4 +1,12 @@
 
+## v93.0 — Pro Log Clarity / Exact Cutoff Graph
+- Expanded the Log graph into the available screen width and removed the extra instruction row.
+- Changed graph rendering so adjacent events cut off exactly at the status-change minute.
+- Added precise short-event markers for 1-minute events without visually stretching their duration.
+- Tightened event rows for a cleaner, less cluttered Log screen.
+- Verified build, offline smoke test, and OFF/ON/OFF split behavior.
+
+
 ## v92.9 — Log Timeline / Graph Usability Fix
 
 - Fixed insert/edit/delete override to split continuous duty-status blocks correctly.
