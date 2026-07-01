@@ -429,13 +429,14 @@ export default function App() {
     const timer = setInterval(() => {
       const today = localDayKey();
       setState(s => {
-        const eventsByDay = { ...s.eventsByDay };
-        const certifyStatus = { ...s.certifyStatus };
+        const rolled = rolloverActiveDrivingIfNeeded(s, new Date());
+        const eventsByDay = { ...rolled.eventsByDay };
+        const certifyStatus = { ...rolled.certifyStatus };
         const before = JSON.stringify(eventsByDay[today] || []);
         ensureTodayCarryover(eventsByDay, certifyStatus, today);
         refreshCarryoverIfOnlyPlaceholder(eventsByDay, today);
         const after = JSON.stringify(eventsByDay[today] || []);
-        if (before !== after || !s.eventsByDay?.[today]) return { ...s, eventsByDay, certifyStatus };
+        if (rolled !== s || before !== after || !s.eventsByDay?.[today]) return { ...rolled, eventsByDay, certifyStatus };
         return s;
       });
     }, 30000);
@@ -462,6 +463,64 @@ export default function App() {
     // status to now/current-day or midnight/completed-day, but writing the
     // split segments prevents stale gaps after insert/edit/delete/shift.
     return normalized.map(event => ({ ...event }));
+  }
+
+  function minuteFromDate(date = new Date()) {
+    return Math.max(0, Math.min(1439, date.getHours() * 60 + date.getMinutes()));
+  }
+
+  function findEventDayById(eventsByDay = {}, id = '') {
+    if (!id) return '';
+    return Object.keys(eventsByDay || {}).find(day => (eventsByDay?.[day] || []).some(e => e.id === id)) || '';
+  }
+
+  function rolloverActiveDrivingIfNeeded(s, now = new Date()) {
+    const today = localDayKey(now);
+    const nowMinute = minuteFromDate(now);
+    const gpsId = s.gpsTrip?.eventId || '';
+    const gpsDay = findEventDayById(s.eventsByDay || {}, gpsId);
+    const sourceDay = gpsDay || (s.currentStatus === 'D' ? s.activeDay : '');
+
+    if (!sourceDay || sourceDay === today || sourceDay > today) return s;
+    if (s.currentStatus !== 'D' && s.gpsTrip?.status !== 'active') return s;
+
+    const previousBase = continuousBaseForDay(s, sourceDay);
+    const sourceEvent = previousBase.find(e => e.id === gpsId) || [...previousBase].reverse().find(e => e.status === 'D') || null;
+    if (!sourceEvent) return { ...s, activeDay: today };
+
+    const previousUpdated = normalizeLogEvents(previousBase.map(e => (e.id === sourceEvent.id ? { ...e, endMin: 1440 } : e)));
+    const rolloverId = `gps_drive_${today}_${Date.now()}`;
+    const todayExisting = (s.eventsByDay?.[today] || []).filter(e => !e.carriedFromPreviousDay);
+    const todayDrive = {
+      ...sourceEvent,
+      id: rolloverId,
+      status: 'D',
+      startMin: 0,
+      endMin: Math.max(1, nowMinute),
+      city: s.currentLocation?.city || sourceEvent.city || 'GPS',
+      state: s.currentLocation?.state || sourceEvent.state || 'UNK',
+      note: 'Driving',
+      description: sourceEvent.description || '',
+      source: 'gps_drive_rollover',
+      carriedFromPreviousDay: false,
+    };
+    const todayUpdated = commitTimelineForDay(insertManyOverride(todayExisting, [todayDrive]), today, s);
+
+    return {
+      ...s,
+      activeDay: today,
+      selectedEventId: rolloverId,
+      currentStatus: 'D',
+      currentReason: s.currentReason || 'Driving',
+      currentLocation: {
+        ...(s.currentLocation || {}),
+        city: s.currentLocation?.city || todayDrive.city,
+        state: s.currentLocation?.state || todayDrive.state,
+      },
+      certifyStatus: { ...(s.certifyStatus || {}), [today]: s.certifyStatus?.[today] || 'Active day / Not certified yet' },
+      eventsByDay: { ...(s.eventsByDay || {}), [sourceDay]: previousUpdated, [today]: todayUpdated },
+      gpsTrip: s.gpsTrip ? { ...s.gpsTrip, eventId: rolloverId, status: 'active', rolloverFromEventId: gpsId || sourceEvent.id, rolloverFromDay: sourceDay } : s.gpsTrip,
+    };
   }
 
   function markDayRecert(next, day = next.activeDay) {
@@ -910,30 +969,32 @@ export default function App() {
 
   function updateGpsTrip(fix) {
     setState(s => {
-      if (!s.gpsTrip || s.gpsTrip.status !== 'active') return s;
-      const last = s.gpsTrip.lastPoint;
+      let base = rolloverActiveDrivingIfNeeded(s, new Date());
+      if (!base.gpsTrip || base.gpsTrip.status !== 'active') return base;
+      const last = base.gpsTrip.lastPoint;
       let miles = 0;
       if (last) {
         const raw = haversineMiles(last, fix);
         if (raw >= 0.005 && raw <= 5) miles = raw;
       }
       const stateCode = fix.state || detectState(fix.lat, fix.lng);
-      const milesByState = miles ? addMilesByState(s.gpsTrip.milesByState || {}, stateCode, miles) : (s.gpsTrip.milesByState || {});
-      const nowMinValue = new Date().getHours() * 60 + new Date().getMinutes();
-      const dayEvents = normalizeLogEvents((s.eventsByDay[s.activeDay] || []).map(e =>
-        e.id === s.gpsTrip.eventId ? { ...e, endMin: Math.max(e.startMin + 1, nowMinValue), state: e.state || stateCode } : e
+      const milesByState = miles ? addMilesByState(base.gpsTrip.milesByState || {}, stateCode, miles) : (base.gpsTrip.milesByState || {});
+      const nowMinValue = minuteFromDate(new Date());
+      const activeDay = base.activeDay || localDayKey();
+      const dayEvents = normalizeLogEvents((base.eventsByDay[activeDay] || []).map(e =>
+        e.id === base.gpsTrip.eventId ? { ...e, endMin: Math.max(e.startMin + 1, nowMinValue), state: e.state || stateCode } : e
       ));
       return {
-        ...s,
+        ...base,
         gpsTrip:{
-          ...s.gpsTrip,
+          ...base.gpsTrip,
           lastPoint: fix,
-          points: [...(s.gpsTrip.points || []), fix].slice(-1000),
+          points: [...(base.gpsTrip.points || []), fix].slice(-1000),
           milesByState,
-          totalMiles: Number(((s.gpsTrip.totalMiles || 0) + miles).toFixed(2)),
+          totalMiles: Number(((base.gpsTrip.totalMiles || 0) + miles).toFixed(2)),
         },
-        currentLocation:{ city:s.currentLocation?.city || 'GPS', state:stateCode },
-        eventsByDay:{ ...s.eventsByDay, [s.activeDay]: dayEvents },
+        currentLocation:{ city:base.currentLocation?.city || 'GPS', state:stateCode },
+        eventsByDay:{ ...base.eventsByDay, [activeDay]: dayEvents },
       };
     });
   }
@@ -941,9 +1002,10 @@ export default function App() {
   function stopGpsDriving() {
     setState(s => {
       if (!s.gpsTrip) return s;
+      const rolled = rolloverActiveDrivingIfNeeded(s, new Date());
       return {
-        ...s,
-        gpsTrip:{ ...s.gpsTrip, status:'stopped', stoppedAt:Date.now() },
+        ...rolled,
+        gpsTrip:{ ...rolled.gpsTrip, status:'stopped', stoppedAt:Date.now() },
         sheet:{ type:'status' },
       };
     });
@@ -1182,22 +1244,18 @@ export default function App() {
   function stopDrivingToOnDuty(fix = null) {
     setState(s => {
       const now = new Date();
-      const today = localDayKey(now);
-      const day = s.activeDay === today ? s.activeDay : today;
-      const changeAt = Math.max(0, Math.min(1439, now.getHours() * 60 + now.getMinutes()));
-      const stateCode = fix?.state || s.currentLocation?.state || detectState(fix?.lat || 0, fix?.lng || 0);
-      const city = s.currentLocation?.city || 'GPS';
-      const existing = s.eventsByDay[day] || [];
+      const base = rolloverActiveDrivingIfNeeded(s, now);
+      const day = localDayKey(now);
+      const changeAt = minuteFromDate(now);
+      const stateCode = fix?.state || base.currentLocation?.state || detectState(fix?.lat || 0, fix?.lng || 0);
+      const city = base.currentLocation?.city || 'GPS';
+      const existing = continuousBaseForDay(base, day);
 
       const ev = {
         id: `auto_on_${Date.now()}`,
         status:'ON',
         startMin: changeAt,
-        // Live status changes are current until now. If the driver says the
-        // pickup/pre-trip started 15 minutes ago, the new status overrides the
-        // old status for that whole backdated window instead of creating an
-        // ON block followed by stale OFF time.
-        endMin: Math.max(changeAt + 1, Math.min(1439, nowLiveMin || changeAt + 1)),
+        endMin: Math.min(1440, changeAt + 1),
         city,
         state: stateCode,
         description:'',
@@ -1205,21 +1263,21 @@ export default function App() {
         lat: fix?.lat ?? null,
         lng: fix?.lng ?? null,
         gpsAccuracy: fix?.accuracy ?? null,
-        locationSource: fix ? 'gps' : (s.currentLocation?.locationSource || 'manual'),
+        locationSource: fix ? 'gps' : (base.currentLocation?.locationSource || 'manual'),
         source:'auto_stop',
       };
 
-      const updated = normalizeLogEvents(closePreviousAndStart(existing, ev));
+      const updated = commitTimelineForDay(closePreviousAndStart(existing, ev), day, base);
 
       return {
-        ...s,
+        ...base,
         activeDay: day,
         currentStatus:'ON',
         currentReason:'Stopped / On Duty',
-        currentLocation:{ city, state:stateCode, lat:fix?.lat ?? s.currentLocation?.lat, lng:fix?.lng ?? s.currentLocation?.lng, locationSource: fix ? 'gps' : (s.currentLocation?.locationSource || 'manual') },
+        currentLocation:{ city, state:stateCode, lat:fix?.lat ?? base.currentLocation?.lat, lng:fix?.lng ?? base.currentLocation?.lng, locationSource: fix ? 'gps' : (base.currentLocation?.locationSource || 'manual') },
         selectedEventId: ev.id,
-        gpsTrip: s.gpsTrip ? { ...s.gpsTrip, status:'stopped', stoppedAt:Date.now() } : s.gpsTrip,
-        eventsByDay:{ ...s.eventsByDay, [day]: updated },
+        gpsTrip: base.gpsTrip ? { ...base.gpsTrip, status:'stopped', stoppedAt:Date.now() } : base.gpsTrip,
+        eventsByDay:{ ...base.eventsByDay, [day]: updated },
         sheet:null,
       };
     });

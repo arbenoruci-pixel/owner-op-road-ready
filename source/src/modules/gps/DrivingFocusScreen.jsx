@@ -21,9 +21,14 @@ export default function DrivingFocusScreen({ open, state, liveCurrent, onStopDri
 
   const current = liveCurrent.event;
   const start = current?.startMin ?? nowMin();
-  const used = Math.max(0, nowMin() - start);
-  const driveLeft = Math.max(0, 11 * 60 - used);
   const gpsActive = state.gpsTrip?.status === 'active';
+  const gpsElapsed = gpsActive && state.gpsTrip?.startedAt
+    ? Math.max(0, Math.round((Date.now() - Number(state.gpsTrip.startedAt || Date.now())) / 60000))
+    : null;
+  // If GPS driving crossed midnight, count elapsed driving from the original
+  // start timestamp instead of resetting the 11h clock at 12:00 AM.
+  const used = gpsElapsed != null ? gpsElapsed : Math.max(0, nowMin() - start);
+  const driveLeft = Math.max(0, 11 * 60 - used);
   const location = liveCurrent.location
     ? `${liveCurrent.location.city || 'GPS'}, ${liveCurrent.location.state || 'UNK'}`
     : 'GPS location';
