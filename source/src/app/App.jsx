@@ -546,7 +546,22 @@ export default function App() {
 
       if (day === localDayKey()) { ensureTodayCarryover(eventsByDay, certifyStatus, day); refreshCarryoverIfOnlyPlaceholder(eventsByDay, day); }
 
-      return { ...s, view:'day', activeDay:day, eventsByDay, certifyStatus, selectedEventId:null, selectMode:false, selectedIds:[], sheet:null };
+      // Opening a day from the Logs list or graph preview must always land on
+      // the Log tab. Older tab requests (for example Inspect from a previous
+      // flow) are otherwise replayed by DayLogScreen and make the graph feel
+      // broken because tapping it opens Inspection.
+      return {
+        ...s,
+        view:'day',
+        activeDay:day,
+        eventsByDay,
+        certifyStatus,
+        selectedEventId:null,
+        selectMode:false,
+        selectedIds:[],
+        sheet:null,
+        roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'open-day' },
+      };
     });
   }
 
