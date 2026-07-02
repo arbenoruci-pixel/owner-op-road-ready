@@ -32,6 +32,17 @@ function reasonNeedsLoadLink(status, reason) {
   return status === 'ON' && /pickup|loading|delivery|unloading/i.test(String(reason || ''));
 }
 
+function selectedReasonsForStatus(status, note = '') {
+  const reasons = reasonListForStatus(status);
+  const value = String(note || '').toLowerCase();
+  const picked = reasons.filter(reason => value.includes(reason.toLowerCase()));
+  return picked.length ? picked : [reasons[0]].filter(Boolean);
+}
+
+function joinReasons(reasons = []) {
+  return reasons.filter(Boolean).join(' / ');
+}
+
 function parseLocationTextLocal(value, fallbackState = '') {
   const raw = String(value || '');
   if (!raw.trim()) return { city: '', state: '' };
@@ -420,6 +431,21 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
     return `Will split ${statusLabel(covering.status)} at ${timeLabel(s)} and resume after ${timeLabel(e)}.`;
   }
 
+  const selectedReasons = selectedReasonsForStatus(form.status, form.note);
+
+  function toggleReason(reason) {
+    const current = selectedReasonsForStatus(form.status, form.note);
+    const exists = current.includes(reason);
+    const next = exists
+      ? (current.length > 1 ? current.filter(item => item !== reason) : current)
+      : [...current, reason];
+
+    updateForm({
+      note: joinReasons(next),
+      description: textLooksLikeStatusArtifact(form.description, form.status) ? '' : form.description,
+    });
+  }
+
   const previewEvents = graphEvents();
   const activeId = mode === 'insert' ? insertDraftEvent.id : selectedEventId;
   const graphHeader = activeEvent
@@ -436,14 +462,14 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
       />
 
       <div className="insert-driver-block">
-        <div className="insert-section-title">{actionHeadingForStatus(form.status)}</div>
+        <div className="insert-section-title">{actionHeadingForStatus(form.status)} <span className="multi-pick-hint">Pick one or more</span></div>
         <div className="insert-reason-grid">
           {reasonListForStatus(form.status).map(reason => (
             <button
               key={reason}
               type="button"
-              className={(form.note || '').toLowerCase() === reason.toLowerCase() ? 'picked' : ''}
-              onClick={() => setReason(reason)}
+              className={selectedReasons.includes(reason) ? 'picked' : ''}
+              onClick={() => toggleReason(reason)}
             >
               {reason}
             </button>
