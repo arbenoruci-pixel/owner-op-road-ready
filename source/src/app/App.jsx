@@ -1532,7 +1532,14 @@ export default function App() {
         onOpenDot={()=>setState(s=>({ ...s, view:'dot', sheet:null }))}
       />
       <DriveTrackerSheet state={state} open={!!state.gpsPanelOpen} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
-      <DrivingFocusScreen open={!state.sheet && liveCurrent.status === 'D'} state={state} liveCurrent={liveCurrent} onStopDriving={stopGpsDriving} onStopToOnDuty={stopDrivingToOnDuty} onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))} />
+      <DrivingFocusScreen
+        open={!state.sheet && liveCurrent.status === 'D' && state.gpsTrip?.status === 'active'}
+        state={state}
+        liveCurrent={liveCurrent}
+        onStopDriving={stopGpsDriving}
+        onStopToOnDuty={stopDrivingToOnDuty}
+        onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))}
+      />
       {state.sheet?.type === 'equipment' && <EquipmentSheet equipment={state.equipment || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveEquipment} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: state.currentStatus || 'OFF', currentReason: state.currentReason || 'Off Duty', currentLocation: state.currentLocation}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
     </>
@@ -1579,7 +1586,14 @@ export default function App() {
         onRoadGuardFix={applyRoadGuardFix}
       />
       <DriveTrackerSheet state={state} open={!!state.gpsPanelOpen} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
-      <DrivingFocusScreen open={!state.sheet && liveCurrent.status === 'D'} state={state} liveCurrent={liveCurrent} onStopDriving={stopGpsDriving} onStopToOnDuty={stopDrivingToOnDuty} onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))} />
+      <DrivingFocusScreen
+        open={!state.sheet && liveCurrent.status === 'D' && state.gpsTrip?.status === 'active'}
+        state={state}
+        liveCurrent={liveCurrent}
+        onStopDriving={stopGpsDriving}
+        onStopToOnDuty={stopDrivingToOnDuty}
+        onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))}
+      />
       {state.sheet?.type === 'add' && <InsertEditEventSheet defaults={state.sheet.defaults} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onCreate={addEvent} onSave={addEvent} onUpdate={updateEvent} />}
       {state.sheet?.type === 'edit' && selectedEvent && <EditEventSheet event={selectedEvent} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={(patch)=>updateEvent(selectedEvent.id, patch)} onDelete={()=>deleteEvent(selectedEvent.id)} />}
       {state.sheet?.type === 'shift' && <ShiftSheet events={events} selectedIds={state.selectedIds} onApply={applyShift} onClose={()=>setState(s=>({ ...s, sheet:null }))} />}
