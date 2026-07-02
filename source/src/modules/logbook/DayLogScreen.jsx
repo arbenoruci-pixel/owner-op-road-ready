@@ -121,6 +121,34 @@ function joinCityState(city, state) {
   return parts.length ? parts.join(', ') : 'None';
 }
 
+function routeLegsForDay(state, day) {
+  const all = Object.entries(state.routeLegsByDay || {}).flatMap(([legDay, legs]) => (legs || []).map(leg => ({ ...leg, day:leg.day || legDay })));
+  return all
+    .filter(leg => {
+      if (leg.day === day || leg.pickupDay === day || leg.deliveryDay === day) return true;
+      // Carry only open/in-progress legs into newer days; completed legs stay on their own day.
+      return String(leg.pickupDay || leg.day || '') < String(day || '') && leg.status !== 'delivered' && leg.status !== 'cancelled';
+    })
+    .sort((a,b)=>String(a.pickupDay || a.day).localeCompare(String(b.pickupDay || b.day)) || Number(a.pickupMin ?? 9999)-Number(b.pickupMin ?? 9999));
+}
+
+function legLabel(leg) {
+  const from = joinCityState(leg.fromCity, leg.fromState);
+  const to = joinCityState(leg.toCity, leg.toState);
+  if (from === 'None' && to === 'None') return 'Route leg';
+  if (from === 'None') return `To ${to}`;
+  if (to === 'None') return `${from} → open`;
+  return `${from} → ${to}`;
+}
+
+function legMeta(leg) {
+  const parts = [];
+  if (leg.shippingDocs) parts.push(`BOL ${leg.shippingDocs}`);
+  parts.push(leg.status === 'delivered' ? 'Delivered' : 'Open');
+  if (leg.pickupDay) parts.push(`Pickup ${leg.pickupDay}`);
+  return parts.join(' · ');
+}
+
 function driverNameForState(state) {
   return state.signatureByDay?.[state.activeDay]?.driverName || state.driverProfile?.name || DEFAULT_DRIVER_NAME;
 }
@@ -133,7 +161,9 @@ function formSummary(state, events) {
   const dutyMap = Object.fromEntries(dutyTotals);
   const load = state.loadInfo || {};
   const equipment = state.equipment || {};
-  const shippingDocs = [load.shippingDocs || load.loadNo, equipment.container, equipment.chassis].filter(Boolean).join(' ');
+  const routeLegs = routeLegsForDay(state, state.activeDay);
+  const legDocs = routeLegs.map(leg => leg.shippingDocs || leg.loadNo).filter(Boolean);
+  const shippingDocs = [...new Set([...(legDocs || []), load.shippingDocs || load.loadNo, equipment.container, equipment.chassis].filter(Boolean))].join(' ');
   const trailers = state.currentTrailer && state.currentTrailer !== 'No trailer'
     ? state.currentTrailer
     : (equipment.trailer || state.driver?.trailer || 'None');
@@ -153,8 +183,9 @@ function formSummary(state, events) {
     mainOffice: safeValue(state.mainOfficeAddress || DEFAULT_MAIN_OFFICE),
     homeTerminal: safeValue(state.homeTerminalAddress),
     coDrivers: safeValue(state.coDrivers),
-    from: joinCityState(load.pickupCity, load.pickupState),
-    to: joinCityState(load.deliveryCity, load.deliveryState),
+    from: routeLegs[0] ? joinCityState(routeLegs[0].fromCity, routeLegs[0].fromState) : joinCityState(load.pickupCity, load.pickupState),
+    to: routeLegs.length ? joinCityState(routeLegs[routeLegs.length - 1].toCity, routeLegs[routeLegs.length - 1].toState) : joinCityState(load.deliveryCity, load.deliveryState),
+    routeLegs,
     notes: safeValue(notes),
   };
 }
@@ -215,6 +246,44 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
     if (value == null) return;
     onSaveLoad?.({ shippingDocs: String(value || '').trim(), loadNo: String(value || '').trim() });
   }
+  function addRouteLeg() {
+    if (typeof window === 'undefined') return;
+    const fromValue = window.prompt('Pickup from (City, ST)', form.from === 'None' ? '' : form.from);
+    if (fromValue == null) return;
+    const toValue = window.prompt('Going to (City, ST)', form.to === 'None' ? '' : form.to);
+    if (toValue == null) return;
+    const bolValue = window.prompt('BOL / Shipping #', form.shippingDocs === 'None' ? '' : form.shippingDocs) || '';
+    const from = parseCityStateEdit(fromValue);
+    const to = parseCityStateEdit(toValue);
+    const day = state.activeDay;
+    const leg = {
+      id:`manual_leg_${Date.now()}`,
+      day,
+      pickupDay:day,
+      pickupEventId:'',
+      pickupMin:null,
+      fromCity:from.city,
+      fromState:from.state,
+      toCity:to.city,
+      toState:to.state,
+      shippingDocs:String(bolValue || '').trim(),
+      loadNo:String(bolValue || '').trim(),
+      status:'open',
+      source:'manual_form',
+      updatedAt:Date.now(),
+    };
+    const routeLegsByDay = { ...(state.routeLegsByDay || {}) };
+    routeLegsByDay[day] = [...(routeLegsByDay[day] || []), leg];
+    onSaveLoad?.({
+      routeLegsByDay,
+      shippingDocs: leg.shippingDocs || load.shippingDocs || '',
+      loadNo: leg.loadNo || load.loadNo || '',
+      pickupCity: from.city,
+      pickupState: from.state,
+      deliveryCity: to.city,
+      deliveryState: to.state,
+    });
+  }
   return (
     <div className="road-paper-form">
       <div className="road-form-totals">
@@ -244,6 +313,17 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
       <FormRow label="Carrier" value={form.carrierName} onClick={() => editText('Carrier name', form.carrierName, 'carrierName')} />
       <FormRow label="Main Office Address" value={form.mainOffice} onClick={() => editText('Main office address', form.mainOffice, 'mainOfficeAddress')} />
       <FormRow label="Home Terminal Address" value={form.homeTerminal} onClick={() => editText('Home terminal address', form.homeTerminal, 'homeTerminalAddress')} />
+
+      <FormSectionTitle>ROUTE / SHIPPING</FormSectionTitle>
+      <div className="route-leg-list">
+        {form.routeLegs.length ? form.routeLegs.map(leg => (
+          <button key={leg.id} type="button" className={`route-leg-row ${leg.status === 'delivered' ? 'done' : 'open'}`} onClick={addRouteLeg}>
+            <b>{legLabel(leg)}</b>
+            <span>{legMeta(leg)}</span>
+          </button>
+        )) : <div className="route-leg-empty">No route legs yet.</div>}
+        <button type="button" className="route-leg-add" onClick={addRouteLeg}>+ Add stop / leg</button>
+      </div>
 
       <FormSectionTitle>OTHER</FormSectionTitle>
       <FormRow label="Co-Drivers" value={form.coDrivers} onClick={() => editText('Co-drivers', form.coDrivers, 'coDrivers')} />

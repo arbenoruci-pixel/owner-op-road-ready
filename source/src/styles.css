@@ -6724,3 +6724,197 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   color:var(--driver-accent);
   border-color:var(--driver-accent);
 }
+
+/* v94.3 Status picker overflow guard: keep Change Status inside iPhone viewport */
+html,
+body,
+#root {
+  overflow-x: hidden !important;
+}
+
+.status-driver-picker-v934,
+.status-page.status-driver-picker-v934 {
+  width: 100% !important;
+  max-width: 430px !important;
+  margin: 0 auto !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.driver-picker-head {
+  width: 100% !important;
+  max-width: 430px !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.driver-picker-head > div {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.driver-picker-head b,
+.driver-picker-head small {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.driver-picker-body {
+  width: 100% !important;
+  max-width: 430px !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+}
+
+.picker-section {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.driver-duty-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.driver-duty-grid button,
+.driver-reason-grid button,
+.start-ago-pills button {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.driver-reason-grid,
+.start-ago-pills {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.driver-reason-grid button {
+  text-overflow: ellipsis !important;
+}
+
+.driver-location-row {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.driver-location-row input {
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.driver-location-suggestions {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  box-sizing: border-box !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.driver-location-suggestions button {
+  max-width: 150px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.driver-load-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  gap: 8px !important;
+  box-sizing: border-box !important;
+}
+
+.driver-load-grid label,
+.driver-load-grid input {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.driver-status-save {
+  max-width: calc(100vw - 32px) !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 390px) {
+  .driver-picker-head {
+    grid-template-columns: 38px minmax(0, 1fr) 38px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .driver-picker-head b {
+    font-size: 22px !important;
+  }
+
+  .driver-picker-body {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
+
+/* v94.4 Multi-stop route legs: compact route/shipping list */
+.route-leg-list{
+  display:grid;
+  gap:7px;
+  margin:0 0 8px;
+}
+.route-leg-row{
+  width:100%;
+  border:1px solid var(--fb-line, #dfe5ec);
+  border-radius:14px;
+  background:#fff;
+  padding:10px 12px;
+  text-align:left;
+  display:grid;
+  gap:3px;
+}
+.route-leg-row b{
+  color:var(--fb-ink, #111827);
+  font-size:13.5px;
+  font-weight:900;
+}
+.route-leg-row span{
+  color:var(--fb-muted, #6b7280);
+  font-size:12px;
+  font-weight:750;
+}
+.route-leg-row.open{border-left:4px solid #2156d9;}
+.route-leg-row.done{border-left:4px solid #168980;}
+.route-leg-add{
+  min-height:38px;
+  border:1px dashed #cbd5e1;
+  border-radius:14px;
+  background:#fff;
+  color:#2156d9;
+  font-size:13px;
+  font-weight:900;
+}
+.route-leg-empty{
+  border:1px dashed #d7dde6;
+  border-radius:14px;
+  padding:10px 12px;
+  color:#6b7280;
+  font-size:12.5px;
+  font-weight:800;
+  background:#fff;
+}

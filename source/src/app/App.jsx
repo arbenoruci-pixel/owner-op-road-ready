@@ -314,6 +314,7 @@ function normalizeState(s) {
     equipment: s.equipment || { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: s.gpsTrip || null,
     loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
+    routeLegsByDay: s.routeLegsByDay || {},
   };
 
   return reconcilePreTripInspections(normalized, Object.keys(eventsByDay));
@@ -334,6 +335,7 @@ function defaultInitialState() {
     equipment: { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: null,
     loadInfo: { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
+    routeLegsByDay: {},
     currentStatus: 'OFF',
     currentReason: 'Off Duty',
     currentLocation: { city:'GPS', state:'UNK', locationSource:'pending' },
@@ -619,7 +621,9 @@ export default function App() {
         }
       }
 
-      let next = { ...s, gpsTrip, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: evs } };
+      const eventsByDay = { ...s.eventsByDay, [s.activeDay]: evs };
+      const routeLegsByDay = syncRouteLegTimes(s.routeLegsByDay || {}, eventsByDay);
+      let next = { ...s, gpsTrip, routeLegsByDay, eventsByDay };
       const editedEvent = evs.find(e => e.id === id);
       next = withAcceptedPreTripInspection(next, s.activeDay, editedEvent, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
@@ -637,7 +641,9 @@ export default function App() {
         const { sourceEventId, sourceEventReason, shippingDocs, loadNo, pickupCity, pickupState, deliveryCity, deliveryState, updatedAt, ...rest } = loadInfo;
         loadInfo = { ...rest, shippingDocs:'', loadNo:'', pickupCity:'', pickupState:'', deliveryCity:'', deliveryState:'' };
       }
-      let next = { ...s, loadInfo, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: evs }, selectedEventId:null, sheet:null };
+      const eventsByDay = { ...s.eventsByDay, [s.activeDay]: evs };
+      const routeLegsByDay = syncRouteLegTimes(removeOrUnlinkRouteLegForEvent(s.routeLegsByDay || {}, id), eventsByDay);
+      let next = { ...s, loadInfo, routeLegsByDay, eventsByDay, selectedEventId:null, sheet:null };
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
     });
@@ -730,6 +736,166 @@ export default function App() {
     const trailing = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
     if (trailing) return { city:trailing[1].trim(), state:trailing[2].toUpperCase() };
     return { city:raw, state:fallbackState || '' };
+  }
+
+  function routeLegArray(routeLegsByDay = {}) {
+    return Object.entries(routeLegsByDay || {}).flatMap(([day, legs]) => (legs || []).map(leg => ({ ...leg, day: leg.day || day })));
+  }
+
+  function normalizeRouteLeg(leg = {}) {
+    return {
+      id: leg.id || `leg_${Date.now()}`,
+      day: leg.day || leg.pickupDay || localDayKey(),
+      pickupDay: leg.pickupDay || leg.day || '',
+      pickupEventId: leg.pickupEventId || '',
+      pickupMin: Number.isFinite(Number(leg.pickupMin)) ? Number(leg.pickupMin) : null,
+      deliveryDay: leg.deliveryDay || '',
+      deliveryEventId: leg.deliveryEventId || '',
+      deliveryMin: Number.isFinite(Number(leg.deliveryMin)) ? Number(leg.deliveryMin) : null,
+      fromCity: leg.fromCity || '',
+      fromState: leg.fromState || '',
+      toCity: leg.toCity || '',
+      toState: leg.toState || '',
+      shippingDocs: leg.shippingDocs || leg.loadNo || '',
+      loadNo: leg.loadNo || leg.shippingDocs || '',
+      kind: leg.kind || 'loaded',
+      status: leg.status || (leg.deliveryEventId ? 'delivered' : 'open'),
+      source: leg.source || 'route_leg',
+      updatedAt: leg.updatedAt || Date.now(),
+    };
+  }
+
+  function isPickupReason(reason = '') {
+    return /pickup|loading/i.test(String(reason || ''));
+  }
+
+  function isDeliveryReason(reason = '') {
+    return /delivery|unloading/i.test(String(reason || ''));
+  }
+
+  function findOpenRouteLeg(routeLegsByDay = {}, day, shippingDocs = '') {
+    const docs = String(shippingDocs || '').trim().toLowerCase();
+    return routeLegArray(routeLegsByDay)
+      .filter(leg => leg.status !== 'delivered' && leg.status !== 'cancelled')
+      .filter(leg => !docs || String(leg.shippingDocs || leg.loadNo || '').trim().toLowerCase() === docs)
+      .sort((a, b) => String(a.pickupDay || a.day).localeCompare(String(b.pickupDay || b.day)) || Number(a.pickupMin || 0) - Number(b.pickupMin || 0))
+      .at(-1) || null;
+  }
+
+  function upsertRouteLeg(routeLegsByDay = {}, day, leg) {
+    const next = { ...(routeLegsByDay || {}) };
+    const homeDay = leg.day || day;
+    const list = [...(next[homeDay] || [])];
+    const normalized = normalizeRouteLeg({ ...leg, day: homeDay });
+    const idx = list.findIndex(item => item.id === normalized.id || (normalized.pickupEventId && item.pickupEventId === normalized.pickupEventId));
+    if (idx >= 0) list[idx] = { ...list[idx], ...normalized, updatedAt:Date.now() };
+    else list.push(normalized);
+    next[homeDay] = list.sort((a,b)=>(a.pickupMin ?? 9999)-(b.pickupMin ?? 9999));
+    return next;
+  }
+
+  function removeOrUnlinkRouteLegForEvent(routeLegsByDay = {}, eventId = '') {
+    if (!eventId) return routeLegsByDay || {};
+    const next = {};
+    for (const [day, legs] of Object.entries(routeLegsByDay || {})) {
+      const kept = [];
+      for (const leg of legs || []) {
+        if (leg.pickupEventId === eventId || leg.id === eventId || leg.id === `leg_${eventId}`) {
+          // Pickup created the route leg; deleting that event removes the leg entirely.
+          continue;
+        }
+        if (leg.deliveryEventId === eventId) {
+          kept.push({ ...leg, deliveryEventId:'', deliveryDay:'', deliveryMin:null, status:'open', updatedAt:Date.now() });
+          continue;
+        }
+        kept.push(leg);
+      }
+      if (kept.length) next[day] = kept;
+    }
+    return next;
+  }
+
+  function syncRouteLegTimes(routeLegsByDay = {}, eventsByDay = {}) {
+    const eventIndex = new Map();
+    Object.entries(eventsByDay || {}).forEach(([day, events]) => {
+      (events || []).forEach(event => event?.id && eventIndex.set(event.id, { day, event }));
+    });
+    const next = {};
+    for (const [day, legs] of Object.entries(routeLegsByDay || {})) {
+      const synced = (legs || []).map(leg => {
+        let out = { ...leg };
+        const pickup = leg.pickupEventId ? eventIndex.get(leg.pickupEventId) : null;
+        const delivery = leg.deliveryEventId ? eventIndex.get(leg.deliveryEventId) : null;
+        if (pickup) out = { ...out, pickupDay:pickup.day, pickupMin:pickup.event.startMin, fromCity:pickup.event.city || out.fromCity, fromState:pickup.event.state || out.fromState };
+        if (delivery) out = { ...out, deliveryDay:delivery.day, deliveryMin:delivery.event.startMin, status:'delivered' };
+        return out;
+      });
+      if (synced.length) next[day] = synced;
+    }
+    return next;
+  }
+
+  function updateRouteLegsForStatus(routeLegsByDay = {}, day, payload = {}, eventId = '', startMin = 0) {
+    const reason = String(payload.reason || '');
+    const shippingDocs = String(payload.shippingDocs || payload.loadNo || '').trim();
+    const origin = { city:payload.city || '', state:payload.state || '' };
+    const destination = parseCityStateInput(payload.destination || '', payload.destinationState || '');
+
+    if (isPickupReason(reason)) {
+      const leg = normalizeRouteLeg({
+        id:`leg_${eventId}`,
+        day,
+        pickupDay:day,
+        pickupEventId:eventId,
+        pickupMin:startMin,
+        fromCity:origin.city,
+        fromState:origin.state,
+        toCity:destination.city,
+        toState:destination.state,
+        shippingDocs,
+        loadNo:shippingDocs,
+        status:'open',
+        source:'pickup_event',
+      });
+      return upsertRouteLeg(routeLegsByDay, day, leg);
+    }
+
+    if (isDeliveryReason(reason)) {
+      const existing = findOpenRouteLeg(routeLegsByDay, day, shippingDocs);
+      if (existing) {
+        return upsertRouteLeg(routeLegsByDay, existing.day || existing.pickupDay || day, {
+          ...existing,
+          deliveryDay:day,
+          deliveryEventId:eventId,
+          deliveryMin:startMin,
+          toCity:existing.toCity || origin.city || destination.city,
+          toState:existing.toState || origin.state || destination.state,
+          status:'delivered',
+          updatedAt:Date.now(),
+        });
+      }
+      const leg = normalizeRouteLeg({
+        id:`leg_${eventId}`,
+        day,
+        pickupDay:day,
+        pickupEventId:'',
+        pickupMin:null,
+        fromCity:'',
+        fromState:'',
+        toCity:origin.city || destination.city,
+        toState:origin.state || destination.state,
+        shippingDocs,
+        loadNo:shippingDocs,
+        deliveryDay:day,
+        deliveryEventId:eventId,
+        deliveryMin:startMin,
+        status:'delivered',
+        source:'delivery_event',
+      });
+      return upsertRouteLeg(routeLegsByDay, day, leg);
+    }
+
+    return routeLegsByDay || {};
   }
 
   function buildLoadPatchForStatusPayload(payload = {}, eventId = '') {
@@ -851,14 +1017,31 @@ export default function App() {
 
       const toAdd = eventsToAdd.map((e,i)=>({ id:`flow_${stamp}_${i}`, ...e }));
       const merged = insertManyOverride(existing, toAdd);
+      const eventsByDay = { ...s.eventsByDay, [day]: merged };
+      let routeLegsByDay = s.routeLegsByDay || {};
+      for (const event of toAdd) {
+        if (isPickupReason(event.note) || isDeliveryReason(event.note)) {
+          routeLegsByDay = updateRouteLegsForStatus(routeLegsByDay, day, {
+            status:event.status,
+            reason:event.note,
+            city:event.city,
+            state:event.state,
+            shippingDocs:load.loadNo || load.shippingDocs || '',
+            loadNo:load.loadNo || load.shippingDocs || '',
+            destination:[load.deliveryCity, load.deliveryState].filter(Boolean).join(', '),
+          }, event.id, event.startMin);
+        }
+      }
+      routeLegsByDay = syncRouteLegTimes(routeLegsByDay, eventsByDay);
 
       let next = {
         ...s,
         currentStatus,
         currentReason,
         currentLocation,
+        routeLegsByDay,
         selectedEventId: toAdd[toAdd.length - 1]?.id || s.selectedEventId,
-        eventsByDay:{ ...s.eventsByDay, [day]: merged },
+        eventsByDay,
       };
       const workflowPreTrip = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
       next = withAcceptedPreTripInspection(next, day, workflowPreTrip, acceptedWorkflowInspection);
@@ -872,6 +1055,7 @@ export default function App() {
       const next = {
         ...s,
         loadInfo: { ...(s.loadInfo || {}), ...payload },
+        ...(payload.routeLegsByDay ? { routeLegsByDay: payload.routeLegsByDay } : {}),
       };
       if (payload.driverName !== undefined) {
         next.driverProfile = { ...(s.driverProfile || {}), name:String(payload.driverName || '').trim() };
@@ -1232,8 +1416,14 @@ export default function App() {
         locationSource,
         source: 'live_status',
       };
-      const loadInfoPatch = buildLoadPatchForStatusPayload({ status, reason, city, state:st, shippingDocs, loadNo, destination, destinationState }, eventId);
+      const loadPayload = { status, reason, city, state:st, shippingDocs, loadNo, destination, destinationState };
+      const loadInfoPatch = buildLoadPatchForStatusPayload(loadPayload, eventId);
       const continuous = normalizeLogEvents(closePreviousAndStart(existing, ev));
+      const eventsByDay = { ...s.eventsByDay, [day]: continuous };
+      const routeLegsByDay = syncRouteLegTimes(
+        updateRouteLegsForStatus(s.routeLegsByDay || {}, day, loadPayload, eventId, changeAt),
+        eventsByDay
+      );
       let next = {
         ...s,
         currentStatus: status,
@@ -1242,7 +1432,8 @@ export default function App() {
         currentTrailer: trailer,
         selectedEventId: ev.id,
         sheet: null,
-        eventsByDay: { ...s.eventsByDay, [day]: continuous },
+        eventsByDay,
+        routeLegsByDay,
         ...(loadInfoPatch ? { loadInfo:{ ...(s.loadInfo || {}), ...loadInfoPatch } } : {}),
       };
       next = withAcceptedPreTripInspection(next, day, ev, acceptedLiveInspection);
