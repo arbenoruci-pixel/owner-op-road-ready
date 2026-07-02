@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 function parseLocationText(value, fallbackState = '') {
   const raw = String(value || '');
@@ -18,9 +18,13 @@ function parseLocationText(value, fallbackState = '') {
   return { city: raw.trim(), state: fallbackState || '' };
 }
 
+function locationString(city = '', state = '') {
+  return [city, state].filter(Boolean).join(', ');
+}
+
 /**
  * Compact location row ("City, ST") with GPS and clear controls.
- * On focus the full value is selected so iPhone users can replace it quickly.
+ * Manual typing stays intact while the driver types; parsing happens on blur/save.
  */
 export default function EditorLocationFields({
   city,
@@ -31,10 +35,25 @@ export default function EditorLocationFields({
   onGps = null,
   gpsStatus = '',
   onClear = null,
+  suggestions = [],
+  collapsedDescription = false,
 }) {
-  const value = [city, state].filter(Boolean).join(', ');
+  const value = locationString(city, state);
+  const [draft, setDraft] = useState(value);
+  const [showDescription, setShowDescription] = useState(!collapsedDescription || !!description);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  function commitLocation(nextValue = draft) {
+    const parsed = parseLocationText(nextValue, state);
+    onLocationChange(parsed.city, parsed.state);
+    setDraft(locationString(parsed.city, parsed.state));
+  }
 
   function clearLocation() {
+    setDraft('');
     onLocationChange('', '');
     onClear?.();
   }
@@ -45,26 +64,42 @@ export default function EditorLocationFields({
       <div className="location-one-v85 location-editable-v91">
         <button type="button" className="gps-locate-btn" onClick={onGps || undefined} aria-label="Use GPS location">⌖</button>
         <input
-          value={value}
+          value={draft}
           onFocus={e => e.target.select()}
           onClick={e => e.currentTarget.select()}
-          onChange={e => {
-            const parsed = parseLocationText(e.target.value, state);
-            onLocationChange(parsed.city, parsed.state);
-          }}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={() => commitLocation()}
           placeholder="City, ST"
           autoComplete="off"
           inputMode="text"
         />
         <button type="button" className="location-clear-btn" onClick={clearLocation} aria-label="Clear location">×</button>
       </div>
-      {gpsStatus ? <div className="gps-msg gps-v85">{gpsStatus}</div> : null}
-      <input
-        className="desc-v85"
-        value={description}
-        onChange={e => onDescriptionChange(e.target.value)}
-        placeholder="Optional description"
-      />
+
+      {suggestions.length ? (
+        <div className="editor-location-suggestions">
+          {suggestions.map(item => (
+            <button key={item} type="button" onClick={() => commitLocation(item)}>{item}</button>
+          ))}
+        </div>
+      ) : null}
+
+      {draft && !parseLocationText(draft, '').state ? (
+        <div className="gps-msg gps-v85 warn">Add state, example: Gary, IN</div>
+      ) : gpsStatus ? (
+        <div className="gps-msg gps-v85">{gpsStatus}</div>
+      ) : null}
+
+      {showDescription ? (
+        <input
+          className="desc-v85"
+          value={description}
+          onChange={e => onDescriptionChange(e.target.value)}
+          placeholder="Optional description"
+        />
+      ) : (
+        <button type="button" className="add-note-row insert-add-description" onClick={() => setShowDescription(true)}>+ Add description optional</button>
+      )}
     </div>
   );
 }

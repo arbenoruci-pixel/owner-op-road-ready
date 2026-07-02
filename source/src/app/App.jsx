@@ -581,7 +581,24 @@ export default function App() {
       const toAdd = incoming.map((e,i)=>sanitizeDutyEventForStatus({ id:`ev_${stamp}_${i}`, city:s.currentLocation?.city || 'GPS', state:s.currentLocation?.state || 'UNK', description:'', note:statusDefaultNote(e?.status || 'OFF'), source:'manual', ...e }));
       const dayEvents = continuousBaseForDay(s, s.activeDay);
       let merged = commitTimelineForDay(insertManyOverride(dayEvents, toAdd), s.activeDay, s);
-      let next = { ...s, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: merged }, selectedEventId: toAdd[toAdd.length-1]?.id || null, sheet:null };
+      const eventsByDay = { ...s.eventsByDay, [s.activeDay]: merged };
+      let routeLegsByDay = s.routeLegsByDay || {};
+      for (const event of toAdd) {
+        if (isPickupReason(event.note) || isDeliveryReason(event.note)) {
+          routeLegsByDay = updateRouteLegsForStatus(routeLegsByDay, s.activeDay, {
+            status:event.status,
+            reason:event.note,
+            city:event.city,
+            state:event.state,
+            shippingDocs:event.shippingDocs || event.loadNo || '',
+            loadNo:event.loadNo || event.shippingDocs || '',
+            destination:event.destination || '',
+            destinationState:event.destinationState || '',
+          }, event.id, event.startMin);
+        }
+      }
+      routeLegsByDay = syncRouteLegTimes(routeLegsByDay, eventsByDay);
+      let next = { ...s, eventsByDay, routeLegsByDay, selectedEventId: toAdd[toAdd.length-1]?.id || null, sheet:null };
       const preTripAdded = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
       next = withAcceptedPreTripInspection(next, s.activeDay, preTripAdded, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
@@ -622,9 +639,22 @@ export default function App() {
       }
 
       const eventsByDay = { ...s.eventsByDay, [s.activeDay]: evs };
-      const routeLegsByDay = syncRouteLegTimes(s.routeLegsByDay || {}, eventsByDay);
-      let next = { ...s, gpsTrip, routeLegsByDay, eventsByDay };
       const editedEvent = evs.find(e => e.id === id);
+      let routeLegsByDay = syncRouteLegTimes(s.routeLegsByDay || {}, eventsByDay);
+      if (editedEvent && (isPickupReason(editedEvent.note) || isDeliveryReason(editedEvent.note))) {
+        routeLegsByDay = updateRouteLegsForStatus(routeLegsByDay, s.activeDay, {
+          status:editedEvent.status,
+          reason:editedEvent.note,
+          city:editedEvent.city,
+          state:editedEvent.state,
+          shippingDocs:editedEvent.shippingDocs || editedEvent.loadNo || '',
+          loadNo:editedEvent.loadNo || editedEvent.shippingDocs || '',
+          destination:editedEvent.destination || '',
+          destinationState:editedEvent.destinationState || '',
+        }, editedEvent.id, editedEvent.startMin);
+        routeLegsByDay = syncRouteLegTimes(routeLegsByDay, eventsByDay);
+      }
+      let next = { ...s, gpsTrip, routeLegsByDay, eventsByDay };
       next = withAcceptedPreTripInspection(next, s.activeDay, editedEvent, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);

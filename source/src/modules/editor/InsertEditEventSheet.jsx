@@ -9,6 +9,46 @@ import { label as statusLabel } from '../../shared/utils/status.js';
 import { previewInsertOverride, applyEditOverride } from '../../core/timeline/timelineEngine.js';
 import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
 
+const onReasons = ['Pre-trip inspection', 'Pickup / Loading', 'Delivery / Unloading', 'Fuel', 'Waiting', 'Drop Trailer', 'Drop & Hook'];
+const offReasons = ['Off Duty', 'Break', 'Parking', 'Personal Conveyance'];
+const sbReasons = ['Sleeper Berth', 'Rest'];
+const dReasons = ['Driving', 'Yard Move'];
+
+function reasonListForStatus(status) {
+  if (status === 'ON') return onReasons;
+  if (status === 'OFF') return offReasons;
+  if (status === 'SB') return sbReasons;
+  return dReasons;
+}
+
+function actionHeadingForStatus(status) {
+  if (status === 'ON') return 'What are you doing on duty?';
+  if (status === 'OFF') return 'Why are you off duty?';
+  if (status === 'SB') return 'Sleeper status';
+  return 'Driving status';
+}
+
+function reasonNeedsLoadLink(status, reason) {
+  return status === 'ON' && /pickup|loading|delivery|unloading/i.test(String(reason || ''));
+}
+
+function parseLocationTextLocal(value, fallbackState = '') {
+  const raw = String(value || '');
+  if (!raw.trim()) return { city: '', state: '' };
+  const parts = raw.split(',');
+  if (parts.length >= 2) {
+    const state = parts.pop().trim().toUpperCase().slice(0, 2);
+    return { city: parts.join(',').trim(), state };
+  }
+  const trailingState = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
+  if (trailingState) return { city: trailingState[1].trim(), state: trailingState[2].toUpperCase() };
+  return { city: raw.trim(), state: fallbackState || '' };
+}
+
+function locationString(city = '', state = '') {
+  return [city, state].filter(Boolean).join(', ');
+}
+
 function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
   const value = String(text || '').toLowerCase();
   if (!value.trim()) return false;
@@ -21,7 +61,7 @@ function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
 }
 
 function defaultNoteForStatus(status) {
-  return statusLabel(status);
+  return reasonListForStatus(status)[0] || statusLabel(status);
 }
 
 function clampMin(v) {
@@ -32,7 +72,7 @@ function cleanEnd(start, end) {
   return Math.max(start + 5, Math.min(1439, Number(end || start + 15)));
 }
 
-function draftEvent({ id='insert_draft', status='ON', startMin, endMin, city='GPS', state='UNK', description='', note='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual' }) {
+function draftEvent({ id='insert_draft', status='ON', startMin, endMin, city='GPS', state='UNK', description='', note='', shippingDocs='', loadNo='', destination='', destinationState='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual' }) {
   const s = clampMin(startMin);
   return {
     id,
@@ -43,6 +83,10 @@ function draftEvent({ id='insert_draft', status='ON', startMin, endMin, city='GP
     state,
     description,
     note,
+    shippingDocs,
+    loadNo,
+    destination,
+    destinationState,
     lat,
     lng,
     gpsAccuracy,
@@ -60,7 +104,11 @@ function eventToForm(e) {
     city: e?.city || 'GPS',
     state: e?.state || 'UNK',
     description: e?.description || '',
-    note: e?.note || '',
+    note: e?.note || defaultNoteForStatus(e?.status || 'ON'),
+    shippingDocs: e?.shippingDocs || e?.loadNo || '',
+    loadNo: e?.loadNo || e?.shippingDocs || '',
+    destination: e?.destination || '',
+    destinationState: e?.destinationState || '',
     lat: e?.lat ?? null,
     lng: e?.lng ?? null,
     gpsAccuracy: e?.gpsAccuracy ?? null,
@@ -84,7 +132,11 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
     endMin: Math.min(1439, defaultStart + 15),
     city: defaults.city || 'GPS',
     state: defaults.state || 'UNK',
-    note: defaults.status === 'D' ? 'Driving' : 'New event',
+    note: defaultNoteForStatus(defaults.status || 'ON'),
+    shippingDocs: defaults.shippingDocs || defaults.loadNo || '',
+    loadNo: defaults.loadNo || defaults.shippingDocs || '',
+    destination: defaults.destination || '',
+    destinationState: defaults.destinationState || '',
   }));
 
   const selectedExisting = useMemo(
@@ -159,6 +211,10 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
           state: next.state,
           description: next.description,
           note: next.note,
+          shippingDocs: next.shippingDocs,
+          loadNo: next.loadNo,
+          destination: next.destination,
+          destinationState: next.destinationState,
           lat: next.lat,
           lng: next.lng,
           gpsAccuracy: next.gpsAccuracy,
@@ -186,7 +242,7 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
       endMin: Math.min(1439, start + 15),
       city: form.city || 'GPS',
       state: form.state || 'UNK',
-      note: lastStatus === 'D' ? 'Driving' : 'New event',
+      note: defaultNoteForStatus(lastStatus),
       lat: form.lat,
       lng: form.lng,
       gpsAccuracy: form.gpsAccuracy,
@@ -209,6 +265,10 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
       state: form.state || insertDraftEvent.state || 'UNK',
       description: form.description || insertDraftEvent.description || '',
       note: form.note || insertDraftEvent.note || '',
+      shippingDocs: form.shippingDocs || insertDraftEvent.shippingDocs || '',
+      loadNo: form.loadNo || form.shippingDocs || insertDraftEvent.loadNo || '',
+      destination: form.destination || insertDraftEvent.destination || '',
+      destinationState: form.destinationState || insertDraftEvent.destinationState || '',
       lat: form.lat,
       lng: form.lng,
       gpsAccuracy: form.gpsAccuracy,
@@ -271,6 +331,10 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
         state: form.state,
         description: form.description,
         note: form.note,
+        shippingDocs: form.shippingDocs,
+        loadNo: form.loadNo || form.shippingDocs,
+        destination: form.destination,
+        destinationState: form.destinationState,
         lat: form.lat,
         lng: form.lng,
         gpsAccuracy: form.gpsAccuracy,
@@ -288,6 +352,10 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
         state: form.state,
         description: form.description,
         note: form.note,
+        shippingDocs: form.shippingDocs,
+        loadNo: form.loadNo || form.shippingDocs,
+        destination: form.destination,
+        destinationState: form.destinationState,
         lat: form.lat,
         lng: form.lng,
         gpsAccuracy: form.gpsAccuracy,
@@ -309,6 +377,10 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
       state: form.state || 'UNK',
       description: textLooksLikeStatusArtifact(form.description, form.status) ? '' : form.description,
       note: (textLooksLikeStatusArtifact(form.note, form.status) || /^new event$/i.test(String(form.note || '').trim())) ? defaultNoteForStatus(form.status) : (form.note || defaultNoteForStatus(form.status)),
+      shippingDocs: String(form.shippingDocs || form.loadNo || '').trim(),
+      loadNo: String(form.loadNo || form.shippingDocs || '').trim(),
+      destination: String(form.destination || '').trim(),
+      destinationState: String(form.destinationState || '').trim(),
       lat: form.lat,
       lng: form.lng,
       gpsAccuracy: form.gpsAccuracy,
@@ -328,6 +400,26 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
     }
   }
 
+  function setReason(reason) {
+    updateForm({ note: reason, description: textLooksLikeStatusArtifact(form.description, form.status) ? '' : form.description });
+  }
+
+  function setDuration(minutes) {
+    const start = fromInput(form.start);
+    const end = Math.min(1439, start + minutes);
+    updateForm({ end: toInput(end) });
+    if (mode === 'insert') setInsertDraftEvent(d => ({ ...d, startMin:start, endMin:end }));
+  }
+
+  function splitPreviewText() {
+    if (mode !== 'insert') return '';
+    const s = fromInput(form.start);
+    const e = cleanEnd(s, fromInput(form.end));
+    const covering = events.find(ev => Number(ev.startMin || 0) < e && Number(ev.endMin || 0) > s);
+    if (!covering) return `Adds ${statusLabel(form.status)} from ${timeLabel(s)} to ${timeLabel(e)}.`;
+    return `Will split ${statusLabel(covering.status)} at ${timeLabel(s)} and resume after ${timeLabel(e)}.`;
+  }
+
   const previewEvents = graphEvents();
   const activeId = mode === 'insert' ? insertDraftEvent.id : selectedEventId;
   const graphHeader = activeEvent
@@ -342,6 +434,22 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
         status={form.status}
         onChange={(st) => updateForm({ status: st })}
       />
+
+      <div className="insert-driver-block">
+        <div className="insert-section-title">{actionHeadingForStatus(form.status)}</div>
+        <div className="insert-reason-grid">
+          {reasonListForStatus(form.status).map(reason => (
+            <button
+              key={reason}
+              type="button"
+              className={(form.note || '').toLowerCase() === reason.toLowerCase() ? 'picked' : ''}
+              onClick={() => setReason(reason)}
+            >
+              {reason}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <EditorGraphPanel
         events={previewEvents}
@@ -373,6 +481,46 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
               ) : null}
             />
 
+            {mode === 'insert' && (
+              <div className="insert-duration-panel">
+                <div className="insert-section-title">Duration</div>
+                <div className="insert-duration-grid">
+                  {[1, 5, 15, 30].map(min => (
+                    <button key={min} type="button" onClick={() => setDuration(min)}>{min}m</button>
+                  ))}
+                  <button type="button" onClick={() => setDuration(Math.max(1, nowMin() - fromInput(form.start)))}>Until now</button>
+                </div>
+                <div className="insert-split-preview">{splitPreviewText()}</div>
+              </div>
+            )}
+
+            {reasonNeedsLoadLink(form.status, form.note) && (
+              <div className="insert-load-link">
+                <div className="insert-section-title">Linked load</div>
+                <div className="insert-load-grid">
+                  <label>
+                    <span>BOL / Shipping #</span>
+                    <input value={form.shippingDocs || ''} onChange={e => updateForm({ shippingDocs:e.target.value, loadNo:e.target.value })} placeholder="Load or BOL #" />
+                  </label>
+                  <label>
+                    <span>{/delivery|unloading/i.test(form.note || '') ? 'Delivery location' : 'Going to'}</span>
+                    <input
+                      value={form.destination || ''}
+                      onChange={e => {
+                        const parsed = parseLocationTextLocal(e.target.value, form.destinationState || '');
+                        updateForm({ destination:e.target.value, destinationState: parsed.state || form.destinationState || '' });
+                      }}
+                      onBlur={e => {
+                        const parsed = parseLocationTextLocal(e.target.value, form.destinationState || '');
+                        updateForm({ destination: locationString(parsed.city, parsed.state), destinationState: parsed.state });
+                      }}
+                      placeholder="City, ST"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
             <EditorLocationFields
               city={form.city}
               state={form.state}
@@ -381,12 +529,17 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
               onDescriptionChange={(v) => updateForm({ description: v })}
               onGps={() => applyGps(false)}
               gpsStatus={gpsStatus}
+              suggestions={['Gary, IN', 'Gurnee, IL', 'Romeoville, IL', 'Joliet, IL', 'Bolingbrook, IL', 'Chicago, IL', 'Toledo, OH']}
+              collapsedDescription
               onClear={() => updateForm({ city: '', state: '', lat: null, lng: null, gpsAccuracy: null, locationSource: 'manual' })}
             />
 
-            <div className="edit-sticky-save"><button className="save-main" onClick={save}>{mode === 'insert' ? 'Save new event' : 'Save changes'}</button></div>
+            <div className="edit-sticky-save"><button className="save-main" onClick={save}>{mode === 'insert' ? `Save ${form.status} · ${Math.max(1, fromInput(form.end) - fromInput(form.start))}m` : 'Save changes'}</button></div>
 
-            <EditorNotesField note={form.note} onNoteChange={(v) => updateForm({ note: v })} />
+            <details className="insert-notes-details">
+              <summary>+ Add note optional</summary>
+              <EditorNotesField note={form.note} onNoteChange={(v) => updateForm({ note: v })} />
+            </details>
           </>
         )}
         <button className="cancel-main" onClick={onClose}>Cancel</button>
