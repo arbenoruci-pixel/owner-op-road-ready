@@ -1087,6 +1087,44 @@ export default function DayDetail({
     setMoveDelta(0);
   }
 
+
+  function handleLogCheckIssue(payload = {}) {
+    const warningText = String(payload.warning?.text || '');
+    const target = payload.target || {};
+    const type = payload.type || target.type || '';
+
+    if (type === 'sign' || /certified/i.test(warningText)) {
+      setActiveTab('sign');
+      return;
+    }
+
+    let targetEventId = target.eventId || '';
+
+    if (!targetEventId && (type === 'manualDriving' || /manual driving/i.test(warningText))) {
+      targetEventId = displayEvents.find(event => event.status === 'D' && event.source !== 'gps_drive')?.id || '';
+    }
+
+    if (!targetEventId && (type === 'missingLocation' || /city\/state|location/i.test(warningText))) {
+      targetEventId = displayEvents.find(event => !event.city || !event.state || event.city === 'GPS' || event.state === 'UNK')?.id || '';
+    }
+
+    if (!targetEventId && target.startMin != null) {
+      targetEventId = displayEvents.find(event =>
+        Number(event.startMin || 0) <= Number(target.startMin) &&
+        Number(event.endMin || 0) >= Number(target.startMin)
+      )?.id || '';
+    }
+
+    setActiveTab('log');
+
+    if (targetEventId) {
+      onSelect?.(targetEventId);
+      // Open the exact event when this is a fixable row. HOS rows remain driver-reviewed
+      // but still open the event so the driver can inspect the logged time/status.
+      setTimeout(() => onOpenEdit?.(targetEventId), 0);
+    }
+  }
+
   return (
     <section className={`screen active graph-first-screen ${selectedEvent ? "editing-graph" : ""} ${moveOpen ? "inline-moving" : ""}`}>
       <Header title={title(state.activeDay)} onBack={onBack} onRight={onTools} />
@@ -1146,7 +1184,7 @@ export default function DayDetail({
         <>
           <EventList events={displayEvents} selectedId={state.selectedEventId} selectMode={state.selectMode} selectedIds={state.selectedIds} onSelect={onSelect} onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />
 
-          <LogCheckPanel events={displayEvents} state={state} />
+          <LogCheckPanel events={displayEvents} state={state} onIssueAction={handleLogCheckIssue} />
 
           <div className="cert-line cert-line-status-only">
             <span>Certification</span>

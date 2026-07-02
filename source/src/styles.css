@@ -7104,3 +7104,34 @@ body,
 @media(max-width:390px){
   .multi-pick-hint{display:block;float:none;margin-top:3px;}
 }
+
+/* v94.8 Log Check issue tap-to-fix */
+.logcheck-warnings{
+  display:grid!important;
+  gap:6px!important;
+}
+.logcheck-warnings .hos-warning{
+  width:100%!important;
+  display:grid!important;
+  grid-template-columns:1fr auto!important;
+  align-items:center!important;
+  gap:10px!important;
+  text-align:left!important;
+  border-radius:12px!important;
+  cursor:pointer!important;
+}
+.logcheck-warnings .hos-warning b{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-width:46px!important;
+  height:28px!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.72)!important;
+  color:inherit!important;
+  font-size:11px!important;
+  font-weight:950!important;
+}
+.logcheck-warnings .hos-warning:active{
+  transform:scale(.996)!important;
+}
