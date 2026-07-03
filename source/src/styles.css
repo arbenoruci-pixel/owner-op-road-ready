@@ -7135,3 +7135,91 @@ body,
 .logcheck-warnings .hos-warning:active{
   transform:scale(.996)!important;
 }
+
+/* v94.9 DOT Officer Check before signing */
+.dot-officer-check{
+  margin:0 10px 10px!important;
+  border:1px solid var(--fb-line, #e4e7ec)!important;
+  border-radius:15px!important;
+  background:#fff!important;
+  overflow:hidden!important;
+}
+.dot-officer-check-head{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  padding:10px 11px!important;
+  border-bottom:1px solid var(--fb-line, #e4e7ec)!important;
+}
+.dot-officer-check-head b{
+  color:#111827!important;
+  font-size:14px!important;
+  font-weight:950!important;
+}
+.dot-officer-check-head span{
+  color:#667085!important;
+  font-size:11px!important;
+  font-weight:850!important;
+}
+.dot-officer-check-rows{
+  display:grid!important;
+  gap:0!important;
+}
+.dot-officer-row{
+  width:100%!important;
+  display:grid!important;
+  grid-template-columns:1fr auto!important;
+  align-items:center!important;
+  gap:10px!important;
+  padding:10px 11px!important;
+  border:0!important;
+  border-bottom:1px solid #eef1f5!important;
+  background:#fff!important;
+  text-align:left!important;
+}
+.dot-officer-row:last-child{border-bottom:0!important;}
+.dot-officer-row span{
+  min-width:0!important;
+  display:grid!important;
+  gap:2px!important;
+}
+.dot-officer-row span b{
+  color:#111827!important;
+  font-size:13px!important;
+  font-weight:930!important;
+}
+.dot-officer-row span em{
+  color:#667085!important;
+  font-style:normal!important;
+  font-size:11.5px!important;
+  font-weight:750!important;
+  line-height:1.25!important;
+}
+.dot-officer-row strong{
+  min-width:54px!important;
+  height:28px!important;
+  border-radius:999px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  font-size:11px!important;
+  font-weight:950!important;
+}
+.dot-officer-row.ok strong{background:#ecfdf3!important;color:#067647!important;}
+.dot-officer-row.warn strong{background:#fffaeb!important;color:#b54708!important;}
+.dot-officer-row.bad strong{background:#fef3f2!important;color:#b42318!important;}
+.dot-officer-row.notice strong{background:#eff4ff!important;color:#2156d9!important;}
+.dot-officer-row:active{transform:scale(.997)!important;background:#f8fafc!important;}
+.roadguard-action-row{
+  grid-template-columns:repeat(4,1fr)!important;
+}
+.roadguard-head-actions{
+  display:flex!important;
+  gap:5px!important;
+  justify-content:flex-end!important;
+  flex-wrap:wrap!important;
+}
+.roadguard-head-actions button{
+  min-width:42px!important;
+}

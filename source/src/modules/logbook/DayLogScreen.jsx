@@ -740,13 +740,120 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
   );
 }
 
+
+function officerChecklistRows(state, day, guard) {
+  const events = displayEventsForDay(state.eventsByDay?.[day] || [], day >= localDayKey());
+  const total = events.reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);
+  const activeDay = day >= localDayKey();
+  const inspection = state.inspectionByDay?.[day] || {};
+  const signed = !!state.signatureByDay?.[day]?.signed;
+  const profileIssues = guard.fixRequired.filter(issue => /driver|carrier|main_office|truck|unit|trailer|shipping/i.test(String(issue.code || issue.title || '')));
+  const fieldIssues = guard.fixRequired.length;
+  const hosIssues = guard.hosViolations.length + guard.review.filter(issue => /hos|hour|break|cycle|window|driving/i.test(`${issue.code || ''} ${issue.title || ''}`)).length;
+
+  return [
+    {
+      key:'form',
+      title:'Form/header fields',
+      status: profileIssues.length || fieldIssues ? 'Fix' : 'OK',
+      detail: profileIssues.length || fieldIssues ? `${fieldIssues || profileIssues.length} required item(s) to review` : 'Driver, carrier, office, equipment, and shipping docs present',
+      tone: profileIssues.length || fieldIssues ? 'bad' : 'ok',
+      action:'APPLY_SAVED_PROFILE',
+    },
+    {
+      key:'day',
+      title:'24-hour log coverage',
+      status: activeDay ? 'Active' : (Math.abs(total - 1440) <= 1 ? 'OK' : 'Fix'),
+      detail: activeDay ? 'Today is still open. Sign after day is complete.' : `Total ${durLabel(total)}${Math.abs(total - 1440) <= 1 ? '' : ' / needs 24h'}`,
+      tone: activeDay ? 'notice' : (Math.abs(total - 1440) <= 1 ? 'ok' : 'bad'),
+      action:'OPEN_LOG',
+    },
+    {
+      key:'hos',
+      title:'HOS review',
+      status: guard.hosViolations.length ? 'Violation?' : (hosIssues ? 'Review' : 'OK'),
+      detail: guard.hosViolations.length ? `${guard.hosViolations.length} possible HOS violation(s)` : (hosIssues ? `${hosIssues} HOS item(s) to review` : 'No HOS violations shown by app'),
+      tone: guard.hosViolations.length ? 'bad' : (hosIssues ? 'warn' : 'ok'),
+      action:'OPEN_LOG',
+    },
+    {
+      key:'inspection',
+      title:'Inspection / pre-trip',
+      status: inspection.complete ? 'OK' : 'Review',
+      detail: inspection.complete ? `Completed${inspection.sourceStartMin != null ? ` at ${minutesLabel(inspection.sourceStartMin)}` : ''}` : 'No completed inspection sheet for this day',
+      tone: inspection.complete ? 'ok' : 'warn',
+      action:'OPEN_INSPECTION',
+    },
+    {
+      key:'sign',
+      title:'Certification',
+      status: signed ? 'Signed' : (activeDay ? 'Later' : 'Fix'),
+      detail: signed ? 'Driver certification is saved' : (activeDay ? 'Active day cannot be signed until complete' : 'Driver signature/certification missing'),
+      tone: signed ? 'ok' : (activeDay ? 'notice' : 'bad'),
+      action:'OPEN_SIGN',
+    },
+    {
+      key:'dot',
+      title:'Previous 7 days',
+      status: guard.dotPackage.length ? 'Fix' : 'OK',
+      detail: guard.dotPackage.length ? `${guard.dotPackage.length} previous-day package issue(s)` : 'Previous 7 days are present/ready by app check',
+      tone: guard.dotPackage.length ? 'bad' : 'ok',
+      action:'OPEN_DOT_DAYS',
+    },
+  ];
+}
+
+function DotOfficerChecklist({ rows = [], onQuickFix, setShowDot }) {
+  function runAction(row) {
+    if (row.action === 'OPEN_DOT_DAYS') {
+      setShowDot?.(true);
+      return;
+    }
+    if (row.action === 'OPEN_INSPECTION') {
+      onQuickFix?.('OPEN_INSPECTION', {});
+      return;
+    }
+    if (row.action === 'OPEN_LOG') {
+      onQuickFix?.('OPEN_LOG', {});
+      return;
+    }
+    if (row.action === 'APPLY_SAVED_PROFILE') {
+      onQuickFix?.('APPLY_SAVED_PROFILE', {});
+      return;
+    }
+  }
+
+  return (
+    <div className="dot-officer-check">
+      <div className="dot-officer-check-head">
+        <b>DOT Officer Check</b>
+        <span>Current day + previous 7 days</span>
+      </div>
+      <div className="dot-officer-check-rows">
+        {rows.map(row => (
+          <button key={row.key} type="button" className={`dot-officer-row ${row.tone}`} onClick={() => runAction(row)}>
+            <span>
+              <b>{row.title}</b>
+              <em>{row.detail}</em>
+            </span>
+            <strong>{row.status}</strong>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
   const [copyStatus, setCopyStatus] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [showToday, setShowToday] = useState(true);
   const [showDot, setShowDot] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [officerOpen, setOfficerOpen] = useState(false);
   const guard = buildSignGuardSummary(state, day);
+  const officerRows = officerChecklistRows(state, day, guard);
 
   useEffect(() => {
     if (!wizardRequestId) return;
@@ -777,12 +884,13 @@ function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
     <div className={`signguard-panel signguard-panel-v92 roadguard-lite ${guard.status.toLowerCase()} ${expanded ? 'expanded' : 'collapsed'}`}>
       <div className="roadguard-lite-head">
         <button className="roadguard-lite-main" onClick={() => setExpanded(value => !value)}>
-          <span>Log check</span>
+          <span>DOT officer check</span>
           <b>{headline}</b>
           <em>{issueCount ? `${issueCount} item${issueCount === 1 ? '' : 's'}` : 'No open items'}</em>
         </button>
         <div className="roadguard-head-actions">
           <button className="roadguard-copy-mini" onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Log review copied')}>Copy</button>
+          <button className="roadguard-fix-mini" onClick={() => { setExpanded(true); setOfficerOpen(true); setShowDot(true); }}>DOT</button>
           {issueCount > 0 && <button className="roadguard-fix-mini" onClick={() => { setExpanded(true); setWizardOpen(true); }}>Fix</button>}
         </div>
       </div>
@@ -809,10 +917,13 @@ function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
           )}
 
           <div className="signguard-action-strip-v92 roadguard-action-row">
+            <button onClick={() => { setOfficerOpen(true); setShowDot(true); }}>DOT Check</button>
             <button onClick={() => onQuickFix?.('APPLY_SAVED_PROFILE', { day })}>Profile</button>
             <button onClick={() => onQuickFix?.('OPEN_SHIPPING_DOCS', { day })}>BOL / empty</button>
             <button onClick={() => setShowDot(value => !value)}>{showDot ? 'Hide DOT' : 'DOT days'}</button>
           </div>
+
+          {officerOpen && <DotOfficerChecklist rows={officerRows} onQuickFix={onQuickFix} setShowDot={setShowDot} />}
 
           {showToday && (guard.todayIssues.length ? (
             <div className="signguard-issues signguard-issues-v92 roadguard-issues-compact">
