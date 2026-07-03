@@ -14,7 +14,7 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
   const [stoppedSince, setStoppedSince] = useState(null);
   const stoppedSinceRef = useRef(null);
   const autoStoppedRef = useRef(false);
-  const AUTO_MOTION = true;
+  const AUTO_MOTION = false;
 
   const totalMiles = useMemo(() => {
     const m = state.gpsTrip?.milesByState || {};
@@ -103,7 +103,7 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
                 ? 'Recording miles while status is DRIVING'
                 : armed
                   ? `Will switch to DRIVING around ${MOTION_MPH}+ mph`
-                  : 'GPS watches motion while app is open'}
+                  : 'Motion detection is off until you arm it'}
             </span>
           </div>
           <div className="gps-total">{formatMiles(totalMiles)}</div>
@@ -140,7 +140,7 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
 
         {!active && !armed && (
           <div className="gps-actions">
-            <button className="drive-main" onClick={() => setArmed(true)}>MOTION WATCH ON</button>
+            <button className="drive-main" onClick={() => setArmed(true)}>ARM MOTION WATCH</button>
             <button className="drive-secondary" onClick={onStartDriving}>START DRIVING + GPS</button>
           </div>
         )}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { durLabel, nowMin } from '../../shared/utils/time.js';
+import { analyzeLinkedHos } from '../../core/hos/hosEngine.js';
 
 function remainingLabel(minsLeft) {
   const safe = Math.max(0, Math.round(minsLeft || 0));
@@ -25,9 +26,18 @@ export default function DrivingFocusScreen({ open, state, liveCurrent, onStopDri
   const gpsElapsed = gpsActive && state.gpsTrip?.startedAt
     ? Math.max(0, Math.round((Date.now() - Number(state.gpsTrip.startedAt || Date.now())) / 60000))
     : null;
-  // If GPS driving crossed midnight, count elapsed driving from the original
-  // start timestamp instead of resetting the 11h clock at 12:00 AM.
-  const used = gpsElapsed != null ? gpsElapsed : Math.max(0, nowMin() - start);
+
+  // The focus screen should use the same linked-HOS 11h clock as Log Check.
+  // The current GPS trip elapsed time is still useful while moving, but the
+  // 11-hour remaining clock must not reset to 11:00 every time a new drive
+  // segment starts after a short ON DUTY stop.
+  const hos = analyzeLinkedHos(state.eventsByDay || {}, state.activeDay, state.certifyStatus || {});
+  const driveCard = hos.cards?.find(card => card.label === '11h Drive');
+  const driveUsedMatch = String(driveCard?.value || '').match(/(?:(\d+)h)?\s*(\d+)?m?\s*used/i);
+  const hosUsed = driveUsedMatch
+    ? (Number(driveUsedMatch[1] || 0) * 60 + Number(driveUsedMatch[2] || 0))
+    : Math.max(0, nowMin() - start);
+  const used = Math.max(hosUsed, gpsElapsed || 0);
   const driveLeft = Math.max(0, 11 * 60 - used);
   const location = liveCurrent.location
     ? `${liveCurrent.location.city || 'GPS'}, ${liveCurrent.location.state || 'UNK'}`
