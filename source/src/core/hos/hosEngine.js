@@ -136,7 +136,12 @@ export function buildContinuousTimeline(eventsByDay = {}, activeDay) {
 
   Object.entries(eventsByDay || {}).forEach(([dayKey, rawEvents]) => {
     const continuousEvents = makeContinuousLogEvents(rawEvents || [], {
-      isCurrentDay: dayKey === today && dayKey === activeDay,
+      // Today is always the open/current day for HOS math, even when the
+      // driver is reviewing/signing a previous day (activeDay !== today).
+      // Treating today as "completed" extended its last open event to 24:00
+      // and inflated drive/on-duty time with phantom hours, which produced
+      // false 11h/14h/70h warnings while reviewing past days.
+      isCurrentDay: dayKey === today,
       nowMinute: n,
     });
 

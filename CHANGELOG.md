@@ -1,3 +1,9 @@
+## v95.2 — Deep Scan Fix
+- Fixed critical linked-HOS bug: reviewing/signing a past day extended today's open event to midnight, producing phantom drive/on-duty hours and false 11h/14h/30m/70h warnings. Today is now always treated as the open day (extends to now only).
+- Removed the vertical dashed warning guide line from graph violation overlays; warnings stay as colored segment overlays on the duty line.
+- Change Status: a late-resolving automatic GPS fix can no longer overwrite a manually typed/picked city/state; explicit Use GPS still applies.
+- Added scripts/verify-deep-scan-v952.mjs (8 offline checks). Offline sync smoke test and esbuild bundle validation passed; npm registry blocked so next build must run on deploy.
+
 
 ## v93.3 — Start Gap Visual Fix + Thinner Graph Line
 - Fixed Log tab start-of-day visual gap by forcing DayLogScreen to render from normalized display timeline and adding a defensive graph-level start-gap guard.

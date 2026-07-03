@@ -215,8 +215,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const c = rangeColor(r);
         return (
           <g key={`${r.id || i}_${r.startMin}_${r.endMin}`} className="graph-violation">
+            {/* Segment overlay only: no full-height vertical guide line, so
+                warnings stay on the duty line instead of polluting the graph. */}
             <line x1={x1} x2={x2} y1={y} y2={y} stroke={c} strokeWidth="12" strokeLinecap="round" opacity=".96" />
-            <line x1={x1} x2={x1} y1={TOP} y2={TOP+4*ROW_H} stroke={c} strokeWidth="5" strokeDasharray="5 4" opacity=".9" />
             <circle cx={x1} cy={y} r="13" fill={c} stroke="#fff" strokeWidth="4" />
             <text x={x1} y={y+4} textAnchor="middle" className="violation-bang">!</text>
           </g>

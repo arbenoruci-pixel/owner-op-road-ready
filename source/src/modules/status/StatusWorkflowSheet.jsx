@@ -76,6 +76,10 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   const [shippingDocs, setShippingDocs] = useState(state.loadInfo?.shippingDocs || state.loadInfo?.loadNo || '');
   const [destination, setDestination] = useState([state.loadInfo?.deliveryCity, state.loadInfo?.deliveryState].filter(Boolean).join(', '));
   const askedOffGps = useRef(false);
+  // Set when the driver types or picks a location manually. A late-resolving
+  // automatic GPS fix (e.g. the OFF-duty auto lookup) must never overwrite a
+  // manual city/state; only the explicit "Use GPS" button may replace it.
+  const manualLocationDirty = useRef(false);
 
   function applyFix(position) {
     const coords = position.coords || {};
@@ -107,11 +111,18 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
       return;
     }
 
+    if (!auto) manualLocationDirty.current = false;
     setGpsStatus(auto ? 'Getting GPS for OFF duty…' : 'Getting GPS…');
 
     navigator.geolocation.getCurrentPosition(
-      applyFix,
+      (position) => {
+        // A slow automatic fix must not replace a location the driver has
+        // typed/picked in the meantime.
+        if (auto && manualLocationDirty.current) return;
+        applyFix(position);
+      },
       () => {
+        if (auto && manualLocationDirty.current) return;
         setGpsStatus('GPS blocked/unavailable. Type location manually.');
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
@@ -176,6 +187,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   }
 
   function applyLocationText(value = locationText) {
+    manualLocationDirty.current = true;
     const parsed = parseLocationText(value, st || 'IL');
     setCity(parsed.city);
     setSt(parsed.state);
@@ -299,6 +311,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
               onFocus={(e) => e.currentTarget.select()}
               onBlur={() => applyLocationText()}
               onChange={(e) => {
+                manualLocationDirty.current = true;
                 setLocationText(e.target.value);
                 setGpsFix(null);
                 setGpsStatus('Manual location');
@@ -310,6 +323,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
               type="button"
               className="location-clear-btn"
               onClick={() => {
+                manualLocationDirty.current = true;
                 setCity('');
                 setSt('');
                 setLocationText('');
