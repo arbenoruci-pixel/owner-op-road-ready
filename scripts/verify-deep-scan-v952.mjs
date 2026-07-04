@@ -281,4 +281,17 @@ ok('location fix: custom highlighted modal replaces native prompt', () => {
   assert.ok(cssSrc.includes('v95.39 custom location fix modal'), 'location fix modal styles missing');
 });
 
+// 24) Sign tab should use one simple DOT Check button and focused modal.
+ok('sign tab: simple DOT Check modal replaces heavy inline panels', () => {
+  const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
+  assert.ok(daySrc.includes('function DotCheckModal'), 'DotCheckModal missing');
+  assert.ok(daySrc.includes('dot-simple-launch'), 'simple DOT launch button missing');
+  assert.ok(daySrc.includes("issue.section !== 'previous'"), 'current-day issue filter missing');
+  assert.ok(daySrc.includes('Previous 7 days package'), 'previous package should be collapsed');
+  assert.ok(!daySrc.includes('<ChatGptAssistBox state={state} day={day}'), 'ChatGPT helper should not render inline in SignGuardPanel');
+  assert.ok(!daySrc.includes('<DotPackageTable rows={guard.dotRows}'), 'DOT package table should not render inline in SignGuardPanel');
+  assert.ok(cssSrc.includes('v95.40 simple DOT Check launch'), 'simple DOT modal styles missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

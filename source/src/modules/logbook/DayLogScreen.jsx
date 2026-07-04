@@ -1181,19 +1181,114 @@ function DotOfficerChecklist({ check, onQuickFix, onIssueAction, setShowDot }) {
   );
 }
 
+function DotCheckModal({ open, day, check, guard, onClose, onQuickFix, onIssueAction }) {
+  const [showPackage, setShowPackage] = useState(false);
+  if (!open) return null;
+
+  const issues = check?.issues || [];
+  const todayIssues = issues.filter(issue => issue.section !== 'previous');
+  const packageIssues = issues.filter(issue => issue.section === 'previous');
+  const todayFix = todayIssues.filter(issue => issue.severity === 'fix').length;
+  const todayReview = todayIssues.filter(issue => issue.severity === 'review').length;
+  const cleanToday = todayIssues.length === 0;
+
+  function runIssue(issue) {
+    onIssueAction?.(issue);
+    onClose?.();
+  }
+
+  function runPackageIssue(issue) {
+    if (issue.day) {
+      onQuickFix?.('OPEN_DAY', { day:issue.day, issue, tab: issue.fixAction === 'OPEN_DAY_SIGN' ? 'sign' : 'log' });
+      onClose?.();
+    }
+  }
+
+  return (
+    <div className="dot-simple-overlay" role="dialog" aria-modal="true" aria-label="DOT Check">
+      <div className="dot-simple-card">
+        <div className="dot-simple-head">
+          <div>
+            <span>DOT Check</span>
+            <b>{title(day)} · {day}</b>
+          </div>
+          <button onClick={onClose}>Close</button>
+        </div>
+
+        <div className={`dot-simple-status ${cleanToday ? 'ok' : 'fix'}`}>
+          <strong>{cleanToday ? 'This day looks clean' : `${todayFix} fix · ${todayReview} review`}</strong>
+          <span>{cleanToday ? 'Form, log, locations, HOS, inspection, and route checks passed for this day.' : 'Tap an item to go directly to the problem.'}</span>
+        </div>
+
+        <div className="dot-simple-sections">
+          {(check?.sections || []).filter(section => section.id !== 'previous').map(section => (
+            <div key={section.id} className={`dot-simple-section ${section.tone}`}>
+              <span>{section.title}</span>
+              <b>{section.status}</b>
+            </div>
+          ))}
+        </div>
+
+        {todayIssues.length ? (
+          <div className="dot-simple-issues">
+            {todayIssues.map(issue => (
+              <button key={issue.id || issue.code || issue.title} type="button" className={`dot-simple-issue ${issue.tone || 'warn'}`} onClick={() => runIssue(issue)}>
+                <span>
+                  <b>{issue.title}</b>
+                  <em>{issue.detail}</em>
+                </span>
+                <strong>{issue.actionLabel || 'Open'}</strong>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="dot-simple-clean">
+            No current-day problems found.
+          </div>
+        )}
+
+        {packageIssues.length ? (
+          <div className="dot-simple-package">
+            <button type="button" className="dot-simple-package-toggle" onClick={() => setShowPackage(value => !value)}>
+              <span>
+                <b>Previous 7 days package</b>
+                <em>{packageIssues.length} item{packageIssues.length === 1 ? '' : 's'} hidden from main view</em>
+              </span>
+              <strong>{showPackage ? 'Hide' : 'Show'}</strong>
+            </button>
+            {showPackage && (
+              <div className="dot-simple-package-list">
+                {packageIssues.map(issue => (
+                  <button key={issue.id || issue.code || issue.day} type="button" onClick={() => runPackageIssue(issue)}>
+                    <span>
+                      <b>{issue.title}</b>
+                      <em>{issue.detail || issue.day}</em>
+                    </span>
+                    <strong>{issue.actionLabel || 'Open'}</strong>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function SignGuardPanel({ state, day, onQuickFix, onDotIssueAction, wizardRequestId = 0 }) {
   const [copyStatus, setCopyStatus] = useState('');
-  const [expanded, setExpanded] = useState(false);
-  const [showToday, setShowToday] = useState(true);
-  const [showDot, setShowDot] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [officerOpen, setOfficerOpen] = useState(false);
+  const [dotOpen, setDotOpen] = useState(false);
   const guard = buildSignGuardSummary(state, day);
   const officer = buildDotOfficerCheck(state, day);
+  const todayIssues = (officer.issues || []).filter(issue => issue.section !== 'previous');
+  const packageIssues = (officer.issues || []).filter(issue => issue.section === 'previous');
+  const todayFix = todayIssues.filter(issue => issue.severity === 'fix').length;
+  const todayReview = todayIssues.filter(issue => issue.severity === 'review').length;
 
   useEffect(() => {
     if (!wizardRequestId) return;
-    setExpanded(true);
     setWizardOpen(true);
   }, [wizardRequestId]);
 
@@ -1207,78 +1302,38 @@ function SignGuardPanel({ state, day, onQuickFix, onDotIssueAction, wizardReques
     window.setTimeout(() => setCopyStatus(''), 2200);
   }
 
-  const headline = officer.label || (guard.status === 'READY'
-    ? 'Ready'
-    : guard.status === 'FIX_REQUIRED'
-      ? 'Needs fixes'
-      : 'Review needed');
-
-  const firstIssue = officer.issues?.[0] || guard.todayIssues?.[0] || guard.dotPackage?.[0] || null;
-  const issueCount = officer.issues?.length || (guard.fixRequired.length + guard.hosViolations.length + guard.dotPackage.length);
-
   return (
-    <div className={`signguard-panel signguard-panel-v92 roadguard-lite ${String(officer.status || guard.status).toLowerCase()} ${expanded ? 'expanded' : 'collapsed'}`}>
-      <div className="roadguard-lite-head">
-        <button className="roadguard-lite-main" onClick={() => setExpanded(value => !value)}>
-          <span>DOT officer check</span>
-          <b>{headline}</b>
-          <em>{issueCount ? `${issueCount} item${issueCount === 1 ? '' : 's'}` : 'No open items'}</em>
-        </button>
-        <div className="roadguard-head-actions">
-          <button className="roadguard-copy-mini" onClick={() => copyText(buildChatGptLogReviewPrompt(state, day), 'Log review copied')}>Copy</button>
-          <button className="roadguard-fix-mini" onClick={() => { setExpanded(true); setOfficerOpen(true); setShowDot(true); }}>DOT</button>
-          {issueCount > 0 && <button className="roadguard-fix-mini" onClick={() => { setExpanded(true); setWizardOpen(true); }}>Fix</button>}
+    <div className="signguard-panel signguard-panel-v92 roadguard-lite dot-simple-launch-wrap">
+      <button type="button" className={`dot-simple-launch ${todayIssues.length ? 'needs-fix' : 'clean'}`} onClick={() => setDotOpen(true)}>
+        <span>
+          <b>DOT Check</b>
+          <em>{todayIssues.length ? `${todayFix} fix · ${todayReview} review for this day` : 'This day looks clean'}</em>
+        </span>
+        <strong>{todayIssues.length ? 'Open' : 'Run'}</strong>
+      </button>
+
+      {packageIssues.length ? (
+        <div className="dot-simple-package-note">
+          Previous 7 days: {packageIssues.length} package item{packageIssues.length === 1 ? '' : 's'}
         </div>
-      </div>
+      ) : null}
 
-      {firstIssue && !expanded && (
-        <button className="roadguard-first-issue" onClick={() => setExpanded(true)}>
-          <span>{firstIssue.title}</span>
-          <em>{firstIssue.where || 'Open review'}</em>
-        </button>
-      )}
+      <DotCheckModal
+        open={dotOpen}
+        day={day}
+        check={officer}
+        guard={guard}
+        onClose={() => setDotOpen(false)}
+        onQuickFix={onQuickFix}
+        onIssueAction={onDotIssueAction}
+      />
 
-      <div className="signguard-score-row signguard-score-row-v92 roadguard-score-compact">
-        <button className={officer.fixCount ? 'bad' : 'ok'} onClick={() => { setExpanded(true); setOfficerOpen(true); }}><b>{officer.fixCount}</b><span>Fix</span></button>
-        <button className={officer.reviewCount ? 'warn' : 'ok'} onClick={() => { setExpanded(true); setOfficerOpen(true); }}><b>{officer.reviewCount}</b><span>Review</span></button>
-        <button className={guard.dotPackage.length ? 'warn' : 'ok'} onClick={() => { setExpanded(true); setShowDot(value => !value); }}><b>{guard.dotPackage.length}</b><span>7 days</span></button>
-      </div>
-
-      {expanded && (
-        <>
-          {guard.notices.length > 0 && (
-            <div className="signguard-notice-v92 roadguard-notice-compact">
-              {guard.notices.map(issue => <span key={issue.code}>{issue.title}: {issue.detail}</span>)}
-            </div>
-          )}
-
-          <div className="signguard-action-strip-v92 roadguard-action-row">
-            <button onClick={() => { setOfficerOpen(true); setShowDot(false); }}>Run DOT Check</button>
-            <button onClick={() => onQuickFix?.('APPLY_SAVED_PROFILE', { day })}>Profile</button>
-            <button onClick={() => onQuickFix?.('OPEN_SHIPPING_DOCS', { day })}>BOL / empty</button>
-            <button onClick={() => setShowDot(value => !value)}>{showDot ? 'Hide DOT' : 'DOT days'}</button>
-          </div>
-
-          {officerOpen && <DotOfficerChecklist check={officer} onQuickFix={onQuickFix} onIssueAction={onDotIssueAction} setShowDot={setShowDot} />}
-
-          {showToday && (guard.todayIssues.length ? (
-            <div className="signguard-issues signguard-issues-v92 roadguard-issues-compact">
-              {guard.todayIssues.map(issue => <SignGuardIssueCard key={issue.code} issue={issue} state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />)}
-            </div>
-          ) : (
-            <div className="signguard-clean roadguard-clean">Today looks clean.</div>
-          ))}
-
-          {showDot && <DotPackageTable rows={guard.dotRows} onQuickFix={onQuickFix} onCopy={copyText} state={state} day={day} />}
-
-          <ChatGptAssistBox state={state} day={day} onCopy={copyText} onQuickFix={onQuickFix} />
-        </>
-      )}
       <RoadGuardFixWizard open={wizardOpen} guard={guard} day={day} state={state} onClose={() => setWizardOpen(false)} onQuickFix={onQuickFix} onCopy={copyText} />
       {copyStatus ? <span className="signguard-copy-status">{copyStatus}</span> : null}
     </div>
   );
 }
+
 
 class SignatureErrorBoundary extends React.Component {
   constructor(props) {
