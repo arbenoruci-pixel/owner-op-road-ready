@@ -48,13 +48,16 @@ function buildLocationContinuityIssues(events = []) {
     const miles = estimatedLocationMiles(event, next);
     issues.push(makeIssue('location', {
       id:`location_jump_${event.id || index}_${next.id || index + 1}`,
-      severity:'review',
-      title:'Location changes without driving',
-      detail:`${eventTitle(event)} in ${cityState(event.city, event.state)} → ${eventTitle(next)} in ${cityState(next.city, next.state)}${miles ? ` · about ${miles.toFixed(0)} mi` : ''}`,
-      fixAction:'OPEN_EVENT',
+      severity:'fix',
+      title:'Location jump with no driving',
+      detail:`${eventTitle(next)} starts in ${cityState(next.city, next.state)} right after ${eventTitle(event)} in ${cityState(event.city, event.state)}${miles ? ` · about ${miles.toFixed(0)} mi apart` : ''}`,
+      fixAction:'FIX_LOCATION_CONTINUITY',
+      previousEventId:event.id || '',
       eventId:next.id || event.id || '',
+      previousLocation:{ city:event.city || '', state:event.state || '' },
+      currentLocation:{ city:next.city || '', state:next.state || '' },
       startMin:next.startMin,
-      actionLabel:'Review',
+      actionLabel:'Fix location',
     }));
   });
   return issues;

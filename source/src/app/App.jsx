@@ -36,6 +36,26 @@ function findDateInText(text = '') {
 }
 
 
+function parseCityStateText(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return { city:'', state:'' };
+  const parts = raw.split(',');
+  if (parts.length >= 2) {
+    const state = parts.pop().trim().toUpperCase().slice(0, 2);
+    return { city:parts.join(',').trim(), state };
+  }
+  const trailing = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
+  if (trailing) return { city:trailing[1].trim(), state:trailing[2].toUpperCase() };
+  return { city:raw, state:'' };
+}
+
+function formatCityState(city = '', state = '') {
+  const c = String(city || '').trim();
+  const s = String(state || '').trim().toUpperCase().slice(0, 2);
+  return [c, s].filter(Boolean).join(', ');
+}
+
+
 function carryoverNoteForStatus(status) {
   if (status === 'SB') return 'Sleeper Berth';
   if (status === 'D') return 'Driving';
@@ -1262,6 +1282,95 @@ export default function App() {
     signLogDay(state.activeDay, payload);
   }
 
+  function fixLocationContinuity(payload = {}) {
+    const issue = payload.issue || {};
+    const targetDay = payload.day || issue.day || state.activeDay;
+
+    setState(s => {
+      const day = targetDay || s.activeDay;
+      const baseEvents = continuousBaseForDay(s, day);
+      let targetId = issue.eventId || '';
+      let previousId = issue.previousEventId || '';
+      let targetIndex = baseEvents.findIndex(event => event.id === targetId);
+
+      if (targetIndex < 0 && issue.startMin != null) {
+        targetIndex = baseEvents.findIndex(event =>
+          Number(event.startMin || 0) <= Number(issue.startMin) &&
+          Number(event.endMin || 0) >= Number(issue.startMin)
+        );
+        targetId = baseEvents[targetIndex]?.id || targetId;
+      }
+
+      if (!previousId && targetIndex > 0) previousId = baseEvents[targetIndex - 1]?.id || '';
+      const targetEvent = baseEvents.find(event => event.id === targetId) || null;
+      const previousEvent = baseEvents.find(event => event.id === previousId) || null;
+
+      if (!targetEvent || !previousEvent) {
+        return {
+          ...s,
+          activeDay: day,
+          view:'day',
+          roadGuardTabRequest:{ tab:'log', at:Date.now() },
+        };
+      }
+
+      const prevLoc = issue.previousLocation || { city:previousEvent.city || '', state:previousEvent.state || '' };
+      const currLoc = issue.currentLocation || { city:targetEvent.city || '', state:targetEvent.state || '' };
+      const prevLabel = formatCityState(prevLoc.city, prevLoc.state) || formatCityState(previousEvent.city, previousEvent.state);
+      const currLabel = formatCityState(currLoc.city, currLoc.state) || formatCityState(targetEvent.city, targetEvent.state);
+
+      let choice = '1';
+      if (typeof window !== 'undefined' && window.prompt) {
+        choice = window.prompt(
+          `Location jump with no driving.\n\nPrevious event: ${prevLabel}\nCurrent event: ${currLabel}\n\n1 = set current event to ${prevLabel}\n2 = set previous event to ${currLabel}\nOr type City, ST for the current event.`,
+          '1'
+        );
+      }
+
+      if (choice == null) return s;
+
+      let eventIdToPatch = targetEvent.id;
+      let nextLoc = { ...prevLoc };
+
+      const cleanChoice = String(choice || '').trim();
+      if (cleanChoice === '2') {
+        eventIdToPatch = previousEvent.id;
+        nextLoc = { ...currLoc };
+      } else if (cleanChoice !== '1') {
+        const parsed = parseCityStateText(cleanChoice);
+        if (!parsed.city || !parsed.state) return s;
+        nextLoc = parsed;
+      }
+
+      const updatedEvents = commitTimelineForDay(baseEvents.map(event => (
+        event.id === eventIdToPatch
+          ? {
+              ...event,
+              city: nextLoc.city || event.city,
+              state: nextLoc.state || event.state,
+              lat:null,
+              lng:null,
+              gpsAccuracy:null,
+              locationSource:'manual',
+              updatedAt:Date.now(),
+            }
+          : event
+      )), day, s);
+
+      const next = {
+        ...s,
+        activeDay: day,
+        view:'day',
+        selectedEventId:eventIdToPatch,
+        sheet:null,
+        eventsByDay:{ ...(s.eventsByDay || {}), [day]: updatedEvents },
+        roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'fix-location-continuity' },
+      };
+
+      return markDayRecert(next, day);
+    });
+  }
+
   function addPreTripBeforeDriving(payload = {}) {
     const targetDay = payload.day || payload.issue?.day || state.activeDay;
     if (typeof window !== 'undefined' && window.confirm) {
@@ -1326,6 +1435,11 @@ export default function App() {
 
     if (action === 'ADD_PRETRIP_BEFORE_DRIVING') {
       addPreTripBeforeDriving(payload);
+      return;
+    }
+
+    if (action === 'FIX_LOCATION_CONTINUITY') {
+      fixLocationContinuity(payload);
       return;
     }
 

@@ -38,7 +38,7 @@ function targetTabForIssue(issue = {}, action = '') {
   const code = String(issue.code || issue.id || '').toLowerCase();
   const where = String(issue.where || issue.section || '').toLowerCase();
   const text = `${code} ${where} ${issue.title || ''} ${issue.detail || ''}`.toLowerCase();
-  if (action === 'ADD_PRETRIP_BEFORE_DRIVING') return 'log';
+  if (action === 'ADD_PRETRIP_BEFORE_DRIVING' || action === 'FIX_LOCATION_CONTINUITY') return 'log';
   if (/inspection/.test(text) || action === 'OPEN_INSPECTION') return 'inspection';
   if (/sign|certif/.test(text) || action === 'OPEN_SIGN' || action === 'OPEN_DAY_SIGN') return 'sign';
   if (/form|shipping|carrier|office|driver|vehicle|truck|trailer|equipment|bol/.test(text) || action === 'OPEN_SHIPPING_DOCS' || action === 'APPLY_SAVED_PROFILE' || action === 'OPEN_EQUIPMENT') return 'form';
@@ -1616,6 +1616,12 @@ export default function DayDetail({
     if (action === 'ADD_PRETRIP_BEFORE_DRIVING') {
       setActiveTab('log');
       onRoadGuardFix?.('ADD_PRETRIP_BEFORE_DRIVING', { day: issue.day || state.activeDay, issue });
+      return;
+    }
+
+    if (action === 'FIX_LOCATION_CONTINUITY') {
+      setActiveTab('log');
+      onRoadGuardFix?.('FIX_LOCATION_CONTINUITY', { day: issue.day || state.activeDay, issue });
       return;
     }
 

@@ -187,4 +187,16 @@ ok('smart dot: location continuity and unsigned previous day are detected', () =
   assert.ok(dotSrc.includes('Pre-trip timing needs review'), 'pre-trip timing review missing');
 });
 
+// 16) Location-continuity issues must offer a direct location fix.
+ok('location continuity: issue offers direct location fix suggestions', () => {
+  const signingSrc = readFileSync(new URL('../source/src/modules/logbook/signing.js', import.meta.url), 'utf8');
+  const dotSrc = readFileSync(new URL('../source/src/core/dot/dotOfficerCheckEngine.js', import.meta.url), 'utf8');
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(signingSrc.includes('FIX_LOCATION_CONTINUITY'), 'signing action missing');
+  assert.ok(dotSrc.includes('Fix location'), 'DOT fix label missing');
+  assert.ok(appSrc.includes('function fixLocationContinuity'), 'app fixLocationContinuity function missing');
+  assert.ok(appSrc.includes('1 = set current event'), 'location fix suggestions missing');
+  assert.ok(appSrc.includes('2 = set previous event'), 'alternate location fix missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

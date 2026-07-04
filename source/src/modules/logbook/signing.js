@@ -66,11 +66,14 @@ function locationContinuityIssues(events = [], day = '') {
     if (!touches) return;
     issues.push({
       code:`location_jump_${event.id || index}_${next.id || index + 1}`,
-      title:'Location changes without a driving event',
-      detail:`${statusLabel(event.status)} ends at ${timeLabel(event.endMin, true)} in ${locationLabel(event)}, then ${statusLabel(next.status)} starts in ${locationLabel(next)}.`,
+      title:'Location jump with no driving',
+      detail:`${statusLabel(next.status)} starts in ${locationLabel(next)} immediately after ${statusLabel(event.status)} in ${locationLabel(event)}. If there was no driving between them, these locations should match.`,
       where:'Log tab → location continuity',
       day,
+      previousEventId:event.id || '',
       eventId:next.id || event.id || '',
+      previousLocation:{ city:event.city || '', state:event.state || '' },
+      currentLocation:{ city:next.city || '', state:next.state || '' },
       startMin:next.startMin,
     });
   });
@@ -155,7 +158,10 @@ export function issueSuggestedAction(issue = {}) {
   if (code.includes('missing_pretrip_event')) {
     return { label:'Add 15m pre-trip', action:'ADD_PRETRIP_BEFORE_DRIVING' };
   }
-  if (code.includes('pretrip_after_driving') || code.includes('location_jump')) {
+  if (code.includes('location_jump')) {
+    return { label:'Fix location', action:'FIX_LOCATION_CONTINUITY' };
+  }
+  if (code.includes('pretrip_after_driving')) {
     return { label:'Open event', action:'OPEN_LOG' };
   }
   if (code.includes('inspection_unlinked') || code.includes('missing_inspection') || code.includes('inspection_time')) {
