@@ -223,4 +223,17 @@ ok('location continuity: recommended fix can patch previous connected chain', ()
   assert.ok(appSrc.includes('set earlier connected event(s)'), 'recommended chain-fix prompt missing');
 });
 
+// 19) Clean edit flow: graph/event taps open edit without selected Move/Edit/Void bar.
+ok('clean edit flow: no selected action bar in log screen', () => {
+  const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
+  const eventListSrc = readFileSync(new URL('../source/src/modules/logbook/EventList.jsx', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
+  assert.ok(!daySrc.includes('SelectedEventBar'), 'DayLogScreen should not render selected event bar');
+  assert.ok(daySrc.includes('handleGraphEventTap'), 'graph tap edit handler missing');
+  assert.ok(daySrc.includes('clean-edit-flow-rail'), 'clean action rail missing');
+  assert.ok(!daySrc.includes("state.selectMode ? 'Done' : 'Move'"), 'main Move button should be removed');
+  assert.ok(eventListSrc.includes('onOpenEdit(event.id)'), 'event row tap should open edit');
+  assert.ok(cssSrc.includes('v95.35 clean event edit flow'), 'clean edit CSS missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

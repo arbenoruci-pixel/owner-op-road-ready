@@ -3,7 +3,6 @@ import { Header, Tabs } from '../../shared/ui/Chrome.jsx';
 import LogGraph from '../graph/LogGraph.jsx';
 import EventList from './EventList.jsx';
 import LogCheckPanel from './LogCheckPanel.jsx';
-import SelectedEventBar from './SelectedEventBar.jsx';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { buildDotOfficerCheck } from '../../core/dot/dotOfficerCheckEngine.js';
 import { estimatedRoadMiles, pointFromLogLocation, recalcMilesByTimeWindow } from '../../core/gps/locationService.js';
@@ -1752,6 +1751,15 @@ export default function DayDetail({
     }
   }
 
+  function handleGraphEventTap(eventId) {
+    if (!eventId) {
+      onSelect?.(null);
+      return;
+    }
+    onSelect?.(eventId);
+    window.setTimeout(() => onOpenEdit?.(eventId), 0);
+  }
+
   return (
     <section className={`screen active graph-first-screen ${selectedEvent ? "editing-graph" : ""} ${moveOpen ? "inline-moving" : ""}`}>
       <Header title={title(state.activeDay)} onBack={onBack} onRight={onTools} />
@@ -1763,47 +1771,21 @@ export default function DayDetail({
             events={previewGraphEvents}
             selectedId={state.selectedEventId}
             violationRanges={previewViolationRanges}
-            onSelect={onSelect}
+            onSelect={handleGraphEventTap}
             onEmptyTap={() => onSelect(null)}
           />
         </div>
-      )}
-
-      {activeTab === 'log' && (
-        <SelectedEventBar
-          event={selectedPreviewEvent}
-          onEdit={onOpenEdit}
-          onVoid={onDelete}
-          onClear={() => onSelect(null)}
-          moveOpen={moveOpen}
-          moveDelta={boundedMoveDelta}
-          moveWasClamped={!!moveWasClamped}
-          moveHasWarning={moveHasWarning}
-          onToggleMove={() => { setMoveOpen(value => !value); setMoveDelta(0); }}
-          onAdjustMove={adjustMove}
-          onApplyMove={applyMove}
-          onResetMove={() => setMoveDelta(0)}
-        />
       )}
 
       {activeTab === 'form' && <MiniFormPanel state={state} events={displayEvents} onSaveLoad={onSaveLoad} onOpenTrailer={onOpenTrailer} />}
       {activeTab === 'sign' && <SignatureErrorBoundary day={state.activeDay}><SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} onDotIssueAction={handleDotOfficerIssue} /></SignatureErrorBoundary>}
       {activeTab === 'inspection' && <InspectionPanel state={state} events={displayEvents} onSaveInspection={onSaveInspection} />}
 
-      {activeTab === 'log' && !selectedEvent && (
-        <div className="graph-action-rail">
+      {activeTab === 'log' && (
+        <div className="graph-action-rail clean-edit-flow-rail">
           <button onClick={() => onOpenAdd({ mode:'choice' })}>Insert</button>
-          <button onClick={onToggleSelectMode}>{state.selectMode ? 'Done' : 'Move'}</button>
           <button onClick={onOpenStatus}>Status</button>
           <button onClick={onToggleGps}>Drive</button>
-        </div>
-      )}
-
-      {activeTab === 'log' && state.selectMode && !selectedEvent && (
-        <div className="bulk-strip graph-bulk-strip graph-bulk-compact">
-          <button onClick={onSelectAll}>All</button>
-          <button onClick={onClearSelection}>Clear</button>
-          <button className="primary" onClick={onOpenShift}>Shift</button>
         </div>
       )}
 

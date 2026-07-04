@@ -7578,3 +7578,18 @@ body,
     transform:rotate(90deg);
   }
 }
+
+/* v95.35 clean event edit flow */
+.clean-edit-flow-rail,
+.graph-action-rail.clean-edit-flow-rail{
+  grid-template-columns:repeat(3,1fr)!important;
+}
+.graph-first-screen .selected-event-bar{
+  display:none!important;
+}
+.clean-event-row{
+  cursor:pointer;
+}
+.clean-event-row .blue-edit{
+  min-width:64px!important;
+}

@@ -24,7 +24,7 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
 
   return (
     <div className="events clean-events">
-      {events.filter(event => event.id !== selectedId).map(event => {
+      {events.map(event => {
         const selected = selectedId === event.id;
         const checked = selectedIds.includes(event.id);
         const loc = `${event.city || ''}${event.state ? `, ${event.state}` : ''}`.trim();
@@ -33,7 +33,7 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
             key={event.id}
             ref={(el) => { refs.current[event.id] = el; }}
             className={`event-row clean-event-row ${selected ? 'selected' : ''}`}
-            onClick={() => selectMode ? onToggleSelected(event.id) : onSelect(event.id)}
+            onClick={() => selectMode ? onToggleSelected(event.id) : onOpenEdit(event.id)}
           >
             {selectMode ? (
               <input className="event-check" type="checkbox" readOnly checked={checked} />
