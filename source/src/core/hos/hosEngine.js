@@ -501,7 +501,9 @@ export function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}
   const cycle = calculateCycle(timeline, restBlocks, currentEndAbs, 70, 8);
   const restProgress = currentRestProgress(restBlocks, currentEndAbs);
 
-  const manualDrivingMins = timeline.filter(e => e.status === 'D' && e.source !== 'gps_drive').reduce((sum,e) => sum + eventDuration(e), 0);
+  const manualDrivingMins = timeline
+    .filter(e => e.status === 'D' && e.source !== 'gps_drive' && !(Number(e.manualMiles || 0) > 0))
+    .reduce((sum,e) => sum + eventDuration(e), 0);
   const missingLocation = timeline.filter(e => !e.city || !e.state).length;
 
   const warnings = [...gaps, ...statusReasonWarnings(timeline)];

@@ -153,6 +153,10 @@ function driverNameForState(state) {
   return state.signatureByDay?.[state.activeDay]?.driverName || state.driverProfile?.name || DEFAULT_DRIVER_NAME;
 }
 
+function manualMilesTotal(events = []) {
+  return (events || []).reduce((sum, event) => sum + Math.max(0, Number(event.manualMiles || 0)), 0);
+}
+
 function formSummary(state, events) {
   const dutyTotals = ['OFF','SB','D','ON'].map(status => {
     const mins = (events || []).filter(e => e.status === status).reduce((sum, e) => sum + Math.max(0, e.endMin - e.startMin), 0);
@@ -168,6 +172,9 @@ function formSummary(state, events) {
     ? state.currentTrailer
     : (equipment.trailer || state.driver?.trailer || 'None');
   const notes = [...new Set((events || []).map(e => e.description || e.note).filter(Boolean))].slice(0, 2).join(' · ');
+  const gpsMiles = Number(state.gpsTrip?.totalMiles || 0);
+  const manualMiles = manualMilesTotal(events);
+  const totalMiles = gpsMiles + manualMiles;
   return {
     off: formatDutyMinutes(dutyMap.OFF || 0),
     sb: formatDutyMinutes(dutyMap.SB || 0),
@@ -175,7 +182,7 @@ function formSummary(state, events) {
     on: formatDutyMinutes(dutyMap.ON || 0),
     vehicles: safeValue(state.driver?.truck),
     trailers: safeValue(trailers),
-    distance: state.gpsTrip?.totalMiles ? `${Number(state.gpsTrip.totalMiles).toFixed(2)} mi` : 'None',
+    distance: totalMiles > 0 ? `${totalMiles.toFixed(2)} mi${manualMiles ? ` (${manualMiles.toFixed(2)} manual)` : ''}` : 'None',
     odometers: 'No Vehicles',
     shippingDocs: safeValue(shippingDocs),
     driverName: driverNameForState(state),
@@ -1130,7 +1137,7 @@ export default function DayDetail({
   state, liveCurrent, events, selectedEvent, onBack, onSelect, onOpenAdd, onOpenEdit, onDelete,
   onToggleSelectMode, onToggleSelectedId, onSelectAll, onClearSelection, onOpenShift, onMoveSelected,
   onCertify, onTools, onOpenStatus, onOpenTrailer, onDriverFlow, onSaveLoad, onToggleGps,
-  onSaveInspection, onSaveSignature, onRoadGuardFix
+  onSaveInspection, onSaveSignature, onRoadGuardFix, onSaveManualMiles
 }) {
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveDelta, setMoveDelta] = useState(0);
@@ -1199,6 +1206,40 @@ export default function DayDetail({
   }
 
 
+  function promptManualMilesForEvent(eventId = '') {
+    const event = displayEvents.find(item => item.id === eventId) || displayEvents.find(item => item.status === 'D' && item.source !== 'gps_drive');
+    if (!event) {
+      window.alert?.('No manual driving event found on this day.');
+      return;
+    }
+
+    const current = Number(event.manualMiles || 0) > 0 ? String(event.manualMiles) : '';
+    const label = `${minutesLabel(event.startMin)}–${minutesLabel(event.endMin)} · ${event.city || 'GPS'}, ${event.state || 'UNK'}`;
+    const rawMiles = window.prompt?.(`Enter miles for manual driving:\n${label}`, current);
+    if (rawMiles == null) return;
+
+    const miles = Number(String(rawMiles).replace(/[^0-9.]/g, ''));
+    if (!Number.isFinite(miles) || miles <= 0) {
+      window.alert?.('Enter a valid miles number greater than 0.');
+      return;
+    }
+
+    const defaultState = event.manualMilesState || event.state || state.currentLocation?.state || 'UNK';
+    const rawState = window.prompt?.('State for these miles, example IN or IL:', defaultState);
+    if (rawState == null) return;
+
+    const milesState = String(rawState || defaultState || 'UNK').trim().toUpperCase().slice(0, 2) || 'UNK';
+
+    onSaveManualMiles?.(event.id, {
+      manualMiles: miles,
+      manualMilesState: milesState,
+      manualMilesReviewedAt: Date.now(),
+      description: event.description || `Manual miles ${miles.toFixed(2)} mi ${milesState}`,
+    });
+
+    window.alert?.(`Saved ${miles.toFixed(2)} manual miles for ${milesState}.`);
+  }
+
   function handleLogCheckIssue(payload = {}) {
     const warningText = String(payload.warning?.text || '');
     const target = payload.target || {};
@@ -1211,8 +1252,10 @@ export default function DayDetail({
 
     let targetEventId = target.eventId || '';
 
-    if (!targetEventId && (type === 'manualDriving' || /manual driving/i.test(warningText))) {
-      targetEventId = displayEvents.find(event => event.status === 'D' && event.source !== 'gps_drive')?.id || '';
+    if (type === 'manualDriving' || /manual driving/i.test(warningText)) {
+      targetEventId = targetEventId || displayEvents.find(event => event.status === 'D' && event.source !== 'gps_drive' && !(Number(event.manualMiles || 0) > 0))?.id || displayEvents.find(event => event.status === 'D' && event.source !== 'gps_drive')?.id || '';
+      promptManualMilesForEvent(targetEventId);
+      return;
     }
 
     if (!targetEventId && (type === 'missingLocation' || /city\/state|location/i.test(warningText))) {

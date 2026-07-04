@@ -1584,6 +1584,7 @@ export default function App() {
         onSaveInspection={saveInspection}
         onSaveSignature={saveSignature}
         onRoadGuardFix={applyRoadGuardFix}
+        onSaveManualMiles={(id, patch)=>updateEvent(id, patch)}
       />
       <DriveTrackerSheet state={state} open={!!state.gpsPanelOpen} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       <DrivingFocusScreen

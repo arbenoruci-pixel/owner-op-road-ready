@@ -31,6 +31,15 @@ function targetForWarning(warning, ranges = []) {
   return ranges.find(range => range.type === type) || null;
 }
 
+function actionLabelForWarning(warning, target) {
+  const type = target?.type || warningTypeFromText(warning?.text);
+  if (type === 'manualDriving') return 'Add miles';
+  if (type === 'sign') return 'Sign';
+  if (type === 'missingLocation') return 'Fix location';
+  if (target) return 'Review';
+  return 'Review';
+}
+
 export default function HosCheck({ events, state, onIssueAction }) {
   const [open, setOpen] = useState(false);
   const result = analyzeLinkedHos(state.eventsByDay || {}, state.activeDay, state.certifyStatus || {});
@@ -78,7 +87,7 @@ export default function HosCheck({ events, state, onIssueAction }) {
                     onClick={() => issueClick(w)}
                   >
                     <span>⚠ {w.text}</span>
-                    <b>{canOpen ? 'Fix' : 'Review'}</b>
+                    <b>{actionLabelForWarning(w, target)}</b>
                   </button>
                 );
               })}
