@@ -8,6 +8,7 @@ import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay, displayEventsForDayFromState } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
+import { durLabel } from '../../shared/utils/time.js';
 import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
@@ -972,7 +973,7 @@ class SignatureErrorBoundary extends React.Component {
       return (
         <div className="signature-panel road-sign-panel">
           <div className="signature-error-inline">
-            Signature screen had a problem. Tap Try again, or reload the app.
+            Signature screen had a problem. Tap Try again. If it still appears, reload the app.
           </div>
           <button type="button" className="road-sign-save sign-save" onClick={() => this.setState({ error: null })}>
             Try signature again
