@@ -5,6 +5,7 @@ import EventList from './EventList.jsx';
 import LogCheckPanel from './LogCheckPanel.jsx';
 import SelectedEventBar from './SelectedEventBar.jsx';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
+import { buildDotOfficerCheck } from '../../core/dot/dotOfficerCheckEngine.js';
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay, displayEventsForDayFromState } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
@@ -811,49 +812,81 @@ function officerChecklistRows(state, day, guard) {
   ];
 }
 
-function DotOfficerChecklist({ rows = [], onQuickFix, setShowDot }) {
-  function runAction(row) {
-    if (row.action === 'OPEN_DOT_DAYS') {
+function DotOfficerChecklist({ check, onQuickFix, onIssueAction, setShowDot }) {
+  const sections = check?.sections || [];
+  const issues = check?.issues || [];
+
+  function runSection(section) {
+    if (section.id === 'previous') {
       setShowDot?.(true);
       return;
     }
-    if (row.action === 'OPEN_INSPECTION') {
-      onQuickFix?.('OPEN_INSPECTION', {});
+    const firstIssue = section.issues?.[0];
+    if (firstIssue) {
+      onIssueAction?.(firstIssue);
       return;
     }
-    if (row.action === 'OPEN_LOG') {
-      onQuickFix?.('OPEN_LOG', {});
+    if (section.id === 'inspection') onQuickFix?.('OPEN_INSPECTION', {});
+    if (section.id === 'coverage' || section.id === 'hos' || section.id === 'location') onQuickFix?.('OPEN_LOG', {});
+  }
+
+  function runIssue(issue) {
+    if (issue.fixAction === 'OPEN_DOT_DAYS') {
+      setShowDot?.(true);
       return;
     }
-    if (row.action === 'APPLY_SAVED_PROFILE') {
-      onQuickFix?.('APPLY_SAVED_PROFILE', {});
-      return;
-    }
+    onIssueAction?.(issue);
   }
 
   return (
-    <div className="dot-officer-check">
-      <div className="dot-officer-check-head">
-        <b>DOT Officer Check</b>
-        <span>Current day + previous 7 days</span>
+    <div className={`dot-officer-check smart ${check?.status?.toLowerCase() || 'review'}`}>
+      <div className="dot-officer-check-head smart">
+        <div>
+          <b>DOT Check</b>
+          <span>Form · log · locations · HOS · inspection · previous 7</span>
+        </div>
+        <strong>{check?.label || 'Review before signing'}</strong>
       </div>
+
+      <div className="dot-officer-score">
+        <b>{Math.round(check?.score ?? 0)}</b>
+        <span>Readiness</span>
+        <em>{check?.fixCount || 0} fix · {check?.reviewCount || 0} review</em>
+      </div>
+
       <div className="dot-officer-check-rows">
-        {rows.map(row => (
-          <button key={row.key} type="button" className={`dot-officer-row ${row.tone}`} onClick={() => runAction(row)}>
+        {sections.map(section => (
+          <button key={section.id} type="button" className={`dot-officer-row ${section.tone}`} onClick={() => runSection(section)}>
             <span>
-              <b>{row.title}</b>
-              <em>{row.detail}</em>
+              <b>{section.title}</b>
+              <em>{section.detail}</em>
             </span>
-            <strong>{row.status}</strong>
+            <strong>{section.status}</strong>
           </button>
         ))}
       </div>
+
+      {issues.length ? (
+        <div className="dot-officer-issues">
+          {issues.slice(0, 12).map(issue => (
+            <button key={issue.id} type="button" className={`dot-officer-issue ${issue.tone || 'warn'}`} onClick={() => runIssue(issue)}>
+              <span>
+                <b>{issue.title}</b>
+                <em>{issue.detail}</em>
+              </span>
+              <strong>{issue.actionLabel || 'Open'}</strong>
+            </button>
+          ))}
+          {issues.length > 12 ? <div className="dot-officer-more">{issues.length - 12} more item(s)</div> : null}
+        </div>
+      ) : (
+        <div className="dot-officer-clean">Ready by current app checks.</div>
+      )}
     </div>
   );
 }
 
-
-function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
+function SignGuardPanel({ state, day, onQuickFix, onDotIssueAction, wizardRequestId = 0 }) {
   const [copyStatus, setCopyStatus] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [showToday, setShowToday] = useState(true);
@@ -861,7 +894,7 @@ function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [officerOpen, setOfficerOpen] = useState(false);
   const guard = buildSignGuardSummary(state, day);
-  const officerRows = officerChecklistRows(state, day, guard);
+  const officer = buildDotOfficerCheck(state, day);
 
   useEffect(() => {
     if (!wizardRequestId) return;
@@ -879,17 +912,17 @@ function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
     window.setTimeout(() => setCopyStatus(''), 2200);
   }
 
-  const headline = guard.status === 'READY'
+  const headline = officer.label || (guard.status === 'READY'
     ? 'Ready'
     : guard.status === 'FIX_REQUIRED'
       ? 'Needs fixes'
-      : 'Review needed';
+      : 'Review needed');
 
-  const firstIssue = guard.todayIssues?.[0] || guard.dotPackage?.[0] || null;
-  const issueCount = guard.fixRequired.length + guard.hosViolations.length + guard.dotPackage.length;
+  const firstIssue = officer.issues?.[0] || guard.todayIssues?.[0] || guard.dotPackage?.[0] || null;
+  const issueCount = officer.issues?.length || (guard.fixRequired.length + guard.hosViolations.length + guard.dotPackage.length);
 
   return (
-    <div className={`signguard-panel signguard-panel-v92 roadguard-lite ${guard.status.toLowerCase()} ${expanded ? 'expanded' : 'collapsed'}`}>
+    <div className={`signguard-panel signguard-panel-v92 roadguard-lite ${String(officer.status || guard.status).toLowerCase()} ${expanded ? 'expanded' : 'collapsed'}`}>
       <div className="roadguard-lite-head">
         <button className="roadguard-lite-main" onClick={() => setExpanded(value => !value)}>
           <span>DOT officer check</span>
@@ -911,9 +944,9 @@ function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
       )}
 
       <div className="signguard-score-row signguard-score-row-v92 roadguard-score-compact">
-        <button className={guard.fixRequired.length ? 'bad' : 'ok'} onClick={() => { setExpanded(true); setShowToday(true); }}><b>{guard.fixRequired.length}</b><span>Fix</span></button>
-        <button className={guard.hosViolations.length ? 'bad' : 'ok'} onClick={() => { setExpanded(true); setShowToday(true); }}><b>{guard.hosViolations.length}</b><span>HOS</span></button>
-        <button className={guard.dotPackage.length ? 'warn' : 'ok'} onClick={() => { setExpanded(true); setShowDot(value => !value); }}><b>{guard.dotPackage.length}</b><span>DOT</span></button>
+        <button className={officer.fixCount ? 'bad' : 'ok'} onClick={() => { setExpanded(true); setOfficerOpen(true); }}><b>{officer.fixCount}</b><span>Fix</span></button>
+        <button className={officer.reviewCount ? 'warn' : 'ok'} onClick={() => { setExpanded(true); setOfficerOpen(true); }}><b>{officer.reviewCount}</b><span>Review</span></button>
+        <button className={guard.dotPackage.length ? 'warn' : 'ok'} onClick={() => { setExpanded(true); setShowDot(value => !value); }}><b>{guard.dotPackage.length}</b><span>7 days</span></button>
       </div>
 
       {expanded && (
@@ -925,13 +958,13 @@ function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
           )}
 
           <div className="signguard-action-strip-v92 roadguard-action-row">
-            <button onClick={() => { setOfficerOpen(true); setShowDot(true); }}>DOT Check</button>
+            <button onClick={() => { setOfficerOpen(true); setShowDot(false); }}>Run DOT Check</button>
             <button onClick={() => onQuickFix?.('APPLY_SAVED_PROFILE', { day })}>Profile</button>
             <button onClick={() => onQuickFix?.('OPEN_SHIPPING_DOCS', { day })}>BOL / empty</button>
             <button onClick={() => setShowDot(value => !value)}>{showDot ? 'Hide DOT' : 'DOT days'}</button>
           </div>
 
-          {officerOpen && <DotOfficerChecklist rows={officerRows} onQuickFix={onQuickFix} setShowDot={setShowDot} />}
+          {officerOpen && <DotOfficerChecklist check={officer} onQuickFix={onQuickFix} onIssueAction={onDotIssueAction} setShowDot={setShowDot} />}
 
           {showToday && (guard.todayIssues.length ? (
             <div className="signguard-issues signguard-issues-v92 roadguard-issues-compact">
@@ -986,7 +1019,7 @@ class SignatureErrorBoundary extends React.Component {
   }
 }
 
-function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
+function SignaturePanel({ state, onSaveSignature, onQuickFix, onDotIssueAction }) {
   const day = state.activeDay;
   const saved = state.signatureByDay?.[day] || {};
   const savedDriverSignature = state.driverSignature || null;
@@ -1161,7 +1194,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
         <span>{todayActive ? 'Today is active. Sign after the day is complete.' : signState.reason}</span>
       </div>
 
-      <SignGuardPanel state={state} day={day} onQuickFix={onQuickFix} wizardRequestId={wizardRequestId} />
+      <SignGuardPanel state={state} day={day} onQuickFix={onQuickFix} onDotIssueAction={onDotIssueAction} wizardRequestId={wizardRequestId} />
 
 
       {signatureError ? <div className="signature-error-inline">{signatureError}</div> : null}
@@ -1293,6 +1326,59 @@ export default function DayDetail({
     window.alert?.(`Saved ${miles.toFixed(2)} manual miles for ${milesState}.`);
   }
 
+  function handleDotOfficerIssue(issue = {}) {
+    if (!issue) return;
+    const action = issue.fixAction || '';
+    if (action === 'OPEN_SIGN' || action === 'OPEN_DAY_SIGN') {
+      if (issue.day && issue.day !== state.activeDay) onRoadGuardFix?.('OPEN_DAY', { day:issue.day });
+      setActiveTab('sign');
+      return;
+    }
+
+    if (action === 'OPEN_INSPECTION') {
+      setActiveTab('inspection');
+      return;
+    }
+
+    if (action === 'OPEN_FORM_FIELD' || action === 'OPEN_ROUTE_LEG') {
+      setActiveTab('form');
+      if (issue.target === 'shippingDocs') {
+        window.setTimeout(() => onRoadGuardFix?.('OPEN_SHIPPING_DOCS', { day:issue.day || state.activeDay }), 0);
+      }
+      return;
+    }
+
+    if (action === 'CREATE_MISSING_DAY' || action === 'OPEN_DAY') {
+      const dayToOpen = issue.day || state.activeDay;
+      onRoadGuardFix?.('OPEN_DAY', { day:dayToOpen });
+      return;
+    }
+
+    if (action === 'OPEN_MANUAL_MILES') {
+      setActiveTab('log');
+      promptManualMilesForEvent(issue.eventId || '');
+      return;
+    }
+
+    if (action === 'OPEN_EVENT' || action === 'OPEN_HOS_RANGE' || action === 'OPEN_LOG') {
+      setActiveTab('log');
+      let targetEventId = issue.eventId || '';
+      if (!targetEventId && issue.startMin != null) {
+        targetEventId = displayEvents.find(event =>
+          Number(event.startMin || 0) <= Number(issue.startMin) &&
+          Number(event.endMin || 0) >= Number(issue.startMin)
+        )?.id || '';
+      }
+      if (targetEventId) {
+        onSelect?.(targetEventId);
+        window.setTimeout(() => onOpenEdit?.(targetEventId), 0);
+      }
+      return;
+    }
+
+    setActiveTab('log');
+  }
+
   function handleLogCheckIssue(payload = {}) {
     const warningText = String(payload.warning?.text || '');
     const target = payload.target || {};
@@ -1367,7 +1453,7 @@ export default function DayDetail({
       )}
 
       {activeTab === 'form' && <MiniFormPanel state={state} events={displayEvents} onSaveLoad={onSaveLoad} onOpenTrailer={onOpenTrailer} />}
-      {activeTab === 'sign' && <SignatureErrorBoundary day={state.activeDay}><SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} /></SignatureErrorBoundary>}
+      {activeTab === 'sign' && <SignatureErrorBoundary day={state.activeDay}><SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} onDotIssueAction={handleDotOfficerIssue} /></SignatureErrorBoundary>}
       {activeTab === 'inspection' && <InspectionPanel state={state} events={displayEvents} onSaveInspection={onSaveInspection} />}
 
       {activeTab === 'log' && !selectedEvent && (
