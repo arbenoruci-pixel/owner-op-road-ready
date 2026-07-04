@@ -12,6 +12,11 @@ const ROW_H = 96;
 const BODY_W = W - LEFT - RIGHT;
 const SHORT_EVENT_MARKER_PX = 12;
 const HIT_MIN_PX = 24;
+// v95.6 continuous duty line: one stroke width for horizontals AND vertical
+// bends, drawn as a single SVG path so corners are clean 90° miter joins.
+const LINE_W = 8;
+const CORNER_INSET = LINE_W / 2;
+const TRACE_COLOR = '#172033';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -149,15 +154,69 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return <text key={s} x={W-5} y={CENTER(s)+5} textAnchor="end" className="total-label">{(mins/60).toFixed(2).padStart(5,'0')}</text>;
       })}
 
-      {/* Horizontal status segments and transition joints are rendered separately so each event ends exactly at the next event boundary. */}
+      {/* v95.6 continuous duty line.
+          Layer 1 — selection highlights (soft row fill + outer glow) drawn
+          UNDER the trace so selecting never thickens or distorts the line.
+          Layer 2 — one continuous SVG path (H/V commands, miter joins, butt
+          caps) in neutral dark slate: horizontals and vertical bends share
+          the exact same stroke width and clean 90° corners, no join dots.
+          Layer 3 — status-colored horizontal overlays at the SAME width,
+          inset by half a stroke at status changes so corners stay a single
+          clean body instead of double-rendered thick joints. */}
 
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
+        if (!selected) return null;
+        const y = CENTER(event.status);
+        const span = exactSpan(event);
+        return (
+          <g key={`${event.id}_sel`} pointerEvents="none">
+            <rect x={span.x1} y={TOP+rowIndex(event.status)*ROW_H+3} width={Math.max(3, span.width)} height={ROW_H-6} rx="8" fill={soft(event.status)} />
+            <line
+              x1={span.x1}
+              x2={span.x2}
+              y1={y}
+              y2={y}
+              stroke={color(event.status)}
+              strokeWidth={LINE_W + 12}
+              strokeLinecap="round"
+              opacity=".22"
+            />
+          </g>
+        );
+      })}
+      {transitions(sorted).map((t,i) => {
+        const selected = selectedId === t.to.id || selectedId === t.from.id || editId === t.to.id || editId === t.from.id;
+        if (!selected) return null;
+        const x = xFromMin(t.minute);
+        const y1 = CENTER(t.from.status);
+        const y2 = CENTER(t.to.status);
+        return (
+          <rect key={`${i}_tsel`} x={x-14} y={Math.min(y1,y2)-11} width="28" height={Math.abs(y2-y1)+22} rx="14" fill="rgba(95,99,104,.13)" pointerEvents="none" />
+        );
+      })}
+
+      {bodyPath && (
+        <path
+          d={bodyPath}
+          fill="none"
+          stroke={TRACE_COLOR}
+          strokeWidth={LINE_W}
+          strokeLinecap="butt"
+          strokeLinejoin="miter"
+          pointerEvents="none"
+        />
+      )}
+
+      {sorted.map((event, i) => {
         const y = CENTER(event.status);
         const span = hitSpan(event);
+        const bendBefore = i > 0 && sorted[i-1].status !== event.status;
+        const bendAfter = i < sorted.length - 1 && sorted[i+1].status !== event.status;
+        const ox1 = span.x1 + (bendBefore ? CORNER_INSET : 0);
+        const ox2 = span.x2 - (bendAfter ? CORNER_INSET : 0);
         return (
           <g key={event.id}>
-            {selected && <rect x={span.x1} y={TOP+rowIndex(event.status)*ROW_H+3} width={Math.max(3, span.width)} height={ROW_H-6} rx="8" fill={soft(event.status)} />}
             <line
               x1={span.hitX1 ?? span.x1}
               x2={span.hitX2 ?? span.x2}
@@ -168,40 +227,17 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               strokeLinecap="butt"
               onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
             />
-            {selected && (
+            {ox2 - ox1 > 0.5 && (
               <line
-                x1={span.x1}
-                x2={span.x2}
+                x1={ox1}
+                x2={ox2}
                 y1={y}
                 y2={y}
-                stroke="#111827"
-                strokeWidth="20"
+                stroke={color(event.status)}
+                strokeWidth={LINE_W}
                 strokeLinecap="butt"
-                opacity=".14"
                 pointerEvents="none"
               />
-            )}
-            <line
-              x1={span.x1}
-              x2={span.x2}
-              y1={y}
-              y2={y}
-              stroke={color(event.status)}
-              strokeWidth={selected ? 12.6 : 8.1}
-              strokeLinecap="butt"
-              pointerEvents="none"
-            />
-            {span.short && (
-              <g className="short-event-marker" pointerEvents="none">
-                <circle cx={(span.x1 + span.x2) / 2} cy={y} r={selected ? 7 : 5} fill={color(event.status)} stroke="#fff" strokeWidth="2" />
-                <line x1={(span.x1 + span.x2) / 2} x2={(span.x1 + span.x2) / 2} y1={y-15} y2={y+15} stroke={color(event.status)} strokeWidth="2.7" strokeLinecap="round" opacity=".92" />
-              </g>
-            )}
-            {selected && (
-              <>
-                <circle cx={xFromMin(event.startMin)} cy={y} r="13" fill="#fff" stroke={color(event.status)} strokeWidth="4.5" pointerEvents="none" />
-                <circle cx={xFromMin(event.endMin)} cy={y} r="13" fill="#fff" stroke={color(event.status)} strokeWidth="4.5" pointerEvents="none" />
-              </>
             )}
           </g>
         );
@@ -215,78 +251,56 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const c = rangeColor(r);
         return (
           <g key={`${r.id || i}_${r.startMin}_${r.endMin}`} className="graph-violation">
-            {/* Segment overlay only: no full-height vertical guide line, so
-                warnings stay on the duty line instead of polluting the graph. */}
-            <line x1={x1} x2={x2} y1={y} y2={y} stroke={c} strokeWidth="12" strokeLinecap="round" opacity=".96" />
+            {/* Segment overlay only: same stroke width as the duty line, butt
+                caps, and no full-height vertical guide line, so warnings sit
+                on the duty line instead of polluting the graph. */}
+            <line x1={x1} x2={x2} y1={y} y2={y} stroke={c} strokeWidth={LINE_W} strokeLinecap="butt" opacity=".96" />
             <circle cx={x1} cy={y} r="13" fill={c} stroke="#fff" strokeWidth="4" />
             <text x={x1} y={y+4} textAnchor="middle" className="violation-bang">!</text>
           </g>
         );
       })}
 
+      {/* Transition tap targets only: the visible vertical bend is part of the
+          continuous base path above — no separate stroke, no endpoint dots. */}
       {transitions(sorted).map((t,i) => {
         const x = xFromMin(t.minute);
         const y1 = CENTER(t.from.status);
         const y2 = CENTER(t.to.status);
-        const selected = selectedId === t.to.id || selectedId === t.from.id || editId === t.to.id || editId === t.from.id;
-        const strokeW = selected ? 5.4 : 3.6;
-        const cornerR = strokeW / 2;
         return (
-          <g key={i} className="smooth-transition">
-            {selected && <rect x={x-14} y={Math.min(y1,y2)-11} width="28" height={Math.abs(y2-y1)+22} rx="14" fill="rgba(95,99,104,.13)" />}
-            <line x1={x} x2={x} y1={y1} y2={y2} stroke="transparent" strokeWidth="36" strokeLinecap="butt" onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(t.to.id); } }} />
-            <line
-              x1={x}
-              x2={x}
-              y1={y1}
-              y2={y2}
-              stroke="#223047"
-              strokeWidth={strokeW}
-              strokeLinecap="butt"
-              strokeLinejoin="miter"
-              pointerEvents="none"
-            />
-            <circle cx={x} cy={y1} r="3.2" fill="#223047" pointerEvents="none" />
-            <circle cx={x} cy={y2} r="3.2" fill="#223047" pointerEvents="none" />
-
-          </g>
+          <line
+            key={i}
+            className="smooth-transition"
+            x1={x} x2={x} y1={y1} y2={y2}
+            stroke="transparent"
+            strokeWidth="36"
+            strokeLinecap="butt"
+            onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(t.to.id); } }}
+          />
         );
       })}
 
-      {/* Short-event boundary masks: when a 1-15 minute event sits between
-          two same-row blocks, thick strokes can look like the old status
-          continues through it. These display-only masks cut the adjacent row
-          and then redraw a clear marker for the true short segment. */}
-      {shortEvents.map(({ event, index, span }) => {
-        const mid = (span.x1 + span.x2) / 2;
-        const neighborStatuses = new Set();
-        const prev = sorted[index - 1];
-        const next = sorted[index + 1];
-        if (prev && prev.status !== event.status) neighborStatuses.add(prev.status);
-        if (next && next.status !== event.status) neighborStatuses.add(next.status);
-        return Array.from(neighborStatuses).map(status => (
-          <rect
-            key={`${event.id || index}_cut_${status}`}
-            x={mid - 9}
-            y={CENTER(status) - 8}
-            width="18"
-            height="16"
-            rx="4"
-            fill="#fcfdfb"
-            pointerEvents="none"
-          />
-        ));
-      })}
+      {/* Short 1–15 minute events: the base path already dips to the true row
+          as part of the continuous body; one small status-colored dot marks
+          the event so it stays visible. No spike lines, no boundary masks,
+          no double rendering. */}
       {shortEvents.map(({ event, span }, index) => {
         const selected = selectedId === event.id || editId === event.id;
         const mid = (span.x1 + span.x2) / 2;
         const y = CENTER(event.status);
         const c = color(event.status);
         return (
-          <g key={`${event.id || index}_short_clear`} className="short-event-clear-marker" pointerEvents="none">
-            <circle cx={mid} cy={y} r={selected ? 8 : 6} fill={c} stroke="#fff" strokeWidth="2.5" />
-            <line x1={mid} x2={mid} y1={y-17} y2={y+17} stroke={c} strokeWidth="3" strokeLinecap="round" opacity=".96" />
-          </g>
+          <circle
+            key={`${event.id || index}_short`}
+            className="short-event-marker"
+            cx={mid}
+            cy={y}
+            r={selected ? 8 : 6}
+            fill={c}
+            stroke="#fff"
+            strokeWidth="2.5"
+            pointerEvents="none"
+          />
         );
       })}
 

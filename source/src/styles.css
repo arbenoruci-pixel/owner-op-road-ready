@@ -7235,3 +7235,12 @@ body,
   font-size:12px!important;
   font-weight:850!important;
 }
+
+/* v95.6 continuous duty line graph.
+   The short-event marker is now a single <circle class="short-event-marker">
+   (no wrapper group, no spike lines), so the depth shadow targets it directly.
+   The duty trace itself is one SVG path + same-width overlays in LogGraph.jsx;
+   no CSS width overrides so horizontals and bends always match. */
+.log-graph circle.short-event-marker{
+  filter:drop-shadow(0 1px 1px rgba(15,23,42,.22));
+}

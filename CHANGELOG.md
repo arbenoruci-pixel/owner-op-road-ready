@@ -1,3 +1,13 @@
+## v95.6 — Continuous Duty Line Graph
+- Duty-status trace is now one continuous SVG path (M/H/V, butt caps, miter joins): horizontals and vertical bends share the exact same 8px stroke, clean 90° corners.
+- Removed transition endpoint dots, thin separate bend strokes, cap artifacts and double-rendered overlaps at status changes.
+- Status colors kept via same-width horizontal overlays inset half a stroke at bends; corners stay one seamless neutral body.
+- Selection is now a soft under-glow + row fill and never thickens or distorts the real line; start/end circles appear only in active edit mode.
+- Short 1-minute events: single clean dot marker on the path's own dip — spike lines, duplicate markers and boundary masks removed.
+- Violation overlays match line width with butt caps (no fattening); still no full-height guide lines.
+- Added scripts/verify-continuous-line-v956.mjs (13 offline checks). Offline sync smoke test and deep-scan verifier passed; npm registry blocked so next build must run on deploy.
+
+
 ## v95.2 — Deep Scan Fix
 - Fixed critical linked-HOS bug: reviewing/signing a past day extended today's open event to midnight, producing phantom drive/on-duty hours and false 11h/14h/30m/70h warnings. Today is now always treated as the open day (extends to now only).
 - Removed the vertical dashed warning guide line from graph violation overlays; warnings stay as colored segment overlays on the duty line.
