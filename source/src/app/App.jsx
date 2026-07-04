@@ -298,12 +298,22 @@ function normalizeState(s) {
   refreshCarryoverIfOnlyPlaceholder(eventsByDay, today);
   const currentFromCarry = (eventsByDay[today] || []).length ? sorted(eventsByDay[today])[0] : null;
 
+  const existingSignatureFromDays = Object.values(s.signatureByDay || {}).find(sig => sig?.signatureDataUrl)?.signatureDataUrl || '';
+  const driverSignature = s.driverSignature || (existingSignatureFromDays
+    ? {
+      dataUrl: existingSignatureFromDays,
+      driverName: Object.values(s.signatureByDay || {}).find(sig => sig?.driverName)?.driverName || s.driverProfile?.name || 'Driver',
+      savedAt: Date.now(),
+      migratedFromDaySignature: true,
+    }
+    : null);
+
   const compactSignatureByDay = Object.fromEntries(Object.entries(s.signatureByDay || {}).map(([dayKey, sig]) => {
     if (!sig || typeof sig !== 'object') return [dayKey, sig];
     const { signatureDataUrl, ...rest } = sig;
     return [dayKey, {
       ...rest,
-      ...(signatureDataUrl ? { signatureRef:'driverSignature' } : {}),
+      ...((signatureDataUrl || sig.signatureRef) ? { signatureRef:'driverSignature' } : {}),
     }];
   }));
 
@@ -319,7 +329,7 @@ function normalizeState(s) {
     currentLocation: s.currentLocation || (currentFromCarry ? { city: currentFromCarry.city || 'GPS', state: currentFromCarry.state || 'UNK', locationSource:'carryover' } : { city:'GPS', state:'UNK', locationSource:'pending' }),
     inspectionByDay: s.inspectionByDay || {},
     signatureByDay: compactSignatureByDay || {},
-    driverSignature: s.driverSignature || null,
+    driverSignature,
     equipment: s.equipment || { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: s.gpsTrip || null,
     loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },

@@ -7244,3 +7244,15 @@ body,
 .log-graph circle.short-event-marker{
   filter:drop-shadow(0 1px 1px rgba(15,23,42,.22));
 }
+
+/* v95.9 sign fallback + thinner vertical bends */
+.signature-error-inline{
+  margin:8px 0 10px!important;
+  padding:9px 10px!important;
+  border:1px solid #fecaca!important;
+  border-radius:12px!important;
+  background:#fef2f2!important;
+  color:#991b1b!important;
+  font-size:12px!important;
+  font-weight:850!important;
+}

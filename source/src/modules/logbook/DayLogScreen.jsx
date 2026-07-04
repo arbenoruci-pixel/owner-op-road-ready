@@ -951,11 +951,45 @@ function SignGuardPanel({ state, day, onQuickFix, wizardRequestId = 0 }) {
   );
 }
 
+class SignatureErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.day !== this.props.day && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="signature-panel road-sign-panel">
+          <div className="signature-error-inline">
+            Signature screen had a problem. Tap Try again, or reload the app.
+          </div>
+          <button type="button" className="road-sign-save sign-save" onClick={() => this.setState({ error: null })}>
+            Try signature again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
   const day = state.activeDay;
   const saved = state.signatureByDay?.[day] || {};
   const savedDriverSignature = state.driverSignature || null;
-  const existingDataUrl = savedDriverSignature?.dataUrl || saved.signatureDataUrl || '';
+  const existingDataUrl = saved.signatureDataUrl || (saved.signatureRef === 'driverSignature' ? savedDriverSignature?.dataUrl : '') || savedDriverSignature?.dataUrl || '';
   const [name, setName] = useState(savedDriverSignature?.driverName || saved.driverName || driverNameForState(state));
   const [hasInk, setHasInk] = useState(!!existingDataUrl);
   const [changeSignature, setChangeSignature] = useState(!existingDataUrl);
@@ -1332,7 +1366,7 @@ export default function DayDetail({
       )}
 
       {activeTab === 'form' && <MiniFormPanel state={state} events={displayEvents} onSaveLoad={onSaveLoad} onOpenTrailer={onOpenTrailer} />}
-      {activeTab === 'sign' && <SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} />}
+      {activeTab === 'sign' && <SignatureErrorBoundary day={state.activeDay}><SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} /></SignatureErrorBoundary>}
       {activeTab === 'inspection' && <InspectionPanel state={state} events={displayEvents} onSaveInspection={onSaveInspection} />}
 
       {activeTab === 'log' && !selectedEvent && (

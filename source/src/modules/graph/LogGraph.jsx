@@ -15,6 +15,7 @@ const HIT_MIN_PX = 24;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
 const LINE_W = 8;
+const VERTICAL_LINE_W = LINE_W * 0.85;
 const CORNER_INSET = LINE_W / 2;
 const TRACE_COLOR = '#172033';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
@@ -220,17 +221,41 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {bodyPath && (
-        <path
-          d={bodyPath}
-          fill="none"
-          stroke={TRACE_COLOR}
-          strokeWidth={LINE_W}
-          strokeLinecap="butt"
-          strokeLinejoin="miter"
-          pointerEvents="none"
-        />
-      )}
+      {/* Base duty trace: horizontal body stays LINE_W; vertical status-change
+          bends are 15% thinner so they do not dominate the graph visually. */}
+      {sorted.map((event, i) => {
+        const y = CENTER(event.status);
+        const span = exactSpan(event);
+        return (
+          <line
+            key={`${event.id || i}_base_h`}
+            x1={span.x1}
+            x2={span.x2}
+            y1={y}
+            y2={y}
+            stroke={TRACE_COLOR}
+            strokeWidth={LINE_W}
+            strokeLinecap="butt"
+            pointerEvents="none"
+          />
+        );
+      })}
+      {transitions(sorted).map((t, i) => {
+        const x = xFromMin(t.minute);
+        return (
+          <line
+            key={`${i}_base_v`}
+            x1={x}
+            x2={x}
+            y1={CENTER(t.from.status)}
+            y2={CENTER(t.to.status)}
+            stroke={TRACE_COLOR}
+            strokeWidth={VERTICAL_LINE_W}
+            strokeLinecap="butt"
+            pointerEvents="none"
+          />
+        );
+      })}
 
       {sorted.map((event, i) => {
         const y = CENTER(event.status);
@@ -344,8 +369,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return (
           <g className="edit-handles-large">
             <rect x={Math.min(sx, ex)} y={TOP} width={Math.max(4, Math.abs(ex - sx))} height={graphBottom - TOP} fill={c} opacity=".09" pointerEvents="none" />
-            <line x1={sx} x2={sx} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="6" strokeLinecap="round" opacity=".9" pointerEvents="none" />
-            <line x1={ex} x2={ex} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="6" strokeLinecap="round" opacity=".9" pointerEvents="none" />
+            <line x1={sx} x2={sx} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="5.1" strokeLinecap="round" opacity=".78" pointerEvents="none" />
+            <line x1={ex} x2={ex} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="5.1" strokeLinecap="round" opacity=".78" pointerEvents="none" />
 
             <line x1={startHandleX} x2={sx} y1={chipCY} y2={y} stroke="#111827" strokeWidth="10" strokeLinecap="round" opacity=".86" pointerEvents="none" />
             <line x1={endHandleX} x2={ex} y1={chipCY} y2={y} stroke="#111827" strokeWidth="10" strokeLinecap="round" opacity=".86" pointerEvents="none" />
