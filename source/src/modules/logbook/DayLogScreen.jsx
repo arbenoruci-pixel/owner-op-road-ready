@@ -119,9 +119,37 @@ function formatDutyMinutes(mins) {
   return `${Math.floor(total / 60)}h ${total % 60}m`;
 }
 
+function cleanCityName(city = '') {
+  const text = String(city || '').trim();
+  if (!text) return '';
+  if (text === text.toLowerCase() || text === text.toUpperCase()) {
+    return text.toLowerCase().replace(/\b[a-z]/g, letter => letter.toUpperCase());
+  }
+  return text;
+}
+
+function cleanStateName(state = '') {
+  return String(state || '').trim().toUpperCase().slice(0, 2);
+}
+
 function joinCityState(city, state) {
-  const parts = [city, state].filter(Boolean);
+  const cleanCity = cleanCityName(city);
+  const cleanState = cleanStateName(state);
+  const parts = [cleanCity, cleanState].filter(Boolean);
   return parts.length ? parts.join(', ') : 'None';
+}
+
+function uniqueClean(values = []) {
+  const seen = new Set();
+  return values
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .filter(value => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function routeLegsForDay(state, day) {
@@ -298,12 +326,14 @@ function formSummary(state, events) {
   const load = state.loadInfo || {};
   const equipment = state.equipment || {};
   const routeLegs = routeLegsForDay(state, state.activeDay);
-  const legDocs = routeLegs.map(leg => leg.shippingDocs || leg.loadNo).filter(Boolean);
-  const shippingDocs = [...new Set([...(legDocs || []), load.shippingDocs || load.loadNo, equipment.container, equipment.chassis].filter(Boolean))].join(' ');
+  const legDocs = uniqueClean(routeLegs.map(leg => leg.shippingDocs || leg.loadNo));
+  const loadDocs = uniqueClean([load.shippingDocs, load.loadNo, load.bol, load.po]);
+  const equipmentDocs = uniqueClean([equipment.container, equipment.chassis]);
+  const shippingDocs = (routeLegs.length ? legDocs : uniqueClean([...loadDocs, ...equipmentDocs])).join(' · ');
   const trailers = state.currentTrailer && state.currentTrailer !== 'No trailer'
     ? state.currentTrailer
     : (equipment.trailer || state.driver?.trailer || 'None');
-  const notes = [...new Set((events || []).map(e => e.description || e.note).filter(Boolean))].slice(0, 2).join(' · ');
+  const notes = safeValue(load.notes || load.note || state.formNotes || '', 'None');
   const manualMiles = manualMilesTotal(events);
   const hasDriving = (events || []).some(event => event.status === 'D');
   return {
@@ -324,7 +354,7 @@ function formSummary(state, events) {
     from: routeLegs[0] ? joinCityState(routeLegs[0].fromCity, routeLegs[0].fromState) : joinCityState(load.pickupCity, load.pickupState),
     to: routeLegs.length ? joinCityState(routeLegs[routeLegs.length - 1].toCity, routeLegs[routeLegs.length - 1].toState) : joinCityState(load.deliveryCity, load.deliveryState),
     routeLegs,
-    notes: safeValue(notes),
+    notes,
   };
 }
 
@@ -386,7 +416,9 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
   }
   function addRouteLeg() {
     if (typeof window === 'undefined') return;
-    const fromValue = window.prompt('Pickup from (City, ST)', form.from === 'None' ? '' : form.from);
+    const lastLeg = form.routeLegs[form.routeLegs.length - 1] || null;
+    const defaultFrom = lastLeg ? joinCityState(lastLeg.toCity, lastLeg.toState) : form.from;
+    const fromValue = window.prompt('Pickup from (City, ST)', defaultFrom === 'None' ? '' : defaultFrom);
     if (fromValue == null) return;
     const toValue = window.prompt('Going to (City, ST)', form.to === 'None' ? '' : form.to);
     if (toValue == null) return;
@@ -412,15 +444,32 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
     };
     const routeLegsByDay = { ...(state.routeLegsByDay || {}) };
     routeLegsByDay[day] = [...(routeLegsByDay[day] || []), leg];
-    onSaveLoad?.({
-      routeLegsByDay,
-      shippingDocs: leg.shippingDocs || load.shippingDocs || '',
-      loadNo: leg.loadNo || load.loadNo || '',
-      pickupCity: from.city,
-      pickupState: from.state,
-      deliveryCity: to.city,
-      deliveryState: to.state,
-    });
+    onSaveLoad?.({ routeLegsByDay });
+  }
+
+  function editRouteLeg(leg) {
+    if (typeof window === 'undefined' || !leg) return;
+    const fromValue = window.prompt('Pickup from (City, ST)', joinCityState(leg.fromCity, leg.fromState) === 'None' ? '' : joinCityState(leg.fromCity, leg.fromState));
+    if (fromValue == null) return;
+    const toValue = window.prompt('Going to (City, ST)', joinCityState(leg.toCity, leg.toState) === 'None' ? '' : joinCityState(leg.toCity, leg.toState));
+    if (toValue == null) return;
+    const bolValue = window.prompt('BOL / Shipping #', leg.shippingDocs || leg.loadNo || '') || '';
+    const from = parseCityStateEdit(fromValue);
+    const to = parseCityStateEdit(toValue);
+    const targetDay = leg.day || state.activeDay;
+    const updated = {
+      ...leg,
+      fromCity:from.city,
+      fromState:from.state,
+      toCity:to.city,
+      toState:to.state,
+      shippingDocs:String(bolValue || '').trim(),
+      loadNo:String(bolValue || '').trim(),
+      updatedAt:Date.now(),
+    };
+    const routeLegsByDay = { ...(state.routeLegsByDay || {}) };
+    routeLegsByDay[targetDay] = (routeLegsByDay[targetDay] || []).map(item => item.id === leg.id ? updated : item);
+    onSaveLoad?.({ routeLegsByDay });
   }
   return (
     <div className="road-paper-form">
@@ -444,7 +493,7 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
           <div className="road-form-value">{form.odometers}</div>
         </div>
       </div>
-      <FormRow label="Shipping Documents" value={form.shippingDocs} onClick={editShipping} />
+      <FormRow label="Shipping Documents" value={form.shippingDocs} onClick={form.routeLegs.length ? undefined : editShipping} />
       <FormRow label="Driver" value={form.driverName} onClick={() => editText('Driver name', form.driverName, 'driverName')} />
 
       <FormSectionTitle>CARRIER</FormSectionTitle>
@@ -455,7 +504,7 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
       <FormSectionTitle>ROUTE / SHIPPING</FormSectionTitle>
       <div className="route-leg-list">
         {form.routeLegs.length ? form.routeLegs.map(leg => (
-          <button key={leg.id} type="button" className={`route-leg-row ${leg.status === 'delivered' ? 'done' : 'open'}`} onClick={addRouteLeg}>
+          <button key={leg.id} type="button" className={`route-leg-row ${leg.status === 'delivered' ? 'done' : 'open'}`} onClick={() => editRouteLeg(leg)}>
             <b>{legLabel(leg)}</b>
             <span>{legMeta(leg)}</span>
           </button>
@@ -465,8 +514,8 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
 
       <FormSectionTitle>OTHER</FormSectionTitle>
       <FormRow label="Co-Drivers" value={form.coDrivers} onClick={() => editText('Co-drivers', form.coDrivers, 'coDrivers')} />
-      <FormRow label="From" value={form.from} onClick={editPickup} />
-      <FormRow label="To" value={form.to} onClick={editDelivery} />
+      {!form.routeLegs.length && <FormRow label="From" value={form.from} onClick={editPickup} />}
+      {!form.routeLegs.length && <FormRow label="To" value={form.to} onClick={editDelivery} />}
       <FormRow label="Notes" value={form.notes} />
     </div>
   );

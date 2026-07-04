@@ -135,4 +135,13 @@ ok('manual miles: DOT asks for total miles only', () => {
   assert.ok(!daySrc.includes('Break miles by state'), 'state-breakdown prompt should not be present');
 });
 
+// 11) Form route/shipping: route legs should be the source of shipping docs and not leak event notes.
+ok('form: route legs do not leak stale notes or overwrite shipping docs', () => {
+  const src = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
+  assert.ok(src.includes('const shippingDocs = (routeLegs.length ? legDocs'), 'route docs should drive shipping docs when legs exist');
+  assert.ok(src.includes('const notes = safeValue(load.notes || load.note || state.formNotes'), 'form notes should not be pulled from event notes');
+  assert.ok(src.includes('onClick={() => editRouteLeg(leg)}'), 'route leg rows should open edit flow');
+  assert.ok(src.includes('onSaveLoad?.({ routeLegsByDay });'), 'adding a route leg should not overwrite day-level loadInfo fields');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);
