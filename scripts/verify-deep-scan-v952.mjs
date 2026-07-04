@@ -247,4 +247,14 @@ ok('edit sheet: graph tap switches event without closing', () => {
   assert.ok(appSrc.includes('onSwitch={(id)=>setState'), 'App onSwitch prop missing');
 });
 
+// 21) Edit sheet should be compact and not show manual GPS/miles warning.
+ok('edit sheet: compact spacing and no manual driving warning', () => {
+  const editSrc = readFileSync(new URL('../source/src/modules/editor/EditEventSheet.jsx', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
+  assert.ok(!editSrc.includes('Manual Driving entry does not start trip or GPS miles'), 'obsolete driving warning still rendered');
+  assert.ok(editSrc.includes('collapsedDescription'), 'description should be collapsed when optional');
+  assert.ok(cssSrc.includes('v95.37 compact edit sheet spacing'), 'compact edit CSS missing');
+  assert.ok(cssSrc.includes('.editor-clean-v85 .warning'), 'warning hide safeguard missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

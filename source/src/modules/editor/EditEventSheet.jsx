@@ -185,13 +185,12 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
           onGps={applyGps}
           gpsStatus={gpsStatus}
           onClear={() => manualLocation('', '')}
+          collapsedDescription
         />
 
         <div className="edit-sticky-save"><button className="save-main" onClick={save}>Save</button></div>
 
         <EditorNotesField note={note} onNoteChange={setNote} />
-
-        {status === 'D' && <div className="warning">Manual Driving entry does not start trip or GPS miles. Use Drive Mode for tracking.</div>}
 
         <button className="cancel-main" onClick={onClose}>Cancel</button>
       </div>

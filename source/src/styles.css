@@ -7593,3 +7593,121 @@ body,
 .clean-event-row .blue-edit{
   min-width:64px!important;
 }
+
+/* v95.37 compact edit sheet spacing */
+.editor-clean-v85 .editor-form-v85,
+.editor-clean-v85 .form.editor-form-v85{
+  padding:0 8px calc(18px + env(safe-area-inset-bottom))!important;
+  gap:0!important;
+}
+.editor-clean-v85 .selected-duration-live{
+  margin:0 0 6px!important;
+  padding:8px 10px!important;
+  border-radius:13px!important;
+  grid-template-columns:1fr auto!important;
+  gap:2px 8px!important;
+}
+.editor-clean-v85 .selected-duration-live span{
+  font-size:10.5px!important;
+  letter-spacing:.08em!important;
+}
+.editor-clean-v85 .selected-duration-live b{
+  font-size:23px!important;
+  line-height:1!important;
+}
+.editor-clean-v85 .selected-duration-live em{
+  font-size:12px!important;
+  line-height:1.15!important;
+}
+.editor-clean-v85 .editor-form-v85 .form-section{
+  padding:6px!important;
+  margin-bottom:5px!important;
+  border-radius:12px!important;
+}
+.editor-clean-v85 .editor-form-v85 .form-label{
+  margin-bottom:4px!important;
+  font-size:10px!important;
+  letter-spacing:.12em!important;
+}
+.editor-clean-v85 .editor-time-v85{
+  gap:4px!important;
+}
+.editor-clean-v85 .editor-time-v85 input,
+.editor-clean-v85 input[type="time"]{
+  min-height:38px!important;
+  font-size:18px!important;
+  border-radius:12px!important;
+}
+.editor-clean-v85 .editor-quick-v85,
+.editor-clean-v85 .insert-quick-v85{
+  gap:5px!important;
+  margin-top:5px!important;
+}
+.editor-clean-v85 .editor-quick-v85 button,
+.editor-clean-v85 .insert-quick-v85 button{
+  min-height:29px!important;
+  border-radius:11px!important;
+  font-size:11.5px!important;
+}
+.editor-clean-v85 .location-one-v85,
+.editor-clean-v85 .location-one-v85.location-editable-v91{
+  min-height:38px!important;
+  grid-template-columns:42px minmax(0,1fr) 42px!important;
+  border-radius:12px!important;
+}
+.editor-clean-v85 .location-one-v85 button,
+.editor-clean-v85 .location-editable-v91 .gps-locate-btn,
+.editor-clean-v85 .location-editable-v91 .location-clear-btn{
+  min-height:38px!important;
+  font-size:20px!important;
+}
+.editor-clean-v85 .location-one-v85 input,
+.editor-clean-v85 .location-editable-v91 input{
+  min-height:38px!important;
+  font-size:17px!important;
+  padding:0 10px!important;
+}
+.editor-clean-v85 .gps-v85{
+  margin:4px 0 0!important;
+  font-size:11px!important;
+}
+.editor-clean-v85 .desc-v85,
+.editor-clean-v85 input[placeholder="Optional description"]{
+  min-height:32px!important;
+  margin-top:5px!important;
+  font-size:14px!important;
+  border-radius:11px!important;
+}
+.editor-clean-v85 .edit-sticky-save{
+  position:relative!important;
+  bottom:auto!important;
+  padding-top:4px!important;
+  margin:0 0 5px!important;
+  background:transparent!important;
+}
+.editor-clean-v85 .save-main{
+  min-height:46px!important;
+  border-radius:13px!important;
+  font-size:17px!important;
+}
+.editor-clean-v85 .editor-note-compact-v90{
+  margin:0 0 5px!important;
+}
+.editor-clean-v85 .note-toggle-v90{
+  min-height:32px!important;
+  border-radius:11px!important;
+  font-size:12.5px!important;
+}
+.editor-clean-v85 .cancel-main{
+  min-height:39px!important;
+  border-radius:13px!important;
+  margin-top:4px!important;
+}
+.editor-clean-v85 .warning{
+  display:none!important;
+}
+@media(max-width:390px){
+  .editor-clean-v85 .selected-duration-live b{font-size:21px!important;}
+  .editor-clean-v85 .editor-time-v85 input,
+  .editor-clean-v85 input[type="time"]{font-size:17px!important;}
+}
