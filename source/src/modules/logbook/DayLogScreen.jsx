@@ -880,6 +880,7 @@ function LocationContinuityFocus({ issue }) {
   const current = issue.currentLocation || {};
   const previousLabel = locationTextForWizard(previous);
   const currentLabel = locationTextForWizard(current);
+  const preferPreviousToCurrent = !!issue.preferPreviousToCurrent;
 
   return (
     <div className="wizard-focus-problem location-jump">
@@ -889,22 +890,32 @@ function LocationContinuityFocus({ issue }) {
       </div>
 
       <div className="wizard-location-compare">
-        <div className="ok">
-          <span>Previous event</span>
+        <div className={preferPreviousToCurrent ? 'bad' : 'ok'}>
+          <span>{preferPreviousToCurrent ? 'Likely wrong' : 'Previous event'}</span>
           <b>{previousLabel}</b>
         </div>
         <i aria-hidden="true">→</i>
-        <div className="bad">
-          <span>Current event</span>
+        <div className={preferPreviousToCurrent ? 'ok' : 'bad'}>
+          <span>{preferPreviousToCurrent ? 'Reference location' : 'Likely wrong'}</span>
           <b>{currentLabel}</b>
         </div>
       </div>
 
       <div className="wizard-fix-suggestions">
-        <b>Fix options</b>
-        <span>Tap <strong>Fix it</strong> and choose:</span>
-        <em>1 = set current event to {previousLabel}</em>
-        <em>2 = set previous event to {currentLabel}</em>
+        <b>Recommended fix</b>
+        {preferPreviousToCurrent ? (
+          <>
+            <span>Tap <strong>Fix it</strong> and choose:</span>
+            <em>1 = set earlier connected event(s) to {currentLabel}</em>
+            <em>2 = set current event to {previousLabel}</em>
+          </>
+        ) : (
+          <>
+            <span>Tap <strong>Fix it</strong> and choose:</span>
+            <em>1 = set current event to {previousLabel}</em>
+            <em>2 = set previous event to {currentLabel}</em>
+          </>
+        )}
         <em>or type the correct City, ST</em>
       </div>
     </div>

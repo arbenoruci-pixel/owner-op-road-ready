@@ -195,8 +195,8 @@ ok('location continuity: issue offers direct location fix suggestions', () => {
   assert.ok(signingSrc.includes('FIX_LOCATION_CONTINUITY'), 'signing action missing');
   assert.ok(dotSrc.includes('Fix location'), 'DOT fix label missing');
   assert.ok(appSrc.includes('function fixLocationContinuity'), 'app fixLocationContinuity function missing');
-  assert.ok(appSrc.includes('1 = set current event'), 'location fix suggestions missing');
-  assert.ok(appSrc.includes('2 = set previous event'), 'alternate location fix missing');
+  assert.ok(appSrc.includes('Recommended: set current event'), 'current-to-previous recommended fix missing');
+  assert.ok(appSrc.includes('Recommended: set earlier connected event(s)'), 'previous-chain recommended fix missing');
 });
 
 // 17) Fix Wizard should visually focus location-jump problems and show Fix it.
@@ -205,10 +205,22 @@ ok('fix wizard: location jump has focused visual fix UI', () => {
   const signSrc = readFileSync(new URL('../source/src/modules/logbook/signing.js', import.meta.url), 'utf8');
   const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
   assert.ok(daySrc.includes('function LocationContinuityFocus'), 'LocationContinuityFocus component missing');
-  assert.ok(daySrc.includes('Current event'), 'current event emphasis missing');
+  assert.ok(daySrc.includes('Reference location') || daySrc.includes('Current event'), 'current/reference event emphasis missing');
   assert.ok(daySrc.includes("step.action === 'FIX_LOCATION_CONTINUITY' ? 'Fix it'"), 'Fix it button label missing');
   assert.ok(signSrc.includes("label:'Fix it'"), 'Fix it action label missing');
   assert.ok(cssSrc.includes('wizard-location-compare .bad'), 'highlight style missing');
+});
+
+// 18) Location-continuity fix should recommend patching the earlier chain when current/pre-trip is the reference.
+ok('location continuity: recommended fix can patch previous connected chain', () => {
+  const signingSrc = readFileSync(new URL('../source/src/modules/logbook/signing.js', import.meta.url), 'utf8');
+  const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(signingSrc.includes('preferPreviousToCurrent'), 'issue metadata for preferred direction missing');
+  assert.ok(signingSrc.includes('location_jump_pretrip_drive'), 'pretrip-driving location mismatch issue missing');
+  assert.ok(daySrc.includes('Likely wrong'), 'focused UI should highlight the likely wrong side');
+  assert.ok(appSrc.includes('fixChainToCurrent'), 'chain fix flag missing in app');
+  assert.ok(appSrc.includes('set earlier connected event(s)'), 'recommended chain-fix prompt missing');
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

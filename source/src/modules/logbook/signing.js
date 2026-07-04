@@ -64,6 +64,7 @@ function locationContinuityIssues(events = [], day = '') {
     if (sameLocation(event, next)) return;
     const touches = Math.abs(Number(next.startMin || 0) - Number(event.endMin || 0)) <= 5;
     if (!touches) return;
+    const preferPreviousToCurrent = next.status === 'ON';
     issues.push({
       code:`location_jump_${event.id || index}_${next.id || index + 1}`,
       title:'Location jump with no driving',
@@ -74,6 +75,8 @@ function locationContinuityIssues(events = [], day = '') {
       eventId:next.id || event.id || '',
       previousLocation:{ city:event.city || '', state:event.state || '' },
       currentLocation:{ city:next.city || '', state:next.state || '' },
+      preferPreviousToCurrent,
+      fixChainToCurrent: preferPreviousToCurrent,
       startMin:next.startMin,
     });
   });
@@ -369,6 +372,30 @@ export function validateLogForSigning(state, day) {
       day,
       eventId: preTrip.id || '',
       startMin: preTrip.startMin,
+    });
+  }
+
+  if (
+    firstDriving &&
+    preTrip &&
+    Number(preTrip.endMin || 0) <= Number(firstDriving.startMin || 0) &&
+    Math.abs(Number(firstDriving.startMin || 0) - Number(preTrip.endMin || 0)) <= 5 &&
+    preTrip.city && preTrip.state && firstDriving.city && firstDriving.state &&
+    !sameLocation(preTrip, firstDriving)
+  ) {
+    issues.push({
+      code:`location_jump_pretrip_drive_${preTrip.id || preTrip.startMin}_${firstDriving.id || firstDriving.startMin}`,
+      title:'Pre-trip and driving locations do not match',
+      detail:`Pre-trip is in ${locationLabel(preTrip)}, but driving starts in ${locationLabel(firstDriving)}. If driving starts immediately after pre-trip, these locations should match.`,
+      where:'Log tab → Pre-trip / first driving location',
+      day,
+      previousEventId:preTrip.id || '',
+      eventId:firstDriving.id || '',
+      previousLocation:{ city:preTrip.city || '', state:preTrip.state || '' },
+      currentLocation:{ city:firstDriving.city || '', state:firstDriving.state || '' },
+      preferPreviousToCurrent:true,
+      fixChainToCurrent:true,
+      startMin:firstDriving.startMin,
     });
   }
 

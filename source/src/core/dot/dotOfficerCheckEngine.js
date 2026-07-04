@@ -46,6 +46,7 @@ function buildLocationContinuityIssues(events = []) {
     const touches = Math.abs(Number(next.startMin || 0) - Number(event.endMin || 0)) <= 5;
     if (!touches) return;
     const miles = estimatedLocationMiles(event, next);
+    const preferPreviousToCurrent = next.status === 'ON';
     issues.push(makeIssue('location', {
       id:`location_jump_${event.id || index}_${next.id || index + 1}`,
       severity:'fix',
@@ -56,6 +57,8 @@ function buildLocationContinuityIssues(events = []) {
       eventId:next.id || event.id || '',
       previousLocation:{ city:event.city || '', state:event.state || '' },
       currentLocation:{ city:next.city || '', state:next.state || '' },
+      preferPreviousToCurrent,
+      fixChainToCurrent: preferPreviousToCurrent,
       startMin:next.startMin,
       actionLabel:'Fix location',
     }));
@@ -354,9 +357,30 @@ function buildInspectionIssues(state, day, events) {
       startMin:preTrip.startMin,
       actionLabel:'Review',
     }));
+  } else if (
+    firstDriving &&
+    preTrip &&
+    Math.abs(Number(firstDriving.startMin || 0) - Number(preTrip.endMin || 0)) <= 5 &&
+    safeText(preTrip.city) && safeText(preTrip.state) &&
+    safeText(firstDriving.city) && safeText(firstDriving.state) &&
+    !sameEventLocation(preTrip, firstDriving)
+  ) {
+    issues.push(makeIssue('inspection', {
+      id:`location_jump_pretrip_drive_${preTrip.id || preTrip.startMin}_${firstDriving.id || firstDriving.startMin}`,
+      severity:'fix',
+      title:'Pre-trip / driving location mismatch',
+      detail:`Pre-trip ${cityState(preTrip.city, preTrip.state)} → Driving ${cityState(firstDriving.city, firstDriving.state)}`,
+      fixAction:'FIX_LOCATION_CONTINUITY',
+      previousEventId:preTrip.id || '',
+      eventId:firstDriving.id || '',
+      previousLocation:{ city:preTrip.city || '', state:preTrip.state || '' },
+      currentLocation:{ city:firstDriving.city || '', state:firstDriving.state || '' },
+      preferPreviousToCurrent:true,
+      fixChainToCurrent:true,
+      startMin:firstDriving.startMin,
+      actionLabel:'Fix location',
+    }));
   } else if (preTrip && !inspection.complete) {
-    issues.push(makeIssue('inspection', { id:'inspection_from_pretrip', title:'Inspection sheet missing', detail:`Linked pre-trip ${timeLabel(preTrip.startMin, true)}`, fixAction:'OPEN_INSPECTION', eventId:preTrip.id, actionLabel:'Create' }));
-  } else if (hasWork && !inspection.complete) {
     issues.push(makeIssue('inspection', { id:'inspection_review', severity:'review', title:'Inspection review', detail:'Inspection tab', fixAction:'OPEN_INSPECTION', actionLabel:'Open' }));
   }
 

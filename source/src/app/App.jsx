@@ -1319,31 +1319,57 @@ export default function App() {
       const prevLabel = formatCityState(prevLoc.city, prevLoc.state) || formatCityState(previousEvent.city, previousEvent.state);
       const currLabel = formatCityState(currLoc.city, currLoc.state) || formatCityState(targetEvent.city, targetEvent.state);
 
+      const preferPreviousToCurrent = !!issue.preferPreviousToCurrent;
+      const fixChainToCurrent = !!issue.fixChainToCurrent;
+      const recommendedText = preferPreviousToCurrent
+        ? `1 = Recommended: set earlier connected event(s) to ${currLabel}\n2 = set current event to ${prevLabel}`
+        : `1 = Recommended: set current event to ${prevLabel}\n2 = set previous event to ${currLabel}`;
+
       let choice = '1';
       if (typeof window !== 'undefined' && window.prompt) {
         choice = window.prompt(
-          `Location jump with no driving.\n\nPrevious event: ${prevLabel}\nCurrent event: ${currLabel}\n\n1 = set current event to ${prevLabel}\n2 = set previous event to ${currLabel}\nOr type City, ST for the current event.`,
+          `Location jump with no driving.\n\nPrevious event: ${prevLabel}\nCurrent event: ${currLabel}\n\n${recommendedText}\nOr type City, ST for the current event.`,
           '1'
         );
       }
 
       if (choice == null) return s;
 
-      let eventIdToPatch = targetEvent.id;
+      let idsToPatch = [targetEvent.id];
       let nextLoc = { ...prevLoc };
 
       const cleanChoice = String(choice || '').trim();
-      if (cleanChoice === '2') {
-        eventIdToPatch = previousEvent.id;
+      const choosePreviousToCurrent = preferPreviousToCurrent ? cleanChoice === '1' : cleanChoice === '2';
+      const chooseCurrentToPrevious = preferPreviousToCurrent ? cleanChoice === '2' : cleanChoice === '1';
+
+      if (choosePreviousToCurrent) {
         nextLoc = { ...currLoc };
-      } else if (cleanChoice !== '1') {
+        idsToPatch = [previousEvent.id];
+        if (fixChainToCurrent) {
+          const previousIndex = baseEvents.findIndex(event => event.id === previousEvent.id);
+          for (let i = previousIndex - 1; i >= 0; i -= 1) {
+            const current = baseEvents[i + 1];
+            const candidate = baseEvents[i];
+            if (!candidate || candidate.status === 'D') break;
+            const touches = Math.abs(Number(current.startMin || 0) - Number(candidate.endMin || 0)) <= 5;
+            if (!touches) break;
+            idsToPatch.push(candidate.id);
+          }
+        }
+      } else if (chooseCurrentToPrevious) {
+        idsToPatch = [targetEvent.id];
+        nextLoc = { ...prevLoc };
+      } else {
         const parsed = parseCityStateText(cleanChoice);
         if (!parsed.city || !parsed.state) return s;
+        idsToPatch = [targetEvent.id];
         nextLoc = parsed;
       }
 
+      const patchSet = new Set(idsToPatch);
+      const selectedAfterFix = idsToPatch[0] || targetEvent.id;
       const updatedEvents = commitTimelineForDay(baseEvents.map(event => (
-        event.id === eventIdToPatch
+        patchSet.has(event.id)
           ? {
               ...event,
               city: nextLoc.city || event.city,
@@ -1361,7 +1387,7 @@ export default function App() {
         ...s,
         activeDay: day,
         view:'day',
-        selectedEventId:eventIdToPatch,
+        selectedEventId:selectedAfterFix,
         sheet:null,
         eventsByDay:{ ...(s.eventsByDay || {}), [day]: updatedEvents },
         roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'fix-location-continuity' },
