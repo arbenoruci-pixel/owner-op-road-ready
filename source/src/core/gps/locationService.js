@@ -102,9 +102,20 @@ const GPS_CITY_POINTS = [
   { city:'Greenwood', state:'IN', lat:39.6137, lng:-86.1067 },
   { city:'Indianapolis', state:'IN', lat:39.7684, lng:-86.1581 },
   { city:'Gary', state:'IN', lat:41.5934, lng:-87.3464 },
+  { city:'Hammond', state:'IN', lat:41.5834, lng:-87.5000 },
+  { city:'Merrillville', state:'IN', lat:41.4828, lng:-87.3328 },
+  { city:'Portage', state:'IN', lat:41.5759, lng:-87.1761 },
   { city:'South Bend', state:'IN', lat:41.6764, lng:-86.2520 },
   { city:'Fort Wayne', state:'IN', lat:41.0793, lng:-85.1394 },
   { city:'Toledo', state:'OH', lat:41.6528, lng:-83.5379 },
+  { city:'Maumee', state:'OH', lat:41.5628, lng:-83.6538 },
+  { city:'Elyria', state:'OH', lat:41.3684, lng:-82.1076 },
+  { city:'Cleveland', state:'OH', lat:41.4993, lng:-81.6944 },
+  { city:'Streetsboro', state:'OH', lat:41.2392, lng:-81.3459 },
+  { city:'Akron', state:'OH', lat:41.0814, lng:-81.5190 },
+  { city:'Youngstown', state:'OH', lat:41.0998, lng:-80.6495 },
+  { city:'Hubbard', state:'OH', lat:41.1564, lng:-80.5698 },
+  { city:'Warren', state:'OH', lat:41.2376, lng:-80.8184 },
   { city:'Columbus', state:'OH', lat:39.9612, lng:-82.9988 },
   { city:'Cincinnati', state:'OH', lat:39.1031, lng:-84.5120 },
   { city:'Louisville', state:'KY', lat:38.2527, lng:-85.7585 },
@@ -112,6 +123,46 @@ const GPS_CITY_POINTS = [
   { city:'Des Moines', state:'IA', lat:41.5868, lng:-93.6250 },
   { city:'Detroit', state:'MI', lat:42.3314, lng:-83.0458 },
 ];
+
+
+function normalizePlacePart(value = '') {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+}
+
+export function lookupCityPoint(city = '', state = '') {
+  const wantedCity = normalizePlacePart(city);
+  const wantedState = String(state || '').trim().toUpperCase().slice(0, 2);
+  if (!wantedCity || !wantedState) return null;
+  return GPS_CITY_POINTS.find(point =>
+    normalizePlacePart(point.city) === wantedCity &&
+    String(point.state || '').toUpperCase() === wantedState
+  ) || null;
+}
+
+export function pointFromLogLocation(item = {}) {
+  const lat = Number(item.lat);
+  const lng = Number(item.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return {
+      lat,
+      lng,
+      city: item.city || 'GPS',
+      state: item.state || detectState(lat, lng),
+      source: item.locationSource === 'gps' || item.source === 'gps_drive' ? 'gps' : 'coordinates',
+    };
+  }
+  const point = lookupCityPoint(item.city, item.state);
+  if (!point) return null;
+  return { ...point, source:'log-location' };
+}
+
+export function estimatedRoadMiles(a, b) {
+  const raw = haversineMiles(a, b);
+  if (!raw) return 0;
+  // Conservative highway estimate from city center/log points. It is not a
+  // routing engine; the driver can accept or change it in the manual miles flow.
+  return Number((raw * 1.1).toFixed(2));
+}
 
 export function guessGpsCity(lat, lng) {
   if (lat == null || lng == null) return { city:'GPS', state:'UNK' };

@@ -6,6 +6,7 @@ import LogCheckPanel from './LogCheckPanel.jsx';
 import SelectedEventBar from './SelectedEventBar.jsx';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { buildDotOfficerCheck } from '../../core/dot/dotOfficerCheckEngine.js';
+import { estimatedRoadMiles, pointFromLogLocation, recalcMilesByTimeWindow } from '../../core/gps/locationService.js';
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay, displayEventsForDayFromState } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
@@ -157,6 +158,94 @@ function driverNameForState(state) {
 
 function manualMilesTotal(events = []) {
   return (events || []).reduce((sum, event) => sum + Math.max(0, Number(event.manualMiles || 0)), 0);
+}
+
+function hasLocationForMiles(event = {}) {
+  return !!pointFromLogLocation(event) || (!!String(event.city || '').trim() && !!String(event.state || '').trim());
+}
+
+function displayLocationForMiles(event = {}) {
+  return joinCityState(event.city, event.state) !== 'None'
+    ? joinCityState(event.city, event.state)
+    : (event.lat != null && event.lng != null ? 'GPS point' : 'Unknown');
+}
+
+function drivingBlockForEvent(events = [], eventId = '') {
+  const sorted = [...events].sort((a, b) => Number(a.startMin || 0) - Number(b.startMin || 0));
+  const eventIndex = sorted.findIndex(event => event.id === eventId);
+  if (eventIndex < 0) return { sorted, event:null, startIndex:-1, endIndex:-1 };
+  let startIndex = eventIndex;
+  let endIndex = eventIndex;
+
+  while (
+    startIndex > 0 &&
+    sorted[startIndex - 1]?.status === 'D' &&
+    Math.abs(Number(sorted[startIndex]?.startMin || 0) - Number(sorted[startIndex - 1]?.endMin || 0)) <= 5
+  ) {
+    startIndex -= 1;
+  }
+
+  while (
+    endIndex < sorted.length - 1 &&
+    sorted[endIndex + 1]?.status === 'D' &&
+    Math.abs(Number(sorted[endIndex + 1]?.startMin || 0) - Number(sorted[endIndex]?.endMin || 0)) <= 5
+  ) {
+    endIndex += 1;
+  }
+
+  return { sorted, event:sorted[eventIndex], startIndex, endIndex };
+}
+
+function nearestLocationBefore(sorted = [], index = 0) {
+  for (let i = index; i >= 0; i -= 1) {
+    if (hasLocationForMiles(sorted[i])) return sorted[i];
+  }
+  return null;
+}
+
+function nearestLocationAfter(sorted = [], index = 0) {
+  for (let i = index; i < sorted.length; i += 1) {
+    if (hasLocationForMiles(sorted[i])) return sorted[i];
+  }
+  return null;
+}
+
+function bestManualMilesSuggestion({ events = [], eventId = '', gpsPoints = [] } = {}) {
+  const block = drivingBlockForEvent(events, eventId);
+  if (!block.event) return null;
+  const startEvent = block.sorted[block.startIndex];
+  const endEvent = block.sorted[block.endIndex];
+  const gps = recalcMilesByTimeWindow(gpsPoints, Number(startEvent.startMin || 0), Number(endEvent.endMin || 0));
+  if (gps.totalMiles > 0 && gps.pointsUsed >= 2) {
+    const topState = Object.entries(gps.milesByState || {}).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))[0]?.[0] || block.event.state || 'UNK';
+    return {
+      miles:gps.totalMiles,
+      state:topState,
+      confidence:'High',
+      source:'GPS points',
+      from:displayLocationForMiles(startEvent),
+      to:displayLocationForMiles(endEvent),
+    };
+  }
+
+  const originEvent = nearestLocationBefore(block.sorted, block.startIndex) || startEvent;
+  const destinationEvent = nearestLocationAfter(block.sorted, block.endIndex + 1) || endEvent;
+  const origin = pointFromLogLocation(originEvent);
+  const destination = pointFromLogLocation(destinationEvent);
+  if (!origin || !destination) return null;
+
+  const miles = estimatedRoadMiles(origin, destination);
+  if (!miles) return null;
+  return {
+    miles,
+    state:destination.state || block.event.state || origin.state || 'UNK',
+    confidence:origin.source === 'gps' && destination.source === 'gps' ? 'High' : 'Medium',
+    source:origin.source === 'gps' && destination.source === 'gps' ? 'log GPS points' : 'log locations',
+    from:displayLocationForMiles(originEvent),
+    to:displayLocationForMiles(destinationEvent),
+    originEventId:originEvent.id,
+    destinationEventId:destinationEvent.id,
+  };
 }
 
 function formSummary(state, events) {
@@ -1299,9 +1388,19 @@ export default function DayDetail({
       return;
     }
 
-    const current = Number(event.manualMiles || 0) > 0 ? String(event.manualMiles) : '';
+    const suggestion = bestManualMilesSuggestion({
+      events: displayEvents,
+      eventId: event.id,
+      gpsPoints: state.gpsTrip?.points || [],
+    });
+    const current = Number(event.manualMiles || 0) > 0
+      ? String(event.manualMiles)
+      : (suggestion?.miles ? String(suggestion.miles) : '');
     const label = `${minutesLabel(event.startMin)}–${minutesLabel(event.endMin)} · ${event.city || 'GPS'}, ${event.state || 'UNK'}`;
-    const rawMiles = window.prompt?.(`Enter miles for manual driving:\n${label}`, current);
+    const suggestionText = suggestion
+      ? `\n\nSuggested ${suggestion.miles.toFixed(2)} mi from ${suggestion.source}\n${suggestion.from} → ${suggestion.to}\nConfidence: ${suggestion.confidence}`
+      : '\n\nNo distance suggestion found from log locations.';
+    const rawMiles = window.prompt?.(`Enter miles for manual driving:\n${label}${suggestionText}`, current);
     if (rawMiles == null) return;
 
     const miles = Number(String(rawMiles).replace(/[^0-9.]/g, ''));
@@ -1310,7 +1409,13 @@ export default function DayDetail({
       return;
     }
 
-    const defaultState = event.manualMilesState || event.state || state.currentLocation?.state || 'UNK';
+    const durationMin = Math.max(1, Number(event.endMin || 0) - Number(event.startMin || 0));
+    const highForSingleEvent = miles > Math.max(5, (durationMin / 60) * 85 + 3);
+    if (highForSingleEvent && !window.confirm?.(`${miles.toFixed(2)} mi looks high for ${durationMin} minute(s). Continue?`)) {
+      return;
+    }
+
+    const defaultState = event.manualMilesState || suggestion?.state || event.state || state.currentLocation?.state || 'UNK';
     const rawState = window.prompt?.('State for these miles, example IN or IL:', defaultState);
     if (rawState == null) return;
 
@@ -1320,6 +1425,14 @@ export default function DayDetail({
       manualMiles: miles,
       manualMilesState: milesState,
       manualMilesReviewedAt: Date.now(),
+      manualMilesSource: suggestion ? suggestion.source : 'manual',
+      manualMilesSuggestion: suggestion ? {
+        miles:suggestion.miles,
+        source:suggestion.source,
+        confidence:suggestion.confidence,
+        from:suggestion.from,
+        to:suggestion.to,
+      } : null,
       description: event.description || `Manual miles ${miles.toFixed(2)} mi ${milesState}`,
     });
 
