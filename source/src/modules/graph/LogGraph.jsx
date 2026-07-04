@@ -14,6 +14,9 @@ const SHORT_EVENT_MARKER_PX = 12;
 const HIT_MIN_PX = 24;
 // Duty trace stroke width. Visible bends and horizontals use the same width.
 const LINE_W = 8;
+const VERTICAL_LINE_W = 6.8;
+const CORNER_OVERLAP = Math.ceil(VERTICAL_LINE_W / 2) + 1;
+const TRACE_COLOR = "#172033";
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -212,21 +215,37 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* v95.13 Motive-style corners.
-          Render each visible duty segment as a single H/V path. When status
-          changes, the new status owns the bend and the horizontal run in one
-          stroke. This produces clean 90-degree corners like a paper log: no
-          separate dark connector, no edge stubs, no square bridge artifacts. */}
+      {/* v95.14 thin neutral bends with colored horizontal segments.
+          Vertical transition bends stay slightly slimmer than the duty rows.
+          Colored horizontals extend over the bend so corners read as one
+          sharp continuous line without blue/green vertical edge artifacts. */}
+      {transitions(sorted).map((t, i) => {
+        const x = xFromMin(t.minute);
+        const y1 = CENTER(t.from.status);
+        const y2 = CENTER(t.to.status);
+        return (
+          <line
+            key={`bend_${i}`}
+            x1={x} x2={x} y1={y1} y2={y2}
+            stroke={TRACE_COLOR}
+            strokeWidth={VERTICAL_LINE_W}
+            strokeLinecap="butt"
+            pointerEvents="none"
+          />
+        );
+      })}
+
       {sorted.map((event, i) => {
         const prev = sorted[i - 1] || null;
-        const startX = xFromMin(event.startMin);
-        const endX = xFromMin(event.endMin);
+        const next = sorted[i + 1] || null;
         const y = CENTER(event.status);
-        const prevY = prev ? CENTER(prev.status) : y;
-        const d = prev && prev.status !== event.status
-          ? `M ${startX} ${prevY} V ${y} H ${endX}`
-          : `M ${startX} ${y} H ${endX}`;
         const span = hitSpan(event);
+        let x1 = span.x1;
+        let x2 = span.x2;
+        if (prev && prev.status !== event.status) x1 -= CORNER_OVERLAP;
+        if (next && next.status !== event.status) x2 += CORNER_OVERLAP;
+        x1 = Math.max(LEFT, x1);
+        x2 = Math.min(W - RIGHT, x2);
         return (
           <g key={event.id}>
             <line
@@ -239,13 +258,14 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               strokeLinecap="butt"
               onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
             />
-            <path
-              d={d}
-              fill="none"
+            <line
+              x1={x1}
+              x2={x2}
+              y1={y}
+              y2={y}
               stroke={color(event.status)}
               strokeWidth={LINE_W}
               strokeLinecap="butt"
-              strokeLinejoin="miter"
               pointerEvents="none"
             />
           </g>
@@ -265,8 +285,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Transition tap targets only: the visible vertical bend is part of the
-          continuous base path above — no separate stroke, no endpoint dots. */}
+      {/* Transition tap targets only: visible bends are already drawn above. */}
       {transitions(sorted).map((t,i) => {
         const x = xFromMin(t.minute);
         const y1 = CENTER(t.from.status);
