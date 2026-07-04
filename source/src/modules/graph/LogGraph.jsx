@@ -142,7 +142,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       {Array.from({ length: 97 }).map((_,q) => {
         const x = LEFT + (q/96)*BODY_W;
         const major = q % 4 === 0;
-        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#d2dbd3' : '#ecf0eb'} strokeWidth={major ? 1 : 0.5} />;
+        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#d2dbd3' : '#ecf0eb'} strokeWidth={major ? 0.85 : 0.425} />;
       })}
       {Array.from({ length: 25 }).map((_,h) => {
         const x = LEFT + (h/24)*BODY_W;
@@ -152,6 +152,30 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       {STATUS_ORDER.map(s => {
         const mins = sorted.filter(e=>e.status===s).reduce((a,e)=>a+(e.endMin-e.startMin),0);
         return <text key={s} x={W-5} y={CENTER(s)+5} textAnchor="end" className="total-label">{(mins/60).toFixed(2).padStart(5,'0')}</text>;
+      })}
+
+      {/* v95.7 warning underlay.
+          HOS/review markers should not look like a second duty line sitting
+          on top of the trace. They are now soft background bands + small
+          badges under the real continuous duty path. */}
+      {violationRanges.map((r, i) => {
+        const y = CENTER(r.status);
+        const x1 = xFromMin(r.startMin);
+        const x2 = xFromMin(r.endMin);
+        const c = rangeColor(r);
+        return (
+          <g key={`${r.id || i}_${r.startMin}_${r.endMin}_under`} className="graph-violation-underlay" pointerEvents="none">
+            <rect
+              x={Math.min(x1, x2)}
+              y={y - (LINE_W + 12)}
+              width={Math.max(6, Math.abs(x2 - x1))}
+              height={(LINE_W + 12) * 2}
+              rx="10"
+              fill={c}
+              opacity=".12"
+            />
+          </g>
+        );
       })}
 
       {/* v95.6 continuous duty line.
@@ -243,20 +267,15 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Exact violation overlays: red/orange starts at the exact minute the rule is crossed. */}
+      {/* Small issue badges only — no colored line overlay. */}
       {violationRanges.map((r, i) => {
         const y = CENTER(r.status);
         const x1 = xFromMin(r.startMin);
-        const x2 = xFromMin(r.endMin);
         const c = rangeColor(r);
         return (
-          <g key={`${r.id || i}_${r.startMin}_${r.endMin}`} className="graph-violation">
-            {/* Segment overlay only: same stroke width as the duty line, butt
-                caps, and no full-height vertical guide line, so warnings sit
-                on the duty line instead of polluting the graph. */}
-            <line x1={x1} x2={x2} y1={y} y2={y} stroke={c} strokeWidth={LINE_W} strokeLinecap="butt" opacity=".96" />
-            <circle cx={x1} cy={y} r="13" fill={c} stroke="#fff" strokeWidth="4" />
-            <text x={x1} y={y+4} textAnchor="middle" className="violation-bang">!</text>
+          <g key={`${r.id || i}_${r.startMin}_badge`} className="graph-violation-badge" pointerEvents="none">
+            <circle cx={x1} cy={y} r="9" fill={c} stroke="#fff" strokeWidth="3" opacity=".96" />
+            <text x={x1} y={y+3.4} textAnchor="middle" className="violation-bang">!</text>
           </g>
         );
       })}
