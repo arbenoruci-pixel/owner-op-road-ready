@@ -12,13 +12,8 @@ const ROW_H = 96;
 const BODY_W = W - LEFT - RIGHT;
 const SHORT_EVENT_MARKER_PX = 12;
 const HIT_MIN_PX = 24;
-// v95.6 continuous duty line: one stroke width for horizontals AND vertical
-// bends, drawn as a single SVG path so corners are clean 90° miter joins.
+// Duty trace stroke width. Visible bends and horizontals use the same width.
 const LINE_W = 8;
-const VERTICAL_LINE_W = LINE_W * 0.55;
-const JOIN_OVERLAP = VERTICAL_LINE_W / 2 + 1;
-const CORNER_INSET = 0;
-const TRACE_COLOR = '#172033';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -180,15 +175,10 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* v95.6 continuous duty line.
-          Layer 1 — selection highlights (soft row fill + outer glow) drawn
-          UNDER the trace so selecting never thickens or distorts the line.
-          Layer 2 — one continuous SVG path (H/V commands, miter joins, butt
-          caps) in neutral dark slate: horizontals and vertical bends share
-          the exact same stroke width and clean 90° corners, no join dots.
-          Layer 3 — status-colored horizontal overlays at the SAME width,
-          carried all the way to the bend so there is no visible break/gap
-          at the corner. Vertical bends are slightly slimmer underneath. */}
+      {/* v95.13 duty line.
+          Selection glow stays under the trace. Visible status segments are
+          drawn as H/V paths with butt caps and miter joins so corners are
+          straight and clean like a paper log. */}
 
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
@@ -222,68 +212,21 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Base duty trace: horizontal body stays LINE_W; vertical status-change
-          bends are 15% thinner so they do not dominate the graph visually. */}
+      {/* v95.13 Motive-style corners.
+          Render each visible duty segment as a single H/V path. When status
+          changes, the new status owns the bend and the horizontal run in one
+          stroke. This produces clean 90-degree corners like a paper log: no
+          separate dark connector, no edge stubs, no square bridge artifacts. */}
       {sorted.map((event, i) => {
+        const prev = sorted[i - 1] || null;
+        const startX = xFromMin(event.startMin);
+        const endX = xFromMin(event.endMin);
         const y = CENTER(event.status);
-        const span = exactSpan(event);
-        return (
-          <line
-            key={`${event.id || i}_base_h`}
-            x1={span.x1}
-            x2={span.x2}
-            y1={y}
-            y2={y}
-            stroke={TRACE_COLOR}
-            strokeWidth={LINE_W}
-            strokeLinecap="butt"
-            pointerEvents="none"
-          />
-        );
-      })}
-      {transitions(sorted).map((t, i) => {
-        const x = xFromMin(t.minute);
-        const y1 = CENTER(t.from.status);
-        const y2 = CENTER(t.to.status);
-        const top = Math.min(y1, y2);
-        const bottom = Math.max(y1, y2);
-        return (
-          <g key={`${i}_base_v`} pointerEvents="none">
-            <line
-              x1={x}
-              x2={x}
-              y1={y1}
-              y2={y2}
-              stroke={TRACE_COLOR}
-              strokeWidth={VERTICAL_LINE_W}
-              strokeLinecap="butt"
-              opacity=".92"
-            />
-            <rect
-              x={x - LINE_W / 2}
-              y={top - LINE_W / 2}
-              width={LINE_W}
-              height={LINE_W}
-              fill={TRACE_COLOR}
-            />
-            <rect
-              x={x - LINE_W / 2}
-              y={bottom - LINE_W / 2}
-              width={LINE_W}
-              height={LINE_W}
-              fill={TRACE_COLOR}
-            />
-          </g>
-        );
-      })}
-
-      {sorted.map((event, i) => {
-        const y = CENTER(event.status);
+        const prevY = prev ? CENTER(prev.status) : y;
+        const d = prev && prev.status !== event.status
+          ? `M ${startX} ${prevY} V ${y} H ${endX}`
+          : `M ${startX} ${y} H ${endX}`;
         const span = hitSpan(event);
-        const bendBefore = i > 0 && sorted[i-1].status !== event.status;
-        const bendAfter = i < sorted.length - 1 && sorted[i+1].status !== event.status;
-        const ox1 = Math.max(LEFT, span.x1 - (bendBefore ? JOIN_OVERLAP : 0));
-        const ox2 = Math.min(W - RIGHT, span.x2 + (bendAfter ? JOIN_OVERLAP : 0));
         return (
           <g key={event.id}>
             <line
@@ -296,18 +239,15 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               strokeLinecap="butt"
               onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
             />
-            {ox2 - ox1 > 0.5 && (
-              <line
-                x1={ox1}
-                x2={ox2}
-                y1={y}
-                y2={y}
-                stroke={color(event.status)}
-                strokeWidth={LINE_W}
-                strokeLinecap="butt"
-                pointerEvents="none"
-              />
-            )}
+            <path
+              d={d}
+              fill="none"
+              stroke={color(event.status)}
+              strokeWidth={LINE_W}
+              strokeLinecap="butt"
+              strokeLinejoin="miter"
+              pointerEvents="none"
+            />
           </g>
         );
       })}
@@ -389,9 +329,6 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return (
           <g className="edit-handles-large">
             <rect x={Math.min(sx, ex)} y={TOP} width={Math.max(4, Math.abs(ex - sx))} height={graphBottom - TOP} fill={c} opacity=".09" pointerEvents="none" />
-            <line x1={sx} x2={sx} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="5.1" strokeLinecap="round" opacity=".78" pointerEvents="none" />
-            <line x1={ex} x2={ex} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="5.1" strokeLinecap="round" opacity=".78" pointerEvents="none" />
-
             <line x1={startHandleX} x2={sx} y1={chipCY} y2={y} stroke="#111827" strokeWidth="10" strokeLinecap="round" opacity=".86" pointerEvents="none" />
             <line x1={endHandleX} x2={ex} y1={chipCY} y2={y} stroke="#111827" strokeWidth="10" strokeLinecap="round" opacity=".86" pointerEvents="none" />
 
