@@ -7467,3 +7467,114 @@ body,
     grid-template-columns:1fr 1fr!important;
   }
 }
+
+/* v95.33 focused problem UI for DOT Fix Wizard */
+.wizard-focus-problem{
+  margin:12px 0!important;
+  padding:12px!important;
+  border:2px solid #fca5a5!important;
+  border-radius:16px!important;
+  background:#fff1f2!important;
+}
+.wizard-focus-head{
+  display:grid!important;
+  gap:3px!important;
+  margin-bottom:10px!important;
+}
+.wizard-focus-head span{
+  color:#b42318!important;
+  font-size:11px!important;
+  font-weight:1000!important;
+  letter-spacing:.12em!important;
+  text-transform:uppercase!important;
+}
+.wizard-focus-head b{
+  color:#7f1d1d!important;
+  font-size:14px!important;
+  line-height:1.2!important;
+}
+.wizard-location-compare{
+  display:grid!important;
+  grid-template-columns:1fr auto 1fr!important;
+  gap:8px!important;
+  align-items:stretch!important;
+  margin:10px 0!important;
+}
+.wizard-location-compare div{
+  border-radius:14px!important;
+  padding:10px!important;
+  min-width:0!important;
+}
+.wizard-location-compare div span{
+  display:block!important;
+  font-size:10px!important;
+  font-weight:1000!important;
+  letter-spacing:.08em!important;
+  text-transform:uppercase!important;
+  margin-bottom:4px!important;
+}
+.wizard-location-compare div b{
+  display:block!important;
+  font-size:13px!important;
+  line-height:1.15!important;
+}
+.wizard-location-compare .ok{
+  background:#ecfdf3!important;
+  border:1px solid #86efac!important;
+}
+.wizard-location-compare .ok span,
+.wizard-location-compare .ok b{
+  color:#166534!important;
+}
+.wizard-location-compare .bad{
+  background:#fef2f2!important;
+  border:2px solid #ef4444!important;
+  box-shadow:0 0 0 3px rgba(239,68,68,.12)!important;
+}
+.wizard-location-compare .bad span,
+.wizard-location-compare .bad b{
+  color:#991b1b!important;
+}
+.wizard-location-compare i{
+  align-self:center!important;
+  color:#b42318!important;
+  font-style:normal!important;
+  font-size:18px!important;
+  font-weight:1000!important;
+}
+.wizard-fix-suggestions{
+  display:grid!important;
+  gap:4px!important;
+  margin-top:10px!important;
+  padding:10px!important;
+  border-radius:14px!important;
+  background:#fff!important;
+  border:1px dashed #f59e0b!important;
+}
+.wizard-fix-suggestions b{
+  color:#111827!important;
+  font-size:12px!important;
+}
+.wizard-fix-suggestions span,
+.wizard-fix-suggestions em{
+  color:#4b5563!important;
+  font-size:12px!important;
+  line-height:1.25!important;
+  font-style:normal!important;
+  font-weight:800!important;
+}
+.wizard-fix-suggestions strong{
+  color:#2156d9!important;
+}
+.wizard-problem-text{
+  margin-top:10px!important;
+}
+@media (max-width:390px){
+  .wizard-location-compare{
+    grid-template-columns:1fr!important;
+  }
+  .wizard-location-compare i{
+    text-align:center!important;
+    transform:rotate(90deg);
+  }
+}

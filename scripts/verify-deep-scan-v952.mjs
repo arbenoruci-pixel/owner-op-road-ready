@@ -199,4 +199,16 @@ ok('location continuity: issue offers direct location fix suggestions', () => {
   assert.ok(appSrc.includes('2 = set previous event'), 'alternate location fix missing');
 });
 
+// 17) Fix Wizard should visually focus location-jump problems and show Fix it.
+ok('fix wizard: location jump has focused visual fix UI', () => {
+  const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
+  const signSrc = readFileSync(new URL('../source/src/modules/logbook/signing.js', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
+  assert.ok(daySrc.includes('function LocationContinuityFocus'), 'LocationContinuityFocus component missing');
+  assert.ok(daySrc.includes('Current event'), 'current event emphasis missing');
+  assert.ok(daySrc.includes("step.action === 'FIX_LOCATION_CONTINUITY' ? 'Fix it'"), 'Fix it button label missing');
+  assert.ok(signSrc.includes("label:'Fix it'"), 'Fix it action label missing');
+  assert.ok(cssSrc.includes('wizard-location-compare .bad'), 'highlight style missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

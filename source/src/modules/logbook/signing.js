@@ -159,7 +159,7 @@ export function issueSuggestedAction(issue = {}) {
     return { label:'Add 15m pre-trip', action:'ADD_PRETRIP_BEFORE_DRIVING' };
   }
   if (code.includes('location_jump')) {
-    return { label:'Fix location', action:'FIX_LOCATION_CONTINUITY' };
+    return { label:'Fix it', action:'FIX_LOCATION_CONTINUITY' };
   }
   if (code.includes('pretrip_after_driving')) {
     return { label:'Open event', action:'OPEN_LOG' };

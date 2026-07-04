@@ -868,6 +868,49 @@ function buildFixWizardSteps(guard, day) {
   return steps;
 }
 
+function locationTextForWizard(location = {}) {
+  return [location.city, location.state].filter(Boolean).join(', ') || 'Missing location';
+}
+
+function LocationContinuityFocus({ issue }) {
+  const code = String(issue?.code || issue?.id || '');
+  if (!/location_jump/i.test(code)) return null;
+
+  const previous = issue.previousLocation || {};
+  const current = issue.currentLocation || {};
+  const previousLabel = locationTextForWizard(previous);
+  const currentLabel = locationTextForWizard(current);
+
+  return (
+    <div className="wizard-focus-problem location-jump">
+      <div className="wizard-focus-head">
+        <span>Problem</span>
+        <b>Location changed but there is no DRIVING line between these two events.</b>
+      </div>
+
+      <div className="wizard-location-compare">
+        <div className="ok">
+          <span>Previous event</span>
+          <b>{previousLabel}</b>
+        </div>
+        <i aria-hidden="true">→</i>
+        <div className="bad">
+          <span>Current event</span>
+          <b>{currentLabel}</b>
+        </div>
+      </div>
+
+      <div className="wizard-fix-suggestions">
+        <b>Fix options</b>
+        <span>Tap <strong>Fix it</strong> and choose:</span>
+        <em>1 = set current event to {previousLabel}</em>
+        <em>2 = set previous event to {currentLabel}</em>
+        <em>or type the correct City, ST</em>
+      </div>
+    </div>
+  );
+}
+
 function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCopy }) {
   const steps = useMemo(() => buildFixWizardSteps(guard, day), [guard, day]);
   const [index, setIndex] = useState(0);
@@ -968,7 +1011,8 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
               <button type="button" className="roadguard-wizard-day" onClick={() => openStepDay(step.tab || 'log')}>
                 Problem day: {dayDisplayLabel(step.day || day)}
               </button>
-              <p>{step.detail}</p>
+              <LocationContinuityFocus issue={step.issue} />
+              <p className="wizard-problem-text">{step.detail}</p>
               <em>{step.where}</em>
               <small>{step.applyOnlyIfTrue}</small>
             </div>
@@ -978,7 +1022,7 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
             </div>
 
             <div className="roadguard-wizard-actions">
-              <button onClick={runStep}>{step.actionLabel || 'Fix / Open'}</button>
+              <button onClick={runStep}>{step.action === 'FIX_LOCATION_CONTINUITY' ? 'Fix it' : (step.actionLabel || 'Fix / Open')}</button>
               <button className="secondary" onClick={() => openStepDay(step.tab || 'log')}>Open day</button>
               <button className="secondary" onClick={nextStep}>Skip</button>
               <button className="secondary" onClick={copyStep}>Copy</button>
