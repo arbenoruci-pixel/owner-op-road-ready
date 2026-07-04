@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import EditorDutyStatusControls, { DUTY_SHORT_LABELS } from './components/EditorDutyStatusControls.jsx';
 import EditorGraphPanel from './components/EditorGraphPanel.jsx';
 import EditorTimeControls from './components/EditorTimeControls.jsx';
@@ -20,24 +20,81 @@ function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
   return false;
 }
 
-export default function EditEventSheet({ event, events, onClose, onSave, onDelete }) {
-  const [status, setStatus] = useState(event.status);
-  const [start, setStart] = useState(toInput(event.startMin));
-  const [end, setEnd] = useState(toInput(event.endMin));
-  const [city, setCity] = useState(event.city || '');
-  const [state, setState] = useState(event.state || '');
-  const [description, setDescription] = useState(event.description || '');
-  const [note, setNote] = useState(event.note || '');
-  const [lat, setLat] = useState(event.lat ?? null);
-  const [lng, setLng] = useState(event.lng ?? null);
-  const [gpsAccuracy, setGpsAccuracy] = useState(event.gpsAccuracy ?? null);
-  const [locationSource, setLocationSource] = useState(event.locationSource || 'manual');
+function formStateFromEvent(event = {}) {
+  return {
+    status:event.status,
+    start:toInput(event.startMin),
+    end:toInput(event.endMin),
+    city:event.city || '',
+    state:event.state || '',
+    description:event.description || '',
+    note:event.note || '',
+    lat:event.lat ?? null,
+    lng:event.lng ?? null,
+    gpsAccuracy:event.gpsAccuracy ?? null,
+    locationSource:event.locationSource || 'manual',
+  };
+}
+
+function sameValue(a, b) {
+  return String(a ?? '') === String(b ?? '');
+}
+
+export default function EditEventSheet({ event, events, onClose, onSave, onDelete, onSwitch }) {
+  const initialForm = useMemo(() => formStateFromEvent(event), [event.id]);
+  const [status, setStatus] = useState(initialForm.status);
+  const [start, setStart] = useState(initialForm.start);
+  const [end, setEnd] = useState(initialForm.end);
+  const [city, setCity] = useState(initialForm.city);
+  const [state, setState] = useState(initialForm.state);
+  const [description, setDescription] = useState(initialForm.description);
+  const [note, setNote] = useState(initialForm.note);
+  const [lat, setLat] = useState(initialForm.lat);
+  const [lng, setLng] = useState(initialForm.lng);
+  const [gpsAccuracy, setGpsAccuracy] = useState(initialForm.gpsAccuracy);
+  const [locationSource, setLocationSource] = useState(initialForm.locationSource);
   const [gpsStatus, setGpsStatus] = useState('');
+
+  useEffect(() => {
+    const next = formStateFromEvent(event);
+    setStatus(next.status);
+    setStart(next.start);
+    setEnd(next.end);
+    setCity(next.city);
+    setState(next.state);
+    setDescription(next.description);
+    setNote(next.note);
+    setLat(next.lat);
+    setLng(next.lng);
+    setGpsAccuracy(next.gpsAccuracy);
+    setLocationSource(next.locationSource);
+    setGpsStatus('');
+  }, [event.id]);
 
   const preview = { ...event, status, startMin: fromInput(start), endMin: Math.max(fromInput(start) + 5, fromInput(end)), city, state, description, note, lat, lng, gpsAccuracy, locationSource };
   const previewEvents = applyEditOverride(events, event.id, preview);
   const durationMinutes = Math.max(0, preview.endMin - preview.startMin);
   const header = `${DUTY_SHORT_LABELS[status]} · ${timeLabel(fromInput(start))} - ${timeLabel(preview.endMin)}`;
+  const dirty = status !== initialForm.status ||
+    start !== initialForm.start ||
+    end !== initialForm.end ||
+    city !== initialForm.city ||
+    state !== initialForm.state ||
+    description !== initialForm.description ||
+    note !== initialForm.note ||
+    !sameValue(lat, initialForm.lat) ||
+    !sameValue(lng, initialForm.lng) ||
+    !sameValue(gpsAccuracy, initialForm.gpsAccuracy) ||
+    locationSource !== initialForm.locationSource;
+
+  function handleGraphSelect(nextId) {
+    if (!nextId || nextId === event.id) return;
+    if (dirty) {
+      const ok = window.confirm?.('Switch to another event and discard unsaved changes?');
+      if (!ok) return;
+    }
+    onSwitch?.(nextId);
+  }
 
   function applyGps() {
     if (!navigator.geolocation) {
@@ -105,6 +162,8 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
         selectedId={event.id}
         editId={event.id}
         onEditTime={(edge, m) => edge === 'start' ? setStart(toInput(m)) : setEnd(toInput(m))}
+        onSelect={handleGraphSelect}
+        onEmptyTap={() => {}}
         header={header}
       />
 

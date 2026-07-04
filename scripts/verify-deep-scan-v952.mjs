@@ -236,4 +236,15 @@ ok('clean edit flow: no selected action bar in log screen', () => {
   assert.ok(cssSrc.includes('v95.35 clean event edit flow'), 'clean edit CSS missing');
 });
 
+// 20) Edit sheet graph tap can switch to another event when unchanged.
+ok('edit sheet: graph tap switches event without closing', () => {
+  const editSrc = readFileSync(new URL('../source/src/modules/editor/EditEventSheet.jsx', import.meta.url), 'utf8');
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(editSrc.includes('handleGraphSelect'), 'graph select switch handler missing');
+  assert.ok(editSrc.includes('onSwitch?.(nextId)'), 'onSwitch call missing');
+  assert.ok(editSrc.includes('Switch to another event and discard unsaved changes?'), 'dirty switch confirmation missing');
+  assert.ok(editSrc.includes('onSelect={handleGraphSelect}'), 'EditorGraphPanel onSelect not wired');
+  assert.ok(appSrc.includes('onSwitch={(id)=>setState'), 'App onSwitch prop missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);
