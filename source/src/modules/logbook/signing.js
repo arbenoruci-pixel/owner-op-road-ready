@@ -45,6 +45,38 @@ function locationLabel(event = {}) {
   return [event.city, event.state].filter(Boolean).join(', ') || 'MISSING LOCATION';
 }
 
+function sameLocation(a = {}, b = {}) {
+  const ac = String(a.city || '').trim().toLowerCase();
+  const as = String(a.state || '').trim().toLowerCase();
+  const bc = String(b.city || '').trim().toLowerCase();
+  const bs = String(b.state || '').trim().toLowerCase();
+  return !!ac && !!as && ac === bc && as === bs;
+}
+
+function locationContinuityIssues(events = [], day = '') {
+  const issues = [];
+  const ordered = sortedEvents(events).filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+  ordered.forEach((event, index) => {
+    const next = ordered[index + 1];
+    if (!next) return;
+    if (event.status === 'D' || next.status === 'D') return;
+    if (!event.city || !event.state || !next.city || !next.state) return;
+    if (sameLocation(event, next)) return;
+    const touches = Math.abs(Number(next.startMin || 0) - Number(event.endMin || 0)) <= 5;
+    if (!touches) return;
+    issues.push({
+      code:`location_jump_${event.id || index}_${next.id || index + 1}`,
+      title:'Location changes without a driving event',
+      detail:`${statusLabel(event.status)} ends at ${timeLabel(event.endMin, true)} in ${locationLabel(event)}, then ${statusLabel(next.status)} starts in ${locationLabel(next)}.`,
+      where:'Log tab → location continuity',
+      day,
+      eventId:next.id || event.id || '',
+      startMin:next.startMin,
+    });
+  });
+  return issues;
+}
+
 function statusLabel(status) {
   if (status === 'OFF') return 'OFF DUTY';
   if (status === 'SB') return 'SLEEPER';
@@ -89,6 +121,7 @@ function issueSeverity(issue = {}) {
   if (/active_day/i.test(issue.code || '')) return 'notice';
   if (/previous_|missing_previous/i.test(issue.code || '')) return 'dot';
   if (/hos_|drive11|window14|break8|cycle70|violation/i.test(text)) return 'violation';
+  if (/location_jump|pretrip_after_driving|inspection_unlinked/i.test(text)) return 'review';
   if (/missing|invalid|overlap|gap|total|vehicle|shipping|location|inspection|driver|carrier|office/i.test(text)) return 'fix';
   return 'review';
 }
@@ -122,7 +155,10 @@ export function issueSuggestedAction(issue = {}) {
   if (code.includes('missing_pretrip_event')) {
     return { label:'Add 15m pre-trip', action:'ADD_PRETRIP_BEFORE_DRIVING' };
   }
-  if (code.includes('missing_inspection') || code.includes('inspection_time')) {
+  if (code.includes('pretrip_after_driving') || code.includes('location_jump')) {
+    return { label:'Open event', action:'OPEN_LOG' };
+  }
+  if (code.includes('inspection_unlinked') || code.includes('missing_inspection') || code.includes('inspection_time')) {
     return { label:'Open inspection', action:'OPEN_INSPECTION' };
   }
   if (code.includes('missing_location') || code.includes('bad_duration') || code.includes('overlap') || code.includes('gap') || code.includes('day_')) {
@@ -318,12 +354,35 @@ export function validateLogForSigning(state, day) {
     });
   }
 
+  if (firstDriving && preTrip && Number(preTrip.endMin || 0) > Number(firstDriving.startMin || 0)) {
+    issues.push({
+      code: `pretrip_after_driving_${preTrip.id || preTrip.startMin}`,
+      title: 'Pre-trip timing needs review',
+      detail: `Pre-trip ends at ${timeLabel(preTrip.endMin, true)}, but driving starts at ${timeLabel(firstDriving.startMin, true)}.`,
+      where: 'Log tab → Pre-trip / first driving',
+      day,
+      eventId: preTrip.id || '',
+      startMin: preTrip.startMin,
+    });
+  }
+
   if (hasOnOrDrive && !inspection.complete) {
     issues.push({
       code: 'missing_inspection',
       title: 'Pre-trip inspection sheet is missing',
       detail: 'Complete the daily inspection sheet before signing this log.',
       where: 'Inspection tab',
+    });
+  }
+
+  if (inspection.complete && preTrip && inspection.sourceEventId && inspection.sourceEventId !== preTrip.id) {
+    issues.push({
+      code:'inspection_unlinked_pretrip',
+      title:'Inspection is not linked to the ON DUTY Pre-trip event',
+      detail:`Pre-trip event starts at ${timeLabel(preTrip.startMin, true)}. Review inspection link.`,
+      where:'Inspection tab',
+      day,
+      eventId:preTrip.id || '',
     });
   }
 
@@ -337,6 +396,8 @@ export function validateLogForSigning(state, day) {
       });
     }
   }
+
+  issues.push(...locationContinuityIssues(completedEvents, day));
 
   const violations = violationRangesForDay(state.eventsByDay || {}, day) || [];
   violations
@@ -428,8 +489,18 @@ export function buildSignGuardSummary(state, day) {
       };
       dotPackage.push(issue);
       dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status: 'Incomplete', issue });
+    } else if (!signed) {
+      const issue = {
+        code:`previous_unsigned_${prevDay}`,
+        title:`Previous log not signed for ${prevDay}`,
+        detail:'Previous 7-day package has a complete day that still needs certification.',
+        where:'DOT package',
+        day:prevDay,
+      };
+      dotPackage.push(issue);
+      dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status:'Unsigned', issue });
     } else {
-      dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status: signed ? 'Ready' : 'Unsigned', issue: null });
+      dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status: 'Ready', issue: null });
     }
   });
 

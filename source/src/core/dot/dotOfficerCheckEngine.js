@@ -2,6 +2,7 @@ import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { durLabel, nowMin, timeLabel } from '../../shared/utils/time.js';
 import { displayEventsForDayFromState } from '../timeline/displayTimeline.js';
 import { analyzeLinkedHos, violationRangesForDay } from '../hos/hosEngine.js';
+import { haversineMiles, pointFromLogLocation } from '../gps/locationService.js';
 
 const STATUS_LABEL = { OFF:'OFF DUTY', SB:'SLEEPER', D:'DRIVING', ON:'ON DUTY' };
 
@@ -16,6 +17,47 @@ function cityState(city = '', state = '') {
 function eventTitle(event = {}) {
   const status = STATUS_LABEL[event.status] || event.status || 'Event';
   return `${status} ${timeLabel(Number(event.startMin || 0), true)}–${timeLabel(Number(event.endMin || 0), true)}`;
+}
+
+function sameEventLocation(a = {}, b = {}) {
+  const ac = safeText(a.city).toLowerCase();
+  const as = safeText(a.state).toLowerCase();
+  const bc = safeText(b.city).toLowerCase();
+  const bs = safeText(b.state).toLowerCase();
+  return !!ac && !!as && ac === bc && as === bs;
+}
+
+function estimatedLocationMiles(a = {}, b = {}) {
+  const pa = pointFromLogLocation(a);
+  const pb = pointFromLogLocation(b);
+  if (!pa || !pb) return 0;
+  const miles = haversineMiles(pa, pb);
+  return Number.isFinite(miles) ? miles : 0;
+}
+
+function buildLocationContinuityIssues(events = []) {
+  const issues = [];
+  (events || []).forEach((event, index) => {
+    const next = events[index + 1];
+    if (!next) return;
+    if (event.status === 'D' || next.status === 'D') return;
+    if (!safeText(event.city) || !safeText(event.state) || !safeText(next.city) || !safeText(next.state)) return;
+    if (sameEventLocation(event, next)) return;
+    const touches = Math.abs(Number(next.startMin || 0) - Number(event.endMin || 0)) <= 5;
+    if (!touches) return;
+    const miles = estimatedLocationMiles(event, next);
+    issues.push(makeIssue('location', {
+      id:`location_jump_${event.id || index}_${next.id || index + 1}`,
+      severity:'review',
+      title:'Location changes without driving',
+      detail:`${eventTitle(event)} in ${cityState(event.city, event.state)} → ${eventTitle(next)} in ${cityState(next.city, next.state)}${miles ? ` · about ${miles.toFixed(0)} mi` : ''}`,
+      fixAction:'OPEN_EVENT',
+      eventId:next.id || event.id || '',
+      startMin:next.startMin,
+      actionLabel:'Review',
+    }));
+  });
+  return issues;
 }
 
 function previousSevenDays(day) {
@@ -226,7 +268,7 @@ function buildCoverageIssues(state, day, events) {
 }
 
 function buildLocationIssues(events) {
-  return events.flatMap((event, index) => {
+  const missingIssues = events.flatMap((event, index) => {
     const missing = !safeText(event.city) || !safeText(event.state) || /^gps$/i.test(safeText(event.city)) || /^unk$/i.test(safeText(event.state));
     if (!missing) return [];
     return [makeIssue('location', {
@@ -239,6 +281,7 @@ function buildLocationIssues(events) {
       actionLabel:'Fix location',
     })];
   });
+  return [...missingIssues, ...buildLocationContinuityIssues(events)];
 }
 
 function buildHosIssues(state, day, events) {
@@ -297,10 +340,33 @@ function buildInspectionIssues(state, day, events) {
       startMin:firstDriving.startMin,
       actionLabel:'Add 15m pre-trip',
     }));
+  } else if (firstDriving && preTrip && Number(preTrip.endMin || 0) > Number(firstDriving.startMin || 0)) {
+    issues.push(makeIssue('inspection', {
+      id:`pretrip_after_driving_${preTrip.id || preTrip.startMin}`,
+      severity:'review',
+      title:'Pre-trip timing needs review',
+      detail:`Pre-trip ends ${timeLabel(preTrip.endMin, true)} but driving starts ${timeLabel(firstDriving.startMin, true)}`,
+      fixAction:'OPEN_EVENT',
+      eventId:preTrip.id || '',
+      startMin:preTrip.startMin,
+      actionLabel:'Review',
+    }));
   } else if (preTrip && !inspection.complete) {
     issues.push(makeIssue('inspection', { id:'inspection_from_pretrip', title:'Inspection sheet missing', detail:`Linked pre-trip ${timeLabel(preTrip.startMin, true)}`, fixAction:'OPEN_INSPECTION', eventId:preTrip.id, actionLabel:'Create' }));
   } else if (hasWork && !inspection.complete) {
     issues.push(makeIssue('inspection', { id:'inspection_review', severity:'review', title:'Inspection review', detail:'Inspection tab', fixAction:'OPEN_INSPECTION', actionLabel:'Open' }));
+  }
+
+  if (inspection.complete && preTrip && inspection.sourceEventId && inspection.sourceEventId !== preTrip.id) {
+    issues.push(makeIssue('inspection', {
+      id:'inspection_unlinked_pretrip',
+      severity:'review',
+      title:'Inspection link review',
+      detail:`Inspection is not linked to pre-trip at ${timeLabel(preTrip.startMin, true)}`,
+      fixAction:'OPEN_INSPECTION',
+      eventId:preTrip.id || '',
+      actionLabel:'Review',
+    }));
   }
 
   if (inspection.complete && inspection.sourceEventId && !eventIds.has(inspection.sourceEventId)) {

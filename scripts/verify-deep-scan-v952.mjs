@@ -176,4 +176,15 @@ ok('pretrip: missing ON DUTY pre-trip before driving is detected and fixable', (
   assert.ok(appSrc.includes('inspectionFromPreTripEvent(day, preTripEvent'), 'pre-trip insertion should create/link inspection');
 });
 
+// 15) Smart DOT: detect location continuity and unsigned previous day.
+ok('smart dot: location continuity and unsigned previous day are detected', () => {
+  const signingSrc = readFileSync(new URL('../source/src/modules/logbook/signing.js', import.meta.url), 'utf8');
+  const dotSrc = readFileSync(new URL('../source/src/core/dot/dotOfficerCheckEngine.js', import.meta.url), 'utf8');
+  assert.ok(signingSrc.includes('locationContinuityIssues'), 'signing location continuity check missing');
+  assert.ok(dotSrc.includes('buildLocationContinuityIssues'), 'DOT location continuity check missing');
+  assert.ok(signingSrc.includes('previous_unsigned_'), 'previous unsigned DOT package issue missing');
+  assert.ok(dotSrc.includes('Inspection link review'), 'inspection link review missing');
+  assert.ok(dotSrc.includes('Pre-trip timing needs review'), 'pre-trip timing review missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);
