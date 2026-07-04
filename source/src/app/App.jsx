@@ -1262,8 +1262,72 @@ export default function App() {
     signLogDay(state.activeDay, payload);
   }
 
+  function addPreTripBeforeDriving(payload = {}) {
+    const targetDay = payload.day || payload.issue?.day || state.activeDay;
+    if (typeof window !== 'undefined' && window.confirm) {
+      const ok = window.confirm('Add 15 minutes ON DUTY Pre-trip before first driving?');
+      if (!ok) return;
+    }
+
+    setState(s => {
+      const day = targetDay || s.activeDay;
+      const baseEvents = continuousBaseForDay(s, day);
+      const firstDrive = baseEvents.find(event => event.status === 'D');
+      if (!firstDrive) return {
+        ...s,
+        activeDay: day,
+        view:'day',
+        roadGuardTabRequest:{ tab:'log', at:Date.now() },
+      };
+
+      const endMin = Math.max(1, Math.min(1440, Number(firstDrive.startMin || 0)));
+      const startMin = Math.max(0, endMin - 15);
+      if (startMin >= endMin) return {
+        ...s,
+        activeDay: day,
+        view:'day',
+        roadGuardTabRequest:{ tab:'log', at:Date.now() },
+      };
+
+      const preTripEvent = {
+        id:`pretrip_${day}_${Date.now()}`,
+        status:'ON',
+        startMin,
+        endMin,
+        city:firstDrive.city || s.currentLocation?.city || 'GPS',
+        state:firstDrive.state || s.currentLocation?.state || 'UNK',
+        description:'',
+        note:'Pre-trip Inspection',
+        source:'manual_pretrip_fix',
+        locationSource:firstDrive.locationSource || 'manual',
+      };
+
+      const updatedEvents = commitTimelineForDay(insertManyOverride(baseEvents, [preTripEvent]), day, s);
+      let next = {
+        ...s,
+        activeDay: day,
+        view:'day',
+        selectedEventId: preTripEvent.id,
+        sheet:null,
+        eventsByDay:{ ...(s.eventsByDay || {}), [day]: updatedEvents },
+        inspectionByDay:{
+          ...(s.inspectionByDay || {}),
+          [day]: inspectionFromPreTripEvent(day, preTripEvent, (s.inspectionByDay || {})[day] || {}),
+        },
+        roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'add-pretrip' },
+      };
+      next = reconcilePreTripInspections(next, [day]);
+      return markDayRecert(next, day);
+    });
+  }
+
   function applyRoadGuardFix(action, payload = {}) {
     if (!action) return;
+
+    if (action === 'ADD_PRETRIP_BEFORE_DRIVING') {
+      addPreTripBeforeDriving(payload);
+      return;
+    }
 
     if (action === 'OPEN_SHIPPING_DOCS') {
       const existing = state.loadInfo?.shippingDocs || state.loadInfo?.bol || state.loadInfo?.loadNo || '';

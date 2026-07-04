@@ -119,6 +119,9 @@ export function issueSuggestedAction(issue = {}) {
   if (code.includes('active_day')) {
     return { label:'Keep driving / sign later', action:'NO_ACTION' };
   }
+  if (code.includes('missing_pretrip_event')) {
+    return { label:'Add 15m pre-trip', action:'ADD_PRETRIP_BEFORE_DRIVING' };
+  }
   if (code.includes('missing_inspection') || code.includes('inspection_time')) {
     return { label:'Open inspection', action:'OPEN_INSPECTION' };
   }
@@ -181,6 +184,7 @@ export function validateLogForSigning(state, day) {
   const inspection = state.inspectionByDay?.[day] || {};
   const vehicle = String(state.driver?.truck || '').trim();
   const hasOnOrDrive = events.some(event => event.status === 'ON' || event.status === 'D');
+  const firstDriving = events.find(event => event.status === 'D');
   const preTrip = events.find(isPreTripEvent);
   const completedEvents = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
   const total = totalMinutes(completedEvents);
@@ -301,6 +305,18 @@ export function validateLogForSigning(state, day) {
       });
     }
   });
+
+  if (firstDriving && !preTrip) {
+    issues.push({
+      code: `missing_pretrip_event_${firstDriving.id || firstDriving.startMin}`,
+      title: 'Pre-trip ON DUTY event is missing',
+      detail: `Driving starts at ${timeLabel(firstDriving.startMin, true)}. Add an ON DUTY Pre-trip inspection before driving if it was done.`,
+      where: 'Log tab → before first driving',
+      day,
+      eventId: firstDriving.id || '',
+      startMin: firstDriving.startMin,
+    });
+  }
 
   if (hasOnOrDrive && !inspection.complete) {
     issues.push({

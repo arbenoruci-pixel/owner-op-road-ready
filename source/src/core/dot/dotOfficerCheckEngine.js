@@ -281,11 +281,23 @@ function buildHosIssues(state, day, events) {
 function buildInspectionIssues(state, day, events) {
   const issues = [];
   const inspection = state.inspectionByDay?.[day] || {};
+  const firstDriving = events.find(event => event.status === 'D');
   const preTrip = events.find(hasPreTripText);
   const eventIds = new Set(events.map(event => event.id));
   const hasWork = hasVehicleWork(events);
 
-  if (preTrip && !inspection.complete) {
+  if (firstDriving && !preTrip) {
+    issues.push(makeIssue('inspection', {
+      id:`missing_pretrip_event_${firstDriving.id || firstDriving.startMin}`,
+      severity:'fix',
+      title:'Pre-trip ON DUTY event missing',
+      detail:`Driving starts ${timeLabel(firstDriving.startMin, true)} · add 15m ON DUTY before driving`,
+      fixAction:'ADD_PRETRIP_BEFORE_DRIVING',
+      eventId:firstDriving.id || '',
+      startMin:firstDriving.startMin,
+      actionLabel:'Add 15m pre-trip',
+    }));
+  } else if (preTrip && !inspection.complete) {
     issues.push(makeIssue('inspection', { id:'inspection_from_pretrip', title:'Inspection sheet missing', detail:`Linked pre-trip ${timeLabel(preTrip.startMin, true)}`, fixAction:'OPEN_INSPECTION', eventId:preTrip.id, actionLabel:'Create' }));
   } else if (hasWork && !inspection.complete) {
     issues.push(makeIssue('inspection', { id:'inspection_review', severity:'review', title:'Inspection review', detail:'Inspection tab', fixAction:'OPEN_INSPECTION', actionLabel:'Open' }));

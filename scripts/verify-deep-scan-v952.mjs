@@ -164,4 +164,16 @@ ok('fix wizard: issue day is visible and openable', () => {
   assert.ok(appSrc.includes('const tab = [\'log\',\'form\',\'sign\',\'inspection\'].includes(payload.tab)'), 'OPEN_DAY tab routing missing');
 });
 
+// 14) DOT/signing must catch missing ON DUTY pre-trip before driving and offer a 15m fix.
+ok('pretrip: missing ON DUTY pre-trip before driving is detected and fixable', () => {
+  const signingSrc = readFileSync(new URL('../source/src/modules/logbook/signing.js', import.meta.url), 'utf8');
+  const dotSrc = readFileSync(new URL('../source/src/core/dot/dotOfficerCheckEngine.js', import.meta.url), 'utf8');
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(signingSrc.includes('missing_pretrip_event'), 'signing pre-trip issue missing');
+  assert.ok(dotSrc.includes('ADD_PRETRIP_BEFORE_DRIVING'), 'DOT pre-trip fix action missing');
+  assert.ok(appSrc.includes('function addPreTripBeforeDriving'), 'app pre-trip fix function missing');
+  assert.ok(appSrc.includes('endMin - 15'), '15 minute pre-trip insertion missing');
+  assert.ok(appSrc.includes('inspectionFromPreTripEvent(day, preTripEvent'), 'pre-trip insertion should create/link inspection');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);
