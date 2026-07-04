@@ -24,7 +24,12 @@ function mergeableSameStatus(last, current) {
   const overlaps = Number(current.startMin || 0) < Number(last.endMin || 0);
   if (!touches && !overlaps) return false;
 
-  // Only auto-merge adjacent/touching same-status rows when their text is
+  // Continuous DRIVING must display as one driving block. Motion-start, GPS,
+  // and manual-start rows can create adjacent D rows with slightly different
+  // notes, but DOT/paper-log view should show one continuous status line.
+  if (last.status === 'D') return true;
+
+  // Only auto-merge other adjacent/touching same-status rows when their text is
   // effectively the same or one side is blank. This prevents stale notes from
   // a replaced ON DUTY Pre-trip event being glued onto a new OFF DUTY block.
   const notesCompatible = !hasText(last.note) || !hasText(current.note) || sameText(last.note, current.note);
@@ -60,18 +65,30 @@ export function normalizeLogEvents(events = []) {
     // Same duty status and touching/overlapping time should be one continuous block.
     // This removes exact duplicates too.
     if (mergeableSameStatus(last, ev)) {
+      const manualMiles = Math.max(0, Number(last.manualMiles || 0)) + Math.max(0, Number(ev.manualMiles || 0));
+      const preserveStartLocation = last.status === 'D';
       merged[merged.length - 1] = {
         ...last,
         endMin: Math.max(last.endMin, ev.endMin),
-        city: ev.city || last.city,
-        state: ev.state || last.state,
-        lat: ev.lat ?? last.lat,
-        lng: ev.lng ?? last.lng,
-        gpsAccuracy: ev.gpsAccuracy ?? last.gpsAccuracy,
-        locationSource: ev.locationSource || last.locationSource,
-        note: latestText(last.note, ev.note),
-        description: latestText(last.description, ev.description),
-        source: last.source === ev.source ? last.source : (ev.source || last.source),
+        // Location on a RODS event is the location of the duty-status change.
+        // For continuous driving, keep the first/start location; only fill from
+        // the later row if the first row was blank.
+        city: preserveStartLocation ? (last.city || ev.city) : (ev.city || last.city),
+        state: preserveStartLocation ? (last.state || ev.state) : (ev.state || last.state),
+        lat: preserveStartLocation ? (last.lat ?? ev.lat ?? null) : (ev.lat ?? last.lat ?? null),
+        lng: preserveStartLocation ? (last.lng ?? ev.lng ?? null) : (ev.lng ?? last.lng ?? null),
+        gpsAccuracy: preserveStartLocation ? (last.gpsAccuracy ?? ev.gpsAccuracy ?? null) : (ev.gpsAccuracy ?? last.gpsAccuracy ?? null),
+        locationSource: preserveStartLocation ? (last.locationSource || ev.locationSource || 'manual') : (ev.locationSource || last.locationSource || 'manual'),
+        note: last.status === 'D' ? latestText(ev.note, last.note) : latestText(last.note, ev.note),
+        description: last.status === 'D' ? latestText(ev.description, last.description) : latestText(last.description, ev.description),
+        source: last.source === ev.source ? last.source : (last.source || ev.source),
+        ...(manualMiles > 0 ? {
+          manualMiles: Number(manualMiles.toFixed(2)),
+          manualMilesState: last.manualMilesState || ev.manualMilesState,
+          manualMilesReviewedAt: Math.max(Number(last.manualMilesReviewedAt || 0), Number(ev.manualMilesReviewedAt || 0)) || undefined,
+          manualMilesSource: last.manualMilesSource || ev.manualMilesSource,
+          manualMilesSuggestion: last.manualMilesSuggestion || ev.manualMilesSuggestion,
+        } : {}),
       };
       continue;
     }
