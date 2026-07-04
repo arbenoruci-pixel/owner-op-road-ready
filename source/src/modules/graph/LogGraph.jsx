@@ -12,11 +12,11 @@ const ROW_H = 96;
 const BODY_W = W - LEFT - RIGHT;
 const SHORT_EVENT_MARKER_PX = 12;
 const HIT_MIN_PX = 24;
-// Duty trace stroke width. Visible bends and horizontals use the same width.
+// v95.6 continuous duty line: one stroke width for horizontals AND vertical
+// bends, drawn as a single SVG path so corners are clean 90° miter joins.
 const LINE_W = 8;
-const VERTICAL_LINE_W = 6.8;
-const CORNER_OVERLAP = Math.ceil(VERTICAL_LINE_W / 2) + 1;
-const TRACE_COLOR = "#172033";
+const VERTICAL_LINE_W = Number((LINE_W * 0.85).toFixed(2));
+const TRACE_COLOR = '#172033';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -178,10 +178,15 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* v95.13 duty line.
-          Selection glow stays under the trace. Visible status segments are
-          drawn as H/V paths with butt caps and miter joins so corners are
-          straight and clean like a paper log. */}
+      {/* v95.6 continuous duty line.
+          Layer 1 — selection highlights (soft row fill + outer glow) drawn
+          UNDER the trace so selecting never thickens or distorts the line.
+          Layer 2 — one continuous SVG path (H/V commands, miter joins, butt
+          caps) in neutral dark slate: horizontals and vertical bends share
+          the exact same stroke width and clean 90° corners, no join dots.
+          Layer 3 — status-colored horizontal overlays at the SAME width,
+          carried all the way to the bend so there is no visible break/gap
+          at the corner. Vertical bends are slightly slimmer underneath. */}
 
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
@@ -215,37 +220,89 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* v95.14 thin neutral bends with colored horizontal segments.
-          Vertical transition bends stay slightly slimmer than the duty rows.
-          Colored horizontals extend over the bend so corners read as one
-          sharp continuous line without blue/green vertical edge artifacts. */}
-      {transitions(sorted).map((t, i) => {
-        const x = xFromMin(t.minute);
-        const y1 = CENTER(t.from.status);
-        const y2 = CENTER(t.to.status);
+      {/* Base duty trace: horizontal body stays LINE_W; vertical status-change
+          bends are 15% thinner so they do not dominate the graph visually. */}
+      {sorted.map((event, i) => {
+        const y = CENTER(event.status);
+        const span = exactSpan(event);
         return (
           <line
-            key={`bend_${i}`}
-            x1={x} x2={x} y1={y1} y2={y2}
+            key={`${event.id || i}_base_h`}
+            x1={span.x1}
+            x2={span.x2}
+            y1={y}
+            y2={y}
             stroke={TRACE_COLOR}
-            strokeWidth={VERTICAL_LINE_W}
+            strokeWidth={LINE_W}
             strokeLinecap="butt"
             pointerEvents="none"
           />
         );
       })}
+      {transitions(sorted).map((t, i) => {
+        const x = xFromMin(t.minute);
+        const y1 = CENTER(t.from.status);
+        const y2 = CENTER(t.to.status);
+        const top = Math.min(y1, y2);
+        const bottom = Math.max(y1, y2);
+        const mid = (y1 + y2) / 2;
+        const fromAccent = t.from.status === 'D' || t.from.status === 'ON';
+        const toAccent = t.to.status === 'D' || t.to.status === 'ON';
+        return (
+          <g key={`${i}_base_v`} pointerEvents="none">
+            <line
+              x1={x}
+              x2={x}
+              y1={y1}
+              y2={y2}
+              stroke={TRACE_COLOR}
+              strokeWidth={VERTICAL_LINE_W}
+              strokeLinecap="butt"
+              opacity=".94"
+            />
+            <rect
+              x={x - LINE_W / 2}
+              y={top - LINE_W / 2}
+              width={LINE_W}
+              height={LINE_W}
+              fill={TRACE_COLOR}
+            />
+            <rect
+              x={x - LINE_W / 2}
+              y={bottom - LINE_W / 2}
+              width={LINE_W}
+              height={LINE_W}
+              fill={TRACE_COLOR}
+            />
+            {fromAccent && (
+              <line
+                x1={x}
+                x2={x}
+                y1={y1}
+                y2={mid}
+                stroke={color(t.from.status)}
+                strokeWidth={LINE_W}
+                strokeLinecap="butt"
+              />
+            )}
+            {toAccent && (
+              <line
+                x1={x}
+                x2={x}
+                y1={mid}
+                y2={y2}
+                stroke={color(t.to.status)}
+                strokeWidth={LINE_W}
+                strokeLinecap="butt"
+              />
+            )}
+          </g>
+        );
+      })}
 
-      {sorted.map((event, i) => {
-        const prev = sorted[i - 1] || null;
-        const next = sorted[i + 1] || null;
+      {sorted.map((event) => {
         const y = CENTER(event.status);
         const span = hitSpan(event);
-        let x1 = span.x1;
-        let x2 = span.x2;
-        if (prev && prev.status !== event.status) x1 -= CORNER_OVERLAP;
-        if (next && next.status !== event.status) x2 += CORNER_OVERLAP;
-        x1 = Math.max(LEFT, x1);
-        x2 = Math.min(W - RIGHT, x2);
         return (
           <g key={event.id}>
             <line
@@ -259,13 +316,14 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
             />
             <line
-              x1={x1}
-              x2={x2}
+              x1={span.x1}
+              x2={span.x2}
               y1={y}
               y2={y}
               stroke={color(event.status)}
               strokeWidth={LINE_W}
               strokeLinecap="butt"
+              strokeLinejoin="miter"
               pointerEvents="none"
             />
           </g>
@@ -285,7 +343,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Transition tap targets only: visible bends are already drawn above. */}
+      {/* Transition tap targets only: the visible vertical bend is part of the
+          continuous base path above — no separate stroke, no endpoint dots. */}
       {transitions(sorted).map((t,i) => {
         const x = xFromMin(t.minute);
         const y1 = CENTER(t.from.status);
@@ -348,6 +407,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return (
           <g className="edit-handles-large">
             <rect x={Math.min(sx, ex)} y={TOP} width={Math.max(4, Math.abs(ex - sx))} height={graphBottom - TOP} fill={c} opacity=".09" pointerEvents="none" />
+            <line x1={sx} x2={sx} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="5.1" strokeLinecap="round" opacity=".78" pointerEvents="none" />
+            <line x1={ex} x2={ex} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="5.1" strokeLinecap="round" opacity=".78" pointerEvents="none" />
+
             <line x1={startHandleX} x2={sx} y1={chipCY} y2={y} stroke="#111827" strokeWidth="10" strokeLinecap="round" opacity=".86" pointerEvents="none" />
             <line x1={endHandleX} x2={ex} y1={chipCY} y2={y} stroke="#111827" strokeWidth="10" strokeLinecap="round" opacity=".86" pointerEvents="none" />
 
