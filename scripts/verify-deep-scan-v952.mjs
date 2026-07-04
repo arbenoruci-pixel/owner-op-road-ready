@@ -130,6 +130,8 @@ ok('manual miles: DOT asks for total miles only', () => {
   const dotSrc = readFileSync(new URL('../source/src/core/dot/dotOfficerCheckEngine.js', import.meta.url), 'utf8');
   assert.ok(dotSrc.includes('Driving miles missing'), 'DOT missing miles issue not present');
   assert.ok(daySrc.includes('Enter total miles for this driving'), 'total miles prompt missing');
+  assert.ok(daySrc.includes('[62, 65, 68]'), '62/65/68 speed guide missing');
+  assert.ok(daySrc.includes('speedMilesOptions'), 'speed miles helper missing');
   assert.ok(!daySrc.includes('Break miles by state'), 'state-breakdown prompt should not be present');
 });
 

@@ -166,7 +166,7 @@ function buildFormIssues(state, day, events) {
       id:`missing_driving_miles_${event.id || index}`,
       severity:'fix',
       title:'Driving miles missing',
-      detail:eventTitle(event),
+      detail:`${eventTitle(event)} · ${durLabel(eventDuration(event))}`,
       fixAction:'OPEN_MANUAL_MILES',
       eventId:event.id,
       actionLabel:'Add miles',

@@ -210,6 +210,47 @@ function nearestLocationAfter(sorted = [], index = 0) {
   return null;
 }
 
+function drivingMinutesForBlock(events = [], eventId = '') {
+  const block = drivingBlockForEvent(events, eventId);
+  if (!block.event) return 0;
+  const startEvent = block.sorted[block.startIndex];
+  const endEvent = block.sorted[block.endIndex];
+  return Math.max(0, Number(endEvent?.endMin || 0) - Number(startEvent?.startMin || 0));
+}
+
+function drivingMinutesForDay(events = []) {
+  return (events || [])
+    .filter(event => event.status === 'D')
+    .reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);
+}
+
+function milesAtSpeed(minutes = 0, mph = 65) {
+  return Number(((Math.max(0, Number(minutes || 0)) / 60) * Number(mph || 0)).toFixed(2));
+}
+
+function speedMilesOptions(minutes = 0) {
+  return [62, 65, 68].map(speed => ({ speed, miles:milesAtSpeed(minutes, speed) }));
+}
+
+function speedOptionsText(options = []) {
+  return options.map(item => `${item.speed}mph ${item.miles.toFixed(2)} mi`).join(' · ');
+}
+
+function bestSpeedDefault(options = []) {
+  return options.find(item => item.speed === 65)?.miles || options[0]?.miles || 0;
+}
+
+function drivingMilesSpeedGuide(events = [], eventId = '') {
+  const legMinutes = drivingMinutesForBlock(events, eventId);
+  const dayMinutes = drivingMinutesForDay(events);
+  return {
+    legMinutes,
+    dayMinutes,
+    leg:speedMilesOptions(legMinutes),
+    day:speedMilesOptions(dayMinutes),
+  };
+}
+
 function bestManualMilesSuggestion({ events = [], eventId = '', gpsPoints = [] } = {}) {
   const block = drivingBlockForEvent(events, eventId);
   if (!block.event) return null;
@@ -1392,14 +1433,21 @@ export default function DayDetail({
       eventId: event.id,
       gpsPoints: state.gpsTrip?.points || [],
     });
+    const speedGuide = drivingMilesSpeedGuide(displayEvents, event.id);
+    const legSpeedDefault = bestSpeedDefault(speedGuide.leg);
     const current = Number(event.manualMiles || 0) > 0
       ? String(event.manualMiles)
-      : (suggestion?.miles ? String(suggestion.miles) : '');
+      : (suggestion?.miles ? String(suggestion.miles) : (legSpeedDefault ? String(legSpeedDefault) : ''));
     const label = `${minutesLabel(event.startMin)}–${minutesLabel(event.endMin)} · ${event.city || 'GPS'}, ${event.state || 'UNK'}`;
+    const speedText = `\n\nSpeed guide for this leg (${formatDutyMinutes(speedGuide.legMinutes)}):\n${speedOptionsText(speedGuide.leg)}${
+      speedGuide.dayMinutes !== speedGuide.legMinutes
+        ? `\n\nDay driving total (${formatDutyMinutes(speedGuide.dayMinutes)}):\n${speedOptionsText(speedGuide.day)}`
+        : ''
+    }`;
     const suggestionText = suggestion
-      ? `\n\nSuggested ${suggestion.miles.toFixed(2)} mi from ${suggestion.source}\n${suggestion.from} → ${suggestion.to}\nConfidence: ${suggestion.confidence}`
-      : '\n\nNo distance suggestion found from log locations.';
-    const rawMiles = window.prompt?.(`Enter total miles for this driving:\n${label}${suggestionText}`, current);
+      ? `\n\nLocation estimate ${suggestion.miles.toFixed(2)} mi from ${suggestion.source}\n${suggestion.from} → ${suggestion.to}\nConfidence: ${suggestion.confidence}`
+      : '';
+    const rawMiles = window.prompt?.(`Enter total miles for this driving:\n${label}${speedText}${suggestionText}`, current);
     if (rawMiles == null) return;
 
     const miles = Number(String(rawMiles).replace(/[^0-9.]/g, ''));
@@ -1408,9 +1456,9 @@ export default function DayDetail({
       return;
     }
 
-    const durationMin = Math.max(1, Number(event.endMin || 0) - Number(event.startMin || 0));
+    const durationMin = Math.max(1, speedGuide.legMinutes || (Number(event.endMin || 0) - Number(event.startMin || 0)));
     const highForSingleEvent = miles > Math.max(5, (durationMin / 60) * 85 + 3);
-    if (highForSingleEvent && !window.confirm?.(`${miles.toFixed(2)} mi looks high for ${durationMin} minute(s). Continue?`)) {
+    if (highForSingleEvent && !window.confirm?.(`${miles.toFixed(2)} mi looks high for ${formatDutyMinutes(durationMin)}. Continue?`)) {
       return;
     }
 
@@ -1419,14 +1467,20 @@ export default function DayDetail({
       manualMilesByState: null,
       manualMilesState: '',
       manualMilesReviewedAt: Date.now(),
-      manualMilesSource: suggestion ? suggestion.source : 'manual',
-      manualMilesSuggestion: suggestion ? {
-        miles:suggestion.miles,
-        source:suggestion.source,
-        confidence:suggestion.confidence,
-        from:suggestion.from,
-        to:suggestion.to,
-      } : null,
+      manualMilesSource: suggestion ? suggestion.source : 'speed guide',
+      manualMilesSuggestion: {
+        miles:suggestion?.miles || null,
+        source:suggestion?.source || 'speed guide',
+        confidence:suggestion?.confidence || 'Guide',
+        from:suggestion?.from || null,
+        to:suggestion?.to || null,
+        speedGuide:{
+          legMinutes:speedGuide.legMinutes,
+          dayMinutes:speedGuide.dayMinutes,
+          leg:speedGuide.leg,
+          day:speedGuide.day,
+        },
+      },
       description: event.description || `Driving miles ${miles.toFixed(2)} mi`,
     });
 
