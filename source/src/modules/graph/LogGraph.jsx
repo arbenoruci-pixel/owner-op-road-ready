@@ -15,7 +15,8 @@ const HIT_MIN_PX = 24;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
 const LINE_W = 8;
-const VERTICAL_LINE_W = LINE_W * 0.7225;
+const VERTICAL_LINE_W = LINE_W * 0.55;
+const JOIN_OVERLAP = VERTICAL_LINE_W / 2 + 1;
 const CORNER_INSET = 0;
 const TRACE_COLOR = '#172033';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
@@ -252,6 +253,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
             stroke={TRACE_COLOR}
             strokeWidth={VERTICAL_LINE_W}
             strokeLinecap="butt"
+            opacity=".92"
             pointerEvents="none"
           />
         );
@@ -262,8 +264,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const span = hitSpan(event);
         const bendBefore = i > 0 && sorted[i-1].status !== event.status;
         const bendAfter = i < sorted.length - 1 && sorted[i+1].status !== event.status;
-        const ox1 = span.x1 + (bendBefore ? CORNER_INSET : 0);
-        const ox2 = span.x2 - (bendAfter ? CORNER_INSET : 0);
+        const ox1 = Math.max(LEFT, span.x1 - (bendBefore ? JOIN_OVERLAP : 0));
+        const ox2 = Math.min(W - RIGHT, span.x2 + (bendAfter ? JOIN_OVERLAP : 0));
         return (
           <g key={event.id}>
             <line
