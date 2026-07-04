@@ -35,8 +35,17 @@ function actionHeading(status) {
   return 'Driving status';
 }
 
-function reasonNeedsLoadLink(status, reason) {
-  return status === 'ON' && /pickup|loading|delivery|unloading/i.test(String(reason || ''));
+function reasonText(reasons = []) {
+  const list = Array.isArray(reasons) ? reasons : [reasons];
+  return list.map(item => String(item || '').trim()).filter(Boolean).join(' · ');
+}
+
+function reasonHas(reasons = [], pattern) {
+  return pattern.test(reasonText(reasons));
+}
+
+function reasonNeedsLoadLink(status, reasons) {
+  return status === 'ON' && reasonHas(reasons, /pickup|loading|delivery|unloading/i);
 }
 
 function uniqueSuggestions(values = []) {
@@ -67,7 +76,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   const [city, setCity] = useState(state.currentLocation?.city || 'Chicago');
   const [st, setSt] = useState(state.currentLocation?.state || 'IL');
   const [locationText, setLocationText] = useState(locationString(state.currentLocation?.city || 'Chicago', state.currentLocation?.state || 'IL'));
-  const [reason, setReason] = useState(reasonList(state.currentStatus || 'OFF')[0]);
+  const [selectedReasons, setSelectedReasons] = useState([reasonList(state.currentStatus || 'OFF')[0]]);
   const [startAgoMinutes, setStartAgoMinutes] = useState(0);
   const [notes, setNotes] = useState('');
   const [showNotes, setShowNotes] = useState(false);
@@ -138,19 +147,29 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
 
   function choose(next) {
     setStatus(next);
-    setReason(reasonList(next)[0]);
+    setSelectedReasons([reasonList(next)[0]]);
     if (next === 'OFF') {
       askedOffGps.current = false;
       setTimeout(() => useGps(true), 0);
     }
   }
 
+  function toggleReason(reasonValue) {
+    setSelectedReasons(current => {
+      const active = current.includes(reasonValue);
+      const next = active ? current.filter(item => item !== reasonValue) : [...current, reasonValue];
+      return next.length ? next : [reasonValue];
+    });
+  }
+
   function payload() {
     const parsedLoc = parseLocationText(locationText, st || 'IL');
     const parsedDest = parseDestinationState(destination);
+    const reason = reasonText(selectedReasons) || reasonList(status)[0];
     return {
       status,
       reason,
+      reasons:selectedReasons,
       city: parsedLoc.city,
       state: parsedLoc.state,
       description: notes,
@@ -179,7 +198,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
 
   function saveSpecial(s, r) {
     setStatus(s);
-    setReason(r);
+    setSelectedReasons([r]);
     if (s === 'OFF') {
       askedOffGps.current = false;
       setTimeout(() => useGps(true), 0);
@@ -248,10 +267,13 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
         <section className="picker-section">
           <div className="picker-label-row">
             <label>{actionHeading(status)}</label>
+            <span>{selectedReasons.length > 1 ? `${selectedReasons.length} selected` : 'select one or more'}</span>
           </div>
-          <div className="reason-pills driver-reason-grid">
+          <div className="reason-pills driver-reason-grid multi-reason-grid">
             {reasonList(status).map(r => (
-              <button key={r} type="button" className={reason === r ? 'picked' : ''} onClick={() => setReason(r)}>{r}</button>
+              <button key={r} type="button" className={selectedReasons.includes(r) ? 'picked' : ''} onClick={() => toggleReason(r)}>
+                {selectedReasons.includes(r) ? '✓ ' : ''}{r}
+              </button>
             ))}
           </div>
         </section>
@@ -270,10 +292,10 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
           </div>
         </section>
 
-        {reasonNeedsLoadLink(status, reason) && (
+        {reasonNeedsLoadLink(status, selectedReasons) && (
           <section className="picker-section load-link-section">
             <div className="picker-label-row">
-              <label>{/delivery|unloading/i.test(reason) ? 'Delivery info' : 'Pickup info'}</label>
+              <label>{reasonHas(selectedReasons, /delivery|unloading/i) ? 'Delivery info' : 'Pickup info'}</label>
               <span>linked to this event</span>
             </div>
             <div className="driver-load-grid">
@@ -287,7 +309,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
                 />
               </label>
               <label>
-                <span>{/delivery|unloading/i.test(reason) ? 'Delivery location' : 'Going to'}</span>
+                <span>{reasonHas(selectedReasons, /delivery|unloading/i) ? 'Delivery location' : 'Going to'}</span>
                 <input
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}

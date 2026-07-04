@@ -257,4 +257,16 @@ ok('edit sheet: compact spacing and no manual driving warning', () => {
   assert.ok(cssSrc.includes('.editor-clean-v85 .warning'), 'warning hide safeguard missing');
 });
 
+// 22) Status workflow supports selecting multiple reason chips.
+ok('status workflow: multi-reason chips are supported', () => {
+  const statusSrc = readFileSync(new URL('../source/src/modules/status/StatusWorkflowSheet.jsx', import.meta.url), 'utf8');
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(statusSrc.includes('selectedReasons'), 'selectedReasons state missing');
+  assert.ok(statusSrc.includes('toggleReason'), 'toggleReason handler missing');
+  assert.ok(statusSrc.includes('reasonText(selectedReasons)'), 'combined reason text missing');
+  assert.ok(statusSrc.includes('select one or more'), 'multi-reason UI hint missing');
+  assert.ok(statusSrc.includes('reasonNeedsLoadLink(status, selectedReasons)'), 'load-link condition not multi-reason aware');
+  assert.ok(appSrc.includes('/drop trailer/i.test(reason)'), 'drop-trailer multi-reason handling missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

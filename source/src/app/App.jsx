@@ -1610,11 +1610,11 @@ export default function App() {
       const existing = continuousBaseForDay(s, day);
       let note = reason;
       let trailer = s.currentTrailer;
-      if (reason === 'Drop Trailer') {
+      if (/drop trailer/i.test(reason) && !/drop\s*&\s*hook/i.test(reason)) {
         note = `Drop Trailer · ${droppedTrailer || trailer}`;
         trailer = 'No trailer';
       }
-      if (reason === 'Drop & Hook') {
+      if (/drop\s*&\s*hook/i.test(reason)) {
         note = `Drop & Hook · dropped ${droppedTrailer || trailer}${hookedTrailer ? ` / hooked ${hookedTrailer}` : ''}`;
         trailer = hookedTrailer || 'New trailer';
       }
@@ -1623,7 +1623,7 @@ export default function App() {
       const ev = {
         id: eventId,
         status,
-        specialMode: reason === 'Yard Move' ? 'yard_move' : (reason === 'Personal Conveyance' ? 'personal_conveyance' : 'none'),
+        specialMode: /yard move/i.test(reason) ? 'yard_move' : (/personal conveyance/i.test(reason) ? 'personal_conveyance' : 'none'),
         startMin: changeAt,
         // Live status changes are current until now. If the driver says the
         // pickup/pre-trip started 15 minutes ago, the new status overrides the
