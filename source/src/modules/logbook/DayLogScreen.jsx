@@ -25,6 +25,25 @@ function title(day) {
   return `${dow} | ${mon} ${String(d.getDate()).padStart(2,'0')}`;
 }
 
+function dayDisplayLabel(day) {
+  if (!day) return 'Unknown day';
+  return `${title(day)} · ${day}`;
+}
+
+function issueDay(issue = {}, fallbackDay = '') {
+  return issue.day || issue.targetDay || fallbackDay;
+}
+
+function targetTabForIssue(issue = {}, action = '') {
+  const code = String(issue.code || issue.id || '').toLowerCase();
+  const where = String(issue.where || issue.section || '').toLowerCase();
+  const text = `${code} ${where} ${issue.title || ''} ${issue.detail || ''}`.toLowerCase();
+  if (/inspection/.test(text) || action === 'OPEN_INSPECTION') return 'inspection';
+  if (/sign|certif/.test(text) || action === 'OPEN_SIGN' || action === 'OPEN_DAY_SIGN') return 'sign';
+  if (/form|shipping|carrier|office|driver|vehicle|truck|trailer|equipment|bol/.test(text) || action === 'OPEN_SHIPPING_DOCS' || action === 'APPLY_SAVED_PROFILE' || action === 'OPEN_EQUIPMENT') return 'form';
+  return 'log';
+}
+
 function clampDelta(event, delta) {
   if (!event) return 0;
   const min = -Number(event.startMin || 0);
@@ -650,21 +669,26 @@ function SignGuardIssueCard({ issue, state, day, onCopy, onQuickFix }) {
   const code = String(issue.code || '');
   const type = code.includes('hos_') ? 'violation' : (code.includes('active_day') ? 'notice' : (/missing|gap|overlap|invalid|total|inspection|vehicle|shipping|location|carrier|office|driver/i.test(`${issue.code || ''} ${issue.title || ''}`) ? 'fix' : 'review'));
   const label = type === 'violation' ? 'HOS REVIEW' : type === 'fix' ? 'FIX REQUIRED' : type === 'notice' ? 'NOTICE' : 'REVIEW';
+  const targetDay = suggested.day || issueDay(issue, day);
+  const targetTab = targetTabForIssue(issue, suggested.action);
   return (
     <div className={`signguard-issue signguard-issue-v92 ${type}`}>
       <div className="signguard-issue-main">
         <span>{label}</span>
         <b>{issue.title}</b>
         <p>{issue.detail}</p>
+        <button type="button" className="issue-day-link" onClick={() => onQuickFix?.('OPEN_DAY', { day: targetDay, tab: targetTab, issue })}>
+          {dayDisplayLabel(targetDay)}
+        </button>
         <em>{issue.where}</em>
       </div>
       <div className="signguard-issue-actions-v92">
         {suggested.action !== 'NO_ACTION' && (
-          <button className="mini-primary" onClick={() => onQuickFix?.(suggested.action, { issue, day: suggested.day || issue.day || day })}>
+          <button className="mini-primary" onClick={() => onQuickFix?.(suggested.action, { issue, day: targetDay, tab: targetTab })}>
             {actionLabelForIssue(issue)}
           </button>
         )}
-        <button className="mini-secondary" onClick={() => onCopy(buildIssueFixPrompt(state, day, issue), 'Issue copied')}>Copy</button>
+        <button className="mini-secondary" onClick={() => onCopy(buildIssueFixPrompt(state, targetDay, issue), 'Issue copied')}>Copy</button>
       </div>
     </div>
   );
@@ -793,6 +817,8 @@ function buildFixWizardSteps(guard, day) {
       action: 'APPLY_SAVED_PROFILE',
       actionLabel: 'Apply saved profile',
       kind: 'safe',
+      day,
+      tab: 'form',
       issue: profileIssues[0],
       applyOnlyIfTrue: 'Uses the saved profile. Review it after applying.',
     });
@@ -813,6 +839,7 @@ function buildFixWizardSteps(guard, day) {
         actionLabel: reviewOnly ? 'Review log' : suggested.label || 'Open',
         kind: reviewOnly ? 'review' : 'fix',
         day: suggested.day || issue.day || day,
+        tab: targetTabForIssue(issue, suggested.action),
         issue,
         applyOnlyIfTrue: reviewOnly
           ? 'Review only. Do not change accurate driving/on-duty time.'
@@ -831,6 +858,7 @@ function buildFixWizardSteps(guard, day) {
       actionLabel: 'Open day',
       kind: 'dot',
       day: suggested.day || issue.day || day,
+      tab: 'log',
       issue,
       applyOnlyIfTrue: 'Open the day. Fill or change time only if you know the true record.',
     });
@@ -862,6 +890,17 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
     setIndex(current => Math.min(current + 1, total));
   }
 
+  function openStepDay(targetTab = step?.tab || 'log') {
+    if (!step) return;
+    onQuickFix?.('OPEN_DAY', {
+      issue: step.issue,
+      day: step.day || day,
+      tab: targetTab,
+      wizard: true,
+    });
+    onClose?.();
+  }
+
   function runStep() {
     if (!step) return;
     if (!step.action || step.action === 'NO_ACTION') {
@@ -869,10 +908,13 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
       return;
     }
 
-    const silentApply = step.action === 'APPLY_SAVED_PROFILE' || step.action === 'OPEN_SHIPPING_DOCS';
+    const targetDay = step.day || day;
+    const targetTab = step.tab || targetTabForIssue(step.issue || {}, step.action);
+    const silentApply = (step.action === 'APPLY_SAVED_PROFILE' || step.action === 'OPEN_SHIPPING_DOCS') && targetDay === day;
     onQuickFix?.(step.action, {
       issue: step.issue,
-      day: step.day || day,
+      day: targetDay,
+      tab: targetTab,
       silent: silentApply,
       wizard: true,
     });
@@ -886,11 +928,13 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
 
   function copyStep() {
     if (!step) return;
-    const text = buildIssueFixPrompt(state, day, step.issue || {
+    const targetDay = step.day || day;
+    const text = buildIssueFixPrompt(state, targetDay, step.issue || {
       title: step.title,
       detail: step.detail,
       where: step.where,
       code: step.id,
+      day: targetDay,
     });
     onCopy?.(text, 'Wizard step copied');
   }
@@ -920,6 +964,9 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
             <div className={`roadguard-wizard-step ${step.kind}`}>
               <span>{step.kind === 'dot' ? 'DOT package' : step.kind === 'review' ? 'Review only' : 'Fix item'}</span>
               <b>{step.title}</b>
+              <button type="button" className="roadguard-wizard-day" onClick={() => openStepDay(step.tab || 'log')}>
+                Problem day: {dayDisplayLabel(step.day || day)}
+              </button>
               <p>{step.detail}</p>
               <em>{step.where}</em>
               <small>{step.applyOnlyIfTrue}</small>
@@ -931,6 +978,7 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
 
             <div className="roadguard-wizard-actions">
               <button onClick={runStep}>{step.actionLabel || 'Fix / Open'}</button>
+              <button className="secondary" onClick={() => openStepDay(step.tab || 'log')}>Open day</button>
               <button className="secondary" onClick={nextStep}>Skip</button>
               <button className="secondary" onClick={copyStep}>Copy</button>
             </div>

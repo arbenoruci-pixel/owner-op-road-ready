@@ -7437,3 +7437,33 @@ body,
     min-height:40px!important;
   }
 }
+
+/* v95.29 day-aware fix wizard */
+.roadguard-wizard-day,
+.issue-day-link{
+  width:100%!important;
+  min-height:36px!important;
+  border:1px solid #dbe3f0!important;
+  border-radius:12px!important;
+  background:#f8fafc!important;
+  color:#2156d9!important;
+  font-size:12px!important;
+  font-weight:950!important;
+  text-align:left!important;
+  padding:8px 10px!important;
+  margin:8px 0!important;
+}
+.issue-day-link{
+  width:auto!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  margin:8px 0 0!important;
+}
+.roadguard-wizard-actions{
+  grid-template-columns:minmax(0,1.3fr) minmax(88px,.8fr) minmax(70px,.7fr) minmax(70px,.7fr)!important;
+}
+@media (max-width:390px){
+  .roadguard-wizard-actions{
+    grid-template-columns:1fr 1fr!important;
+  }
+}

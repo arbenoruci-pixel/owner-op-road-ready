@@ -154,4 +154,14 @@ ok('form: route legs can be deleted', () => {
   assert.ok(css.includes('v95.28 route leg delete action'), 'route leg delete styles missing');
 });
 
+// 13) Fix wizard must show and open the problem day.
+ok('fix wizard: issue day is visible and openable', () => {
+  const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(daySrc.includes('Problem day: {dayDisplayLabel(step.day || day)}'), 'wizard problem-day label missing');
+  assert.ok(daySrc.includes('openStepDay'), 'wizard open-day handler missing');
+  assert.ok(daySrc.includes('issue-day-link'), 'issue day link missing');
+  assert.ok(appSrc.includes('const tab = [\'log\',\'form\',\'sign\',\'inspection\'].includes(payload.tab)'), 'OPEN_DAY tab routing missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

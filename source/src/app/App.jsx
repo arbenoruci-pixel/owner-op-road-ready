@@ -1329,7 +1329,8 @@ export default function App() {
     if (action === 'OPEN_DAY') {
       const day = payload.day || payload.issue?.day || findDateInText(payload.issue?.code) || findDateInText(payload.issue?.title);
       if (!day) return;
-      setState(s => ({ ...s, activeDay:day, view:'day', selectedEventId:null, roadGuardTabRequest:{ tab:'log', at:Date.now() } }));
+      const tab = ['log','form','sign','inspection'].includes(payload.tab) ? payload.tab : 'log';
+      setState(s => ({ ...s, activeDay:day, view:'day', selectedEventId:null, sheet:null, roadGuardTabRequest:{ tab, at:Date.now() } }));
       return;
     }
 
