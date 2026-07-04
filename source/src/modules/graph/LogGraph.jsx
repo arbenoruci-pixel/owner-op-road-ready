@@ -16,6 +16,7 @@ const HIT_MIN_PX = 24;
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
 const LINE_W = 8;
 const VERTICAL_LINE_W = Number((LINE_W * 0.85).toFixed(2));
+const CORNER_OVERLAP = VERTICAL_LINE_W / 2;
 const TRACE_COLOR = '#172033';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
@@ -243,66 +244,29 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const x = xFromMin(t.minute);
         const y1 = CENTER(t.from.status);
         const y2 = CENTER(t.to.status);
-        const top = Math.min(y1, y2);
-        const bottom = Math.max(y1, y2);
-        const mid = (y1 + y2) / 2;
-        const fromAccent = t.from.status === 'D' || t.from.status === 'ON';
-        const toAccent = t.to.status === 'D' || t.to.status === 'ON';
         return (
-          <g key={`${i}_base_v`} pointerEvents="none">
-            <line
-              x1={x}
-              x2={x}
-              y1={y1}
-              y2={y2}
-              stroke={TRACE_COLOR}
-              strokeWidth={VERTICAL_LINE_W}
-              strokeLinecap="butt"
-              opacity=".94"
-            />
-            <rect
-              x={x - LINE_W / 2}
-              y={top - LINE_W / 2}
-              width={LINE_W}
-              height={LINE_W}
-              fill={TRACE_COLOR}
-            />
-            <rect
-              x={x - LINE_W / 2}
-              y={bottom - LINE_W / 2}
-              width={LINE_W}
-              height={LINE_W}
-              fill={TRACE_COLOR}
-            />
-            {fromAccent && (
-              <line
-                x1={x}
-                x2={x}
-                y1={y1}
-                y2={mid}
-                stroke={color(t.from.status)}
-                strokeWidth={LINE_W}
-                strokeLinecap="butt"
-              />
-            )}
-            {toAccent && (
-              <line
-                x1={x}
-                x2={x}
-                y1={mid}
-                y2={y2}
-                stroke={color(t.to.status)}
-                strokeWidth={LINE_W}
-                strokeLinecap="butt"
-              />
-            )}
-          </g>
+          <line
+            key={`${i}_base_v`}
+            x1={x}
+            x2={x}
+            y1={y1}
+            y2={y2}
+            stroke={TRACE_COLOR}
+            strokeWidth={VERTICAL_LINE_W}
+            strokeLinecap="butt"
+            opacity=".9"
+            pointerEvents="none"
+          />
         );
       })}
 
-      {sorted.map((event) => {
+      {sorted.map((event, i) => {
         const y = CENTER(event.status);
         const span = hitSpan(event);
+        const bendBefore = i > 0 && sorted[i - 1].status !== event.status;
+        const bendAfter = i < sorted.length - 1 && sorted[i + 1].status !== event.status;
+        const x1 = Math.max(LEFT, span.x1 - (bendBefore ? CORNER_OVERLAP : 0));
+        const x2 = Math.min(W - RIGHT, span.x2 + (bendAfter ? CORNER_OVERLAP : 0));
         return (
           <g key={event.id}>
             <line
@@ -316,8 +280,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
             />
             <line
-              x1={span.x1}
-              x2={span.x2}
+              x1={x1}
+              x2={x2}
               y1={y}
               y2={y}
               stroke={color(event.status)}
