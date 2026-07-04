@@ -243,19 +243,37 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       })}
       {transitions(sorted).map((t, i) => {
         const x = xFromMin(t.minute);
+        const y1 = CENTER(t.from.status);
+        const y2 = CENTER(t.to.status);
+        const top = Math.min(y1, y2);
+        const bottom = Math.max(y1, y2);
         return (
-          <line
-            key={`${i}_base_v`}
-            x1={x}
-            x2={x}
-            y1={CENTER(t.from.status)}
-            y2={CENTER(t.to.status)}
-            stroke={TRACE_COLOR}
-            strokeWidth={VERTICAL_LINE_W}
-            strokeLinecap="butt"
-            opacity=".92"
-            pointerEvents="none"
-          />
+          <g key={`${i}_base_v`} pointerEvents="none">
+            <line
+              x1={x}
+              x2={x}
+              y1={y1}
+              y2={y2}
+              stroke={TRACE_COLOR}
+              strokeWidth={VERTICAL_LINE_W}
+              strokeLinecap="butt"
+              opacity=".92"
+            />
+            <rect
+              x={x - LINE_W / 2}
+              y={top - LINE_W / 2}
+              width={LINE_W}
+              height={LINE_W}
+              fill={TRACE_COLOR}
+            />
+            <rect
+              x={x - LINE_W / 2}
+              y={bottom - LINE_W / 2}
+              width={LINE_W}
+              height={LINE_W}
+              fill={TRACE_COLOR}
+            />
+          </g>
         );
       })}
 
