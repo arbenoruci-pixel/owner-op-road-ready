@@ -263,9 +263,8 @@ function formSummary(state, events) {
     ? state.currentTrailer
     : (equipment.trailer || state.driver?.trailer || 'None');
   const notes = [...new Set((events || []).map(e => e.description || e.note).filter(Boolean))].slice(0, 2).join(' · ');
-  const gpsMiles = Number(state.gpsTrip?.totalMiles || 0);
   const manualMiles = manualMilesTotal(events);
-  const totalMiles = gpsMiles + manualMiles;
+  const hasDriving = (events || []).some(event => event.status === 'D');
   return {
     off: formatDutyMinutes(dutyMap.OFF || 0),
     sb: formatDutyMinutes(dutyMap.SB || 0),
@@ -273,7 +272,7 @@ function formSummary(state, events) {
     on: formatDutyMinutes(dutyMap.ON || 0),
     vehicles: safeValue(state.driver?.truck),
     trailers: safeValue(trailers),
-    distance: totalMiles > 0 ? `${totalMiles.toFixed(2)} mi${manualMiles ? ` (${manualMiles.toFixed(2)} manual)` : ''}` : 'None',
+    distance: manualMiles > 0 ? `${manualMiles.toFixed(2)} mi` : (hasDriving ? 'Missing' : 'None'),
     odometers: 'No Vehicles',
     shippingDocs: safeValue(shippingDocs),
     driverName: driverNameForState(state),
@@ -1382,9 +1381,9 @@ export default function DayDetail({
 
 
   function promptManualMilesForEvent(eventId = '') {
-    const event = displayEvents.find(item => item.id === eventId) || displayEvents.find(item => item.status === 'D' && item.source !== 'gps_drive');
+    const event = displayEvents.find(item => item.id === eventId) || displayEvents.find(item => item.status === 'D');
     if (!event) {
-      window.alert?.('No manual driving event found on this day.');
+      window.alert?.('No driving event found on this day.');
       return;
     }
 
@@ -1400,7 +1399,7 @@ export default function DayDetail({
     const suggestionText = suggestion
       ? `\n\nSuggested ${suggestion.miles.toFixed(2)} mi from ${suggestion.source}\n${suggestion.from} → ${suggestion.to}\nConfidence: ${suggestion.confidence}`
       : '\n\nNo distance suggestion found from log locations.';
-    const rawMiles = window.prompt?.(`Enter miles for manual driving:\n${label}${suggestionText}`, current);
+    const rawMiles = window.prompt?.(`Enter total miles for this driving:\n${label}${suggestionText}`, current);
     if (rawMiles == null) return;
 
     const miles = Number(String(rawMiles).replace(/[^0-9.]/g, ''));
@@ -1415,15 +1414,10 @@ export default function DayDetail({
       return;
     }
 
-    const defaultState = event.manualMilesState || suggestion?.state || event.state || state.currentLocation?.state || 'UNK';
-    const rawState = window.prompt?.('State for these miles, example IN or IL:', defaultState);
-    if (rawState == null) return;
-
-    const milesState = String(rawState || defaultState || 'UNK').trim().toUpperCase().slice(0, 2) || 'UNK';
-
     onSaveManualMiles?.(event.id, {
       manualMiles: miles,
-      manualMilesState: milesState,
+      manualMilesByState: null,
+      manualMilesState: '',
       manualMilesReviewedAt: Date.now(),
       manualMilesSource: suggestion ? suggestion.source : 'manual',
       manualMilesSuggestion: suggestion ? {
@@ -1433,10 +1427,10 @@ export default function DayDetail({
         from:suggestion.from,
         to:suggestion.to,
       } : null,
-      description: event.description || `Manual miles ${miles.toFixed(2)} mi ${milesState}`,
+      description: event.description || `Driving miles ${miles.toFixed(2)} mi`,
     });
 
-    window.alert?.(`Saved ${miles.toFixed(2)} manual miles for ${milesState}.`);
+    window.alert?.(`Saved ${miles.toFixed(2)} driving miles.`);
   }
 
   function handleDotOfficerIssue(issue = {}) {
@@ -1503,12 +1497,6 @@ export default function DayDetail({
     }
 
     let targetEventId = target.eventId || '';
-
-    if (type === 'manualDriving' || /manual driving/i.test(warningText)) {
-      targetEventId = targetEventId || displayEvents.find(event => event.status === 'D' && event.source !== 'gps_drive' && !(Number(event.manualMiles || 0) > 0))?.id || displayEvents.find(event => event.status === 'D' && event.source !== 'gps_drive')?.id || '';
-      promptManualMilesForEvent(targetEventId);
-      return;
-    }
 
     if (!targetEventId && (type === 'missingLocation' || /city\/state|location/i.test(warningText))) {
       targetEventId = displayEvents.find(event => !event.city || !event.state || event.city === 'GPS' || event.state === 'UNK')?.id || '';

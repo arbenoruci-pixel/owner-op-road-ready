@@ -9,7 +9,7 @@ import {
   makeContinuousLogEvents,
   closePreviousAndStart,
 } from '../source/src/core/timeline/timelineEngine.js';
-import { pointFromLogLocation, estimatedRoadMiles } from '../source/src/core/gps/locationService.js';
+import { pointFromLogLocation, estimatedRoadMiles, estimateMilesByStateBetween, parseMilesByState, sumMilesByState } from '../source/src/core/gps/locationService.js';
 
 let checks = 0;
 function ok(name, fn) {
@@ -121,6 +121,16 @@ ok('manual miles: null coordinates fall back to log city points', () => {
   assert.equal(origin.source, 'log-location');
   assert.equal(destination.source, 'log-location');
   assert.ok(miles > 120 && miles < 260, `expected Midwest estimate, got ${miles}`);
+});
+
+
+// 10) Manual miles: DOT asks for total miles only, not state breakdown.
+ok('manual miles: DOT asks for total miles only', () => {
+  const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
+  const dotSrc = readFileSync(new URL('../source/src/core/dot/dotOfficerCheckEngine.js', import.meta.url), 'utf8');
+  assert.ok(dotSrc.includes('Driving miles missing'), 'DOT missing miles issue not present');
+  assert.ok(daySrc.includes('Enter total miles for this driving'), 'total miles prompt missing');
+  assert.ok(!daySrc.includes('Break miles by state'), 'state-breakdown prompt should not be present');
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

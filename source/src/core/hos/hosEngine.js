@@ -501,9 +501,6 @@ export function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}
   const cycle = calculateCycle(timeline, restBlocks, currentEndAbs, 70, 8);
   const restProgress = currentRestProgress(restBlocks, currentEndAbs);
 
-  const manualDrivingMins = timeline
-    .filter(e => e.status === 'D' && e.source !== 'gps_drive' && !(Number(e.manualMiles || 0) > 0))
-    .reduce((sum,e) => sum + eventDuration(e), 0);
   const missingLocation = timeline.filter(e => !e.city || !e.state).length;
 
   const warnings = [...gaps, ...statusReasonWarnings(timeline)];
@@ -513,7 +510,6 @@ export function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}
   if (limit14 != null && currentEndAbs > limit14) warnings.push({ severity:'high', text:'14-hour window appears exceeded.' });
   if (breakInfo.needed) warnings.push({ severity:'high', text:'30-minute break required before more driving.' });
   if (cycle.exceeded) warnings.push({ severity:'high', text:'70-hour / 8-day cycle appears exceeded.' });
-  if (manualDrivingMins > 0) warnings.push({ severity:'medium', text:'Manual driving exists. Review GPS/miles record if needed.' });
   if (missingLocation > 0) warnings.push({ severity:'medium', text:`${missingLocation} event(s) missing city/state.` });
 
   if (restProgress && restProgress.duration < 10 * HOUR) {

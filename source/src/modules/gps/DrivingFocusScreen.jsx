@@ -51,7 +51,7 @@ export default function DrivingFocusScreen({ open, state, liveCurrent, onStopDri
   return (
     <div className="drive-focus">
       <div className="drive-focus-top">
-        <span>{gpsActive ? 'GPS DRIVING' : 'MANUAL DRIVING'}</span>
+        <span>DRIVING</span>
         <button onClick={onOpenLog}>Log</button>
       </div>
 
@@ -77,7 +77,7 @@ export default function DrivingFocusScreen({ open, state, liveCurrent, onStopDri
       </div>
 
       <p className="drive-focus-note">
-        Motion GPS works while the web app is open. Native iPhone/Android app is required for reliable background GPS.
+        Paper-log mode records duty status only.
       </p>
     </div>
   );

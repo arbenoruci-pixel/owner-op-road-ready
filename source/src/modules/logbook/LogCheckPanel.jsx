@@ -11,7 +11,6 @@ function warningTypeFromText(text = '') {
   if (t.includes('rest')) return 'restWatch';
   if (t.includes('sleeper')) return 'split7watch';
   if (t.includes('certified')) return 'sign';
-  if (t.includes('manual driving')) return 'manualDriving';
   if (t.includes('city/state') || t.includes('location')) return 'missingLocation';
   return '';
 }
@@ -24,7 +23,7 @@ function targetForWarning(warning, ranges = []) {
   const type = warningTypeFromText(text);
   if (!type) return null;
 
-  if (type === 'sign' || type === 'manualDriving' || type === 'missingLocation') {
+  if (type === 'sign' || type === 'missingLocation') {
     return { type };
   }
 
@@ -33,7 +32,6 @@ function targetForWarning(warning, ranges = []) {
 
 function actionLabelForWarning(warning, target) {
   const type = target?.type || warningTypeFromText(warning?.text);
-  if (type === 'manualDriving') return 'Add miles';
   if (type === 'sign') return 'Sign';
   if (type === 'missingLocation') return 'Fix location';
   if (target) return 'Review';
@@ -78,7 +76,7 @@ export default function HosCheck({ events, state, onIssueAction }) {
             <div className="logcheck-warnings">
               {result.warnings.map((w, i) => {
                 const target = targetForWarning(w, result.violationRanges || []);
-                const canOpen = !!target || /certified|manual driving|city\/state|location/i.test(String(w.text || ''));
+                const canOpen = !!target || /certified|city\/state|location/i.test(String(w.text || ''));
                 return (
                   <button
                     key={i}

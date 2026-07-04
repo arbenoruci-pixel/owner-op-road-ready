@@ -156,6 +156,23 @@ function buildFormIssues(state, day, events) {
     issues.push(makeIssue('form', { id:'missing_shipping_docs', title:'Shipping docs missing', detail:'Form → Shipping docs / BOL', fixAction:'OPEN_FORM_FIELD', target:'shippingDocs', actionLabel:'Add BOL' }));
   }
 
+  const drivingWithoutMiles = events.filter(event =>
+    event.status === 'D' &&
+    Number(event.endMin || 0) > Number(event.startMin || 0) &&
+    !(Number(event.manualMiles || 0) > 0)
+  );
+  drivingWithoutMiles.forEach((event, index) => {
+    issues.push(makeIssue('form', {
+      id:`missing_driving_miles_${event.id || index}`,
+      severity:'fix',
+      title:'Driving miles missing',
+      detail:eventTitle(event),
+      fixAction:'OPEN_MANUAL_MILES',
+      eventId:event.id,
+      actionLabel:'Add miles',
+    }));
+  });
+
   const docTokens = splitDocTokens(docs);
   const dupes = [...new Set(docTokens.filter((item, index) => docTokens.indexOf(item) !== index))];
   if (dupes.length) {
@@ -244,21 +261,7 @@ function buildHosIssues(state, day, events) {
     }));
   });
 
-  events
-    .filter(event => event.status === 'D' && event.source !== 'gps_drive' && !(Number(event.manualMiles || 0) > 0))
-    .forEach(event => {
-      issues.push(makeIssue('hos', {
-        id:`manual_miles_${event.id}`,
-        severity:'review',
-        title:'Manual driving needs miles',
-        detail:eventTitle(event),
-        fixAction:'OPEN_MANUAL_MILES',
-        eventId:event.id,
-        actionLabel:'Add miles',
-      }));
-    });
-
-  const hosWarnings = (result.warnings || []).filter(w => /11-hour|14-hour|30-minute|70-hour|cycle|manual driving/i.test(String(w.text || '')));
+  const hosWarnings = (result.warnings || []).filter(w => /11-hour|14-hour|30-minute|70-hour|cycle/i.test(String(w.text || '')));
   hosWarnings.forEach((warning, index) => {
     const exists = issues.some(issue => String(issue.title || '').includes(String(warning.text || '').slice(0, 20)));
     if (exists) return;

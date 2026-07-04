@@ -175,6 +175,125 @@ export function estimatedRoadMiles(a, b) {
   return Number((raw * 1.1).toFixed(2));
 }
 
+function addStateMiles(map, state, miles) {
+  const key = String(state || 'UNK').trim().toUpperCase().slice(0, 2) || 'UNK';
+  const amount = Math.max(0, Number(miles || 0));
+  if (!amount) return map;
+  return { ...map, [key]: Number(((map[key] || 0) + amount).toFixed(2)) };
+}
+
+// Directional state-border/corridor points for manual-mile estimates when the
+// web app has no GPS breadcrumbs. These are approximate highway split points,
+// not a routing engine; the driver can edit the state breakdown before saving.
+const STATE_CORRIDORS = {
+  'IL-IN': [{ state:'IL', lat:41.5990, lng:-87.5240 }],
+  'IN-IL': [{ state:'IN', lat:41.5990, lng:-87.5240 }],
+
+  'IN-OH': [{ state:'IN', lat:41.6920, lng:-84.8060 }],
+  'OH-IN': [{ state:'OH', lat:41.6920, lng:-84.8060 }],
+
+  'IL-OH': [
+    { state:'IL', lat:41.5990, lng:-87.5240 },
+    { state:'IN', lat:41.6920, lng:-84.8060 },
+  ],
+  'OH-IL': [
+    { state:'OH', lat:41.6920, lng:-84.8060 },
+    { state:'IN', lat:41.5990, lng:-87.5240 },
+  ],
+
+  'IL-WI': [{ state:'IL', lat:42.4930, lng:-87.9490 }],
+  'WI-IL': [{ state:'WI', lat:42.4930, lng:-87.9490 }],
+
+  'IL-IA': [{ state:'IL', lat:41.5060, lng:-90.5150 }],
+  'IA-IL': [{ state:'IA', lat:41.5060, lng:-90.5150 }],
+
+  'IN-MI': [{ state:'IN', lat:41.7590, lng:-85.9900 }],
+  'MI-IN': [{ state:'MI', lat:41.7590, lng:-85.9900 }],
+
+  'OH-MI': [{ state:'OH', lat:41.7320, lng:-83.5000 }],
+  'MI-OH': [{ state:'MI', lat:41.7320, lng:-83.5000 }],
+};
+
+export function sumMilesByState(map = {}) {
+  return Number(Object.values(map || {}).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0).toFixed(2));
+}
+
+export function scaleMilesByState(map = {}, targetMiles = 0) {
+  const target = Math.max(0, Number(targetMiles || 0));
+  const current = sumMilesByState(map);
+  if (!target || !current) return map || {};
+  const entries = Object.entries(map || {}).filter(([, miles]) => Number(miles || 0) > 0);
+  let scaled = {};
+  let running = 0;
+  entries.forEach(([state, miles], index) => {
+    const value = index === entries.length - 1
+      ? Math.max(0, Number((target - running).toFixed(2)))
+      : Number(((Number(miles || 0) / current) * target).toFixed(2));
+    running += value;
+    scaled = addStateMiles(scaled, state, value);
+  });
+  return scaled;
+}
+
+export function formatMilesByState(map = {}) {
+  return Object.entries(map || {})
+    .filter(([, miles]) => Number(miles || 0) > 0)
+    .map(([state, miles]) => `${String(state || 'UNK').toUpperCase()} ${Number(miles || 0).toFixed(2)}`)
+    .join(', ');
+}
+
+export function parseMilesByState(input = '') {
+  const text = String(input || '').trim();
+  if (!text) return {};
+  let out = {};
+  const stateFirst = /([A-Za-z]{2})\s*[:=\-]?\s*([0-9]+(?:\.[0-9]+)?)/g;
+  const milesFirst = /([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]{2})/g;
+  let matched = false;
+  for (const match of text.matchAll(stateFirst)) {
+    matched = true;
+    out = addStateMiles(out, match[1], Number(match[2]));
+  }
+  if (!matched) {
+    for (const match of text.matchAll(milesFirst)) {
+      matched = true;
+      out = addStateMiles(out, match[2], Number(match[1]));
+    }
+  }
+  return out;
+}
+
+export function estimateMilesByStateBetween(origin = {}, destination = {}) {
+  if (!origin || !destination) return {};
+  const startState = String(origin.state || detectState(origin.lat, origin.lng) || 'UNK').toUpperCase().slice(0, 2);
+  const endState = String(destination.state || detectState(destination.lat, destination.lng) || 'UNK').toUpperCase().slice(0, 2);
+  if (!startState || !endState || startState === 'UN' || endState === 'UN') return {};
+
+  if (startState === endState) {
+    const miles = estimatedRoadMiles(origin, destination);
+    return miles ? { [startState]: miles } : {};
+  }
+
+  const corridor = STATE_CORRIDORS[`${startState}-${endState}`] || [];
+  if (!corridor.length) {
+    const miles = estimatedRoadMiles(origin, destination);
+    if (!miles) return {};
+    const half = Number((miles / 2).toFixed(2));
+    return { [startState]: half, [endState]: Number((miles - half).toFixed(2)) };
+  }
+
+  let out = {};
+  let previous = origin;
+  for (const point of corridor) {
+    const miles = estimatedRoadMiles(previous, point);
+    out = addStateMiles(out, point.state || previous.state || startState, miles);
+    previous = point;
+  }
+  const finalMiles = estimatedRoadMiles(previous, destination);
+  out = addStateMiles(out, endState, finalMiles);
+
+  return out;
+}
+
 export function guessGpsCity(lat, lng) {
   if (lat == null || lng == null) return { city:'GPS', state:'UNK' };
 

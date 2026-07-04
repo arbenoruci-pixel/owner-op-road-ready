@@ -1175,88 +1175,16 @@ export default function App() {
   }
 
   function startGpsDriving() {
-    setState(s => {
-      const now = new Date();
-      const today = localDayKey(now);
-      const activeDay = s.activeDay === today ? s.activeDay : today;
-      const startMin = now.getHours() * 60 + now.getMinutes();
-      const ev = {
-        id: `gps_drive_${Date.now()}`,
-        status:'D',
-        startMin,
-        endMin: Math.min(1439, startMin + 1),
-        city: s.currentLocation?.city || 'Chicago',
-        state: s.currentLocation?.state || 'IL',
-        description: s.equipment?.type === 'intermodal'
-          ? `Intermodal ${s.equipment.chassis || ''} ${s.equipment.container || ''}`.trim()
-          : '',
-        note:'Driving',
-        source:'gps_drive',
-      };
-      const existing = s.eventsByDay[activeDay] || [];
-      const updated = normalizeLogEvents(closePreviousAndStart(existing, ev));
-      return {
-        ...s,
-        currentStatus:'D',
-        currentReason:'Driving',
-        selectedEventId: ev.id,
-        activeDay,
-        eventsByDay:{ ...s.eventsByDay, [activeDay]: updated },
-        gpsTrip:{
-          status:'active',
-          startedAt: Date.now(),
-          eventId: ev.id,
-          points:[],
-          lastPoint:null,
-          milesByState:{},
-          totalMiles:0,
-        }
-      };
-    });
+    setState(s => ({ ...s, sheet:{ type:'status' }, gpsPanelOpen:false }));
   }
 
-  function updateGpsTrip(fix) {
-    setState(s => {
-      let base = rolloverActiveDrivingIfNeeded(s, new Date());
-      if (!base.gpsTrip || base.gpsTrip.status !== 'active') return base;
-      const last = base.gpsTrip.lastPoint;
-      let miles = 0;
-      if (last) {
-        const raw = haversineMiles(last, fix);
-        if (raw >= 0.005 && raw <= 5) miles = raw;
-      }
-      const stateCode = fix.state || detectState(fix.lat, fix.lng);
-      const milesByState = miles ? addMilesByState(base.gpsTrip.milesByState || {}, stateCode, miles) : (base.gpsTrip.milesByState || {});
-      const nowMinValue = minuteFromDate(new Date());
-      const activeDay = base.activeDay || localDayKey();
-      const dayEvents = normalizeLogEvents((base.eventsByDay[activeDay] || []).map(e =>
-        e.id === base.gpsTrip.eventId ? { ...e, endMin: Math.max(e.startMin + 1, nowMinValue), state: e.state || stateCode } : e
-      ));
-      return {
-        ...base,
-        gpsTrip:{
-          ...base.gpsTrip,
-          lastPoint: fix,
-          points: [...(base.gpsTrip.points || []), fix].slice(-1000),
-          milesByState,
-          totalMiles: Number(((base.gpsTrip.totalMiles || 0) + miles).toFixed(2)),
-        },
-        currentLocation:{ city:base.currentLocation?.city || 'GPS', state:stateCode },
-        eventsByDay:{ ...base.eventsByDay, [activeDay]: dayEvents },
-      };
-    });
+  function updateGpsTrip() {
+    // Paper-log mode: no GPS mileage recording.
+    return;
   }
 
   function stopGpsDriving() {
-    setState(s => {
-      if (!s.gpsTrip) return s;
-      const rolled = rolloverActiveDrivingIfNeeded(s, new Date());
-      return {
-        ...rolled,
-        gpsTrip:{ ...rolled.gpsTrip, status:'stopped', stoppedAt:Date.now() },
-        sheet:{ type:'status' },
-      };
-    });
+    setState(s => ({ ...s, gpsTrip:null, gpsPanelOpen:false, sheet:{ type:'status' } }));
   }
 
   function signLogDay(day = state.activeDay, payload = {}) {
@@ -1593,19 +1521,11 @@ export default function App() {
         onReset={reset}
         onOpenStatus={()=>setState(s=>({ ...s, sheet:{ type:'status' } }))}
         onOpenTrailer={()=>setState(s=>({ ...s, sheet:{ type:'equipment' } }))}
-        onOpenGps={()=>setState(s=>({ ...s, gpsPanelOpen:true }))}
+        onOpenGps={()=>setState(s=>({ ...s, sheet:{ type:'status' }, gpsPanelOpen:false }))}
         onOpenUnsigned={()=>setState(s=>({ ...s, view:'unsigned', sheet:null }))}
         onOpenDot={()=>setState(s=>({ ...s, view:'dot', sheet:null }))}
       />
-      <DriveTrackerSheet state={state} open={!!state.gpsPanelOpen} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
-      <DrivingFocusScreen
-        open={!state.sheet && liveCurrent.status === 'D' && state.gpsTrip?.status === 'active'}
-        state={state}
-        liveCurrent={liveCurrent}
-        onStopDriving={stopGpsDriving}
-        onStopToOnDuty={stopDrivingToOnDuty}
-        onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))}
-      />
+      <DriveTrackerSheet state={state} open={false} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       {state.sheet?.type === 'equipment' && <EquipmentSheet equipment={state.equipment || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveEquipment} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: state.currentStatus || 'OFF', currentReason: state.currentReason || 'Off Duty', currentLocation: state.currentLocation}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
     </>
@@ -1626,7 +1546,7 @@ export default function App() {
     <>
       <DayLogScreen
         state={state}
-        onToggleGps={()=>setState(s=>({ ...s, gpsPanelOpen: !s.gpsPanelOpen }))}
+        onToggleGps={()=>setState(s=>({ ...s, sheet:{ type:'status' }, gpsPanelOpen:false }))}
         liveCurrent={liveCurrent}
         events={events}
         selectedEvent={selectedEvent}
@@ -1652,15 +1572,7 @@ export default function App() {
         onRoadGuardFix={applyRoadGuardFix}
         onSaveManualMiles={(id, patch)=>updateEvent(id, patch)}
       />
-      <DriveTrackerSheet state={state} open={!!state.gpsPanelOpen} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
-      <DrivingFocusScreen
-        open={!state.sheet && liveCurrent.status === 'D' && state.gpsTrip?.status === 'active'}
-        state={state}
-        liveCurrent={liveCurrent}
-        onStopDriving={stopGpsDriving}
-        onStopToOnDuty={stopDrivingToOnDuty}
-        onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))}
-      />
+      <DriveTrackerSheet state={state} open={false} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       {state.sheet?.type === 'add' && <InsertEditEventSheet defaults={state.sheet.defaults} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onCreate={addEvent} onSave={addEvent} onUpdate={updateEvent} />}
       {state.sheet?.type === 'edit' && selectedEvent && <EditEventSheet event={selectedEvent} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={(patch)=>updateEvent(selectedEvent.id, patch)} onDelete={()=>deleteEvent(selectedEvent.id)} />}
       {state.sheet?.type === 'shift' && <ShiftSheet events={events} selectedIds={state.selectedIds} onApply={applyShift} onClose={()=>setState(s=>({ ...s, sheet:null }))} />}
