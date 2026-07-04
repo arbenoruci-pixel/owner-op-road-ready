@@ -15,8 +15,8 @@ const HIT_MIN_PX = 24;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
 const LINE_W = 8;
-const VERTICAL_LINE_W = LINE_W * 0.85;
-const CORNER_INSET = LINE_W / 2;
+const VERTICAL_LINE_W = LINE_W * 0.7225;
+const CORNER_INSET = 0;
 const TRACE_COLOR = '#172033';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
@@ -186,8 +186,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           caps) in neutral dark slate: horizontals and vertical bends share
           the exact same stroke width and clean 90° corners, no join dots.
           Layer 3 — status-colored horizontal overlays at the SAME width,
-          inset by half a stroke at status changes so corners stay a single
-          clean body instead of double-rendered thick joints. */}
+          carried all the way to the bend so there is no visible break/gap
+          at the corner. Vertical bends are slightly slimmer underneath. */}
 
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
