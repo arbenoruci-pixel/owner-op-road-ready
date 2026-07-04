@@ -7391,3 +7391,15 @@ body,
   font-size:12px!important;
   font-weight:850!important;
 }
+
+/* v95.21 temporary test reset utility */
+.choice-card.danger{
+  border-color:#fecaca!important;
+  background:#fff7f7!important;
+}
+.choice-card.danger b{
+  color:#991b1b!important;
+}
+.choice-card.danger span{
+  color:#7f1d1d!important;
+}

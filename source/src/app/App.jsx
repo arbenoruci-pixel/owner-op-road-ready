@@ -1430,6 +1430,42 @@ export default function App() {
     });
   }
 
+  function clearTestDates() {
+    if (typeof window !== 'undefined') {
+      const ok = window.confirm?.('Clear all test dates and start fresh?');
+      if (!ok) return;
+    }
+
+    clearAppSnapshot(APP_STATE_KEY).finally(() => {
+      const today = localDayKey();
+      setState(s => {
+        const next = normalizeState({
+          ...s,
+          view:'logs',
+          activeDay:today,
+          selectedEventId:null,
+          selectedIds:[],
+          selectMode:false,
+          sheet:null,
+          eventsByDay:{},
+          certifyStatus:{},
+          inspectionByDay:{},
+          signatureByDay:{},
+          routeLegsByDay:{},
+          loadInfo:{ loadNo:'', broker:'', pickupCity:'', pickupState:'', deliveryCity:'', deliveryState:'', appointment:'', shippingDocs:'', bol:'', po:'' },
+          gpsTrip:null,
+          gpsPanelOpen:false,
+          currentStatus:'OFF',
+          currentReason:'Off Duty',
+        });
+
+        lastEventsByDayRef.current = s.eventsByDay || {};
+        lastInspectionByDayRef.current = s.inspectionByDay || {};
+        return next;
+      });
+    });
+  }
+
 
   function closeLastAndAddStatus({ status, reason, city, state: st, description='', droppedTrailer='', hookedTrailer='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual', shippingDocs='', loadNo='', destination='', destinationState='', backdateMinutes=0 }) {
     const acceptedLiveInspection = maybeAcceptInspectionForEvent(state, state.activeDay, { status, note:reason, description, city, state:st });
@@ -1631,7 +1667,7 @@ export default function App() {
       {state.sheet?.type === 'equipment' && <EquipmentSheet equipment={state.equipment || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveEquipment} />}
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
-      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} />}
+      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onClearTestDates={clearTestDates} />}
     </>
   );
 }
