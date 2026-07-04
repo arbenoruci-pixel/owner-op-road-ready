@@ -139,17 +139,28 @@ export function lookupCityPoint(city = '', state = '') {
   ) || null;
 }
 
+function hasRealCoordinate(value) {
+  if (value == null || value === '') return false;
+  const n = Number(value);
+  return Number.isFinite(n);
+}
+
 export function pointFromLogLocation(item = {}) {
-  const lat = Number(item.lat);
-  const lng = Number(item.lng);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    return {
-      lat,
-      lng,
-      city: item.city || 'GPS',
-      state: item.state || detectState(lat, lng),
-      source: item.locationSource === 'gps' || item.source === 'gps_drive' ? 'gps' : 'coordinates',
-    };
+  const hasLatLng = hasRealCoordinate(item.lat) && hasRealCoordinate(item.lng);
+  if (hasLatLng) {
+    const lat = Number(item.lat);
+    const lng = Number(item.lng);
+    // Guard against null/blank coordinates turning into 0,0 and creating
+    // impossible mileage suggestions such as 6,000+ miles from Midwest logs.
+    if (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001) {
+      return {
+        lat,
+        lng,
+        city: item.city || 'GPS',
+        state: item.state || detectState(lat, lng),
+        source: item.locationSource === 'gps' || item.source === 'gps_drive' ? 'gps' : 'coordinates',
+      };
+    }
   }
   const point = lookupCityPoint(item.city, item.state);
   if (!point) return null;
@@ -158,7 +169,7 @@ export function pointFromLogLocation(item = {}) {
 
 export function estimatedRoadMiles(a, b) {
   const raw = haversineMiles(a, b);
-  if (!raw) return 0;
+  if (!raw || raw > 1200) return 0;
   // Conservative highway estimate from city center/log points. It is not a
   // routing engine; the driver can accept or change it in the manual miles flow.
   return Number((raw * 1.1).toFixed(2));

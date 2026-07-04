@@ -9,6 +9,7 @@ import {
   makeContinuousLogEvents,
   closePreviousAndStart,
 } from '../source/src/core/timeline/timelineEngine.js';
+import { pointFromLogLocation, estimatedRoadMiles } from '../source/src/core/gps/locationService.js';
 
 let checks = 0;
 function ok(name, fn) {
@@ -109,6 +110,17 @@ ok('hos source: isCurrentDay depends on today only, not activeDay', () => {
   const src = readFileSync(new URL('../source/src/core/hos/hosEngine.js', import.meta.url), 'utf8');
   assert.ok(!src.includes("dayKey === today && dayKey === activeDay"), 'old activeDay-coupled condition still present');
   assert.ok(src.includes('isCurrentDay: dayKey === today'), 'new condition missing');
+});
+
+
+// 9) Manual miles estimate: null/blank coordinates must not become 0,0.
+ok('manual miles: null coordinates fall back to log city points', () => {
+  const origin = pointFromLogLocation({ city:'Willowbrook', state:'IL', lat:null, lng:null });
+  const destination = pointFromLogLocation({ city:'Indianapolis', state:'IN', lat:null, lng:null });
+  const miles = estimatedRoadMiles(origin, destination);
+  assert.equal(origin.source, 'log-location');
+  assert.equal(destination.source, 'log-location');
+  assert.ok(miles > 120 && miles < 260, `expected Midwest estimate, got ${miles}`);
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);
