@@ -144,4 +144,14 @@ ok('form: route legs do not leak stale notes or overwrite shipping docs', () => 
   assert.ok(src.includes('onSaveLoad?.({ routeLegsByDay });'), 'adding a route leg should not overwrite day-level loadInfo fields');
 });
 
+// 12) Form route legs must have an explicit delete action.
+ok('form: route legs can be deleted', () => {
+  const src = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
+  assert.ok(src.includes('function deleteRouteLeg'), 'deleteRouteLeg function missing');
+  assert.ok(src.includes('route-leg-delete'), 'delete button class missing');
+  assert.ok(src.includes("filter(item => item.id !== leg.id)"), 'route leg delete filter missing');
+  assert.ok(css.includes('v95.28 route leg delete action'), 'route leg delete styles missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

@@ -471,6 +471,17 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
     routeLegsByDay[targetDay] = (routeLegsByDay[targetDay] || []).map(item => item.id === leg.id ? updated : item);
     onSaveLoad?.({ routeLegsByDay });
   }
+
+  function deleteRouteLeg(leg) {
+    if (typeof window === 'undefined' || !leg) return;
+    const label = legLabel(leg);
+    const ok = window.confirm?.(`Delete this route leg?\n${label}\n${leg.shippingDocs || leg.loadNo ? `BOL ${leg.shippingDocs || leg.loadNo}` : ''}`);
+    if (!ok) return;
+    const targetDay = leg.day || state.activeDay;
+    const routeLegsByDay = { ...(state.routeLegsByDay || {}) };
+    routeLegsByDay[targetDay] = (routeLegsByDay[targetDay] || []).filter(item => item.id !== leg.id);
+    onSaveLoad?.({ routeLegsByDay });
+  }
   return (
     <div className="road-paper-form">
       <div className="road-form-totals">
@@ -504,10 +515,13 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
       <FormSectionTitle>ROUTE / SHIPPING</FormSectionTitle>
       <div className="route-leg-list">
         {form.routeLegs.length ? form.routeLegs.map(leg => (
-          <button key={leg.id} type="button" className={`route-leg-row ${leg.status === 'delivered' ? 'done' : 'open'}`} onClick={() => editRouteLeg(leg)}>
-            <b>{legLabel(leg)}</b>
-            <span>{legMeta(leg)}</span>
-          </button>
+          <div key={leg.id} className="route-leg-item">
+            <button type="button" className={`route-leg-row ${leg.status === 'delivered' ? 'done' : 'open'}`} onClick={() => editRouteLeg(leg)}>
+              <b>{legLabel(leg)}</b>
+              <span>{legMeta(leg)}</span>
+            </button>
+            <button type="button" className="route-leg-delete" onClick={() => deleteRouteLeg(leg)} aria-label={`Delete ${legLabel(leg)}`}>Delete</button>
+          </div>
         )) : <div className="route-leg-empty">No route legs yet.</div>}
         <button type="button" className="route-leg-add" onClick={addRouteLeg}>+ Add stop / leg</button>
       </div>

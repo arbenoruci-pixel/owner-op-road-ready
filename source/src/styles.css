@@ -7403,3 +7403,37 @@ body,
 .choice-card.danger span{
   color:#7f1d1d!important;
 }
+
+/* v95.28 route leg delete action */
+.route-leg-item{
+  display:grid!important;
+  grid-template-columns:1fr auto!important;
+  gap:8px!important;
+  align-items:stretch!important;
+  margin:0 0 9px!important;
+}
+.route-leg-item .route-leg-row{
+  margin:0!important;
+  width:100%!important;
+}
+.route-leg-delete{
+  min-width:76px!important;
+  border:1px solid #fecaca!important;
+  border-radius:16px!important;
+  background:#fff7f7!important;
+  color:#991b1b!important;
+  font-size:12px!important;
+  font-weight:950!important;
+  padding:0 10px!important;
+}
+.route-leg-delete:active{
+  transform:scale(.98);
+}
+@media (max-width:390px){
+  .route-leg-item{
+    grid-template-columns:1fr!important;
+  }
+  .route-leg-delete{
+    min-height:40px!important;
+  }
+}
