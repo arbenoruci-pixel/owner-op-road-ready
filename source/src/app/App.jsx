@@ -298,6 +298,15 @@ function normalizeState(s) {
   refreshCarryoverIfOnlyPlaceholder(eventsByDay, today);
   const currentFromCarry = (eventsByDay[today] || []).length ? sorted(eventsByDay[today])[0] : null;
 
+  const compactSignatureByDay = Object.fromEntries(Object.entries(s.signatureByDay || {}).map(([dayKey, sig]) => {
+    if (!sig || typeof sig !== 'object') return [dayKey, sig];
+    const { signatureDataUrl, ...rest } = sig;
+    return [dayKey, {
+      ...rest,
+      ...(signatureDataUrl ? { signatureRef:'driverSignature' } : {}),
+    }];
+  }));
+
   const normalized = {
     ...s,
     migratedTodayCleanV65: true,
@@ -309,7 +318,7 @@ function normalizeState(s) {
     currentReason: s.currentReason || currentFromCarry?.note || currentFromCarry?.description || 'Off Duty',
     currentLocation: s.currentLocation || (currentFromCarry ? { city: currentFromCarry.city || 'GPS', state: currentFromCarry.state || 'UNK', locationSource:'carryover' } : { city:'GPS', state:'UNK', locationSource:'pending' }),
     inspectionByDay: s.inspectionByDay || {},
-    signatureByDay: s.signatureByDay || {},
+    signatureByDay: compactSignatureByDay || {},
     driverSignature: s.driverSignature || null,
     equipment: s.equipment || { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: s.gpsTrip || null,
@@ -1241,45 +1250,56 @@ export default function App() {
   }
 
   function signLogDay(day = state.activeDay, payload = {}) {
-    const existingSignature = state.driverSignature || null;
-    const dataUrl = payload.signatureDataUrl || existingSignature?.dataUrl;
-    const driverName = payload.driverName || existingSignature?.driverName || state.signatureByDay?.[day]?.driverName || 'Driver';
+    try {
+      const existingSignature = state.driverSignature || null;
+      const dataUrl = payload.signatureDataUrl || existingSignature?.dataUrl;
+      const driverName = payload.driverName || existingSignature?.driverName || state.signatureByDay?.[day]?.driverName || 'Driver';
 
-    if (!dataUrl) {
-      window.alert?.('Add your driver signature first. After it is saved once, signing future logs is one tap.');
-      return;
-    }
+      if (!dataUrl) {
+        window.alert?.('Add your driver signature first. After it is saved once, signing future logs is one tap.');
+        return;
+      }
 
-    const blockMessage = signBlockMessage(state, day);
-    if (blockMessage) {
-      window.alert?.(blockMessage);
-      return;
-    }
+      const blockMessage = signBlockMessage(state, day);
+      if (blockMessage) {
+        window.alert?.(blockMessage);
+        return;
+      }
 
-    const confirmMessage = signConfirmMessage(state, day);
-    if (confirmMessage && !window.confirm(confirmMessage)) return;
+      const confirmMessage = signConfirmMessage(state, day);
+      if (confirmMessage && !window.confirm(confirmMessage)) return;
 
-    setState(s => {
-      const latestSignature = payload.signatureDataUrl
-        ? { dataUrl: payload.signatureDataUrl, driverName, savedAt: Date.now() }
-        : (s.driverSignature || existingSignature || { dataUrl, driverName, savedAt: Date.now() });
+      setState(s => {
+        const latestSignature = payload.signatureDataUrl
+          ? { dataUrl: payload.signatureDataUrl, driverName, savedAt: Date.now() }
+          : (s.driverSignature || existingSignature || { dataUrl, driverName, savedAt: Date.now() });
 
-      return {
-        ...s,
-        driverSignature: latestSignature,
-        signatureByDay:{
-          ...(s.signatureByDay || {}),
-          [day]: {
-            ...((s.signatureByDay || {})[day] || {}),
-            driverName,
-            signatureDataUrl: latestSignature.dataUrl,
-            signed: true,
-            signedAt: Date.now(),
+        const existingDaySignature = (s.signatureByDay || {})[day] || {};
+        const { signatureDataUrl, ...compactDaySignature } = existingDaySignature;
+
+        return {
+          ...s,
+          // Store the signature image once globally. Each signed day keeps a
+          // reference + signed metadata. This avoids duplicating a base64 image
+          // across many days, which can crash iPhone/Safari after tapping Sign.
+          driverSignature: latestSignature,
+          signatureByDay:{
+            ...(s.signatureByDay || {}),
+            [day]: {
+              ...compactDaySignature,
+              driverName,
+              signatureRef:'driverSignature',
+              signed: true,
+              signedAt: Date.now(),
+            },
           },
-        },
-        certifyStatus:{ ...s.certifyStatus, [day]:'Certified' },
-      };
-    });
+          certifyStatus:{ ...s.certifyStatus, [day]:'Certified' },
+        };
+      });
+    } catch (error) {
+      console.error('signLogDay failed', error);
+      window.alert?.('Signing failed. Please reload and try again. Your log was not changed.');
+    }
   }
 
   function certify(day = state.activeDay) {

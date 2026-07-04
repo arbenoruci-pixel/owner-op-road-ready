@@ -7223,3 +7223,15 @@ body,
 .roadguard-head-actions button{
   min-width:42px!important;
 }
+
+/* v95.5 Sign crash guard */
+.signature-error-inline{
+  margin:8px 0 0!important;
+  padding:9px 10px!important;
+  border:1px solid #fecaca!important;
+  border-radius:12px!important;
+  background:#fef2f2!important;
+  color:#991b1b!important;
+  font-size:12px!important;
+  font-weight:850!important;
+}

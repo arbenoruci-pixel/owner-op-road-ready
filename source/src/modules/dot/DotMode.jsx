@@ -225,7 +225,8 @@ function dayReportHtml(state, day, days) {
       <td>${htmlEscape(event.note || event.description || label(event.status))}</td>
     </tr>`).join('') : '<tr><td colspan="7">No events recorded</td></tr>';
   const recapRows = recaps.map(({ day: d, total }) => `<td><b>${htmlEscape(shortDate(d))}</b><br/>${(total / 60).toFixed(2)}</td>`).join('');
-  const signatureHtml = sig.signatureDataUrl ? `<img src="${htmlEscape(sig.signatureDataUrl)}" alt="Driver signature" />` : '';
+  const signatureDataUrl = sig.signatureDataUrl || (sig.signatureRef === 'driverSignature' ? state.driverSignature?.dataUrl : '') || '';
+  const signatureHtml = signatureDataUrl ? `<img src="${htmlEscape(signatureDataUrl)}" alt="Driver signature" />` : '';
   return `
   <section class="daily-log-page">
     <header class="daily-log-head">
@@ -349,7 +350,7 @@ function DailyPaper({ state, day, days }) {
         <div><b>Certification:</b> {signatureLabel(state, day)}</div>
         {issues.length ? <div className="dot-paper-review"><b>Review:</b> {issues.map(issue => `${issue.where}: ${issue.title}`).join('; ')}</div> : null}
         <p>I hereby certify that my data entries and my record of duty status for this day are true and correct.</p>
-        <div className="dot-sign-line">{sig.signatureDataUrl ? <img src={sig.signatureDataUrl} alt="Driver signature" /> : null}<span>Driver Signature</span></div>
+        <div className="dot-sign-line">{(sig.signatureDataUrl || (sig.signatureRef === 'driverSignature' ? state.driverSignature?.dataUrl : '')) ? <img src={sig.signatureDataUrl || state.driverSignature?.dataUrl} alt="Driver signature" /> : null}<span>Driver Signature</span></div>
       </div>
     </article>
   );

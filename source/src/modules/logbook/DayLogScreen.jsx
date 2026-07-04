@@ -960,6 +960,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
   const [hasInk, setHasInk] = useState(!!existingDataUrl);
   const [changeSignature, setChangeSignature] = useState(!existingDataUrl);
   const [wizardRequestId, setWizardRequestId] = useState(0);
+  const [signatureError, setSignatureError] = useState('');
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef(null);
@@ -1042,25 +1043,39 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
   }
 
   function signLog() {
-    if (changeSignature) {
-      const canvas = canvasRef.current;
-      if (!canvas || !hasInk) return;
+    try {
+      setSignatureError('');
+      if (changeSignature) {
+        const canvas = canvasRef.current;
+        if (!canvas || !hasInk) return;
+        let signatureDataUrl = '';
+        try {
+          signatureDataUrl = canvas.toDataURL('image/png');
+        } catch (error) {
+          console.error('signature canvas export failed', error);
+          setSignatureError('Signature could not be saved. Please clear and draw it again.');
+          return;
+        }
+        onSaveSignature?.({
+          driverName: name || driverNameForState(state),
+          signatureDataUrl,
+        });
+        return;
+      }
+
+      if (!existingDataUrl) {
+        setChangeSignature(true);
+        return;
+      }
+
       onSaveSignature?.({
-        driverName: name || driverNameForState(state),
-        signatureDataUrl: canvas.toDataURL('image/png'),
+        driverName: name || savedDriverSignature?.driverName || driverNameForState(state),
+        signatureDataUrl: existingDataUrl,
       });
-      return;
+    } catch (error) {
+      console.error('sign click failed', error);
+      setSignatureError('Signing failed. Reload and try again.');
     }
-
-    if (!existingDataUrl) {
-      setChangeSignature(true);
-      return;
-    }
-
-    onSaveSignature?.({
-      driverName: name || savedDriverSignature?.driverName || driverNameForState(state),
-      signatureDataUrl: existingDataUrl,
-    });
   }
 
   const signButtonLabel = signState.status === 'Needs Recertification'
@@ -1102,7 +1117,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
               onPointerCancel={endDraw}
             />
           </div>
-          <button className="clear-signature-link" onClick={clearSignature}>Clear Signature</button>
+          <button type="button" className="clear-signature-link" onClick={clearSignature}>Clear Signature</button>
         </>
       )}
 
@@ -1114,8 +1129,11 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
       <SignGuardPanel state={state} day={day} onQuickFix={onQuickFix} wizardRequestId={wizardRequestId} />
 
 
+      {signatureError ? <div className="signature-error-inline">{signatureError}</div> : null}
+
       <div className="signature-actions-row">
         <button
+          type="button"
           className="sign-save road-sign-save"
           onClick={fixBlockers.length ? () => setWizardRequestId(Date.now()) : signLog}
           disabled={fixBlockers.length ? false : ((changeSignature && !hasInk) || todayActive)}
@@ -1124,7 +1142,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix }) {
         </button>
       </div>
 
-      {existingDataUrl && !changeSignature && <button className="clear-signature-link" onClick={() => setChangeSignature(true)}>Change Signature</button>}
+      {existingDataUrl && !changeSignature && <button type="button" className="clear-signature-link" onClick={() => setChangeSignature(true)}>Change Signature</button>}
 
       <div className="signature-footnote">
         {saved.signed ? `Signed · ${prettyStamp(saved.signedAt)}` : existingDataUrl ? 'Ready with saved signature.' : 'Draw signature once.'}
