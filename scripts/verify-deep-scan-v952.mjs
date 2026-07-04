@@ -195,8 +195,8 @@ ok('location continuity: issue offers direct location fix suggestions', () => {
   assert.ok(signingSrc.includes('FIX_LOCATION_CONTINUITY'), 'signing action missing');
   assert.ok(dotSrc.includes('Fix location'), 'DOT fix label missing');
   assert.ok(appSrc.includes('function fixLocationContinuity'), 'app fixLocationContinuity function missing');
-  assert.ok(appSrc.includes('Recommended: set current event'), 'current-to-previous recommended fix missing');
-  assert.ok(appSrc.includes('Recommended: set earlier connected event(s)'), 'previous-chain recommended fix missing');
+  assert.ok(appSrc.includes('Set current event'), 'current-to-previous recommended fix missing');
+  assert.ok(appSrc.includes('Set earlier connected event(s)'), 'previous-chain recommended fix missing');
 });
 
 // 17) Fix Wizard should visually focus location-jump problems and show Fix it.
@@ -220,7 +220,7 @@ ok('location continuity: recommended fix can patch previous connected chain', ()
   assert.ok(signingSrc.includes('location_jump_pretrip_drive'), 'pretrip-driving location mismatch issue missing');
   assert.ok(daySrc.includes('Likely wrong'), 'focused UI should highlight the likely wrong side');
   assert.ok(appSrc.includes('fixChainToCurrent'), 'chain fix flag missing in app');
-  assert.ok(appSrc.includes('set earlier connected event(s)'), 'recommended chain-fix prompt missing');
+  assert.ok(appSrc.includes('Set earlier connected event(s)'), 'recommended chain-fix prompt missing');
 });
 
 // 19) Clean edit flow: graph/event taps open edit without selected Move/Edit/Void bar.
@@ -267,6 +267,18 @@ ok('status workflow: multi-reason chips are supported', () => {
   assert.ok(statusSrc.includes('select one or more'), 'multi-reason UI hint missing');
   assert.ok(statusSrc.includes('reasonNeedsLoadLink(status, selectedReasons)'), 'load-link condition not multi-reason aware');
   assert.ok(appSrc.includes('/drop trailer/i.test(reason)'), 'drop-trailer multi-reason handling missing');
+});
+
+// 23) Location fix uses custom highlighted modal, not native prompt.
+ok('location fix: custom highlighted modal replaces native prompt', () => {
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
+  assert.ok(appSrc.includes('function LocationContinuityFixSheet'), 'custom location fix sheet missing');
+  assert.ok(appSrc.includes("sheet:{ type:'locationFix'"), 'locationFix sheet state missing');
+  assert.ok(appSrc.includes('applyLocationContinuityFix'), 'applyLocationContinuityFix missing');
+  assert.ok(!appSrc.includes('Location jump with no driving.\\n\\nPrevious event'), 'old native prompt text should be removed');
+  assert.ok(cssSrc.includes('location-fix-event.bad'), 'red highlighted event style missing');
+  assert.ok(cssSrc.includes('v95.39 custom location fix modal'), 'location fix modal styles missing');
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

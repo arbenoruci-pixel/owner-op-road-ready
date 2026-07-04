@@ -398,6 +398,122 @@ function sorted(events) {
   return [...events].sort((a,b)=>a.startMin-b.startMin);
 }
 
+function locationFixContextFromState(state = {}, payload = {}) {
+  const issue = payload.issue || {};
+  const day = payload.day || issue.day || state.activeDay;
+  const baseEvents = displayEventsForDayFromState(state.eventsByDay || {}, day);
+  let targetId = issue.eventId || '';
+  let previousId = issue.previousEventId || '';
+  let targetIndex = baseEvents.findIndex(event => event.id === targetId);
+
+  if (targetIndex < 0 && issue.startMin != null) {
+    targetIndex = baseEvents.findIndex(event =>
+      Number(event.startMin || 0) <= Number(issue.startMin) &&
+      Number(event.endMin || 0) >= Number(issue.startMin)
+    );
+    targetId = baseEvents[targetIndex]?.id || targetId;
+  }
+
+  if (!previousId && targetIndex > 0) previousId = baseEvents[targetIndex - 1]?.id || '';
+
+  const targetEvent = baseEvents.find(event => event.id === targetId) || null;
+  const previousEvent = baseEvents.find(event => event.id === previousId) || null;
+  const prevLoc = issue.previousLocation || { city:previousEvent?.city || '', state:previousEvent?.state || '' };
+  const currLoc = issue.currentLocation || { city:targetEvent?.city || '', state:targetEvent?.state || '' };
+  const prevLabel = formatCityState(prevLoc.city, prevLoc.state) || formatCityState(previousEvent?.city, previousEvent?.state) || 'Missing';
+  const currLabel = formatCityState(currLoc.city, currLoc.state) || formatCityState(targetEvent?.city, targetEvent?.state) || 'Missing';
+  const preferPreviousToCurrent = !!issue.preferPreviousToCurrent;
+  const fixChainToCurrent = !!issue.fixChainToCurrent;
+
+  return {
+    day,
+    baseEvents,
+    targetEvent,
+    previousEvent,
+    prevLoc,
+    currLoc,
+    prevLabel,
+    currLabel,
+    preferPreviousToCurrent,
+    fixChainToCurrent,
+  };
+}
+
+function LocationContinuityFixSheet({ state, payload, onClose, onApply }) {
+  const ctx = locationFixContextFromState(state, payload);
+  const [custom, setCustom] = useState('');
+  const recommended = ctx.preferPreviousToCurrent
+    ? `Set earlier connected event(s) to ${ctx.currLabel}`
+    : `Set current event to ${ctx.prevLabel}`;
+  const alternate = ctx.preferPreviousToCurrent
+    ? `Set current event to ${ctx.prevLabel}`
+    : `Set previous event to ${ctx.currLabel}`;
+
+  if (!ctx.targetEvent || !ctx.previousEvent) {
+    return (
+      <div className="location-fix-overlay">
+        <div className="location-fix-card">
+          <div className="location-fix-head">
+            <span>Location Fix</span>
+            <button onClick={onClose}>Close</button>
+          </div>
+          <p>Could not find the two events. Open the log and review the event locations.</p>
+          <button className="location-fix-primary" onClick={onClose}>OK</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="location-fix-overlay" role="dialog" aria-modal="true" aria-label="Fix location continuity">
+      <div className="location-fix-card">
+        <div className="location-fix-head">
+          <div>
+            <span>Fix location jump</span>
+            <b>{ctx.day}</b>
+          </div>
+          <button onClick={onClose}>Close</button>
+        </div>
+
+        <div className="location-fix-problem">
+          <b>No DRIVING line between these two events.</b>
+          <span>Pick which location should be corrected.</span>
+        </div>
+
+        <div className="location-fix-events">
+          <div className={`location-fix-event ${ctx.preferPreviousToCurrent ? 'bad' : 'ref'}`}>
+            <span>{ctx.preferPreviousToCurrent ? 'Likely wrong' : 'Previous event'}</span>
+            <b>{ctx.prevLabel}</b>
+            <em>{ctx.previousEvent.status} · {ctx.previousEvent.startMin != null ? `${Math.floor(ctx.previousEvent.startMin / 60)}:${String(ctx.previousEvent.startMin % 60).padStart(2, '0')}` : ''}</em>
+          </div>
+          <div className={`location-fix-event ${ctx.preferPreviousToCurrent ? 'ref' : 'bad'}`}>
+            <span>{ctx.preferPreviousToCurrent ? 'Reference location' : 'Likely wrong'}</span>
+            <b>{ctx.currLabel}</b>
+            <em>{ctx.targetEvent.status} · {ctx.targetEvent.startMin != null ? `${Math.floor(ctx.targetEvent.startMin / 60)}:${String(ctx.targetEvent.startMin % 60).padStart(2, '0')}` : ''}</em>
+          </div>
+        </div>
+
+        <div className="location-fix-actions">
+          <button className="location-fix-primary" onClick={() => onApply('recommended')}>Fix it</button>
+          <button onClick={() => onApply('alternate')}>{alternate}</button>
+        </div>
+
+        <div className="location-fix-custom">
+          <label>Custom location for current event</label>
+          <div>
+            <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="City, ST" />
+            <button onClick={() => onApply('custom', custom)}>Apply</button>
+          </div>
+        </div>
+
+        <div className="location-fix-recommend">
+          Recommended: <strong>{recommended}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState(defaultInitialState);
   const [offlineHydrated, setOfflineHydrated] = useState(false);
@@ -1285,90 +1401,55 @@ export default function App() {
   function fixLocationContinuity(payload = {}) {
     const issue = payload.issue || {};
     const targetDay = payload.day || issue.day || state.activeDay;
+    setState(s => ({
+      ...s,
+      activeDay: targetDay || s.activeDay,
+      view:'day',
+      selectedEventId: issue.eventId || s.selectedEventId,
+      sheet:{ type:'locationFix', payload:{ ...payload, day: targetDay || s.activeDay } },
+      roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'location-fix-sheet' },
+    }));
+  }
 
+  function applyLocationContinuityFix(payload = {}, mode = 'recommended', customValue = '') {
     setState(s => {
-      const day = targetDay || s.activeDay;
-      const baseEvents = continuousBaseForDay(s, day);
-      let targetId = issue.eventId || '';
-      let previousId = issue.previousEventId || '';
-      let targetIndex = baseEvents.findIndex(event => event.id === targetId);
+      const ctx = locationFixContextFromState(s, payload);
+      if (!ctx.targetEvent || !ctx.previousEvent) return { ...s, sheet:null };
 
-      if (targetIndex < 0 && issue.startMin != null) {
-        targetIndex = baseEvents.findIndex(event =>
-          Number(event.startMin || 0) <= Number(issue.startMin) &&
-          Number(event.endMin || 0) >= Number(issue.startMin)
-        );
-        targetId = baseEvents[targetIndex]?.id || targetId;
-      }
+      let idsToPatch = [ctx.targetEvent.id];
+      let nextLoc = { ...ctx.prevLoc };
 
-      if (!previousId && targetIndex > 0) previousId = baseEvents[targetIndex - 1]?.id || '';
-      const targetEvent = baseEvents.find(event => event.id === targetId) || null;
-      const previousEvent = baseEvents.find(event => event.id === previousId) || null;
-
-      if (!targetEvent || !previousEvent) {
-        return {
-          ...s,
-          activeDay: day,
-          view:'day',
-          roadGuardTabRequest:{ tab:'log', at:Date.now() },
-        };
-      }
-
-      const prevLoc = issue.previousLocation || { city:previousEvent.city || '', state:previousEvent.state || '' };
-      const currLoc = issue.currentLocation || { city:targetEvent.city || '', state:targetEvent.state || '' };
-      const prevLabel = formatCityState(prevLoc.city, prevLoc.state) || formatCityState(previousEvent.city, previousEvent.state);
-      const currLabel = formatCityState(currLoc.city, currLoc.state) || formatCityState(targetEvent.city, targetEvent.state);
-
-      const preferPreviousToCurrent = !!issue.preferPreviousToCurrent;
-      const fixChainToCurrent = !!issue.fixChainToCurrent;
-      const recommendedText = preferPreviousToCurrent
-        ? `1 = Recommended: set earlier connected event(s) to ${currLabel}\n2 = set current event to ${prevLabel}`
-        : `1 = Recommended: set current event to ${prevLabel}\n2 = set previous event to ${currLabel}`;
-
-      let choice = '1';
-      if (typeof window !== 'undefined' && window.prompt) {
-        choice = window.prompt(
-          `Location jump with no driving.\n\nPrevious event: ${prevLabel}\nCurrent event: ${currLabel}\n\n${recommendedText}\nOr type City, ST for the current event.`,
-          '1'
-        );
-      }
-
-      if (choice == null) return s;
-
-      let idsToPatch = [targetEvent.id];
-      let nextLoc = { ...prevLoc };
-
-      const cleanChoice = String(choice || '').trim();
-      const choosePreviousToCurrent = preferPreviousToCurrent ? cleanChoice === '1' : cleanChoice === '2';
-      const chooseCurrentToPrevious = preferPreviousToCurrent ? cleanChoice === '2' : cleanChoice === '1';
-
-      if (choosePreviousToCurrent) {
-        nextLoc = { ...currLoc };
-        idsToPatch = [previousEvent.id];
-        if (fixChainToCurrent) {
-          const previousIndex = baseEvents.findIndex(event => event.id === previousEvent.id);
-          for (let i = previousIndex - 1; i >= 0; i -= 1) {
-            const current = baseEvents[i + 1];
-            const candidate = baseEvents[i];
-            if (!candidate || candidate.status === 'D') break;
-            const touches = Math.abs(Number(current.startMin || 0) - Number(candidate.endMin || 0)) <= 5;
-            if (!touches) break;
-            idsToPatch.push(candidate.id);
-          }
-        }
-      } else if (chooseCurrentToPrevious) {
-        idsToPatch = [targetEvent.id];
-        nextLoc = { ...prevLoc };
-      } else {
-        const parsed = parseCityStateText(cleanChoice);
+      if (mode === 'custom') {
+        const parsed = parseCityStateText(customValue);
         if (!parsed.city || !parsed.state) return s;
-        idsToPatch = [targetEvent.id];
         nextLoc = parsed;
+        idsToPatch = [ctx.targetEvent.id];
+      } else {
+        const useRecommended = mode === 'recommended';
+        const patchEarlierToCurrent = ctx.preferPreviousToCurrent ? useRecommended : !useRecommended;
+        if (patchEarlierToCurrent) {
+          nextLoc = { ...ctx.currLoc };
+          idsToPatch = [ctx.previousEvent.id];
+          if (ctx.fixChainToCurrent) {
+            const previousIndex = ctx.baseEvents.findIndex(event => event.id === ctx.previousEvent.id);
+            for (let i = previousIndex - 1; i >= 0; i -= 1) {
+              const current = ctx.baseEvents[i + 1];
+              const candidate = ctx.baseEvents[i];
+              if (!candidate || candidate.status === 'D') break;
+              const touches = Math.abs(Number(current.startMin || 0) - Number(candidate.endMin || 0)) <= 5;
+              if (!touches) break;
+              idsToPatch.push(candidate.id);
+            }
+          }
+        } else {
+          idsToPatch = [ctx.targetEvent.id];
+          nextLoc = { ...ctx.prevLoc };
+        }
       }
 
       const patchSet = new Set(idsToPatch);
-      const selectedAfterFix = idsToPatch[0] || targetEvent.id;
-      const updatedEvents = commitTimelineForDay(baseEvents.map(event => (
+      const selectedAfterFix = idsToPatch[0] || ctx.targetEvent.id;
+      const updatedEvents = commitTimelineForDay(ctx.baseEvents.map(event => (
         patchSet.has(event.id)
           ? {
               ...event,
@@ -1381,21 +1462,22 @@ export default function App() {
               updatedAt:Date.now(),
             }
           : event
-      )), day, s);
+      )), ctx.day, s);
 
       const next = {
         ...s,
-        activeDay: day,
+        activeDay: ctx.day,
         view:'day',
         selectedEventId:selectedAfterFix,
         sheet:null,
-        eventsByDay:{ ...(s.eventsByDay || {}), [day]: updatedEvents },
+        eventsByDay:{ ...(s.eventsByDay || {}), [ctx.day]: updatedEvents },
         roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'fix-location-continuity' },
       };
 
-      return markDayRecert(next, day);
+      return markDayRecert(next, ctx.day);
     });
   }
+
 
   function addPreTripBeforeDriving(payload = {}) {
     const targetDay = payload.day || payload.issue?.day || state.activeDay;
@@ -1733,6 +1815,7 @@ export default function App() {
       <DriveTrackerSheet state={state} open={false} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       {state.sheet?.type === 'equipment' && <EquipmentSheet equipment={state.equipment || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveEquipment} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: state.currentStatus || 'OFF', currentReason: state.currentReason || 'Off Duty', currentLocation: state.currentLocation}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
+      {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
     </>
   );
   if (state.view === 'unsigned') return (
@@ -1784,6 +1867,7 @@ export default function App() {
       {state.sheet?.type === 'equipment' && <EquipmentSheet equipment={state.equipment || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveEquipment} />}
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
+      {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
       {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onClearTestDates={clearTestDates} />}
     </>
   );
