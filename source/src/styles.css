@@ -8478,3 +8478,11 @@ body,
     grid-template-columns:1fr!important;
   }
 }
+
+/* v95.51 Roadside 8-day list + older saved logs */
+.rr-missing-day .rr-rail{opacity:.55!important}
+.rr-missing-day .rr-sub span:nth-child(3){color:#9b6b1b!important;font-weight:850!important}
+.rr-older-toggle{display:flex;align-items:center;gap:10px;width:calc(100% - 24px)!important;margin:4px 12px 10px!important;border:1px solid var(--fb-line, var(--rr-line))!important;border-radius:15px!important;background:var(--fb-card, var(--rr-surface))!important;padding:12px 13px!important;color:var(--fb-ink, var(--rr-ink))!important;text-align:left;box-shadow:0 2px 8px rgba(20,32,51,.035)!important}
+.rr-older-toggle span{font-size:14px;font-weight:900;letter-spacing:.01em}
+.rr-older-toggle em{font-style:normal;color:var(--fb-muted, var(--rr-muted));font-size:12px;font-weight:800;margin-left:auto}
+.rr-older-toggle b{font-size:12px;font-weight:950;color:var(--fb-blue, var(--rr-accent));background:rgba(33,86,217,.08);border:1px solid rgba(33,86,217,.15);border-radius:999px;padding:5px 9px}

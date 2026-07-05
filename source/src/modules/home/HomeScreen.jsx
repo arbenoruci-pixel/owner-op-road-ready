@@ -1,15 +1,13 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import LogGraph from '../graph/LogGraph.jsx';
 import { label } from '../../shared/utils/status.js';
-import { localDayKey } from '../../shared/utils/date.js';
+import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { signableLogDays, validateLogForSigning } from '../logbook/signing.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 
-// v92.5 Owner-Op Road Ready — Logs list with original visual identity.
-// Structure (status strip + TODAY + LAST 14 DAYS) stays simple/low-stress; the look
-// is our own: light header + wordmark, left status rail, duty chips, warning count.
-// All callbacks and data-derivation are unchanged so the timeline/signing/DOT logic
-// keeps working exactly as before.
+// v95.51 Roadside 8-day home list
+// Home always shows the active log day plus the previous 7 calendar days.
+// Older saved logs remain stored and accessible under Older saved logs.
 
 function dayParts(day) {
   const d = new Date(`${day}T12:00:00`);
@@ -40,7 +38,7 @@ function statusSummary(state) {
   const loc = state.currentLocation || {};
   const source = loc.locationSource || state.homeGpsStatus || 'default';
   const hasRealLocation = source === 'gps' || source === 'manual' || (loc.city && loc.state && !(loc.city === 'Chicago' && loc.state === 'IL' && source === 'default'));
-  let location = 'Getting GPS…';
+  let location = 'Set location';
   if (hasRealLocation) location = `${loc.city || 'GPS'}, ${loc.state || 'UNK'}`;
   else if (state.homeGpsStatus === 'blocked') location = 'GPS blocked';
   else if (state.homeGpsStatus === 'unavailable') location = 'GPS unavailable';
@@ -58,16 +56,51 @@ function inspectionDone(state, day) {
   return !!(insp && (insp.complete || (Array.isArray(insp.checked) && insp.checked.length >= 6)));
 }
 
-function DayRow({ state, day, today, onOpenDay }) {
+function isDayKey(key) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(key || ''));
+}
+
+function savedDayKeys(state) {
+  const out = new Set();
+  [
+    state.eventsByDay,
+    state.certifyStatus,
+    state.signatureByDay,
+    state.inspectionByDay,
+    state.formByDay,
+    state.routeByDay,
+  ].forEach(bucket => {
+    Object.keys(bucket || {}).forEach(day => {
+      if (isDayKey(day)) out.add(day);
+    });
+  });
+  return out;
+}
+
+function hasRealLog(state, day) {
+  return Array.isArray(state.eventsByDay?.[day]) && state.eventsByDay[day].length > 0;
+}
+
+function certLabelForDay(state, day, anchorDay) {
+  const cert = state.certifyStatus?.[day];
+  if (cert) return cert;
+  if (day === anchorDay) return 'Active day / Not certified yet';
+  if (!hasRealLog(state, day)) return 'Missing log';
+  return 'Needs signature';
+}
+
+function DayRow({ state, day, anchorDay, onOpenDay }) {
   const { weekday, date } = dayParts(day);
-  const evs = displayEventsForDay(state.eventsByDay?.[day] || [], day === today);
-  const cert = state.certifyStatus?.[day] || (day === today ? 'Active' : 'Not certified');
-  const status = (state.eventsByDay?.[day] || []).slice(-1)[0]?.status || 'OFF';
+  const raw = state.eventsByDay?.[day] || [];
+  const evs = displayEventsForDay(raw, day === anchorDay);
+  const cert = certLabelForDay(state, day, anchorDay);
+  const status = raw.slice(-1)[0]?.status || 'OFF';
   const certified = cert === 'Certified';
-  const issues = day < today ? validateLogForSigning(state, day).length : 0;
+  const missing = day !== anchorDay && raw.length === 0;
+  const issues = day < anchorDay ? validateLogForSigning(state, day).length : 0;
   const insp = inspectionDone(state, day);
   return (
-    <button type="button" className={`rr-row ${status}`} onClick={() => onOpenDay(day)}>
+    <button type="button" className={`rr-row ${status}${missing ? ' rr-missing-day' : ''}`} onClick={() => onOpenDay(day)}>
       <span className="rr-rail" aria-hidden="true" />
       <span className="rr-body">
         <span className="rr-top">
@@ -88,17 +121,23 @@ function DayRow({ state, day, today, onOpenDay }) {
 }
 
 export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer, onOpenUnsigned, onOpenDot }) {
+  const [showOlder, setShowOlder] = useState(false);
   const today = localDayKey();
-  const todayEvents = displayEventsForDay(state.eventsByDay?.[today] || [], true);
+  const anchorDay = state.activeDay || today;
+  const anchorEvents = displayEventsForDay(state.eventsByDay?.[anchorDay] || [], true);
   const unsigned = signableLogDays(state).length;
   const s = statusSummary(state);
-  const todayCert = state.certifyStatus?.[today] || 'Active';
+  const anchorCert = certLabelForDay(state, anchorDay, anchorDay);
 
-  const previousDays = Object.keys(state.eventsByDay || {})
-    .filter(day => day < today)
-    .sort()
-    .reverse()
-    .slice(0, 14);
+  const roadsideDays = useMemo(() => Array.from({ length: 8 }, (_, i) => addDays(anchorDay, -i)), [anchorDay]);
+  const roadsideSet = useMemo(() => new Set(roadsideDays), [roadsideDays]);
+  const previousSevenDays = roadsideDays.slice(1);
+  const olderSavedDays = useMemo(() => {
+    return [...savedDayKeys(state)]
+      .filter(day => !roadsideSet.has(day))
+      .sort()
+      .reverse();
+  }, [state, roadsideSet]);
 
   return (
     <section className="screen rr-screen">
@@ -129,41 +168,51 @@ export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer
         </button>
       )}
 
-      <div className="rr-sec">Today</div>
-      <button type="button" className={`rr-row rr-today ${s.status}`} onClick={() => onOpenDay(today)}>
+      <div className="rr-sec">Today / active log day</div>
+      <button type="button" className={`rr-row rr-today ${s.status}`} onClick={() => onOpenDay(anchorDay)}>
         <span className="rr-rail" aria-hidden="true" />
         <span className="rr-body">
           <span className="rr-top">
-            <span className="rr-date">{dayParts(today).weekday} <em>{dayParts(today).date}</em></span>
+            <span className="rr-date">{dayParts(anchorDay).weekday} <em>{dayParts(anchorDay).date}</em></span>
             <span className={`rr-chip ${s.status}`}>{SHORT[s.status] || s.status}</span>
           </span>
           <span className="rr-sub">
-            <span>{hLabel(duration(todayEvents))}</span>
+            <span>{hLabel(duration(anchorEvents))}</span>
             <span className="rr-sep" aria-hidden="true">•</span>
-            <span>{todayCert}</span>
+            <span>{anchorCert}</span>
+            {inspectionDone(state, anchorDay) ? <span className="rr-insp">Insp ✓</span> : null}
           </span>
         </span>
       </button>
       <button
         type="button"
         className="rr-today-graph-btn"
-        onClick={() => onOpenDay(today)}
-        aria-label="Open today's log"
+        onClick={() => onOpenDay(anchorDay)}
+        aria-label="Open active log day"
       >
         <span className="rr-today-graph-go" aria-hidden="true">Open</span>
         <div className="rr-today-graph">
-          <LogGraph events={todayEvents} selectedId={null} className="rr-home-graph-svg" />
+          <LogGraph events={anchorEvents} selectedId={null} className="rr-home-graph-svg" />
         </div>
       </button>
 
-      <div className="rr-sec">Last 14 days</div>
-      {previousDays.length === 0 ? (
-        <div className="rr-empty">No previous logs yet.</div>
-      ) : (
-        previousDays.map(day => (
-          <DayRow key={day} state={state} day={day} today={today} onOpenDay={onOpenDay} />
-        ))
-      )}
+      <div className="rr-sec">Previous 7 days</div>
+      {previousSevenDays.map(day => (
+        <DayRow key={day} state={state} day={day} anchorDay={anchorDay} onOpenDay={onOpenDay} />
+      ))}
+
+      {olderSavedDays.length > 0 ? (
+        <>
+          <button type="button" className="rr-older-toggle" onClick={() => setShowOlder(v => !v)}>
+            <span>Older saved logs</span>
+            <em>{olderSavedDays.length} saved</em>
+            <b>{showOlder ? 'Hide' : 'Show'}</b>
+          </button>
+          {showOlder ? olderSavedDays.map(day => (
+            <DayRow key={day} state={state} day={day} anchorDay={anchorDay} onOpenDay={onOpenDay} />
+          )) : null}
+        </>
+      ) : null}
 
       <button type="button" className="rr-dotmode" onClick={onOpenDot}>
         <span className="rr-dotmode-mark" aria-hidden="true" />
