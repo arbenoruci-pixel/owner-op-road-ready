@@ -166,6 +166,38 @@ export function makeContinuousLogEvents(events = [], options = {}) {
 }
 
 
+// v95.54 duty-status override guard.
+// A manual insert must never silently delete the day's last stored event when
+// the new event has a DIFFERENT duty status and reaches past its end. This is
+// the "ON Pre-trip turned into DRIVING" bug: live status changes store a short
+// raw row (start..start+1) and the display extends it to now, so a Driving
+// insert defaulted to "15 min ago" fully covered the raw ON row and
+// insertEventOverride deleted it. The guard keeps the previous event and
+// starts the new status where the previous stored row ends ("Pre-trip kept").
+// An EXACT cover (same startMin and endMin) is still allowed to replace the
+// event, because that is an explicit overwrite of that precise block.
+export function protectLiveTailFromInsert(baseEvents = [], incoming = []) {
+  const ordered = sortEvents((baseEvents || []).filter(Boolean));
+  const tail = ordered[ordered.length - 1] || null;
+  if (!tail) return (incoming || []).filter(Boolean);
+
+  const tailStart = Number(tail.startMin || 0);
+  const tailEnd = Number(tail.endMin || 0);
+
+  return (incoming || []).filter(Boolean).map(ev => {
+    if (!ev || ev.status === tail.status) return ev;
+    const s = Number(ev.startMin || 0);
+    const e = Number(ev.endMin || 0);
+    const coversWholeTail = s <= tailStart && e >= tailEnd;
+    const exactCover = s === tailStart && e === tailEnd;
+    const extendsPastTail = e > tailEnd;
+    if (coversWholeTail && !exactCover && extendsPastTail) {
+      return { ...ev, startMin: Math.min(tailEnd, Math.max(0, e - 1)) };
+    }
+    return ev;
+  });
+}
+
 export function insertEventOverride(events, newEvent) {
   const insert = cleanEvent(newEvent);
   const out = [];

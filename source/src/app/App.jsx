@@ -19,7 +19,7 @@ import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
 import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
 import { rawStoredEventsForDay, stripSyntheticEventFields } from '../core/compliance/rawRodsChecks.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
-import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents } from '../core/timeline/timelineEngine.js';
+import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents, protectLiveTailFromInsert } from '../core/timeline/timelineEngine.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
 import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot } from '../../../lib/local-db/appState.js';
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
@@ -106,6 +106,23 @@ function sanitizeDutyEventForStatus(event = {}, previousStatus = null) {
   }
 
   return next;
+}
+
+// v95.54 dev-safe duty-status write trace. Off in production; flip to true
+// locally to log the raw rows around every duty-status write path.
+const DEBUG_DUTY_TRACE = false;
+function traceDutyWrite(label, day, events) {
+  if (!DEBUG_DUTY_TRACE || typeof console === 'undefined') return;
+  console.log(`[duty-trace] ${label} · ${day}`, (events || []).map(e => ({
+    id: e.id,
+    status: e.status,
+    startMin: e.startMin,
+    endMin: e.endMin,
+    note: e.note || '',
+    source: e.source || '',
+    syntheticCoverage: !!e.syntheticCoverage,
+    carriedFromPreviousDay: !!e.carriedFromPreviousDay,
+  })));
 }
 
 function sanitizeCarryoverEvent(event) {
@@ -711,9 +728,14 @@ export default function App() {
     setState(s => {
       const incoming = incomingForPrompt;
       const stamp = Date.now();
-      const toAdd = incoming.map((e,i)=>sanitizeDutyEventForStatus({ id:`ev_${stamp}_${i}`, city:s.currentLocation?.city || 'GPS', state:s.currentLocation?.state || 'UNK', description:'', note:statusDefaultNote(e?.status || 'OFF'), source:'manual', ...e }));
+      const drafted = incoming.map((e,i)=>sanitizeDutyEventForStatus({ id:`ev_${stamp}_${i}`, city:s.currentLocation?.city || 'GPS', state:s.currentLocation?.state || 'UNK', description:'', note:statusDefaultNote(e?.status || 'OFF'), source:'manual', ...e }));
       const dayEvents = continuousBaseForDay(s, s.activeDay);
+      traceDutyWrite('addEvent:before', s.activeDay, dayEvents);
+      // v95.54: a new insert with a different status must not silently delete
+      // the day's last stored event (ON Pre-trip -> DRIVING override bug).
+      const toAdd = protectLiveTailFromInsert(dayEvents, drafted);
       let merged = commitTimelineForDay(insertManyOverride(dayEvents, toAdd), s.activeDay, s);
+      traceDutyWrite('addEvent:after', s.activeDay, merged);
       const eventsByDay = { ...s.eventsByDay, [s.activeDay]: merged };
       let routeLegsByDay = s.routeLegsByDay || {};
       for (const event of toAdd) {
@@ -1115,7 +1137,9 @@ export default function App() {
       : false;
     setState(s => {
       const day = s.activeDay;
-      const existing = [...(s.eventsByDay[day] || [])].sort((a,b)=>a.startMin-b.startMin);
+      // v95.54: write base must be raw stored events only. The previous raw
+      // array included carryover/synthetic rows and saved them back.
+      const existing = continuousBaseForDay(s, day);
       const now = Math.max(1, Math.min(1439, nowMinute()));
       const stamp = Date.now();
       const load = s.loadInfo || {};
@@ -1178,8 +1202,11 @@ export default function App() {
         currentLocation = { city:de.city || here.city, state:de.state || here.state };
       }
 
-      const toAdd = eventsToAdd.map((e,i)=>({ id:`flow_${stamp}_${i}`, ...e }));
-      const merged = insertManyOverride(existing, toAdd);
+      const drafted = eventsToAdd.map((e,i)=>({ id:`flow_${stamp}_${i}`, ...e }));
+      // v95.54: same live-tail protection as addEvent, and commitTimelineForDay
+      // so no synthetic/carryover rows are ever written into eventsByDay.
+      const toAdd = protectLiveTailFromInsert(existing, drafted);
+      const merged = commitTimelineForDay(insertManyOverride(existing, toAdd), day, s);
       const eventsByDay = { ...s.eventsByDay, [day]: merged };
       let routeLegsByDay = s.routeLegsByDay || {};
       for (const event of toAdd) {
@@ -1264,8 +1291,10 @@ export default function App() {
         note:'Driving started by motion',
         source:'gps_drive',
       };
-      const existing = s.eventsByDay[activeDay] || [];
-      const updated = normalizeLogEvents(closePreviousAndStart(existing, ev));
+      // v95.54: write base must be raw stored events only; never save
+      // carryover/synthetic rows back into eventsByDay.
+      const existing = continuousBaseForDay(s, activeDay);
+      const updated = commitTimelineForDay(closePreviousAndStart(existing, ev), activeDay, s);
       return {
         ...s,
         currentStatus:'D',
@@ -1807,7 +1836,9 @@ export default function App() {
       };
       const loadPayload = { status, reason, city, state:st, shippingDocs, loadNo, destination, destinationState };
       const loadInfoPatch = buildLoadPatchForStatusPayload(loadPayload, eventId);
+      traceDutyWrite('liveStatus:before', day, existing);
       const continuous = normalizeLogEvents(closePreviousAndStart(existing, ev));
+      traceDutyWrite('liveStatus:after', day, continuous);
       const eventsByDay = { ...s.eventsByDay, [day]: continuous };
       const routeLegsByDay = syncRouteLegTimes(
         updateRouteLegsForStatus(s.routeLegsByDay || {}, day, loadPayload, eventId, changeAt),

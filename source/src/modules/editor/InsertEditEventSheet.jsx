@@ -127,8 +127,24 @@ function eventToForm(e) {
   };
 }
 
+// v95.54: the old default (always "15 minutes ago") silently backdated a new
+// event on top of a status change the driver just made — e.g. a Driving insert
+// defaulted right over a fresh ON DUTY Pre-trip and deleted it. If any existing
+// event overlaps the backdate window, default the new event to start now.
+function safeDefaultStart(events = []) {
+  const now = Math.max(0, Math.min(1439, nowMin()));
+  const backdated = Math.max(0, now - 15);
+  const overlapsBackdateWindow = (events || []).some(e => {
+    const start = Number(e?.startMin ?? -1);
+    const end = Number(e?.endMin ?? start);
+    return Number.isFinite(start) && Number.isFinite(end) && end > backdated && start < now;
+  });
+  if (overlapsBackdateWindow) return now;
+  return backdated;
+}
+
 export default function AddStatusSheet({ defaults = {}, events, onClose, onSave, onCreate, onUpdate }) {
-  const defaultStart = defaults.startMin ?? Math.max(0, nowMin() - 15);
+  const defaultStart = defaults.startMin ?? safeDefaultStart(events);
   const createFn = onCreate || onSave;
   const initialMode = defaults.selectedEventId ? 'edit' : (defaults.mode === 'select' ? 'select' : 'insert');
 

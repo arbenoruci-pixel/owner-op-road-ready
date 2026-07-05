@@ -1,3 +1,11 @@
+## v95.54 — Duty Status Override Fix
+- Fixed the ON DUTY Pre-trip -> DRIVING override bug: adding Driving after a short live ON Pre-trip no longer deletes or mutates the ON event.
+- Added protectLiveTailFromInsert for manual/driver workflow inserts so a different-status insert cannot silently cover the day's last stored event and reach past it.
+- Insert sheet default time now starts at NOW when an existing event overlaps the 15-minute backdate window, preventing silent backdating over a fresh status change.
+- Driver workflow and motion write paths now commit raw stored events only and strip synthetic/carry-forward rows before saving.
+- Added scripts/verify-duty-status-override-v9554.mjs. Offline sync, deep scan, continuous-line verifier, and duty override verifier passed; run next build before deploy.
+
+
 ## v95.6 — Continuous Duty Line Graph
 - Duty-status trace is now one continuous SVG path (M/H/V, butt caps, miter joins): horizontals and vertical bends share the exact same 8px stroke, clean 90° corners.
 - Removed transition endpoint dots, thin separate bend strokes, cap artifacts and double-rendered overlaps at status changes.
