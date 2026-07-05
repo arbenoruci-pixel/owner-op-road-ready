@@ -342,4 +342,20 @@ ok('dot previous package: remains collapsed with create missing day modal', () =
   assert.ok(dotSrc.includes('Needs recertification'), 'previous recertification row missing');
 });
 
+
+// 28) Home list: Today must anchor to the real local calendar day, not stale activeDay.
+ok('home list: today anchor and readable current graph are protected', () => {
+  const homeSrc = readFileSync(new URL('../source/src/modules/home/HomeScreen.jsx', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
+  const graphSrc = readFileSync(new URL('../source/src/modules/graph/LogGraph.jsx', import.meta.url), 'utf8');
+  assert.ok(homeSrc.includes('const anchorDay = today;'), 'Home list should anchor to real today, not state.activeDay');
+  assert.ok(homeSrc.includes('function homeCurrentEvents'), 'Home graph display-only current event helper missing');
+  assert.ok(homeSrc.includes("source: 'home_display_only'"), 'Home fallback event must be display-only');
+  assert.ok(homeSrc.includes('Array.from({ length: 8 }, (_, i) => addDays(anchorDay, -i))'), 'Today + previous 7 days range missing');
+  assert.ok(cssSrc.includes('v95.52 Today anchor + Motive-readable home graph'), 'home graph readability styles missing');
+  assert.ok(cssSrc.includes('.rr-today-graph-go{display:none!important;}'), 'home graph Open overlay should be hidden');
+  assert.ok(graphSrc.includes('const LINE_W = 6'), 'Motive-readable thinner duty trace missing');
+  assert.ok(graphSrc.includes("major ? '#aeb7c2' : '#d9dfe6'"), 'clearer grid colors missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

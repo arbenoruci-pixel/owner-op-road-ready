@@ -4,10 +4,11 @@ import { label } from '../../shared/utils/status.js';
 import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { signableLogDays, validateLogForSigning } from '../logbook/signing.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
+import { nowMin } from '../../shared/utils/time.js';
 
-// v95.51 Roadside 8-day home list
-// Home always shows the active log day plus the previous 7 calendar days.
-// Older saved logs remain stored and accessible under Older saved logs.
+// v95.52 Roadside 8-day home list
+// Home always anchors to the real local calendar day, then the previous 7 days.
+// Opening older logs never moves the Home screen away from today.
 
 function dayParts(day) {
   const d = new Date(`${day}T12:00:00`);
@@ -31,7 +32,7 @@ function hLabel(mins) {
 const SHORT = { OFF: 'OFF', SB: 'SB', D: 'DRV', ON: 'ON' };
 
 function statusSummary(state) {
-  const day = state.activeDay || localDayKey();
+  const day = localDayKey();
   const events = state.eventsByDay?.[day] || [];
   const last = [...events].sort((a, b) => a.startMin - b.startMin).at(-1);
   const status = state.currentStatus || last?.status || 'OFF';
@@ -81,6 +82,26 @@ function hasRealLog(state, day) {
   return Array.isArray(state.eventsByDay?.[day]) && state.eventsByDay[day].length > 0;
 }
 
+function homeCurrentEvents(state, day) {
+  const raw = state.eventsByDay?.[day] || [];
+  if (raw.length) return displayEventsForDay(raw, true);
+
+  const status = state.currentStatus || 'OFF';
+  const loc = state.currentLocation || {};
+  const endMin = Math.max(1, Math.min(1440, nowMin()));
+  return [{
+    id: `home_live_${day}`,
+    status,
+    startMin: 0,
+    endMin,
+    city: loc.city || '',
+    state: loc.state || '',
+    note: state.currentReason || (status === 'OFF' ? 'Off Duty' : ''),
+    source: 'home_display_only',
+    displayOnly: true,
+  }];
+}
+
 function certLabelForDay(state, day, anchorDay) {
   const cert = state.certifyStatus?.[day];
   if (cert) return cert;
@@ -123,8 +144,8 @@ function DayRow({ state, day, anchorDay, onOpenDay }) {
 export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer, onOpenUnsigned, onOpenDot }) {
   const [showOlder, setShowOlder] = useState(false);
   const today = localDayKey();
-  const anchorDay = state.activeDay || today;
-  const anchorEvents = displayEventsForDay(state.eventsByDay?.[anchorDay] || [], true);
+  const anchorDay = today;
+  const anchorEvents = homeCurrentEvents(state, anchorDay);
   const unsigned = signableLogDays(state).length;
   const s = statusSummary(state);
   const anchorCert = certLabelForDay(state, anchorDay, anchorDay);
@@ -168,7 +189,7 @@ export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer
         </button>
       )}
 
-      <div className="rr-sec">Today / active log day</div>
+      <div className="rr-sec">Today</div>
       <button type="button" className={`rr-row rr-today ${s.status}`} onClick={() => onOpenDay(anchorDay)}>
         <span className="rr-rail" aria-hidden="true" />
         <span className="rr-body">
@@ -188,7 +209,7 @@ export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer
         type="button"
         className="rr-today-graph-btn"
         onClick={() => onOpenDay(anchorDay)}
-        aria-label="Open active log day"
+        aria-label="Open today log"
       >
         <span className="rr-today-graph-go" aria-hidden="true">Open</span>
         <div className="rr-today-graph">
