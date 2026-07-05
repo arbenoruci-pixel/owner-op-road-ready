@@ -1,3 +1,12 @@
+
+## v95.58 — Safe Update PWA
+
+- Added no-cache app version endpoint for update detection.
+- Added Update ready banner with Update safely action.
+- Added pre-update IndexedDB/localStorage snapshot before reload.
+- Added service worker update message handler and no-cache headers for app-version/sw.
+- Added Tools sheet manual update check.
+
 # v95.56 — Sign/Overlap Midnight Driving Repair
 
 - Purges legacy carryover/display rows from raw log storage on hydration and commit.

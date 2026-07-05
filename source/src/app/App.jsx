@@ -9,6 +9,7 @@ import EditEventSheet from '../modules/editor/EditEventSheet.jsx';
 import ShiftSheet from '../modules/editor/ShiftSheet.jsx';
 import ToolsSheet from '../shared/ui/ToolsSheet.jsx';
 import DigitalWalletScreen from '../modules/wallet/DigitalWalletScreen.jsx';
+import UpdateBanner from '../modules/update/UpdateBanner.jsx';
 import DotMode from '../modules/dot/DotMode.jsx';
 import DriveTrackerSheet from '../modules/gps/DriveTrackerSheet.jsx';
 import DrivingFocusScreen from '../modules/gps/DrivingFocusScreen.jsx';
@@ -22,10 +23,11 @@ import { rawStoredEventsForDay, stripSyntheticEventFields, isSyntheticEvent } fr
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
 import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents, protectLiveTailFromInsert } from '../core/timeline/timelineEngine.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
-import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot } from '../../../lib/local-db/appState.js';
+import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot, savePreUpdateSnapshot } from '../../../lib/local-db/appState.js';
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
 import { installOwnerOpAuthBridge } from '../../../lib/supabase/authBridge.js';
 import { normalizeWallet } from '../core/wallet/dotWallet.js';
+import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, updateReloadUrl } from '../core/update/appUpdate.js';
 
 const ROADGUARD_DEFAULT_PROFILE = {
   driverName: 'Arben Oruci',
@@ -652,8 +654,19 @@ function LocationContinuityFixSheet({ state, payload, onClose, onApply }) {
 export default function App() {
   const [state, setState] = useState(defaultInitialState);
   const [offlineHydrated, setOfflineHydrated] = useState(false);
+  const [updateState, setUpdateState] = useState({
+    currentVersion: CURRENT_APP_VERSION,
+    latestVersion: CURRENT_APP_VERSION,
+    remote: null,
+    available: false,
+    checking: false,
+    saveState: 'idle',
+    dismissedVersion: '',
+    error: '',
+  });
   const lastEventsByDayRef = useRef(null);
   const lastInspectionByDayRef = useRef(null);
+  const updateCheckInFlightRef = useRef(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -668,6 +681,97 @@ export default function App() {
     });
     return () => { cancelled = true; };
   }, []);
+
+
+  async function checkForAppUpdate(reason = 'manual') {
+    if (updateCheckInFlightRef.current) return;
+    updateCheckInFlightRef.current = true;
+    setUpdateState(prev => ({ ...prev, checking: true, error: '' }));
+    try {
+      const remote = await fetchRemoteAppVersion();
+      setUpdateState(prev => {
+        const available = Boolean(remote.version)
+          && isNewerVersion(remote.version, CURRENT_APP_VERSION)
+          && prev.dismissedVersion !== remote.version;
+        return {
+          ...prev,
+          checking: false,
+          latestVersion: remote.version || prev.latestVersion || CURRENT_APP_VERSION,
+          remote,
+          available,
+          saveState: available ? 'ready' : prev.saveState === 'saving-update' ? prev.saveState : 'idle',
+          error: '',
+          lastCheckedAt: new Date().toISOString(),
+          lastCheckReason: reason,
+        };
+      });
+    } catch (error) {
+      setUpdateState(prev => ({
+        ...prev,
+        checking: false,
+        error: error?.message || 'Update check failed',
+        lastCheckedAt: new Date().toISOString(),
+      }));
+    } finally {
+      updateCheckInFlightRef.current = false;
+    }
+  }
+
+  React.useEffect(() => {
+    if (!offlineHydrated) return;
+    checkForAppUpdate('load');
+    const timer = setInterval(() => checkForAppUpdate('interval'), UPDATE_CHECK_INTERVAL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkForAppUpdate('visible');
+    };
+    const onOnline = () => checkForAppUpdate('online');
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [offlineHydrated]);
+
+  function dismissAppUpdate() {
+    setUpdateState(prev => ({
+      ...prev,
+      available: false,
+      dismissedVersion: prev.remote?.version || prev.latestVersion || '',
+      saveState: 'idle',
+    }));
+  }
+
+  async function applySafeAppUpdate() {
+    const remote = updateState.remote || { version:updateState.latestVersion };
+    setUpdateState(prev => ({ ...prev, saveState:'saving-update', error:'' }));
+    try {
+      await saveAppSnapshot(APP_STATE_KEY, state);
+      const meta = buildUpdateMeta(remote, 'safe_update');
+      await savePreUpdateSnapshot(state, meta);
+
+      if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+        try {
+          const registration = await navigator.serviceWorker.getRegistration();
+          await registration?.update?.();
+          registration?.waiting?.postMessage?.({ type:'OWNER_OP_APPLY_UPDATE', meta });
+          registration?.active?.postMessage?.({ type:'OWNER_OP_APPLY_UPDATE', meta });
+        } catch {}
+      }
+
+      setUpdateState(prev => ({ ...prev, saveState:'saved', lastPreUpdateBackupAt: meta.createdAt }));
+      setTimeout(() => {
+        if (typeof window !== 'undefined') window.location.assign(updateReloadUrl(remote) || window.location.href);
+      }, 250);
+    } catch (error) {
+      setUpdateState(prev => ({
+        ...prev,
+        saveState:'failed',
+        error: error?.message || 'Could not save before update',
+      }));
+    }
+  }
 
   React.useEffect(() => {
     if (!offlineHydrated) return;
@@ -2036,8 +2140,17 @@ export default function App() {
     });
   }
 
+  const updateBanner = (
+    <UpdateBanner
+      updateState={updateState}
+      onApply={applySafeAppUpdate}
+      onDismiss={dismissAppUpdate}
+    />
+  );
+
   if (state.view === 'logs') return (
     <>
+      {updateBanner}
       <HomeScreen
         state={state}
         onOpenDay={openDay}
@@ -2057,29 +2170,41 @@ export default function App() {
   );
 
   if (state.view === 'wallet') return (
-    <DigitalWalletScreen
+    <>
+      {updateBanner}
+      <DigitalWalletScreen
       state={state}
       onBack={()=>setState(s=>({ ...s, view:'logs', sheet:null }))}
       onSaveDocument={saveWalletDocument}
       onOpenLogs={()=>setState(s=>({ ...s, view:'logs', sheet:null }))}
       onOpenLoad={()=>setState(s=>({ ...s, view:'day', roadGuardTabRequest:{ tab:'form', at:Date.now(), source:'wallet-load' } }))}
-    />
+      />
+    </>
   );
 
   if (state.view === 'unsigned') return (
-    <UnsignedLogsScreen
+    <>
+      {updateBanner}
+      <UnsignedLogsScreen
       state={state}
       days={signableLogDays(state)}
       onBack={()=>setState(s=>({ ...s, view:'logs', sheet:null }))}
       onOpenDay={openDay}
       onSignDay={(day)=>signLogDay(day, {})}
-    />
+      />
+    </>
   );
 
-  if (state.view === 'dot') return <DotMode state={state} onBack={() => setState(s => ({ ...s, view:'day' }))} />;
+  if (state.view === 'dot') return (
+    <>
+      {updateBanner}
+      <DotMode state={state} onBack={() => setState(s => ({ ...s, view:'day' }))} />
+    </>
+  );
 
   return (
     <>
+      {updateBanner}
       <DayLogScreen
         state={state}
         onToggleGps={()=>setState(s=>({ ...s, sheet:{ type:'status' }, gpsPanelOpen:false }))}
@@ -2118,7 +2243,7 @@ export default function App() {
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
       {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
-      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} onClearTestDates={clearTestDates} />}
+      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
     </>
   );
 }

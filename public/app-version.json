@@ -1,0 +1,10 @@
+{
+  "version": "95.58.0",
+  "build": "v95.58-update-safe-pwa",
+  "releasedAt": "2026-07-05T00:00:00.000Z",
+  "notes": [
+    "Safe update checker",
+    "Pre-update local snapshot",
+    "No auto refresh while driver is using logs"
+  ]
+}
