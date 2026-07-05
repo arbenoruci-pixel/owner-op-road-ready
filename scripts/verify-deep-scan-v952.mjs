@@ -367,4 +367,25 @@ ok('graph polish: thinner cleaner trace constants', () => {
   assert.ok(cssSrc.includes('v95.43 manual driving focus mode'), 'drive mode CSS missing');
 });
 
+
+// 32) Passive same-status cleanup: adjacent OFF/SB rows should collapse after edits.
+ok('timeline: adjacent OFF/SB leftovers merge into one row', () => {
+  const offRows = normalizeLogEvents([
+    { id:'off1', status:'OFF', startMin:0, endMin:785, city:'Elgin', state:'IL', note:'Off Duty' },
+    { id:'off2', status:'OFF', startMin:785, endMin:1300, city:'Elgin', state:'IL', note:'going to parking' },
+    { id:'off3', status:'OFF', startMin:1300, endMin:1305, city:'Willowbrook', state:'IL', note:'Off Duty' },
+    { id:'off4', status:'OFF', startMin:1305, endMin:1440, city:'Elgin', state:'IL', note:'going to parking' },
+  ]);
+  assert.equal(offRows.length, 1, `expected one OFF row, got ${offRows.length}`);
+  assert.equal(offRows[0].status, 'OFF');
+  assert.equal(offRows[0].startMin, 0);
+  assert.equal(offRows[0].endMin, 1440);
+
+  const onRows = normalizeLogEvents([
+    { id:'on1', status:'ON', startMin:480, endMin:495, note:'Pre-trip Inspection' },
+    { id:'on2', status:'ON', startMin:495, endMin:540, note:'Pickup / Loading' },
+  ]);
+  assert.equal(onRows.length, 2, 'distinct ON DUTY work remarks should stay separate');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);
