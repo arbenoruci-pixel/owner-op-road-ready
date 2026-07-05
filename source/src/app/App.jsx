@@ -8,6 +8,7 @@ import InsertEditEventSheet from '../modules/editor/InsertEditEventSheet.jsx';
 import EditEventSheet from '../modules/editor/EditEventSheet.jsx';
 import ShiftSheet from '../modules/editor/ShiftSheet.jsx';
 import ToolsSheet from '../shared/ui/ToolsSheet.jsx';
+import DigitalWalletScreen from '../modules/wallet/DigitalWalletScreen.jsx';
 import DotMode from '../modules/dot/DotMode.jsx';
 import DriveTrackerSheet from '../modules/gps/DriveTrackerSheet.jsx';
 import DrivingFocusScreen from '../modules/gps/DrivingFocusScreen.jsx';
@@ -24,6 +25,7 @@ import { signableLogDays, signConfirmMessage, signBlockMessage } from '../module
 import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot } from '../../../lib/local-db/appState.js';
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
 import { installOwnerOpAuthBridge } from '../../../lib/supabase/authBridge.js';
+import { normalizeWallet } from '../core/wallet/dotWallet.js';
 
 const ROADGUARD_DEFAULT_PROFILE = {
   driverName: 'Arben Oruci',
@@ -485,6 +487,7 @@ function normalizeState(s) {
     gpsTrip: s.gpsTrip || null,
     loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
     routeLegsByDay: s.routeLegsByDay || {},
+    dotWallet: normalizeWallet(s.dotWallet || {}),
   };
 
   return reconcilePreTripInspections(normalized, Object.keys(eventsByDay));
@@ -512,6 +515,7 @@ function defaultInitialState() {
     inspectionByDay: {},
     signatureByDay: {},
     driverSignature: null,
+    dotWallet: normalizeWallet(),
     homeGpsStatus: 'pending',
     gpsPanelOpen: false,
   });
@@ -1848,6 +1852,24 @@ export default function App() {
     }
   }
 
+
+  function saveWalletDocument(docId, doc) {
+    setState(s => {
+      const wallet = normalizeWallet(s.dotWallet || {});
+      return {
+        ...s,
+        dotWallet: {
+          ...wallet,
+          documents: {
+            ...(wallet.documents || {}),
+            [docId]: doc,
+          },
+          lastReviewedAt: Date.now(),
+        },
+      };
+    });
+  }
+
   function reset() {
     clearAppSnapshot(APP_STATE_KEY).finally(() => {
       const next = defaultInitialState();
@@ -2025,6 +2047,7 @@ export default function App() {
         onOpenGps={()=>setState(s=>({ ...s, sheet:{ type:'status' }, gpsPanelOpen:false }))}
         onOpenUnsigned={()=>setState(s=>({ ...s, view:'unsigned', sheet:null }))}
         onOpenDot={()=>setState(s=>({ ...s, view:'dot', sheet:null }))}
+        onOpenWallet={()=>setState(s=>({ ...s, view:'wallet', sheet:null }))}
       />
       <DriveTrackerSheet state={state} open={false} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       {state.sheet?.type === 'equipment' && <EquipmentSheet equipment={state.equipment || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveEquipment} />}
@@ -2032,6 +2055,17 @@ export default function App() {
       {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
     </>
   );
+
+  if (state.view === 'wallet') return (
+    <DigitalWalletScreen
+      state={state}
+      onBack={()=>setState(s=>({ ...s, view:'logs', sheet:null }))}
+      onSaveDocument={saveWalletDocument}
+      onOpenLogs={()=>setState(s=>({ ...s, view:'logs', sheet:null }))}
+      onOpenLoad={()=>setState(s=>({ ...s, view:'day', roadGuardTabRequest:{ tab:'form', at:Date.now(), source:'wallet-load' } }))}
+    />
+  );
+
   if (state.view === 'unsigned') return (
     <UnsignedLogsScreen
       state={state}
@@ -2084,7 +2118,7 @@ export default function App() {
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
       {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
-      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onClearTestDates={clearTestDates} />}
+      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} onClearTestDates={clearTestDates} />}
     </>
   );
 }

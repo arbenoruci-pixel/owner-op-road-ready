@@ -293,3 +293,12 @@ What was deliberately NOT changed (logic preserved verbatim)
 - Made the duty line slightly stronger and the grid clearer.
 - Tightened the Today graph card spacing on the Home Logs screen.
 - Preserved smart paper-log mode, raw DOT coverage validation, and no GPS/motion tracking.
+
+
+## v95.57 — DOT Digital Wallet readiness
+- Added DOT Digital Wallet state, requirement catalog, expiration scanner, and Home attention card.
+- Added Driver / Truck / Trailer / Carrier / Load / Supporting document sections.
+- Added local photo/PDF attachment flow for CDL, medical card, registration, insurance, annual inspections, BOL, and supporting documents.
+- Added expiration statuses: missing, expired, expires soon, watch, OK.
+- Added Wallet screen routes from Home and Tools, plus quick links back to logs/RODS and load docs.
+- Preserved existing logbook, DOT Check, signing, graph, and duty-status override fixes.

@@ -6,6 +6,7 @@ import { signableLogDays, validateLogForSigning } from '../logbook/signing.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
 import { nowMin } from '../../shared/utils/time.js';
+import { evaluateDotWallet, walletCardLabel } from '../../core/wallet/dotWallet.js';
 
 // v95.52 Roadside 8-day home list
 // Home always anchors to the real local calendar day, then the previous 7 days.
@@ -147,13 +148,15 @@ function DayRow({ state, day, anchorDay, onOpenDay }) {
   );
 }
 
-export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer, onOpenUnsigned, onOpenDot }) {
+export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer, onOpenUnsigned, onOpenDot, onOpenWallet }) {
   const [showOlder, setShowOlder] = useState(false);
   const today = localDayKey();
   const anchorDay = today;
   const anchorEvents = homeCurrentEvents(state, anchorDay);
   const unsigned = signableLogDays(state).length;
   const s = statusSummary(state);
+  const walletSummary = evaluateDotWallet(state.dotWallet || {});
+  const walletCard = walletCardLabel(walletSummary);
   const anchorCert = certLabelForDay(state, anchorDay, anchorDay);
 
   const roadsideDays = useMemo(() => Array.from({ length: 8 }, (_, i) => addDays(anchorDay, -i)), [anchorDay]);
@@ -194,6 +197,12 @@ export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer
           <span className="rr-attention-go" aria-hidden="true">Review</span>
         </button>
       )}
+
+      <button type="button" className={`rr-wallet-card ${walletCard.status}`} onClick={onOpenWallet}>
+        <span className="rr-wallet-icon" aria-hidden="true">▣</span>
+        <span className="rr-wallet-copy"><b>{walletCard.title}</b><em>{walletCard.detail}</em></span>
+        <span className="rr-wallet-go">Open</span>
+      </button>
 
       <div className="rr-sec">Today</div>
       <button type="button" className={`rr-row rr-today ${s.status}`} onClick={() => onOpenDay(anchorDay)}>
