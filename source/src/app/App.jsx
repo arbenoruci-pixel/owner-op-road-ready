@@ -14,12 +14,12 @@ import DrivingFocusScreen from '../modules/gps/DrivingFocusScreen.jsx';
 import EquipmentSheet from '../modules/equipment/EquipmentSheet.jsx';
 import TrailerSheet from '../modules/equipment/TrailerSheet.jsx';
 import StatusWorkflowSheet from '../modules/status/StatusWorkflowSheet.jsx';
-import { initialCertifyStatus } from '../state/mockData.js';
+import { initialCertifyStatus, initialEventsByDay } from '../state/mockData.js';
 import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
 import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
+import { rawStoredEventsForDay, stripSyntheticEventFields } from '../core/compliance/rawRodsChecks.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
 import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents } from '../core/timeline/timelineEngine.js';
-import { rawStoredEventsForDay } from '../core/compliance/rawRodsChecks.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
 import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot } from '../../../lib/local-db/appState.js';
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
@@ -30,6 +30,10 @@ const ROADGUARD_DEFAULT_PROFILE = {
   carrierName: 'Narta Express LLC',
   mainOffice: '92 201 Lake Drive, Willowbrook, IL 60527',
 };
+
+const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_OWNER_OP_DEMO_DATA === 'true';
+const DEMO_EVENTS_BY_DAY = ENABLE_DEMO_DATA ? initialEventsByDay : {};
+const DEMO_CERTIFY_STATUS = ENABLE_DEMO_DATA ? initialCertifyStatus : {};
 
 function findDateInText(text = '') {
   const match = String(text || '').match(/\d{4}-\d{2}-\d{2}/);
@@ -307,8 +311,8 @@ function ensureTodayCarryover(eventsByDay, certifyStatus, today) {
 
 function normalizeState(s) {
   const today = localDayKey();
-  const eventsByDay = { ...(s.eventsByDay || {}) };
-  const certifyStatus = { ...initialCertifyStatus, ...(s.certifyStatus || {}) };
+  const eventsByDay = { ...DEMO_EVENTS_BY_DAY, ...(s.eventsByDay || {}) };
+  const certifyStatus = { ...DEMO_CERTIFY_STATUS, ...(s.certifyStatus || {}) };
 
   // sanitize stale carryover notes copied from previous day
   Object.keys(eventsByDay).forEach(day => {
@@ -353,7 +357,7 @@ function normalizeState(s) {
     driverSignature,
     equipment: s.equipment || { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: s.gpsTrip || null,
-    loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'', pickupState:'', deliveryCity:'', deliveryState:'', appointment:'' },
+    loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
     routeLegsByDay: s.routeLegsByDay || {},
   };
 
@@ -368,13 +372,13 @@ function defaultInitialState() {
     selectMode: false,
     selectedIds: [],
     sheet: null,
-    eventsByDay: {},
-    certifyStatus: initialCertifyStatus,
-    driver: { truck:'', trailer:'' },
+    eventsByDay: DEMO_EVENTS_BY_DAY,
+    certifyStatus: DEMO_CERTIFY_STATUS,
+    driver: { truck:'Unit 12', trailer:'Trailer 53' },
     currentTrailer: 'No trailer',
     equipment: { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: null,
-    loadInfo: { loadNo:'', broker:'', pickupCity:'', pickupState:'', deliveryCity:'', deliveryState:'', appointment:'' },
+    loadInfo: { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
     routeLegsByDay: {},
     currentStatus: 'OFF',
     currentReason: 'Off Duty',
@@ -551,9 +555,8 @@ export default function App() {
   }, [state, offlineHydrated]);
 
   React.useEffect(() => {
-    // Smart paper-log mode: no GPS request on launch.
-    // GPS is only requested when the driver taps Use GPS in Status/Edit.
-    setState(s => ({ ...s, homeGpsStatus: s.currentLocation?.locationSource === 'gps' ? 'gps' : 'manual' }));
+    // Smart paper-log mode: no GPS prompt at launch.
+    setState(s => ({ ...s, homeGpsStatus:s.homeGpsStatus === 'pending' ? 'manual' : s.homeGpsStatus }));
   }, []);
 
 
@@ -585,20 +588,16 @@ export default function App() {
     return { ...state, eventsByDay: { ...state.eventsByDay, [day]: normalizeLogEvents(eventsNext) } };
   }
 
-  function rawBaseForDay(s, day = s.activeDay) {
+  function continuousBaseForDay(s, day = s.activeDay) {
     return rawStoredEventsForDay(s.eventsByDay || {}, day);
   }
 
-  function continuousBaseForDay(s, day = s.activeDay) {
-    return rawBaseForDay(s, day);
-  }
-
   function commitTimelineForDay(eventsNext, day, s) {
-    const normalized = normalizeLogEvents(eventsNext);
-    // Store the normalized split timeline. Display code still extends the final
-    // status to now/current-day or midnight/completed-day, but writing the
-    // split segments prevents stale gaps after insert/edit/delete/shift.
-    return normalized.map(event => ({ ...event }));
+    const rawOnly = (eventsNext || [])
+      .filter(Boolean)
+      .filter(event => !event.syntheticCoverage && !event.carriedFromPreviousDay && String(event.source || '') !== 'timeline_continuity')
+      .map(event => stripSyntheticEventFields(event));
+    return normalizeLogEvents(rawOnly).map(event => ({ ...event }));
   }
 
   function minuteFromDate(date = new Date()) {
@@ -939,11 +938,11 @@ export default function App() {
 
   function findOpenRouteLeg(routeLegsByDay = {}, day, shippingDocs = '') {
     const docs = String(shippingDocs || '').trim().toLowerCase();
-    return routeLegArray(routeLegsByDay)
+    const open = routeLegArray(routeLegsByDay)
       .filter(leg => leg.status !== 'delivered' && leg.status !== 'cancelled')
-      .filter(leg => !docs || String(leg.shippingDocs || leg.loadNo || '').trim().toLowerCase() === docs)
-      .sort((a, b) => String(a.pickupDay || a.day).localeCompare(String(b.pickupDay || b.day)) || Number(a.pickupMin || 0) - Number(b.pickupMin || 0))
-      .at(-1) || null;
+      .sort((a, b) => String(a.pickupDay || a.day).localeCompare(String(b.pickupDay || b.day)) || Number(a.pickupMin || 0) - Number(b.pickupMin || 0));
+    if (!docs) return open.length === 1 ? open[0] : null;
+    return open.filter(leg => String(leg.shippingDocs || leg.loadNo || '').trim().toLowerCase() === docs).at(-1) || null;
   }
 
   function upsertRouteLeg(routeLegsByDay = {}, day, leg) {
@@ -1458,6 +1457,96 @@ export default function App() {
   }
 
 
+  function saveCoverageBlock(payload = {}) {
+    const block = payload.block || {};
+    const day = payload.day || state.activeDay;
+    const status = payload.status || block.suggestedStatus || 'OFF';
+    const city = String(payload.city || block.suggestedLocation?.city || state.currentLocation?.city || '').trim();
+    const stateCode = String(payload.state || block.suggestedLocation?.state || state.currentLocation?.state || '').trim().toUpperCase().slice(0, 2);
+    const note = String(payload.note || block.suggestedNote || statusDefaultNote(status)).trim();
+    const startMin = Math.max(0, Math.min(1440, Number(block.startMin || 0)));
+    const endMin = Math.max(startMin, Math.min(1440, Number(block.endMin || startMin)));
+    if (!day || endMin <= startMin) return;
+
+    setState(s => {
+      const rawEvents = rawStoredEventsForDay(s.eventsByDay || {}, day);
+      const stamp = Date.now();
+      const newEvent = {
+        id:`coverage_fix_${day}_${stamp}_${payload.blockIndex ?? 0}`,
+        status,
+        startMin,
+        endMin,
+        city,
+        state:stateCode,
+        note,
+        description:'',
+        source:'coverage_fix_wizard',
+        locationSource:'manual',
+      };
+      const updatedEvents = commitTimelineForDay(insertManyOverride(rawEvents, [newEvent]), day, s);
+      const next = {
+        ...s,
+        activeDay:day,
+        view:'day',
+        selectedEventId:newEvent.id,
+        sheet:null,
+        eventsByDay:{ ...(s.eventsByDay || {}), [day]:updatedEvents },
+        roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'coverage-fix-wizard' },
+      };
+      return markDayRecert(next, day);
+    });
+  }
+
+  function lastKnownLocationForDay(s = {}, day = '') {
+    const allDays = Object.keys(s.eventsByDay || {}).sort();
+    const before = allDays.filter(item => item <= day).reverse();
+    for (const item of before) {
+      const evs = rawStoredEventsForDay(s.eventsByDay || {}, item);
+      const found = [...evs].reverse().find(event => event.city || event.state);
+      if (found) return { city:found.city || '', state:found.state || '' };
+    }
+    return { city:s.currentLocation?.city || '', state:s.currentLocation?.state || '' };
+  }
+
+  function createMissingDay(payload = {}) {
+    const day = payload.day || payload.issue?.day;
+    const status = payload.status === 'SB' ? 'SB' : payload.status === 'OFF' ? 'OFF' : '';
+    if (!day) return;
+    if (!status) {
+      setState(s => ({ ...s, activeDay:day, view:'day', roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'build-missing-day' } }));
+      return;
+    }
+
+    setState(s => {
+      const loc = payload.location || lastKnownLocationForDay(s, day);
+      const event = {
+        id:`missing_day_${day}_${Date.now()}`,
+        status,
+        startMin:0,
+        endMin:1440,
+        city:loc.city || s.currentLocation?.city || '',
+        state:loc.state || s.currentLocation?.state || '',
+        note:status === 'SB' ? 'Sleeper' : 'Off Duty',
+        description:'',
+        source:'missing_day_wizard',
+        locationSource:'manual',
+      };
+      const updatedEvents = commitTimelineForDay([event], day, s);
+      const next = {
+        ...s,
+        activeDay:day,
+        view:'day',
+        selectedEventId:event.id,
+        sheet:null,
+        eventsByDay:{ ...(s.eventsByDay || {}), [day]:updatedEvents },
+        certifyStatus:{ ...(s.certifyStatus || {}), [day]:'Needs signature' },
+        roadGuardTabRequest:{ tab:'sign', at:Date.now(), source:'missing-day-wizard' },
+      };
+      return markDayRecert(next, day);
+    });
+  }
+
+
   function addPreTripBeforeDriving(payload = {}) {
     const targetDay = payload.day || payload.issue?.day || state.activeDay;
     if (typeof window !== 'undefined' && window.confirm) {
@@ -1519,6 +1608,16 @@ export default function App() {
 
   function applyRoadGuardFix(action, payload = {}) {
     if (!action) return;
+
+    if (action === 'OPEN_COVERAGE_WIZARD') {
+      setState(s => ({ ...s, roadGuardTabRequest:{ tab:'sign', at:Date.now(), source:'open-coverage-wizard' } }));
+      return;
+    }
+
+    if (action === 'CREATE_MISSING_DAY') {
+      createMissingDay(payload);
+      return;
+    }
 
     if (action === 'ADD_PRETRIP_BEFORE_DRIVING') {
       addPreTripBeforeDriving(payload);
@@ -1585,7 +1684,7 @@ export default function App() {
         driverProfile:{ ...(s.driverProfile || {}), name:s.driverProfile?.name || s.driverSignature?.driverName || ROADGUARD_DEFAULT_PROFILE.driverName },
         carrierName:s.carrierName || ROADGUARD_DEFAULT_PROFILE.carrierName,
         mainOfficeAddress:s.mainOfficeAddress || ROADGUARD_DEFAULT_PROFILE.mainOffice,
-        driver:{ ...(s.driver || {}), truck:s.driver?.truck || '' },
+        driver:{ ...(s.driver || {}), truck:s.driver?.truck || 'Unit 12' },
         ...(!payload.silent ? { roadGuardTabRequest:{ tab:'form', at:Date.now() } } : {}),
       }));
       return;
@@ -1661,7 +1760,7 @@ export default function App() {
   }
 
 
-  function closeLastAndAddStatus({ status, reason, city, state: st, description='', droppedTrailer='', hookedTrailer='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual', shippingDocs='', loadNo='', destination='', destinationState='', backdateMinutes=0, openDriveFocus=false }) {
+  function closeLastAndAddStatus({ status, reason, city, state: st, description='', droppedTrailer='', hookedTrailer='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual', shippingDocs='', loadNo='', destination='', destinationState='', backdateMinutes=0 }) {
     const acceptedLiveInspection = maybeAcceptInspectionForEvent(state, state.activeDay, { status, note:reason, description, city, state:st });
     setState(s => {
       const nowLiveMin = Math.max(0, Math.min(1439, new Date().getHours() * 60 + new Date().getMinutes()));
@@ -1722,7 +1821,6 @@ export default function App() {
         currentTrailer: trailer,
         selectedEventId: ev.id,
         sheet: null,
-        view: openDriveFocus ? 'drive' : (s.view === 'drive' && status !== 'D' ? 'day' : s.view),
         eventsByDay,
         routeLegsByDay,
         ...(loadInfoPatch ? { loadInfo:{ ...(s.loadInfo || {}), ...loadInfoPatch } } : {}),
@@ -1734,7 +1832,7 @@ export default function App() {
   }
 
   function startDrivingFromStatus({ city, state: st, lat=null, lng=null, gpsAccuracy=null, locationSource='manual' }) {
-    closeLastAndAddStatus({ status:'D', reason:'Driving', city, state:st, description:'', droppedTrailer:'', hookedTrailer:'', lat, lng, gpsAccuracy, locationSource, openDriveFocus:true });
+    closeLastAndAddStatus({ status:'D', reason:'Driving started', city, state:st, description:'', droppedTrailer:'', hookedTrailer:'', lat, lng, gpsAccuracy, locationSource });
   }
 
 
@@ -1773,28 +1871,12 @@ export default function App() {
         currentReason:'Stopped / On Duty',
         currentLocation:{ city, state:stateCode, lat:fix?.lat ?? base.currentLocation?.lat, lng:fix?.lng ?? base.currentLocation?.lng, locationSource: fix ? 'gps' : (base.currentLocation?.locationSource || 'manual') },
         selectedEventId: ev.id,
-        view:'day',
         gpsTrip: base.gpsTrip ? { ...base.gpsTrip, status:'stopped', stoppedAt:Date.now() } : base.gpsTrip,
         eventsByDay:{ ...base.eventsByDay, [day]: updated },
         sheet:null,
       };
     });
   }
-
-  if (state.view === 'drive') return (
-    <>
-      <DrivingFocusScreen
-        open={true}
-        state={state}
-        liveCurrent={liveCurrent}
-        onStopDriving={stopGpsDriving}
-        onStopToOnDuty={stopDrivingToOnDuty}
-        onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))}
-        onOpenStatus={()=>setState(s=>({ ...s, sheet:{ type:'status' }, gpsPanelOpen:false }))}
-      />
-      {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
-    </>
-  );
 
   if (state.view === 'logs') return (
     <>
@@ -1855,6 +1937,8 @@ export default function App() {
         onSaveSignature={saveSignature}
         onRoadGuardFix={applyRoadGuardFix}
         onSaveManualMiles={(id, patch)=>updateEvent(id, patch)}
+        onSaveCoverageBlock={saveCoverageBlock}
+        onCreateMissingDay={createMissingDay}
       />
       <DriveTrackerSheet state={state} open={false} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       {state.sheet?.type === 'add' && <InsertEditEventSheet defaults={state.sheet.defaults} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onCreate={addEvent} onSave={addEvent} onUpdate={updateEvent} />}

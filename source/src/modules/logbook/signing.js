@@ -1,7 +1,7 @@
 import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
-import { rawCoverageIssues, rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
+import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
 
 function hasRealEvents(events = []) {
@@ -171,6 +171,9 @@ export function issueSuggestedAction(issue = {}) {
   if (code.includes('inspection_unlinked') || code.includes('missing_inspection') || code.includes('inspection_time')) {
     return { label:'Open inspection', action:'OPEN_INSPECTION' };
   }
+  if (code.includes('coverage_group')) {
+    return { label:'Start Fix Wizard', action:'OPEN_COVERAGE_WIZARD' };
+  }
   if (code.includes('missing_location') || code.includes('bad_duration') || code.includes('overlap') || code.includes('gap') || code.includes('day_')) {
     return { label:'Open log', action:'OPEN_LOG' };
   }
@@ -206,8 +209,8 @@ export function logSignState(state, day) {
       signed,
       status,
       needsSignature: false,
-      label: 'Future day',
-      reason: 'This log date is after today.',
+      label: 'Future log date',
+      reason: 'Future days cannot be signed yet.',
     };
   }
 
@@ -232,32 +235,60 @@ export function logSignState(state, day) {
   return { signed, status, needsSignature:true, label:'Needs signature', reason:'Completed DOT log day is not signed.' };
 }
 
+function rawEventsByDayForHos(eventsByDay = {}) {
+  const out = {};
+  Object.keys(eventsByDay || {}).forEach(dayKey => {
+    out[dayKey] = rawStoredEventsForDay(eventsByDay, dayKey);
+  });
+  return out;
+}
+
 export function validateLogForSigning(state, day) {
   const issues = [];
   const today = localDayKey();
-  const coverage = rawCoverageIssues(state.eventsByDay || {}, day, { today });
-  const rawEvents = sortedEvents(coverage.events || rawStoredEventsForDay(state.eventsByDay || {}, day));
-  const events = rawEvents;
+  const rawEvents = rawStoredEventsForDay(state.eventsByDay || {}, day);
+  const events = sortedEvents(rawEvents);
+  const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, { currentLocation: state.currentLocation || {} });
+  const coverageGroup = buildCoverageFixGroup(rawCoverageResult, day);
   const inspection = state.inspectionByDay?.[day] || {};
   const vehicle = String(state.driver?.truck || '').trim();
   const hasOnOrDrive = events.some(event => event.status === 'ON' || event.status === 'D');
   const firstDriving = events.find(event => event.status === 'D');
   const preTrip = events.find(isPreTripEvent);
   const completedEvents = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
-  const total = totalMinutes(completedEvents);
   const driverName = stateText(state, 'driverProfile.name', 'driver.name');
   const carrier = stateText(state, 'carrierName', 'driver.carrier');
   const mainOffice = stateText(state, 'mainOfficeAddress', 'driver.mainOffice');
   const shipping = shippingDocsText(state);
 
-  coverage.issues.forEach(issue => {
+  if (coverageGroup) {
     issues.push({
-      ...issue,
-      code: issue.code || 'raw_coverage_issue',
-      where: issue.where || 'Log graph',
+      code: coverageGroup.code || coverageGroup.id,
+      title: coverageGroup.title,
+      detail: coverageGroup.detail,
+      where: 'Log coverage',
+      day,
+      fixAction: coverageGroup.fixAction,
+      actionLabel: coverageGroup.actionLabel,
+      missingBlocks: coverageGroup.missingBlocks || [],
+    });
+  }
+
+  coverageIssuesWithoutGroupedChildren(rawCoverageResult, coverageGroup).forEach(issue => {
+    if (String(issue.code || issue.id || '') === 'future_day') return;
+    issues.push({
+      code: issue.code || issue.id,
+      title: issue.title || 'Log coverage needs review',
+      detail: issue.detail || 'Open the log and review this coverage item.',
+      where: 'Log coverage',
+      day,
+      eventId: issue.eventId || '',
+      startMin: issue.startMin,
+      endMin: issue.endMin,
+      fixAction: issue.fixAction || 'OPEN_LOG',
+      actionLabel: issue.actionLabel || 'Open log',
     });
   });
-
 
   if (!driverName) {
     issues.push({ code:'missing_driver_name', title:'Driver name is missing', detail:'Add the driver name before signing this log.', where:'Form tab → Driver' });
@@ -310,22 +341,23 @@ export function validateLogForSigning(state, day) {
         where: 'Log graph / event list',
       });
     }
-    if (!event.city || !event.state) {
+    if (!event.city || !event.state || /^gps$/i.test(String(event.city || '')) || /^unk$/i.test(String(event.state || ''))) {
       issues.push({
         code: `missing_location_${event.id || index}`,
         title: 'Event location is missing',
-        detail: `${eventLabel(event)} needs a city/state or GPS location.`,
+        detail: `${eventLabel(event)} needs city/state.`,
         where: 'Event location',
+        eventId:event.id || '',
       });
     }
-    const rawEvent = rawEvents[index];
-    const next = rawEvents[index + 1];
-    if (rawEvent && next && Number(next.startMin || 0) < Number(rawEvent.endMin || 0)) {
+    const next = events[index + 1];
+    if (next && Number(next.startMin || 0) < Number(event.endMin || 0)) {
       issues.push({
-        code: `overlap_${rawEvent.id || index}`,
+        code: `overlap_${event.id || index}`,
         title: 'Events overlap',
-        detail: `${eventLabel(rawEvent)} overlaps with ${eventLabel(next)}.`,
+        detail: `${eventLabel(event)} overlaps with ${eventLabel(next)}.`,
         where: 'Log graph',
+        eventId:event.id || '',
       });
     }
   });
@@ -365,7 +397,7 @@ export function validateLogForSigning(state, day) {
     issues.push({
       code:`location_jump_pretrip_drive_${preTrip.id || preTrip.startMin}_${firstDriving.id || firstDriving.startMin}`,
       title:'Pre-trip and driving locations do not match',
-      detail:`Pre-trip is in ${locationLabel(preTrip)}, but driving starts in ${locationLabel(firstDriving)}. If driving starts immediately after pre-trip, these locations should match.`,
+      detail:`Pre-trip is in ${locationLabel(preTrip)}, but driving starts in ${locationLabel(firstDriving)}.`,
       where:'Log tab → Pre-trip / first driving location',
       day,
       previousEventId:preTrip.id || '',
@@ -389,7 +421,7 @@ export function validateLogForSigning(state, day) {
 
   if (inspection.complete && preTrip && !inspection.sourceEventId) {
     issues.push({
-      code:'inspection_unlinked_pretrip',
+      code:'inspection_complete_unlinked_pretrip',
       title:'Inspection complete but Pre-trip link missing',
       detail:`Inspection is complete, but it is not linked to the ON DUTY Pre-trip event at ${timeLabel(preTrip.startMin, true)}.`,
       where:'Inspection tab',
@@ -422,7 +454,8 @@ export function validateLogForSigning(state, day) {
 
   issues.push(...locationContinuityIssues(completedEvents, day));
 
-  const violations = violationRangesForDay(state.eventsByDay || {}, day) || [];
+  const rawEventsByDayForReview = rawEventsByDayForHos(state.eventsByDay || {});
+  const violations = violationRangesForDay(rawEventsByDayForReview, day) || [];
   violations
     .filter(v => v.severity === 'high' || v.type === 'violation')
     .forEach((violation, index) => {
@@ -458,7 +491,8 @@ export function signingWarnings(state, day) {
   if (day === today) warnings.push('This is today’s active log. It is normally signed after the day is complete.');
   if (hasOnOrDrive && !inspection.complete) warnings.push('Pre-trip inspection is missing for this log day.');
 
-  const violations = violationRangesForDay(state.eventsByDay || {}, day) || [];
+  const rawEventsByDayForReview = rawEventsByDayForHos(state.eventsByDay || {});
+  const violations = violationRangesForDay(rawEventsByDayForReview, day) || [];
   if (violations.length) {
     const high = violations.filter(v => v.severity === 'high' || v.type === 'violation').length;
     warnings.push(high ? `${high} high HOS review item(s) found.` : `${violations.length} HOS review item(s) found.`);
@@ -487,17 +521,19 @@ export function buildSignGuardSummary(state, day) {
   const dotRows = [];
 
   previousDays.forEach(prevDay => {
-    const coverage = rawCoverageIssues(state.eventsByDay || {}, prevDay);
+    const coverage = rawCoverageIssues(state.eventsByDay || {}, prevDay, { currentLocation: state.currentLocation || {} });
+    const coverageGroup = buildCoverageFixGroup(coverage, prevDay);
     const prevEvents = coverage.events || [];
     const signed = !!state.signatureByDay?.[prevDay]?.signed;
-    const certStatus = state.certifyStatus?.[prevDay] || '';
-    const readySigned = signed && certStatus === 'Certified';
+    const statusText = state.certifyStatus?.[prevDay] || '';
+    const needsRecert = statusText === 'Needs Recertification';
+    const certified = statusText === 'Certified' && signed && !needsRecert;
 
     if (!prevEvents.length) {
       const issue = {
         code: `missing_previous_${prevDay}`,
         title: `Previous log missing for ${prevDay}`,
-        detail: 'DOT inspection package should have the previous 7 consecutive days available while on duty.',
+        detail: 'Previous 7-day package needs this day available.',
         where: 'DOT package',
         day: prevDay,
       };
@@ -506,33 +542,46 @@ export function buildSignGuardSummary(state, day) {
       return;
     }
 
-    const prevTotal = coverage.total ?? totalMinutes(prevEvents);
-    const coverageIssue = (coverage.issues || []).find(issue => !/no_events/.test(issue.code || ''));
-    if (coverageIssue) {
+    if (coverageGroup || Math.abs(Number(coverage.total || 0) - 1440) > 1) {
       const issue = {
         code: `previous_total_${prevDay}`,
         title: `Previous log incomplete for ${prevDay}`,
-        detail: `${coverageIssue.detail || `This day totals ${durLabel(prevTotal)}.`} Review before roadside inspection.`,
+        detail: `This day has ${durLabel(coverage.total || 0)} confirmed.`,
         where: 'DOT package',
         day: prevDay,
       };
       dotPackage.push(issue);
-      dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status: 'Incomplete', issue });
-    } else if (!readySigned) {
+      dotRows.push({ day: prevDay, total: durLabel(coverage.total || 0), signed, status: 'Incomplete', issue });
+      return;
+    }
+
+    if (needsRecert) {
       const issue = {
-        code: certStatus === 'Needs Recertification' ? `previous_recert_${prevDay}` : `previous_unsigned_${prevDay}`,
-        title: certStatus === 'Needs Recertification' ? `Previous log needs recertification for ${prevDay}` : `Previous log not signed for ${prevDay}`,
-        detail: certStatus === 'Needs Recertification'
-          ? 'This previous day was edited after signing and needs recertification.'
-          : 'Previous 7-day package has a complete day that still needs certification.',
+        code:`previous_recert_${prevDay}`,
+        title:`Previous log needs recertification for ${prevDay}`,
+        detail:'This day was edited after signing.',
         where:'DOT package',
         day:prevDay,
       };
       dotPackage.push(issue);
-      dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status: certStatus === 'Needs Recertification' ? 'Needs Recertification' : 'Unsigned', issue });
-    } else {
-      dotRows.push({ day: prevDay, total: durLabel(prevTotal), signed, status: 'Ready', issue: null });
+      dotRows.push({ day: prevDay, total: durLabel(coverage.total || 0), signed, status:'Needs recertification', issue });
+      return;
     }
+
+    if (!certified) {
+      const issue = {
+        code:`previous_unsigned_${prevDay}`,
+        title:`Previous log not signed for ${prevDay}`,
+        detail:'Previous 7-day package has a complete day that still needs certification.',
+        where:'DOT package',
+        day:prevDay,
+      };
+      dotPackage.push(issue);
+      dotRows.push({ day: prevDay, total: durLabel(coverage.total || 0), signed, status:'Unsigned', issue });
+      return;
+    }
+
+    dotRows.push({ day: prevDay, total: durLabel(coverage.total || 0), signed, status: 'Ready', issue: null });
   });
 
   const fixRequired = dayIssues.filter(issue => issueSeverity(issue) === 'fix');
@@ -568,7 +617,7 @@ export function buildIssueFixPrompt(state, day, issue) {
     `Rule/check: ${issueRuleLabel(issue)}`,
     '',
     'Relevant events for this day:',
-    ...sortedEvents(rawStoredEventsForDay(state.eventsByDay || {}, day)).map((event, index) => `${index + 1}. ${timeLabel(event.startMin, true)} to ${timeLabel(event.endMin, true)} | ${statusLabel(event.status)} | ${locationLabel(event)} | ${event.note || event.description || ''}`),
+    ...sortedEvents(displayEventsForDay(state.eventsByDay?.[day] || [], day === localDayKey())).map((event, index) => `${index + 1}. ${timeLabel(event.startMin, true)} to ${timeLabel(event.endMin, true)} | ${statusLabel(event.status)} | ${locationLabel(event)} | ${event.note || event.description || ''}`),
     '',
     'Tell me:',
     '1. Is this a missing required field, a possible HOS/DOT violation, or only a review item?',
@@ -579,13 +628,13 @@ export function buildIssueFixPrompt(state, day, issue) {
 }
 
 export function buildChatGptLogReviewPrompt(state, day) {
-  const events = sortedEvents(rawStoredEventsForDay(state.eventsByDay || {}, day));
+  const events = sortedEvents(displayEventsForDay(state.eventsByDay?.[day] || [], day === localDayKey()));
   const totals = dutyTotals(events);
   const guard = buildSignGuardSummary(state, day);
   const inspection = state.inspectionByDay?.[day] || {};
   const signature = state.signatureByDay?.[day] || {};
   const previous = guard.previousDays.map(prevDay => {
-    const prevEvents = rawStoredEventsForDay(state.eventsByDay || {}, prevDay);
+    const prevEvents = displayEventsForDay(state.eventsByDay?.[prevDay] || [], prevDay === localDayKey());
     return `${prevDay}: ${durLabel(totalMinutes(prevEvents))} total, ${prevEvents.length} event(s), ${state.signatureByDay?.[prevDay]?.signed ? 'signed' : 'not signed'}`;
   });
 

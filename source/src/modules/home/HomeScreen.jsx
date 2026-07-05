@@ -60,8 +60,8 @@ function inspectionDone(state, day) {
 
 function DayRow({ state, day, today, onOpenDay }) {
   const { weekday, date } = dayParts(day);
-  const evs = displayEventsForDay(state.eventsByDay?.[day] || [], day >= today);
-  const cert = state.certifyStatus?.[day] || (day >= today ? 'Active' : 'Not certified');
+  const evs = displayEventsForDay(state.eventsByDay?.[day] || [], day === today);
+  const cert = state.certifyStatus?.[day] || (day === today ? 'Active' : 'Not certified');
   const status = (state.eventsByDay?.[day] || []).slice(-1)[0]?.status || 'OFF';
   const certified = cert === 'Certified';
   const issues = day < today ? validateLogForSigning(state, day).length : 0;

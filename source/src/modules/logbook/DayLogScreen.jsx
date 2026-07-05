@@ -37,6 +37,7 @@ function targetTabForIssue(issue = {}, action = '') {
   const code = String(issue.code || issue.id || '').toLowerCase();
   const where = String(issue.where || issue.section || '').toLowerCase();
   const text = `${code} ${where} ${issue.title || ''} ${issue.detail || ''}`.toLowerCase();
+  if (action === 'OPEN_COVERAGE_WIZARD') return 'log';
   if (action === 'ADD_PRETRIP_BEFORE_DRIVING' || action === 'FIX_LOCATION_CONTINUITY') return 'log';
   if (/inspection/.test(text) || action === 'OPEN_INSPECTION') return 'inspection';
   if (/sign|certif/.test(text) || action === 'OPEN_SIGN' || action === 'OPEN_DAY_SIGN') return 'sign';
@@ -1046,9 +1047,9 @@ function RoadGuardFixWizard({ open, guard, day, state, onClose, onQuickFix, onCo
 
 
 function officerChecklistRows(state, day, guard) {
-  const events = displayEventsForDay(state.eventsByDay?.[day] || [], day >= localDayKey());
+  const events = displayEventsForDay(state.eventsByDay?.[day] || [], day === localDayKey());
   const total = events.reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);
-  const activeDay = day >= localDayKey();
+  const activeDay = day === localDayKey();
   const inspection = state.inspectionByDay?.[day] || {};
   const signed = !!state.signatureByDay?.[day]?.signed;
   const profileIssues = guard.fixRequired.filter(issue => /driver|carrier|main_office|truck|unit|trailer|shipping/i.test(String(issue.code || issue.title || '')));
@@ -1181,32 +1182,43 @@ function DotOfficerChecklist({ check, onQuickFix, onIssueAction, setShowDot }) {
   );
 }
 
+function coverageBlockTime(block = {}) {
+  return `${minutesLabel(block.startMin)}–${minutesLabel(block.endMin)}`;
+}
+
 function DotCheckModal({ open, day, check, guard, onClose, onQuickFix, onIssueAction }) {
   const [showPackage, setShowPackage] = useState(false);
+  const [showCoverageDetails, setShowCoverageDetails] = useState(false);
   if (!open) return null;
 
   const issues = check?.issues || [];
   const todayIssues = issues.filter(issue => issue.section !== 'previous');
+  const coverageGroup = todayIssues.find(issue => issue.fixAction === 'OPEN_COVERAGE_WIZARD') || check?.coverageGroup || null;
   const packageIssues = issues.filter(issue => issue.section === 'previous');
+  const visibleTodayIssues = coverageGroup ? todayIssues.filter(issue => issue.id !== coverageGroup.id && issue.code !== coverageGroup.code) : todayIssues;
+  const previousRows = check?.previousRows || check?.sections?.find(section => section.id === 'previous')?.rows || [];
   const todayFix = todayIssues.filter(issue => issue.severity === 'fix').length;
   const todayReview = todayIssues.filter(issue => issue.severity === 'review').length;
   const cleanToday = todayIssues.length === 0;
+  const packageHiddenCount = previousRows.length || 7;
 
   function runIssue(issue) {
     onIssueAction?.(issue);
     onClose?.();
   }
 
-  function runPackageIssue(issue) {
-    if (issue.day) {
-      onQuickFix?.('OPEN_DAY', { day:issue.day, issue, tab: issue.fixAction === 'OPEN_DAY_SIGN' ? 'sign' : 'log' });
-      onClose?.();
-    }
+  function runPackageRow(row) {
+    const issue = row.issue || { day:row.day, fixAction:'OPEN_DAY', actionLabel:'Open day', title:row.status, detail:row.day };
+    onIssueAction?.(issue);
+    onClose?.();
   }
+
+  const statusTitle = coverageGroup ? 'Action needed' : cleanToday ? 'This day looks clean' : `${todayFix} fix · ${todayReview} review`;
+  const statusDetail = coverageGroup ? 'This day has missing log coverage.' : cleanToday ? 'Current-day checks passed.' : 'Tap an item to go directly to the problem.';
 
   return (
     <div className="dot-simple-overlay" role="dialog" aria-modal="true" aria-label="DOT Check">
-      <div className="dot-simple-card">
+      <div className="dot-simple-card dot-coverage-card">
         <div className="dot-simple-head">
           <div>
             <span>DOT Check</span>
@@ -1216,9 +1228,38 @@ function DotCheckModal({ open, day, check, guard, onClose, onQuickFix, onIssueAc
         </div>
 
         <div className={`dot-simple-status ${cleanToday ? 'ok' : 'fix'}`}>
-          <strong>{cleanToday ? 'This day looks clean' : `${todayFix} fix · ${todayReview} review`}</strong>
-          <span>{cleanToday ? 'Form, log, locations, HOS, inspection, and route checks passed for this day.' : 'Tap an item to go directly to the problem.'}</span>
+          <strong>{statusTitle}</strong>
+          <span>{statusDetail}</span>
+          {coverageGroup ? <em>{coverageGroup.detail}</em> : null}
+          {coverageGroup ? (
+            <div className="dot-coverage-primary-actions">
+              <button type="button" onClick={() => runIssue(coverageGroup)}>Start Fix Wizard</button>
+              <button type="button" className="secondary" onClick={() => setShowCoverageDetails(value => !value)}>{showCoverageDetails ? 'Hide details' : 'Show details'}</button>
+            </div>
+          ) : null}
         </div>
+
+        {coverageGroup && showCoverageDetails ? (
+          <div className="dot-coverage-details">
+            <div className="dot-coverage-details-head">
+              <b>Coverage details</b>
+              <span>Confirmed total: {durLabel(coverageGroup.confirmedTotal || 0)}</span>
+            </div>
+            <div className="dot-coverage-detail-rows">
+              {(coverageGroup.missingBlocks || []).map((block, index) => (
+                <div key={block.id || index}>
+                  <span>{index + 1}. {block.type === 'start_gap' ? 'Start of day missing' : block.type === 'end_gap' ? 'End of day missing' : 'Gap'}</span>
+                  <b>{coverageBlockTime(block)} · {durLabel(block.durationMin || 0)}</b>
+                </div>
+              ))}
+            </div>
+            <div className="dot-coverage-total-grid">
+              <span>Needed <b>{durLabel(coverageGroup.neededTotal || 1440)}</b></span>
+              <span>Short by <b>{durLabel(coverageGroup.shortBy || 0)}</b></span>
+            </div>
+            <button type="button" onClick={() => runIssue(coverageGroup)}>Start Fix Wizard</button>
+          </div>
+        ) : null}
 
         <div className="dot-simple-sections">
           {(check?.sections || []).filter(section => section.id !== 'previous').map(section => (
@@ -1229,9 +1270,9 @@ function DotCheckModal({ open, day, check, guard, onClose, onQuickFix, onIssueAc
           ))}
         </div>
 
-        {todayIssues.length ? (
+        {visibleTodayIssues.length ? (
           <div className="dot-simple-issues">
-            {todayIssues.map(issue => (
+            {visibleTodayIssues.map(issue => (
               <button key={issue.id || issue.code || issue.title} type="button" className={`dot-simple-issue ${issue.tone || 'warn'}`} onClick={() => runIssue(issue)}>
                 <span>
                   <b>{issue.title}</b>
@@ -1241,36 +1282,185 @@ function DotCheckModal({ open, day, check, guard, onClose, onQuickFix, onIssueAc
               </button>
             ))}
           </div>
-        ) : (
+        ) : (!coverageGroup ? (
           <div className="dot-simple-clean">
             No current-day problems found.
           </div>
-        )}
+        ) : null)}
 
-        {packageIssues.length ? (
-          <div className="dot-simple-package">
-            <button type="button" className="dot-simple-package-toggle" onClick={() => setShowPackage(value => !value)}>
-              <span>
-                <b>Previous 7 days package</b>
-                <em>{packageIssues.length} item{packageIssues.length === 1 ? '' : 's'} hidden from main view</em>
-              </span>
-              <strong>{showPackage ? 'Hide' : 'Show'}</strong>
-            </button>
-            {showPackage && (
-              <div className="dot-simple-package-list">
-                {packageIssues.map(issue => (
-                  <button key={issue.id || issue.code || issue.day} type="button" onClick={() => runPackageIssue(issue)}>
-                    <span>
-                      <b>{issue.title}</b>
-                      <em>{issue.detail || issue.day}</em>
-                    </span>
-                    <strong>{issue.actionLabel || 'Open'}</strong>
-                  </button>
-                ))}
-              </div>
-            )}
+        <div className="dot-simple-package">
+          <button type="button" className="dot-simple-package-toggle" onClick={() => setShowPackage(value => !value)}>
+            <span>
+              <b>Previous 7 days package</b>
+              <em>{packageHiddenCount} item{packageHiddenCount === 1 ? '' : 's'} hidden from main view</em>
+            </span>
+            <strong>{showPackage ? 'Hide' : 'Show'}</strong>
+          </button>
+          {showPackage && (
+            <div className="dot-simple-package-list">
+              {(previousRows.length ? previousRows : packageIssues.map(issue => ({ day:issue.day, status:issue.title, issue }))).map(row => (
+                <button key={row.day || row.issue?.id || row.issue?.code} type="button" onClick={() => runPackageRow(row)}>
+                  <span>
+                    <b>{row.day} · {row.status}</b>
+                    <em>{row.issue?.detail || row.total || 'Ready / signed'}</em>
+                  </span>
+                  <strong>{row.issue?.actionLabel || (row.status === 'Ready' ? 'Open' : 'Fix it')}</strong>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function statusDefaultNote(status = 'OFF') {
+  if (status === 'SB') return 'Sleeper';
+  if (status === 'D') return 'Driving';
+  if (status === 'ON') return 'On Duty';
+  return 'Off Duty';
+}
+
+function CoverageFixWizard({ issue, day, state, onClose, onSaveCoverageBlock }) {
+  const targetDay = issue?.day || day;
+  const check = useMemo(() => buildDotOfficerCheck(state, targetDay), [state, targetDay]);
+  const group = check.coverageGroup || (issue?.fixAction === 'OPEN_COVERAGE_WIZARD' ? issue : null);
+  const blocks = group?.missingBlocks || [];
+  const [index, setIndex] = useState(0);
+  const block = blocks[Math.min(index, Math.max(0, blocks.length - 1))] || null;
+  const [status, setStatus] = useState(block?.suggestedStatus || 'OFF');
+  const [city, setCity] = useState(block?.suggestedLocation?.city || state.currentLocation?.city || '');
+  const [stateCode, setStateCode] = useState(block?.suggestedLocation?.state || state.currentLocation?.state || '');
+  const [note, setNote] = useState(block?.suggestedNote || statusDefaultNote(block?.suggestedStatus || 'OFF'));
+
+  useEffect(() => {
+    if (!issue) return;
+    setIndex(0);
+  }, [issue?.id, targetDay]);
+
+  useEffect(() => {
+    if (!block) return;
+    const suggestedStatus = block.suggestedStatus || 'OFF';
+    setStatus(suggestedStatus);
+    setCity(block.suggestedLocation?.city || state.currentLocation?.city || '');
+    setStateCode(block.suggestedLocation?.state || state.currentLocation?.state || '');
+    setNote(block.suggestedNote || statusDefaultNote(suggestedStatus));
+  }, [block?.id]);
+
+  if (!issue) return null;
+
+  function saveAndNext() {
+    if (!block) return;
+    onSaveCoverageBlock?.({
+      day: targetDay,
+      block,
+      blockIndex: index,
+      status,
+      city,
+      state: stateCode,
+      note: note || statusDefaultNote(status),
+    });
+    setIndex(0);
+  }
+
+  if (!group) {
+    return (
+      <div className="coverage-wizard-overlay" role="dialog" aria-modal="true" aria-label="Coverage fixed">
+        <div className="coverage-wizard-card">
+          <div className="coverage-wizard-head"><span>Fix Wizard</span><button onClick={onClose}>Close</button></div>
+          <div className="coverage-wizard-done"><b>Coverage fixed</b><p>This day now has 24h confirmed coverage.</p><button onClick={onClose}>Done</button></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!block) {
+    return (
+      <div className="coverage-wizard-overlay" role="dialog" aria-modal="true" aria-label="Coverage review">
+        <div className="coverage-wizard-card">
+          <div className="coverage-wizard-head"><span>Fix Wizard</span><button onClick={onClose}>Close</button></div>
+          <div className="coverage-wizard-done"><b>Coverage improved</b><p>1 item still needs review.</p><button onClick={onClose}>Continue review</button></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="coverage-wizard-overlay" role="dialog" aria-modal="true" aria-label="Coverage Fix Wizard">
+      <div className="coverage-wizard-card">
+        <div className="coverage-wizard-head">
+          <div>
+            <span>Fix Wizard</span>
+            <b>Step {Math.min(index + 1, blocks.length)} of {blocks.length}</b>
           </div>
-        ) : null}
+          <button onClick={onClose}>Cancel</button>
+        </div>
+
+        <div className="coverage-wizard-day">Problem day: {dayDisplayLabel(targetDay)}</div>
+
+        <div className="coverage-wizard-block">
+          <span>Missing coverage block</span>
+          <b>{coverageBlockTime(block)}</b>
+          <em>{durLabel(block.durationMin || 0)} unconfirmed</em>
+        </div>
+
+        <div className="coverage-wizard-question">What status was true during this time?</div>
+        <div className="coverage-status-buttons">
+          {['OFF','SB','ON','D'].map(item => (
+            <button key={item} type="button" className={status === item ? 'active' : ''} onClick={() => { setStatus(item); setNote(statusDefaultNote(item)); }}>{item}</button>
+          ))}
+        </div>
+
+        <div className="coverage-wizard-fields">
+          <label>City<input value={city} onChange={e => setCity(e.target.value)} placeholder="City" /></label>
+          <label>ST<input value={stateCode} onChange={e => setStateCode(e.target.value.toUpperCase().slice(0, 2))} placeholder="ST" /></label>
+          <label className="wide">Optional note<input value={note} onChange={e => setNote(e.target.value)} placeholder={statusDefaultNote(status)} /></label>
+        </div>
+
+        <div className="coverage-wizard-actions">
+          <button type="button" onClick={saveAndNext}>Save and next</button>
+          <button type="button" className="secondary" onClick={() => setIndex(current => Math.min(current + 1, blocks.length - 1))}>Skip</button>
+          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MissingDayModal({ issue, onClose, onCreateMissingDay, state }) {
+  const day = issue?.day || '';
+  const defaultCity = state.currentLocation?.city || '';
+  const defaultState = state.currentLocation?.state || '';
+  const [city, setCity] = useState(defaultCity);
+  const [stateCode, setStateCode] = useState(defaultState);
+  if (!issue) return null;
+
+  function create(status) {
+    onCreateMissingDay?.({ day, issue, status, location:{ city, state:stateCode } });
+    onClose?.();
+  }
+
+  function buildManually() {
+    onCreateMissingDay?.({ day, issue });
+    onClose?.();
+  }
+
+  return (
+    <div className="coverage-wizard-overlay" role="dialog" aria-modal="true" aria-label="Create missing log day">
+      <div className="coverage-wizard-card missing-day-card">
+        <div className="coverage-wizard-head"><div><span>Create missing log day</span><b>{day}</b></div><button onClick={onClose}>Cancel</button></div>
+        <p>Choose how to create this day:</p>
+        <div className="coverage-wizard-fields">
+          <label>City<input value={city} onChange={e => setCity(e.target.value)} placeholder="City" /></label>
+          <label>ST<input value={stateCode} onChange={e => setStateCode(e.target.value.toUpperCase().slice(0, 2))} placeholder="ST" /></label>
+        </div>
+        <div className="coverage-wizard-actions vertical">
+          <button type="button" onClick={() => create('OFF')}>Full OFF duty day</button>
+          <button type="button" onClick={() => create('SB')}>Full Sleeper day</button>
+          <button type="button" className="secondary" onClick={buildManually}>Build manually</button>
+          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+        </div>
       </div>
     </div>
   );
@@ -1312,11 +1502,6 @@ function SignGuardPanel({ state, day, onQuickFix, onDotIssueAction, wizardReques
         <strong>{todayIssues.length ? 'Open' : 'Run'}</strong>
       </button>
 
-      {packageIssues.length ? (
-        <div className="dot-simple-package-note">
-          Previous 7 days: {packageIssues.length} package item{packageIssues.length === 1 ? '' : 's'}
-        </div>
-      ) : null}
 
       <DotCheckModal
         open={dotOpen}
@@ -1385,7 +1570,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix, onDotIssueAction }
   const signState = logSignState(state, day);
   const blockers = validateLogForSigning(state, day);
   const fixBlockers = blockers.filter(issue => !/active_day/i.test(String(issue.code || '')));
-  const todayActive = day >= localDayKey();
+  const todayActive = day === localDayKey();
 
   useEffect(() => {
     setName(savedDriverSignature?.driverName || saved.driverName || driverNameForState(state));
@@ -1573,18 +1758,24 @@ export default function DayDetail({
   state, liveCurrent, events, selectedEvent, onBack, onSelect, onOpenAdd, onOpenEdit, onDelete,
   onToggleSelectMode, onToggleSelectedId, onSelectAll, onClearSelection, onOpenShift, onMoveSelected,
   onCertify, onTools, onOpenStatus, onOpenTrailer, onDriverFlow, onSaveLoad, onToggleGps,
-  onSaveInspection, onSaveSignature, onRoadGuardFix, onSaveManualMiles
+  onSaveInspection, onSaveSignature, onRoadGuardFix, onSaveManualMiles, onSaveCoverageBlock, onCreateMissingDay
 }) {
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveDelta, setMoveDelta] = useState(0);
   const [activeTab, setActiveTab] = useState('log');
+  const [coverageWizardIssue, setCoverageWizardIssue] = useState(null);
+  const [missingDayIssue, setMissingDayIssue] = useState(null);
 
   useEffect(() => {
     const requested = state.roadGuardTabRequest?.tab;
     if (requested && ['log', 'form', 'sign', 'inspection'].includes(requested)) {
       setActiveTab(requested);
     }
-  }, [state.roadGuardTabRequest?.at, state.roadGuardTabRequest?.tab]);
+    if (state.roadGuardTabRequest?.source === 'open-coverage-wizard') {
+      const check = buildDotOfficerCheck(state, state.activeDay);
+      if (check.coverageGroup) setCoverageWizardIssue(check.coverageGroup);
+    }
+  }, [state.roadGuardTabRequest?.at, state.roadGuardTabRequest?.tab, state.roadGuardTabRequest?.source]);
 
   const rawDayEvents = state.eventsByDay?.[state.activeDay] || [];
   const displayEvents = useMemo(
@@ -1712,8 +1903,19 @@ export default function DayDetail({
     if (!issue) return;
     const action = issue.fixAction || '';
     if (action === 'OPEN_SIGN' || action === 'OPEN_DAY_SIGN') {
-      if (issue.day && issue.day !== state.activeDay) onRoadGuardFix?.('OPEN_DAY', { day:issue.day, tab:'sign', issue });
+      if (issue.day && issue.day !== state.activeDay) onRoadGuardFix?.('OPEN_DAY', { day:issue.day });
       setActiveTab('sign');
+      return;
+    }
+
+    if (action === 'OPEN_COVERAGE_WIZARD') {
+      setCoverageWizardIssue(issue);
+      setActiveTab('sign');
+      return;
+    }
+
+    if (action === 'CREATE_MISSING_DAY') {
+      setMissingDayIssue(issue);
       return;
     }
 
@@ -1742,9 +1944,9 @@ export default function DayDetail({
       return;
     }
 
-    if (action === 'CREATE_MISSING_DAY' || action === 'OPEN_DAY') {
+    if (action === 'OPEN_DAY') {
       const dayToOpen = issue.day || state.activeDay;
-      onRoadGuardFix?.('OPEN_DAY', { day:dayToOpen, tab: action === 'OPEN_DAY_SIGN' ? 'sign' : 'log', issue });
+      onRoadGuardFix?.('OPEN_DAY', { day:dayToOpen });
       return;
     }
 
@@ -1856,6 +2058,9 @@ export default function DayDetail({
           </div>
         </>
       )}
+
+      <CoverageFixWizard issue={coverageWizardIssue} day={state.activeDay} state={state} onClose={() => setCoverageWizardIssue(null)} onSaveCoverageBlock={onSaveCoverageBlock} />
+      <MissingDayModal issue={missingDayIssue} state={state} onClose={() => setMissingDayIssue(null)} onCreateMissingDay={onCreateMissingDay} />
     </section>
   );
 }

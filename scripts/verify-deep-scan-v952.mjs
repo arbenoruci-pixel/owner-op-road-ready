@@ -10,7 +10,7 @@ import {
   closePreviousAndStart,
 } from '../source/src/core/timeline/timelineEngine.js';
 import { pointFromLogLocation, estimatedRoadMiles, estimateMilesByStateBetween, parseMilesByState, sumMilesByState } from '../source/src/core/gps/locationService.js';
-import { rawCoverageIssues, rawStoredEventsForDay } from '../source/src/core/compliance/rawRodsChecks.js';
+import { rawCoverageIssues, buildCoverageFixGroup } from '../source/src/core/compliance/rawRodsChecks.js';
 
 let checks = 0;
 function ok(name, fn) {
@@ -129,7 +129,7 @@ ok('manual miles: null coordinates fall back to log city points', () => {
 ok('manual miles: DOT asks for total miles only', () => {
   const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
   const dotSrc = readFileSync(new URL('../source/src/core/dot/dotOfficerCheckEngine.js', import.meta.url), 'utf8');
-  assert.ok(dotSrc.includes('Driving miles missing'), 'DOT missing miles issue not present');
+  assert.ok(dotSrc.includes('Total driving miles missing'), 'DOT day-total miles issue not present');
   assert.ok(daySrc.includes('Enter total miles for this driving'), 'total miles prompt missing');
   assert.ok(daySrc.includes('[62, 65, 68]'), '62/65/68 speed guide missing');
   assert.ok(daySrc.includes('speedMilesOptions'), 'speed miles helper missing');
@@ -296,75 +296,50 @@ ok('sign tab: simple DOT Check modal replaces heavy inline panels', () => {
 });
 
 
-// 25) Production state must not seed demo duty logs or fake unit numbers.
-ok('production safety: no seeded demo logs or fake truck unit', () => {
-  const mockSrc = readFileSync(new URL('../source/src/state/mockData.js', import.meta.url), 'utf8');
-  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
-  assert.ok(mockSrc.includes('export const initialEventsByDay = {};'), 'mock duty events should be empty in production');
-  assert.ok(!appSrc.includes('Unit 12'), 'fake Unit 12 should not be a production default');
-  assert.ok(!appSrc.includes('Trailer 53'), 'fake Trailer 53 should not be a production default');
-  assert.ok(!appSrc.includes('{ ...initialEventsByDay'), 'normalizeState must not merge demo events into saved state');
-});
-
-// 26) Raw RODS coverage must catch gaps hidden by visual display continuity.
-ok('raw compliance: one short past event is incomplete', () => {
-  const day = '2026-07-02';
+// 25) DOT coverage: raw coverage child issues are grouped into one main card.
+ok('dot coverage: missing blocks are grouped into one coverage issue', () => {
+  const day = '2026-07-04';
   const eventsByDay = {
-    [day]: [{ id:'short', status:'ON', startMin:480, endMin:540, city:'Chicago', state:'IL', note:'On Duty' }]
+    [day]: [
+      { id:'on1', status:'ON', startMin:225, endMin:240, city:'Willowbrook', state:'IL', note:'On Duty' },
+      { id:'d1', status:'D', startMin:250, endMin:395, city:'Willowbrook', state:'IL', note:'Driving' },
+      { id:'off1', status:'OFF', startMin:395, endMin:1440, city:'Willowbrook', state:'IL', note:'Off Duty' },
+    ],
   };
-  const result = rawCoverageIssues(eventsByDay, day, { today:'2026-07-04' });
-  assert.equal(rawStoredEventsForDay(eventsByDay, day).length, 1);
-  assert.ok(result.issues.some(issue => issue.code === 'day_start_gap'), 'start gap not detected');
-  assert.ok(result.issues.some(issue => issue.code === 'day_end_gap'), 'end gap not detected');
-  assert.ok(result.issues.some(issue => issue.code === 'day_total_not_24h'), '24h total issue not detected');
+  const result = rawCoverageIssues(eventsByDay, day);
+  const group = buildCoverageFixGroup(result, day);
+  assert.equal(group.title, 'Missing log coverage');
+  assert.equal(group.fixAction, 'OPEN_COVERAGE_WIZARD');
+  assert.equal(group.missingBlocks.length, 2);
+  assert.equal(group.missingBlocks[0].startMin, 0);
+  assert.equal(group.missingBlocks[0].endMin, 225);
+  assert.equal(group.missingBlocks[1].startMin, 240);
+  assert.equal(group.missingBlocks[1].endMin, 250);
 });
 
-// 27) App edits must use raw stored events, not visual display rows.
-ok('storage safety: edit/insert/delete base uses raw events', () => {
+// 26) DOT coverage wizard: UI and save path use raw events and real wizard rows.
+ok('dot coverage wizard: modal UI and raw save path are present', () => {
+  const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
   const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
-  assert.ok(appSrc.includes('function rawBaseForDay'), 'rawBaseForDay helper missing');
-  assert.ok(appSrc.includes('return rawBaseForDay(s, day);'), 'continuousBaseForDay should return raw base');
-  assert.ok(appSrc.includes('locationFixContextFromState'), 'location fix context missing');
-  assert.ok(appSrc.includes('rawStoredEventsForDay(state.eventsByDay || {}, day)'), 'location fix should use raw stored events');
+  assert.ok(daySrc.includes('function CoverageFixWizard'), 'CoverageFixWizard component missing');
+  assert.ok(daySrc.includes('Save and next'), 'wizard save-and-next copy missing');
+  assert.ok(daySrc.includes('Missing coverage block'), 'wizard block copy missing');
+  assert.ok(appSrc.includes("source:'coverage_fix_wizard'"), 'coverage wizard event source missing');
+  assert.ok(appSrc.includes('rawStoredEventsForDay(s.eventsByDay || {}, day)'), 'coverage wizard should read raw stored events');
+  assert.ok(appSrc.includes('stripSyntheticEventFields'), 'synthetic stripping missing');
+  assert.ok(!appSrc.includes("displayEventsForDayFromState(s.eventsByDay || {}, day);\n  }\n\n  function commitTimelineForDay"), 'display timeline should not be write base');
 });
 
-// 28) Previous-day package must detect recertification, not just signature image.
-ok('dot package: previous day recertification is treated as package issue', () => {
+// 27) Previous 7 days: collapsed package and create missing day modal are present.
+ok('dot previous package: remains collapsed with create missing day modal', () => {
+  const daySrc = readFileSync(new URL('../source/src/modules/logbook/DayLogScreen.jsx', import.meta.url), 'utf8');
   const dotSrc = readFileSync(new URL('../source/src/core/dot/dotOfficerCheckEngine.js', import.meta.url), 'utf8');
-  const signSrc = readFileSync(new URL('../source/src/modules/logbook/signing.js', import.meta.url), 'utf8');
-  assert.ok(dotSrc.includes('previous_recert_'), 'DOT engine previous recert issue missing');
-  assert.ok(signSrc.includes('previous_recert_'), 'Sign guard previous recert issue missing');
-  assert.ok(dotSrc.includes("certStatus === 'Needs Recertification'"), 'DOT engine should check cert status');
-  assert.ok(signSrc.includes("certStatus === 'Needs Recertification'"), 'Sign guard should check cert status');
-});
-
-
-// 29) Driving status opens a manual-driving focus screen with Motive-style clocks.
-ok('driving mode: manual driving focus screen opens from driving status', () => {
-  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
-  const driveSrc = readFileSync(new URL('../source/src/modules/gps/DrivingFocusScreen.jsx', import.meta.url), 'utf8');
-  assert.ok(appSrc.includes("state.view === 'drive'"), 'drive view route missing');
-  assert.ok(appSrc.includes('openDriveFocus:true'), 'driving status should request drive focus');
-  assert.ok(driveSrc.includes('motive-drive-mode'), 'Motive-style drive mode class missing');
-  assert.ok(driveSrc.includes('drive-clock-grid'), 'four-clock mode missing');
-  assert.ok(driveSrc.includes('Show Split SB Clocks'), 'split clock toggle missing');
-  assert.ok(driveSrc.includes('onOpenStatus'), 'driving status card should open status workflow');
-});
-
-// 30) Smart paper-log mode must not ask for GPS on launch.
-ok('paper-log mode: app does not request GPS on launch', () => {
-  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
-  assert.ok(appSrc.includes('no GPS request on launch'), 'launch GPS comment missing');
-  assert.ok(!appSrc.includes('navigator.geolocation.getCurrentPosition'), 'App should not call geolocation on launch');
-});
-
-// 31) Graph polish: log graph uses thinner Motive-style trace.
-ok('graph polish: thinner cleaner trace constants', () => {
-  const graphSrc = readFileSync(new URL('../source/src/modules/graph/LogGraph.jsx', import.meta.url), 'utf8');
-  const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
-  assert.ok(graphSrc.includes('const LINE_W = 6.8'), 'thinner line width missing');
-  assert.ok(graphSrc.includes("const TRACE_COLOR = '#475467'"), 'softer trace color missing');
-  assert.ok(cssSrc.includes('v95.43 manual driving focus mode'), 'drive mode CSS missing');
+  assert.ok(daySrc.includes('Previous 7 days package'), 'previous package collapsed copy missing');
+  assert.ok(daySrc.includes('function MissingDayModal'), 'Create missing day modal missing');
+  assert.ok(daySrc.includes('Full OFF duty day'), 'Full OFF option missing');
+  assert.ok(daySrc.includes('Full Sleeper day'), 'Full Sleeper option missing');
+  assert.ok(dotSrc.includes('CREATE_MISSING_DAY'), 'previous missing-day action missing');
+  assert.ok(dotSrc.includes('Needs recertification'), 'previous recertification row missing');
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

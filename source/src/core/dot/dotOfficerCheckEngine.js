@@ -1,7 +1,6 @@
 import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { durLabel, nowMin, timeLabel } from '../../shared/utils/time.js';
-import { displayEventsForDayFromState } from '../timeline/displayTimeline.js';
-import { rawCoverageIssues, rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
+import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
 import { analyzeLinkedHos, violationRangesForDay } from '../hos/hosEngine.js';
 import { haversineMiles, pointFromLogLocation } from '../gps/locationService.js';
 
@@ -205,22 +204,22 @@ function buildFormIssues(state, day, events) {
     issues.push(makeIssue('form', { id:'missing_shipping_docs', title:'Shipping docs missing', detail:'Form → Shipping docs / BOL', fixAction:'OPEN_FORM_FIELD', target:'shippingDocs', actionLabel:'Add BOL' }));
   }
 
-  const drivingWithoutMiles = events.filter(event =>
+  const drivingEvents = events.filter(event =>
     event.status === 'D' &&
-    Number(event.endMin || 0) > Number(event.startMin || 0) &&
-    !(Number(event.manualMiles || 0) > 0)
+    Number(event.endMin || 0) > Number(event.startMin || 0)
   );
-  drivingWithoutMiles.forEach((event, index) => {
+  const manualMilesTotal = drivingEvents.reduce((sum, event) => sum + Math.max(0, Number(event.manualMiles || 0)), 0);
+  if (drivingEvents.length && !(manualMilesTotal > 0)) {
     issues.push(makeIssue('form', {
-      id:`missing_driving_miles_${event.id || index}`,
+      id:'missing_total_driving_miles',
       severity:'fix',
-      title:'Driving miles missing',
-      detail:`${eventTitle(event)} · ${durLabel(eventDuration(event))}`,
+      title:'Total driving miles missing',
+      detail:'Enter total miles driven today.',
       fixAction:'OPEN_MANUAL_MILES',
-      eventId:event.id,
-      actionLabel:'Add miles',
+      eventId:drivingEvents[0]?.id || '',
+      actionLabel:'Add total miles',
     }));
-  });
+  }
 
   const docTokens = splitDocTokens(docs);
   const dupes = [...new Set(docTokens.filter((item, index) => docTokens.indexOf(item) !== index))];
@@ -231,19 +230,13 @@ function buildFormIssues(state, day, events) {
   return issues;
 }
 
-function buildCoverageIssues(state, day, events) {
-  const coverage = rawCoverageIssues(state.eventsByDay || {}, day);
-  return (coverage.issues || []).map((issue, index) => makeIssue('coverage', {
-    id: issue.code || `raw_coverage_${index}`,
-    severity: issue.severity === 'notice' ? 'notice' : 'fix',
-    title: issue.title,
-    detail: issue.detail,
-    fixAction: issue.code === 'future_log_day' ? 'OPEN_DAY' : (issue.eventId ? 'OPEN_EVENT' : 'OPEN_LOG'),
-    eventId: issue.eventId || '',
-    startMin: issue.startMin,
-    endMin: issue.endMin,
-    actionLabel: issue.code === 'future_log_day' ? 'Open today' : 'Open log',
-  }));
+function buildCoverageIssues(state, day, rawCoverageResult = null) {
+  const result = rawCoverageResult || rawCoverageIssues(state.eventsByDay || {}, day, { currentLocation: state.currentLocation || {} });
+  const group = buildCoverageFixGroup(result, day);
+  const remainder = coverageIssuesWithoutGroupedChildren(result, group)
+    .filter(issue => String(issue.code || issue.id || '') !== 'future_day')
+    .map(issue => makeIssue('coverage', issue));
+  return group ? [makeIssue('coverage', group), ...remainder] : remainder;
 }
 
 function buildLocationIssues(events) {
@@ -263,10 +256,19 @@ function buildLocationIssues(events) {
   return [...missingIssues, ...buildLocationContinuityIssues(events)];
 }
 
+function rawEventsByDayForHos(eventsByDay = {}) {
+  const out = {};
+  Object.keys(eventsByDay || {}).forEach(dayKey => {
+    out[dayKey] = rawStoredEventsForDay(eventsByDay, dayKey);
+  });
+  return out;
+}
+
 function buildHosIssues(state, day, events) {
   const issues = [];
-  const result = analyzeLinkedHos(state.eventsByDay || {}, day, state.certifyStatus || {});
-  const ranges = violationRangesForDay(state.eventsByDay || {}, day) || [];
+  const rawEventsByDay = rawEventsByDayForHos(state.eventsByDay || {});
+  const result = analyzeLinkedHos(rawEventsByDay, day, state.certifyStatus || {});
+  const ranges = violationRangesForDay(rawEventsByDay, day) || [];
 
   ranges.forEach((range, index) => {
     const event = firstEventInRange(events, range);
@@ -359,10 +361,10 @@ function buildInspectionIssues(state, day, events) {
 
   if (inspection.complete && preTrip && !inspection.sourceEventId) {
     issues.push(makeIssue('inspection', {
-      id:'inspection_unlinked_pretrip',
+      id:'inspection_complete_unlinked_pretrip',
       severity:'review',
       title:'Inspection complete but Pre-trip link missing',
-      detail:`Inspection is complete, but not linked to pre-trip at ${timeLabel(preTrip.startMin, true)}`,
+      detail:`Inspection is complete, but it is not linked to the ON DUTY Pre-trip event at ${timeLabel(preTrip.startMin, true)}`,
       fixAction:'OPEN_INSPECTION',
       eventId:preTrip.id || '',
       actionLabel:'Link pre-trip',
@@ -392,46 +394,82 @@ function buildInspectionIssues(state, day, events) {
   return issues;
 }
 
-function buildPreviousDayIssues(state, day) {
+function buildPreviousDayPackage(state, day) {
   const issues = [];
+  const rows = [];
   previousSevenDays(day).forEach(prevDay => {
-    const coverage = rawCoverageIssues(state.eventsByDay || {}, prevDay);
+    const coverage = rawCoverageIssues(state.eventsByDay || {}, prevDay, { currentLocation: state.currentLocation || {} });
+    const group = buildCoverageFixGroup(coverage, prevDay);
     const completeEvents = coverage.events || [];
     const signed = !!state.signatureByDay?.[prevDay]?.signed;
-    const certStatus = state.certifyStatus?.[prevDay] || '';
-    const readySigned = signed && certStatus === 'Certified';
+    const signStatus = state.certifyStatus?.[prevDay] || '';
+    const needsRecert = signStatus === 'Needs Recertification';
+    const isCertified = signStatus === 'Certified' && signed && !needsRecert;
+    let status = 'Ready';
+    let issue = null;
 
     if (!completeEvents.length) {
-      issues.push(makeIssue('previous', { id:`missing_previous_${prevDay}`, title:'Previous day missing', detail:prevDay, day:prevDay, fixAction:'CREATE_MISSING_DAY', actionLabel:'Create day' }));
-      return;
-    }
-
-    const total = coverage.total ?? totalMinutes(completeEvents);
-    const coverageIssue = (coverage.issues || []).find(issue => !/no_events/.test(issue.code || ''));
-    if (coverageIssue) {
-      issues.push(makeIssue('previous', {
+      status = 'Missing';
+      issue = makeIssue('previous', {
+        id:`missing_previous_${prevDay}`,
+        severity:'fix',
+        title:'Previous day missing',
+        detail:prevDay,
+        day:prevDay,
+        fixAction:'CREATE_MISSING_DAY',
+        actionLabel:'Create day',
+      });
+    } else if (group || Math.abs(Number(coverage.total || 0) - 1440) > 1) {
+      status = 'Incomplete';
+      issue = makeIssue('previous', {
         id:`previous_total_${prevDay}`,
+        severity:'fix',
         title:'Previous day incomplete',
-        detail:`${prevDay} · ${durLabel(total)} confirmed`,
+        detail:`${prevDay} · ${durLabel(coverage.total || 0)} confirmed`,
         day:prevDay,
         fixAction:'OPEN_DAY',
         actionLabel:'Open day',
-      }));
-    }
-
-    if (!readySigned) {
-      issues.push(makeIssue('previous', {
-        id: certStatus === 'Needs Recertification' ? `previous_recert_${prevDay}` : `previous_unsigned_${prevDay}`,
-        severity:'review',
-        title: certStatus === 'Needs Recertification' ? 'Previous day needs recertification' : 'Previous day not signed',
+      });
+    } else if (needsRecert) {
+      status = 'Needs recertification';
+      issue = makeIssue('previous', {
+        id:`previous_recert_${prevDay}`,
+        severity:'fix',
+        title:'Previous day needs recertification',
         detail:prevDay,
         day:prevDay,
         fixAction:'OPEN_DAY_SIGN',
-        actionLabel: certStatus === 'Needs Recertification' ? 'Recertify' : 'Sign day',
-      }));
+        actionLabel:'Recertify',
+      });
+    } else if (!isCertified) {
+      status = 'Unsigned';
+      issue = makeIssue('previous', {
+        id:`previous_unsigned_${prevDay}`,
+        severity:'fix',
+        title:'Previous day not signed',
+        detail:prevDay,
+        day:prevDay,
+        fixAction:'OPEN_DAY_SIGN',
+        actionLabel:'Sign day',
+      });
     }
+
+    if (issue) issues.push(issue);
+    rows.push({
+      day:prevDay,
+      total:durLabel(coverage.total || 0),
+      signed,
+      status,
+      issue,
+      actionLabel:issue?.actionLabel || 'Open',
+      fixAction:issue?.fixAction || 'OPEN_DAY',
+    });
   });
-  return issues;
+  return { issues, rows };
+}
+
+function buildPreviousDayIssues(state, day) {
+  return buildPreviousDayPackage(state, day).issues;
 }
 
 function buildRouteIssues(state, day, events) {
@@ -464,17 +502,28 @@ function buildRouteIssues(state, day, events) {
 
 export function buildDotOfficerCheck(state, day) {
   const events = rawStoredEventsForDay(state.eventsByDay || {}, day);
+  const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, { currentLocation: state.currentLocation || {} });
+  const previousPackage = buildPreviousDayPackage(state, day);
+  const previousSection = sectionSummary('previous', 'Previous 7 days', previousPackage.issues);
+  previousSection.rows = previousPackage.rows;
+
   const sections = [
     sectionSummary('form', 'Form fields', buildFormIssues(state, day, events)),
-    sectionSummary('coverage', 'Log coverage', buildCoverageIssues(state, day, events)),
+    sectionSummary('coverage', 'Log coverage', buildCoverageIssues(state, day, rawCoverageResult)),
     sectionSummary('location', 'Locations', buildLocationIssues(events)),
     sectionSummary('hos', 'HOS review', buildHosIssues(state, day, events)),
     sectionSummary('inspection', 'Inspection', buildInspectionIssues(state, day, events)),
-    sectionSummary('previous', 'Previous 7 days', buildPreviousDayIssues(state, day)),
     sectionSummary('route', 'Route / shipping', buildRouteIssues(state, day, events)),
+    previousSection,
   ];
 
-  const issues = sections.flatMap(section => section.issues.map(issue => ({ ...issue, sectionTitle: section.title })));
+  const issues = sections
+    .flatMap(section => section.issues.map(issue => ({ ...issue, sectionTitle: section.title })))
+    .sort((a, b) => {
+      const ar = a.fixAction === 'OPEN_COVERAGE_WIZARD' ? 0 : a.section === 'previous' ? 4 : a.severity === 'fix' ? 1 : a.severity === 'review' ? 2 : 3;
+      const br = b.fixAction === 'OPEN_COVERAGE_WIZARD' ? 0 : b.section === 'previous' ? 4 : b.severity === 'fix' ? 1 : b.severity === 'review' ? 2 : 3;
+      return ar - br;
+    });
   const fixCount = issues.filter(issue => issue.severity === 'fix').length;
   const reviewCount = issues.filter(issue => issue.severity === 'review').length;
   const noticeCount = issues.filter(issue => issue.severity === 'notice').length;
@@ -490,5 +539,8 @@ export function buildDotOfficerCheck(state, day) {
     noticeCount,
     sections,
     issues,
+    rawCoverageResult,
+    coverageGroup: buildCoverageFixGroup(rawCoverageResult, day),
+    previousRows: previousPackage.rows,
   };
 }

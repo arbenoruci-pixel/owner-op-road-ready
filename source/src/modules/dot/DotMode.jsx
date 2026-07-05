@@ -50,7 +50,7 @@ function dayRange(activeDay) {
 }
 
 function reportEventsForDay(state, day) {
-  return sortEvents(displayEventsForDay(state.eventsByDay?.[day] || [], day >= localDayKey()));
+  return sortEvents(displayEventsForDay(state.eventsByDay?.[day] || [], day === localDayKey()));
 }
 
 function dutyTotals(events = []) {
