@@ -1,8 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { parseSmartLocationText } from '../../../core/gps/locationService.js';
 
 function parseLocationText(value, fallbackState = '') {
-  return parseSmartLocationText(value, fallbackState);
+  const raw = String(value || '');
+  if (!raw.trim()) return { city: '', state: '' };
+
+  const parts = raw.split(',');
+  if (parts.length >= 2) {
+    const state = parts.pop().trim().toUpperCase().slice(0, 2);
+    return { city: parts.join(',').trim(), state };
+  }
+
+  const trailingState = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
+  if (trailingState) {
+    return { city: trailingState[1].trim(), state: trailingState[2].toUpperCase() };
+  }
+
+  return { city: raw.trim(), state: fallbackState || '' };
 }
 
 function locationString(city = '', state = '') {
