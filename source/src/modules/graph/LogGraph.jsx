@@ -14,10 +14,10 @@ const SHORT_EVENT_MARKER_PX = 12;
 const HIT_MIN_PX = 24;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
-const LINE_W = 8;
-const VERTICAL_LINE_W = Number((LINE_W * 0.85).toFixed(2));
+const LINE_W = 6.8;
+const VERTICAL_LINE_W = Number((LINE_W * 0.80).toFixed(2));
 const CORNER_OVERLAP = VERTICAL_LINE_W / 2;
-const TRACE_COLOR = '#172033';
+const TRACE_COLOR = '#475467';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -119,12 +119,12 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
 
   return (
     <svg ref={svgRef} className={`log-graph ${className}`} viewBox={`0 0 ${W} ${graphHeight}`}>
-      <rect x="0" y="0" width={W} height={graphHeight} fill="#fcfdfb" />
+      <rect x="0" y="0" width={W} height={graphHeight} fill="#ffffff" />
       {STATUS_ORDER.map((s,i) => (
         <g key={s}>
-          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#fcfdfb" stroke="#e4e9e3" strokeWidth="0.8" />
+          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#ffffff" stroke="#e6eaf0" strokeWidth="0.8" />
           <text x={LEFT-12} y={CENTER(s)+5} textAnchor="end" className="row-label">{s}</text>
-          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#e4e9e3" strokeWidth="0.8" />
+          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#e6eaf0" strokeWidth="0.8" />
           <rect
             x={LEFT}
             y={TOP+i*ROW_H}
@@ -139,11 +139,11 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           />
         </g>
       ))}
-      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#e4e9e3" strokeWidth="0.8" />
+      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#e6eaf0" strokeWidth="0.8" />
       {Array.from({ length: 97 }).map((_,q) => {
         const x = LEFT + (q/96)*BODY_W;
         const major = q % 4 === 0;
-        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#d2dbd3' : '#ecf0eb'} strokeWidth={major ? 0.85 : 0.425} />;
+        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#d0d5dd' : '#edf2f7'} strokeWidth={major ? 0.78 : 0.36} />;
       })}
       {Array.from({ length: 25 }).map((_,h) => {
         const x = LEFT + (h/24)*BODY_W;

@@ -338,4 +338,33 @@ ok('dot package: previous day recertification is treated as package issue', () =
   assert.ok(signSrc.includes("certStatus === 'Needs Recertification'"), 'Sign guard should check cert status');
 });
 
+
+// 29) Driving status opens a manual-driving focus screen with Motive-style clocks.
+ok('driving mode: manual driving focus screen opens from driving status', () => {
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  const driveSrc = readFileSync(new URL('../source/src/modules/gps/DrivingFocusScreen.jsx', import.meta.url), 'utf8');
+  assert.ok(appSrc.includes("state.view === 'drive'"), 'drive view route missing');
+  assert.ok(appSrc.includes('openDriveFocus:true'), 'driving status should request drive focus');
+  assert.ok(driveSrc.includes('motive-drive-mode'), 'Motive-style drive mode class missing');
+  assert.ok(driveSrc.includes('drive-clock-grid'), 'four-clock mode missing');
+  assert.ok(driveSrc.includes('Show Split SB Clocks'), 'split clock toggle missing');
+  assert.ok(driveSrc.includes('onOpenStatus'), 'driving status card should open status workflow');
+});
+
+// 30) Smart paper-log mode must not ask for GPS on launch.
+ok('paper-log mode: app does not request GPS on launch', () => {
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(appSrc.includes('no GPS request on launch'), 'launch GPS comment missing');
+  assert.ok(!appSrc.includes('navigator.geolocation.getCurrentPosition'), 'App should not call geolocation on launch');
+});
+
+// 31) Graph polish: log graph uses thinner Motive-style trace.
+ok('graph polish: thinner cleaner trace constants', () => {
+  const graphSrc = readFileSync(new URL('../source/src/modules/graph/LogGraph.jsx', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('../source/src/styles.css', import.meta.url), 'utf8');
+  assert.ok(graphSrc.includes('const LINE_W = 6.8'), 'thinner line width missing');
+  assert.ok(graphSrc.includes("const TRACE_COLOR = '#475467'"), 'softer trace color missing');
+  assert.ok(cssSrc.includes('v95.43 manual driving focus mode'), 'drive mode CSS missing');
+});
+
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

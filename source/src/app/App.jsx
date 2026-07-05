@@ -551,36 +551,11 @@ export default function App() {
   }, [state, offlineHydrated]);
 
   React.useEffect(() => {
-    if (!navigator.geolocation) {
-      setState(s => ({ ...s, homeGpsStatus:'unavailable' }));
-      return;
-    }
-
-    setState(s => ({ ...s, homeGpsStatus: s.currentLocation?.locationSource === 'gps' ? 'gps' : 'pending' }));
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude: lat, longitude: lng, accuracy } = pos.coords || {};
-        const guessed = guessGpsCity(lat, lng);
-        setState(s => ({
-          ...s,
-          homeGpsStatus:'gps',
-          currentLocation:{
-            city: guessed.city || 'GPS',
-            state: guessed.state || detectState(lat, lng),
-            lat,
-            lng,
-            gpsAccuracy: accuracy || null,
-            locationSource:'gps',
-          },
-        }));
-      },
-      () => {
-        setState(s => ({ ...s, homeGpsStatus:'blocked' }));
-      },
-      { enableHighAccuracy:true, timeout:12000, maximumAge:60000 }
-    );
+    // Smart paper-log mode: no GPS request on launch.
+    // GPS is only requested when the driver taps Use GPS in Status/Edit.
+    setState(s => ({ ...s, homeGpsStatus: s.currentLocation?.locationSource === 'gps' ? 'gps' : 'manual' }));
   }, []);
+
 
   // Keep today's log available, but never force the driver out of the day they are reviewing.
   React.useEffect(() => {
@@ -1686,7 +1661,7 @@ export default function App() {
   }
 
 
-  function closeLastAndAddStatus({ status, reason, city, state: st, description='', droppedTrailer='', hookedTrailer='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual', shippingDocs='', loadNo='', destination='', destinationState='', backdateMinutes=0 }) {
+  function closeLastAndAddStatus({ status, reason, city, state: st, description='', droppedTrailer='', hookedTrailer='', lat=null, lng=null, gpsAccuracy=null, locationSource='manual', shippingDocs='', loadNo='', destination='', destinationState='', backdateMinutes=0, openDriveFocus=false }) {
     const acceptedLiveInspection = maybeAcceptInspectionForEvent(state, state.activeDay, { status, note:reason, description, city, state:st });
     setState(s => {
       const nowLiveMin = Math.max(0, Math.min(1439, new Date().getHours() * 60 + new Date().getMinutes()));
@@ -1747,6 +1722,7 @@ export default function App() {
         currentTrailer: trailer,
         selectedEventId: ev.id,
         sheet: null,
+        view: openDriveFocus ? 'drive' : (s.view === 'drive' && status !== 'D' ? 'day' : s.view),
         eventsByDay,
         routeLegsByDay,
         ...(loadInfoPatch ? { loadInfo:{ ...(s.loadInfo || {}), ...loadInfoPatch } } : {}),
@@ -1758,7 +1734,7 @@ export default function App() {
   }
 
   function startDrivingFromStatus({ city, state: st, lat=null, lng=null, gpsAccuracy=null, locationSource='manual' }) {
-    closeLastAndAddStatus({ status:'D', reason:'Driving started', city, state:st, description:'', droppedTrailer:'', hookedTrailer:'', lat, lng, gpsAccuracy, locationSource });
+    closeLastAndAddStatus({ status:'D', reason:'Driving', city, state:st, description:'', droppedTrailer:'', hookedTrailer:'', lat, lng, gpsAccuracy, locationSource, openDriveFocus:true });
   }
 
 
@@ -1797,12 +1773,28 @@ export default function App() {
         currentReason:'Stopped / On Duty',
         currentLocation:{ city, state:stateCode, lat:fix?.lat ?? base.currentLocation?.lat, lng:fix?.lng ?? base.currentLocation?.lng, locationSource: fix ? 'gps' : (base.currentLocation?.locationSource || 'manual') },
         selectedEventId: ev.id,
+        view:'day',
         gpsTrip: base.gpsTrip ? { ...base.gpsTrip, status:'stopped', stoppedAt:Date.now() } : base.gpsTrip,
         eventsByDay:{ ...base.eventsByDay, [day]: updated },
         sheet:null,
       };
     });
   }
+
+  if (state.view === 'drive') return (
+    <>
+      <DrivingFocusScreen
+        open={true}
+        state={state}
+        liveCurrent={liveCurrent}
+        onStopDriving={stopGpsDriving}
+        onStopToOnDuty={stopDrivingToOnDuty}
+        onOpenLog={()=>setState(s=>({ ...s, view:'day', gpsPanelOpen:false }))}
+        onOpenStatus={()=>setState(s=>({ ...s, sheet:{ type:'status' }, gpsPanelOpen:false }))}
+      />
+      {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
+    </>
+  );
 
   if (state.view === 'logs') return (
     <>
