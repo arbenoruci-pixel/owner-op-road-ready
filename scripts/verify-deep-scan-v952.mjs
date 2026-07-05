@@ -368,24 +368,13 @@ ok('graph polish: thinner cleaner trace constants', () => {
 });
 
 
-// 32) Passive same-status cleanup: adjacent OFF/SB rows should collapse after edits.
-ok('timeline: adjacent OFF/SB leftovers merge into one row', () => {
-  const offRows = normalizeLogEvents([
-    { id:'off1', status:'OFF', startMin:0, endMin:785, city:'Elgin', state:'IL', note:'Off Duty' },
-    { id:'off2', status:'OFF', startMin:785, endMin:1300, city:'Elgin', state:'IL', note:'going to parking' },
-    { id:'off3', status:'OFF', startMin:1300, endMin:1305, city:'Willowbrook', state:'IL', note:'Off Duty' },
-    { id:'off4', status:'OFF', startMin:1305, endMin:1440, city:'Elgin', state:'IL', note:'going to parking' },
-  ]);
-  assert.equal(offRows.length, 1, `expected one OFF row, got ${offRows.length}`);
-  assert.equal(offRows[0].status, 'OFF');
-  assert.equal(offRows[0].startMin, 0);
-  assert.equal(offRows[0].endMin, 1440);
-
-  const onRows = normalizeLogEvents([
-    { id:'on1', status:'ON', startMin:480, endMin:495, note:'Pre-trip Inspection' },
-    { id:'on2', status:'ON', startMin:495, endMin:540, note:'Pickup / Loading' },
-  ]);
-  assert.equal(onRows.length, 2, 'distinct ON DUTY work remarks should stay separate');
+// 32) Runtime hotfix: passive OFF/SB list merge is display-only, not global timeline.
+ok('event list: passive OFF/SB merge is display-only hotfix', () => {
+  const eventListSrc = readFileSync(new URL('../source/src/modules/logbook/EventList.jsx', import.meta.url), 'utf8');
+  const timelineSrc = readFileSync(new URL('../source/src/core/timeline/timelineEngine.js', import.meta.url), 'utf8');
+  assert.ok(eventListSrc.includes('mergePassiveRowsForList'), 'EventList passive merge helper missing');
+  assert.ok(eventListSrc.includes("event.status === 'OFF' || event.status === 'SB'"), 'OFF/SB display merge missing');
+  assert.ok(!timelineSrc.includes('OFF DUTY and SLEEPER are passive statuses'), 'global passive merge should be rolled back');
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

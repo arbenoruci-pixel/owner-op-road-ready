@@ -24,18 +24,14 @@ function mergeableSameStatus(last, current) {
   const overlaps = Number(current.startMin || 0) < Number(last.endMin || 0);
   if (!touches && !overlaps) return false;
 
-  // Continuous DRIVING should display/store as one driving block.
+  // Continuous DRIVING must display as one driving block. Motion-start, GPS,
+  // and manual-start rows can create adjacent D rows with slightly different
+  // notes, but DOT/paper-log view should show one continuous status line.
   if (last.status === 'D') return true;
 
-  // OFF DUTY and SLEEPER are passive statuses. When edits/deletes leave
-  // adjacent OFF/SB rows with old notes or locations, keep the paper log clean
-  // by collapsing them into one continuous row. This prevents deleted/changed
-  // events from leaving a stack of leftover OFF rows in the event list.
-  if (last.status === 'OFF' || last.status === 'SB') return true;
-
-  // For ON DUTY, keep distinct activities separate unless their text is
-  // compatible. Pre-trip, fuel, pickup/loading, delivery/unloading can be
-  // meaningful separate work remarks even though they share the same duty line.
+  // Only auto-merge other adjacent/touching same-status rows when their text is
+  // effectively the same or one side is blank. This prevents stale notes from
+  // a replaced ON DUTY Pre-trip event being glued onto a new OFF DUTY block.
   const notesCompatible = !hasText(last.note) || !hasText(current.note) || sameText(last.note, current.note);
   const descriptionsCompatible = !hasText(last.description) || !hasText(current.description) || sameText(last.description, current.description);
   return notesCompatible && descriptionsCompatible;
