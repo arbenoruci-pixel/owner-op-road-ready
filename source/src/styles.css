@@ -8513,3 +8513,15 @@ body,
 .preview-graph .log-graph{
   background:#fff!important;
 }
+
+
+/* v95.53 compact readable graph pass
+   Smaller graph height + larger SVG labels so iPhone Safari looks closer to Motive. */
+.log-graph .axis-label{font-size:18px!important;fill:#667085!important;font-weight:850!important;}
+.log-graph .row-label{font-size:23px!important;fill:#1f2937!important;font-weight:950!important;}
+.log-graph .total-label{font-size:18px!important;fill:#334155!important;font-weight:900!important;}
+.rr-today-graph-btn{padding:4px 6px 6px!important;margin:0 12px 8px!important;border-radius:13px!important;}
+.rr-today-graph .log-graph{display:block!important;width:100%!important;height:auto!important;}
+.graph-first-panel{padding:0 6px 7px!important;background:#fff!important;border-top:1px solid #e3e7df!important;border-bottom:1px solid #dfe5dd!important;}
+.graph-first-panel .log-graph{border:1px solid #dfe5df!important;border-radius:12px!important;background:#fff!important;box-shadow:none!important;}
+.preview-graph .log-graph,.v30-graph-card .log-graph{border-radius:12px!important;background:#fff!important;}

@@ -3,23 +3,23 @@ import { clamp, round5 } from '../../shared/utils/time.js';
 import { STATUS_ORDER, rowIndex, color, soft } from '../../shared/utils/status.js';
 
 const W = 1000;
-const EDIT_H = 540;
-const BASE_H = 420;
-const LEFT = 48;
-const RIGHT = 48;
+const EDIT_H = 420;
+const BASE_H = 344;
+const LEFT = 50;
+const RIGHT = 56;
 const TOP = 18;
-const ROW_H = 96;
+const ROW_H = 76;
 const BODY_W = W - LEFT - RIGHT;
 const SHORT_EVENT_MARKER_PX = 12;
 const HIT_MIN_PX = 24;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
-// v95.52 readability: thinner Motive-style duty trace, clearer grid.
-const LINE_W = 6;
+// v95.53 readability: compact Motive-style duty trace, readable on iPhone.
+const LINE_W = 7;
 const VERTICAL_LINE_W = LINE_W;
 const CORNER_INSET = LINE_W / 2;
 const CORNER_OVERLAP = CORNER_INSET;
-const TRACE_COLOR = '#172033';
+const TRACE_COLOR = '#111827';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -124,9 +124,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       <rect x="0" y="0" width={W} height={graphHeight} fill="#ffffff" />
       {STATUS_ORDER.map((s,i) => (
         <g key={s}>
-          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#ffffff" stroke="#d7dde3" strokeWidth="1" />
+          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#ffffff" stroke="#d7dde3" strokeWidth="1.15" />
           <text x={LEFT-12} y={CENTER(s)+5} textAnchor="end" className="row-label">{s}</text>
-          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#d7dde3" strokeWidth="1" />
+          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#d7dde3" strokeWidth="1.15" />
           <rect
             x={LEFT}
             y={TOP+i*ROW_H}
@@ -141,11 +141,11 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           />
         </g>
       ))}
-      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#d7dde3" strokeWidth="1" />
+      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#d7dde3" strokeWidth="1.15" />
       {Array.from({ length: 97 }).map((_,q) => {
         const x = LEFT + (q/96)*BODY_W;
         const major = q % 4 === 0;
-        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#aeb7c2' : '#d9dfe6'} strokeWidth={major ? 1.05 : 0.72} />;
+        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#8f9aa8' : '#d8dee6'} strokeWidth={major ? 1.25 : 0.82} />;
       })}
       {Array.from({ length: 25 }).map((_,h) => {
         const x = LEFT + (h/24)*BODY_W;

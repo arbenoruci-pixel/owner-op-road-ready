@@ -269,3 +269,11 @@ What was deliberately NOT changed (logic preserved verbatim)
 - Collapsed optional notes and fixed reason chips wrapping on mobile.
 - Preserved timeline, RoadGuard, DOT, inspection, ChatGPT parser, and routes.
 - Build and offline sync test passed.
+
+
+## v95.53 — Compact Visible Graph
+- Narrowed the log graph height so it takes less space on iPhone.
+- Enlarged graph labels/totals so the grid is easier to read.
+- Made the duty line slightly stronger and the grid clearer.
+- Tightened the Today graph card spacing on the Home Logs screen.
+- Preserved smart paper-log mode, raw DOT coverage validation, and no GPS/motion tracking.
