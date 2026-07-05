@@ -1712,7 +1712,7 @@ export default function DayDetail({
     if (!issue) return;
     const action = issue.fixAction || '';
     if (action === 'OPEN_SIGN' || action === 'OPEN_DAY_SIGN') {
-      if (issue.day && issue.day !== state.activeDay) onRoadGuardFix?.('OPEN_DAY', { day:issue.day });
+      if (issue.day && issue.day !== state.activeDay) onRoadGuardFix?.('OPEN_DAY', { day:issue.day, tab:'sign', issue });
       setActiveTab('sign');
       return;
     }
@@ -1744,7 +1744,7 @@ export default function DayDetail({
 
     if (action === 'CREATE_MISSING_DAY' || action === 'OPEN_DAY') {
       const dayToOpen = issue.day || state.activeDay;
-      onRoadGuardFix?.('OPEN_DAY', { day:dayToOpen });
+      onRoadGuardFix?.('OPEN_DAY', { day:dayToOpen, tab: action === 'OPEN_DAY_SIGN' ? 'sign' : 'log', issue });
       return;
     }
 

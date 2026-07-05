@@ -14,11 +14,12 @@ import DrivingFocusScreen from '../modules/gps/DrivingFocusScreen.jsx';
 import EquipmentSheet from '../modules/equipment/EquipmentSheet.jsx';
 import TrailerSheet from '../modules/equipment/TrailerSheet.jsx';
 import StatusWorkflowSheet from '../modules/status/StatusWorkflowSheet.jsx';
-import { initialCertifyStatus, initialEventsByDay } from '../state/mockData.js';
+import { initialCertifyStatus } from '../state/mockData.js';
 import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
 import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
 import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents } from '../core/timeline/timelineEngine.js';
+import { rawStoredEventsForDay } from '../core/compliance/rawRodsChecks.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
 import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot } from '../../../lib/local-db/appState.js';
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
@@ -306,7 +307,7 @@ function ensureTodayCarryover(eventsByDay, certifyStatus, today) {
 
 function normalizeState(s) {
   const today = localDayKey();
-  const eventsByDay = { ...initialEventsByDay, ...(s.eventsByDay || {}) };
+  const eventsByDay = { ...(s.eventsByDay || {}) };
   const certifyStatus = { ...initialCertifyStatus, ...(s.certifyStatus || {}) };
 
   // sanitize stale carryover notes copied from previous day
@@ -352,7 +353,7 @@ function normalizeState(s) {
     driverSignature,
     equipment: s.equipment || { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: s.gpsTrip || null,
-    loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
+    loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'', pickupState:'', deliveryCity:'', deliveryState:'', appointment:'' },
     routeLegsByDay: s.routeLegsByDay || {},
   };
 
@@ -367,13 +368,13 @@ function defaultInitialState() {
     selectMode: false,
     selectedIds: [],
     sheet: null,
-    eventsByDay: initialEventsByDay,
+    eventsByDay: {},
     certifyStatus: initialCertifyStatus,
-    driver: { truck:'Unit 12', trailer:'Trailer 53' },
+    driver: { truck:'', trailer:'' },
     currentTrailer: 'No trailer',
     equipment: { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: null,
-    loadInfo: { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
+    loadInfo: { loadNo:'', broker:'', pickupCity:'', pickupState:'', deliveryCity:'', deliveryState:'', appointment:'' },
     routeLegsByDay: {},
     currentStatus: 'OFF',
     currentReason: 'Off Duty',
@@ -401,7 +402,7 @@ function sorted(events) {
 function locationFixContextFromState(state = {}, payload = {}) {
   const issue = payload.issue || {};
   const day = payload.day || issue.day || state.activeDay;
-  const baseEvents = displayEventsForDayFromState(state.eventsByDay || {}, day);
+  const baseEvents = rawStoredEventsForDay(state.eventsByDay || {}, day);
   let targetId = issue.eventId || '';
   let previousId = issue.previousEventId || '';
   let targetIndex = baseEvents.findIndex(event => event.id === targetId);
@@ -609,9 +610,12 @@ export default function App() {
     return { ...state, eventsByDay: { ...state.eventsByDay, [day]: normalizeLogEvents(eventsNext) } };
   }
 
+  function rawBaseForDay(s, day = s.activeDay) {
+    return rawStoredEventsForDay(s.eventsByDay || {}, day);
+  }
+
   function continuousBaseForDay(s, day = s.activeDay) {
-    const raw = (s.eventsByDay?.[day] || []).filter(e => !e.carriedFromPreviousDay);
-    return displayEventsForDayFromState(s.eventsByDay || {}, day);
+    return rawBaseForDay(s, day);
   }
 
   function commitTimelineForDay(eventsNext, day, s) {
@@ -1606,7 +1610,7 @@ export default function App() {
         driverProfile:{ ...(s.driverProfile || {}), name:s.driverProfile?.name || s.driverSignature?.driverName || ROADGUARD_DEFAULT_PROFILE.driverName },
         carrierName:s.carrierName || ROADGUARD_DEFAULT_PROFILE.carrierName,
         mainOfficeAddress:s.mainOfficeAddress || ROADGUARD_DEFAULT_PROFILE.mainOffice,
-        driver:{ ...(s.driver || {}), truck:s.driver?.truck || 'Unit 12' },
+        driver:{ ...(s.driver || {}), truck:s.driver?.truck || '' },
         ...(!payload.silent ? { roadGuardTabRequest:{ tab:'form', at:Date.now() } } : {}),
       }));
       return;

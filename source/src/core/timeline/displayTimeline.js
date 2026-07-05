@@ -54,7 +54,7 @@ export function displayEventsForDayFromState(eventsByDay = {}, day, options = {}
     ? { city: previous.city || 'GPS', state: previous.state || 'UNK' }
     : (options.startLocation || (first ? { city: first.city || 'GPS', state: first.state || 'UNK' } : null));
 
-  return displayEventsForDay(raw, day >= today, {
+  return displayEventsForDay(raw, day === today, {
     ...options,
     fillStartWith,
     startLocation,

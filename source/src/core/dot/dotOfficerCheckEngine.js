@@ -1,6 +1,7 @@
 import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { durLabel, nowMin, timeLabel } from '../../shared/utils/time.js';
 import { displayEventsForDayFromState } from '../timeline/displayTimeline.js';
+import { rawCoverageIssues, rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
 import { analyzeLinkedHos, violationRangesForDay } from '../hos/hosEngine.js';
 import { haversineMiles, pointFromLogLocation } from '../gps/locationService.js';
 
@@ -231,46 +232,18 @@ function buildFormIssues(state, day, events) {
 }
 
 function buildCoverageIssues(state, day, events) {
-  const issues = [];
-  const today = localDayKey();
-  const isActive = day >= today;
-  const targetEnd = isActive ? nowMin() : 1440;
-  const completed = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
-  const total = totalMinutes(completed);
-
-  if (!completed.length) {
-    issues.push(makeIssue('coverage', { id:'no_events', title:'No duty-status events', detail:'Log tab → Events', fixAction:'OPEN_LOG' }));
-    return issues;
-  }
-
-  const first = completed[0];
-  const last = completed[completed.length - 1];
-
-  if (Number(first.startMin || 0) > 1) {
-    issues.push(makeIssue('coverage', { id:'start_gap', title:'Day starts after midnight', detail:`First event starts ${timeLabel(first.startMin, true)}`, fixAction:'OPEN_HOS_RANGE', startMin:0, endMin:first.startMin, eventId:first.id }));
-  }
-
-  if (Number(last.endMin || 0) < targetEnd - 1) {
-    issues.push(makeIssue('coverage', { id:'end_gap', title:isActive ? 'Current log not carried to now' : 'Day ends before midnight', detail:`Last event ends ${timeLabel(last.endMin, true)}`, fixAction:'OPEN_HOS_RANGE', startMin:last.endMin, endMin:targetEnd, eventId:last.id }));
-  }
-
-  if (!isActive && Math.abs(total - 1440) > 1) {
-    issues.push(makeIssue('coverage', { id:'total_not_24h', title:'Daily total not 24h', detail:`Total ${durLabel(total)}`, fixAction:'OPEN_LOG' }));
-  }
-
-  completed.forEach((event, index) => {
-    const next = completed[index + 1];
-    if (!next) return;
-    const gap = Number(next.startMin || 0) - Number(event.endMin || 0);
-    if (gap > 1) {
-      issues.push(makeIssue('coverage', { id:`gap_${event.id || index}`, title:'Gap between events', detail:`${timeLabel(event.endMin, true)}–${timeLabel(next.startMin, true)}`, fixAction:'OPEN_HOS_RANGE', startMin:event.endMin, endMin:next.startMin, eventId:event.id }));
-    }
-    if (gap < -1) {
-      issues.push(makeIssue('coverage', { id:`overlap_${event.id || index}`, title:'Events overlap', detail:`Around ${timeLabel(next.startMin, true)}`, fixAction:'OPEN_EVENT', eventId:event.id }));
-    }
-  });
-
-  return issues;
+  const coverage = rawCoverageIssues(state.eventsByDay || {}, day);
+  return (coverage.issues || []).map((issue, index) => makeIssue('coverage', {
+    id: issue.code || `raw_coverage_${index}`,
+    severity: issue.severity === 'notice' ? 'notice' : 'fix',
+    title: issue.title,
+    detail: issue.detail,
+    fixAction: issue.code === 'future_log_day' ? 'OPEN_DAY' : (issue.eventId ? 'OPEN_EVENT' : 'OPEN_LOG'),
+    eventId: issue.eventId || '',
+    startMin: issue.startMin,
+    endMin: issue.endMin,
+    actionLabel: issue.code === 'future_log_day' ? 'Open today' : 'Open log',
+  }));
 }
 
 function buildLocationIssues(events) {
@@ -384,6 +357,18 @@ function buildInspectionIssues(state, day, events) {
     issues.push(makeIssue('inspection', { id:'inspection_review', severity:'review', title:'Inspection review', detail:'Inspection tab', fixAction:'OPEN_INSPECTION', actionLabel:'Open' }));
   }
 
+  if (inspection.complete && preTrip && !inspection.sourceEventId) {
+    issues.push(makeIssue('inspection', {
+      id:'inspection_unlinked_pretrip',
+      severity:'review',
+      title:'Inspection complete but Pre-trip link missing',
+      detail:`Inspection is complete, but not linked to pre-trip at ${timeLabel(preTrip.startMin, true)}`,
+      fixAction:'OPEN_INSPECTION',
+      eventId:preTrip.id || '',
+      actionLabel:'Link pre-trip',
+    }));
+  }
+
   if (inspection.complete && preTrip && inspection.sourceEventId && inspection.sourceEventId !== preTrip.id) {
     issues.push(makeIssue('inspection', {
       id:'inspection_unlinked_pretrip',
@@ -410,19 +395,40 @@ function buildInspectionIssues(state, day, events) {
 function buildPreviousDayIssues(state, day) {
   const issues = [];
   previousSevenDays(day).forEach(prevDay => {
-    const events = displayEventsForDayFromState(state.eventsByDay || {}, prevDay);
-    const completeEvents = events.filter(event => eventDuration(event) > 0);
+    const coverage = rawCoverageIssues(state.eventsByDay || {}, prevDay);
+    const completeEvents = coverage.events || [];
     const signed = !!state.signatureByDay?.[prevDay]?.signed;
+    const certStatus = state.certifyStatus?.[prevDay] || '';
+    const readySigned = signed && certStatus === 'Certified';
+
     if (!completeEvents.length) {
       issues.push(makeIssue('previous', { id:`missing_previous_${prevDay}`, title:'Previous day missing', detail:prevDay, day:prevDay, fixAction:'CREATE_MISSING_DAY', actionLabel:'Create day' }));
       return;
     }
-    const total = totalMinutes(completeEvents);
-    if (Math.abs(total - 1440) > 1) {
-      issues.push(makeIssue('previous', { id:`previous_total_${prevDay}`, title:'Previous day incomplete', detail:`${prevDay} · ${durLabel(total)}`, day:prevDay, fixAction:'OPEN_DAY', actionLabel:'Open day' }));
+
+    const total = coverage.total ?? totalMinutes(completeEvents);
+    const coverageIssue = (coverage.issues || []).find(issue => !/no_events/.test(issue.code || ''));
+    if (coverageIssue) {
+      issues.push(makeIssue('previous', {
+        id:`previous_total_${prevDay}`,
+        title:'Previous day incomplete',
+        detail:`${prevDay} · ${durLabel(total)} confirmed`,
+        day:prevDay,
+        fixAction:'OPEN_DAY',
+        actionLabel:'Open day',
+      }));
     }
-    if (!signed) {
-      issues.push(makeIssue('previous', { id:`previous_unsigned_${prevDay}`, severity:'review', title:'Previous day not signed', detail:prevDay, day:prevDay, fixAction:'OPEN_DAY_SIGN', actionLabel:'Sign day' }));
+
+    if (!readySigned) {
+      issues.push(makeIssue('previous', {
+        id: certStatus === 'Needs Recertification' ? `previous_recert_${prevDay}` : `previous_unsigned_${prevDay}`,
+        severity:'review',
+        title: certStatus === 'Needs Recertification' ? 'Previous day needs recertification' : 'Previous day not signed',
+        detail:prevDay,
+        day:prevDay,
+        fixAction:'OPEN_DAY_SIGN',
+        actionLabel: certStatus === 'Needs Recertification' ? 'Recertify' : 'Sign day',
+      }));
     }
   });
   return issues;
@@ -441,7 +447,7 @@ function buildRouteIssues(state, day, events) {
       }
     }
     if (hasDeliveryText(event)) {
-      const linked = legs.some(leg => leg.deliveryEventId === event.id || leg.status === 'delivered');
+      const linked = legs.some(leg => leg.deliveryEventId === event.id);
       if (!linked) {
         issues.push(makeIssue('route', { id:`delivery_route_${event.id}`, severity:'review', title:'Delivery route link review', detail:eventTitle(event), fixAction:'OPEN_EVENT', eventId:event.id, actionLabel:'Review' }));
       }
@@ -457,7 +463,7 @@ function buildRouteIssues(state, day, events) {
 }
 
 export function buildDotOfficerCheck(state, day) {
-  const events = displayEventsForDayFromState(state.eventsByDay || {}, day);
+  const events = rawStoredEventsForDay(state.eventsByDay || {}, day);
   const sections = [
     sectionSummary('form', 'Form fields', buildFormIssues(state, day, events)),
     sectionSummary('coverage', 'Log coverage', buildCoverageIssues(state, day, events)),

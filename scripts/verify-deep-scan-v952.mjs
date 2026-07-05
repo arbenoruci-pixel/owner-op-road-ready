@@ -10,6 +10,7 @@ import {
   closePreviousAndStart,
 } from '../source/src/core/timeline/timelineEngine.js';
 import { pointFromLogLocation, estimatedRoadMiles, estimateMilesByStateBetween, parseMilesByState, sumMilesByState } from '../source/src/core/gps/locationService.js';
+import { rawCoverageIssues, rawStoredEventsForDay } from '../source/src/core/compliance/rawRodsChecks.js';
 
 let checks = 0;
 function ok(name, fn) {
@@ -292,6 +293,49 @@ ok('sign tab: simple DOT Check modal replaces heavy inline panels', () => {
   assert.ok(!daySrc.includes('<ChatGptAssistBox state={state} day={day}'), 'ChatGPT helper should not render inline in SignGuardPanel');
   assert.ok(!daySrc.includes('<DotPackageTable rows={guard.dotRows}'), 'DOT package table should not render inline in SignGuardPanel');
   assert.ok(cssSrc.includes('v95.40 simple DOT Check launch'), 'simple DOT modal styles missing');
+});
+
+
+// 25) Production state must not seed demo duty logs or fake unit numbers.
+ok('production safety: no seeded demo logs or fake truck unit', () => {
+  const mockSrc = readFileSync(new URL('../source/src/state/mockData.js', import.meta.url), 'utf8');
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(mockSrc.includes('export const initialEventsByDay = {};'), 'mock duty events should be empty in production');
+  assert.ok(!appSrc.includes('Unit 12'), 'fake Unit 12 should not be a production default');
+  assert.ok(!appSrc.includes('Trailer 53'), 'fake Trailer 53 should not be a production default');
+  assert.ok(!appSrc.includes('{ ...initialEventsByDay'), 'normalizeState must not merge demo events into saved state');
+});
+
+// 26) Raw RODS coverage must catch gaps hidden by visual display continuity.
+ok('raw compliance: one short past event is incomplete', () => {
+  const day = '2026-07-02';
+  const eventsByDay = {
+    [day]: [{ id:'short', status:'ON', startMin:480, endMin:540, city:'Chicago', state:'IL', note:'On Duty' }]
+  };
+  const result = rawCoverageIssues(eventsByDay, day, { today:'2026-07-04' });
+  assert.equal(rawStoredEventsForDay(eventsByDay, day).length, 1);
+  assert.ok(result.issues.some(issue => issue.code === 'day_start_gap'), 'start gap not detected');
+  assert.ok(result.issues.some(issue => issue.code === 'day_end_gap'), 'end gap not detected');
+  assert.ok(result.issues.some(issue => issue.code === 'day_total_not_24h'), '24h total issue not detected');
+});
+
+// 27) App edits must use raw stored events, not visual display rows.
+ok('storage safety: edit/insert/delete base uses raw events', () => {
+  const appSrc = readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
+  assert.ok(appSrc.includes('function rawBaseForDay'), 'rawBaseForDay helper missing');
+  assert.ok(appSrc.includes('return rawBaseForDay(s, day);'), 'continuousBaseForDay should return raw base');
+  assert.ok(appSrc.includes('locationFixContextFromState'), 'location fix context missing');
+  assert.ok(appSrc.includes('rawStoredEventsForDay(state.eventsByDay || {}, day)'), 'location fix should use raw stored events');
+});
+
+// 28) Previous-day package must detect recertification, not just signature image.
+ok('dot package: previous day recertification is treated as package issue', () => {
+  const dotSrc = readFileSync(new URL('../source/src/core/dot/dotOfficerCheckEngine.js', import.meta.url), 'utf8');
+  const signSrc = readFileSync(new URL('../source/src/modules/logbook/signing.js', import.meta.url), 'utf8');
+  assert.ok(dotSrc.includes('previous_recert_'), 'DOT engine previous recert issue missing');
+  assert.ok(signSrc.includes('previous_recert_'), 'Sign guard previous recert issue missing');
+  assert.ok(dotSrc.includes("certStatus === 'Needs Recertification'"), 'DOT engine should check cert status');
+  assert.ok(signSrc.includes("certStatus === 'Needs Recertification'"), 'Sign guard should check cert status');
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);
