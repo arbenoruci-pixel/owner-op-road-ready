@@ -9,7 +9,7 @@ import {
   makeContinuousLogEvents,
   closePreviousAndStart,
 } from '../source/src/core/timeline/timelineEngine.js';
-import { pointFromLogLocation, estimatedRoadMiles, estimateMilesByStateBetween, parseMilesByState, sumMilesByState } from '../source/src/core/gps/locationService.js';
+import { pointFromLogLocation, estimatedRoadMiles, estimateMilesByStateBetween, parseMilesByState, sumMilesByState, parseSmartLocationText } from '../source/src/core/gps/locationService.js';
 import { rawCoverageIssues, rawStoredEventsForDay } from '../source/src/core/compliance/rawRodsChecks.js';
 
 let checks = 0;
@@ -365,6 +365,15 @@ ok('graph polish: thinner cleaner trace constants', () => {
   assert.ok(graphSrc.includes('const LINE_W = 6.8'), 'thinner line width missing');
   assert.ok(graphSrc.includes("const TRACE_COLOR = '#475467'"), 'softer trace color missing');
   assert.ok(cssSrc.includes('v95.43 manual driving focus mode'), 'drive mode CSS missing');
+});
+
+
+// 33) Smart location parser: common typos and missing comma should normalize to known city/state.
+ok('location parser: gery in becomes Gary, IN and not fallback IL', () => {
+  assert.deepEqual(parseSmartLocationText('gery in', 'IL'), { city:'Gary', state:'IN' });
+  assert.deepEqual(parseSmartLocationText('gary il', 'IL'), { city:'Gary', state:'IN' });
+  assert.deepEqual(parseSmartLocationText('elgin il', 'IL'), { city:'Elgin', state:'IL' });
+  assert.deepEqual(parseSmartLocationText('mukwonago wi', 'IL'), { city:'Mukwonago', state:'WI' });
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

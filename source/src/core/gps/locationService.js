@@ -139,6 +139,113 @@ export function lookupCityPoint(city = '', state = '') {
   ) || null;
 }
 
+const STATE_NAME_TO_CODE = {
+  illinois:'IL', il:'IL',
+  indiana:'IN', in:'IN',
+  wisconsin:'WI', wi:'WI',
+  ohio:'OH', oh:'OH',
+  michigan:'MI', mi:'MI',
+  iowa:'IA', ia:'IA',
+  kentucky:'KY', ky:'KY',
+  missouri:'MO', mo:'MO',
+  minnesota:'MN', mn:'MN',
+  pennsylvania:'PA', pa:'PA',
+};
+
+function titleCaseCity(value = '') {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\b[a-z]/g, ch => ch.toUpperCase());
+}
+
+function editDistance(a = '', b = '') {
+  const x = normalizePlacePart(a).replace(/\s+/g, '');
+  const y = normalizePlacePart(b).replace(/\s+/g, '');
+  if (!x || !y) return Math.max(x.length, y.length);
+  const dp = Array.from({ length:x.length + 1 }, () => Array(y.length + 1).fill(0));
+  for (let i = 0; i <= x.length; i += 1) dp[i][0] = i;
+  for (let j = 0; j <= y.length; j += 1) dp[0][j] = j;
+  for (let i = 1; i <= x.length; i += 1) {
+    for (let j = 1; j <= y.length; j += 1) {
+      const cost = x[i - 1] === y[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return dp[x.length][y.length];
+}
+
+function parseStateToken(value = '') {
+  const key = normalizePlacePart(value).replace(/\s+/g, '');
+  return STATE_NAME_TO_CODE[key] || '';
+}
+
+function splitLocationText(value = '', fallbackState = '') {
+  const raw = String(value || '').trim().replace(/\s+/g, ' ');
+  if (!raw) return { city:'', state:'', explicitState:false };
+
+  const commaParts = raw.split(',').map(part => part.trim()).filter(Boolean);
+  if (commaParts.length >= 2) {
+    const state = parseStateToken(commaParts[commaParts.length - 1]) || commaParts[commaParts.length - 1].toUpperCase().slice(0, 2);
+    return { city:commaParts.slice(0, -1).join(', ').trim(), state, explicitState:!!state };
+  }
+
+  const tokens = raw.split(' ').filter(Boolean);
+  if (tokens.length >= 2) {
+    const last = tokens[tokens.length - 1];
+    const lastTwo = last.replace(/[^a-zA-Z]/g, '');
+    const state = parseStateToken(lastTwo) || (lastTwo.length === 2 ? lastTwo.toUpperCase() : '');
+    if (state) return { city:tokens.slice(0, -1).join(' ').trim(), state, explicitState:true };
+  }
+
+  return { city:raw, state:String(fallbackState || '').trim().toUpperCase().slice(0, 2), explicitState:false };
+}
+
+function bestKnownCityMatch(city = '', state = '', explicitState = false) {
+  const wanted = normalizePlacePart(city);
+  if (!wanted) return null;
+  const wantedState = String(state || '').trim().toUpperCase().slice(0, 2);
+  const candidates = GPS_CITY_POINTS
+    .filter(point => !explicitState || !wantedState || String(point.state).toUpperCase() === wantedState)
+    .map(point => {
+      const normalizedCity = normalizePlacePart(point.city);
+      const distance = editDistance(wanted, normalizedCity);
+      const starts = normalizedCity.startsWith(wanted) || wanted.startsWith(normalizedCity);
+      return { point, distance, starts };
+    })
+    .filter(item => item.starts || item.distance <= Math.max(1, Math.min(2, Math.floor(wanted.length / 3))))
+    .sort((a, b) => a.distance - b.distance || Number(b.starts) - Number(a.starts));
+
+  if (candidates[0]) return candidates[0].point;
+
+  // If the typed state is wrong but the city is a unique known city (e.g. Gary IL),
+  // prefer the known city/state instead of blindly keeping the fallback/wrong state.
+  const allMatches = GPS_CITY_POINTS
+    .map(point => ({ point, distance:editDistance(wanted, point.city), starts:normalizePlacePart(point.city).startsWith(wanted) || wanted.startsWith(normalizePlacePart(point.city)) }))
+    .filter(item => item.starts || item.distance <= Math.max(1, Math.min(2, Math.floor(wanted.length / 3))))
+    .sort((a, b) => a.distance - b.distance || Number(b.starts) - Number(a.starts));
+  if (allMatches.length === 1) return allMatches[0].point;
+  if (allMatches.length > 1 && allMatches[0].distance < allMatches[1].distance) return allMatches[0].point;
+  return null;
+}
+
+export function parseSmartLocationText(value = '', fallbackState = '') {
+  const split = splitLocationText(value, fallbackState);
+  if (!split.city && !split.state) return { city:'', state:'' };
+
+  const known = bestKnownCityMatch(split.city, split.state, split.explicitState);
+  if (known) return { city:known.city, state:known.state };
+
+  return {
+    city:titleCaseCity(split.city),
+    state:String(split.state || fallbackState || '').trim().toUpperCase().slice(0, 2),
+  };
+}
+
 function hasRealCoordinate(value) {
   if (value == null || value === '') return false;
   const n = Number(value);

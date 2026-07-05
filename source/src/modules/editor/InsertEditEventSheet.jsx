@@ -7,7 +7,7 @@ import EditorNotesField from './components/EditorNotesField.jsx';
 import { fromInput, nowMin, timeLabel, toInput } from '../../shared/utils/time.js';
 import { label as statusLabel } from '../../shared/utils/status.js';
 import { previewInsertOverride, applyEditOverride } from '../../core/timeline/timelineEngine.js';
-import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
+import { detectState, guessGpsCity, parseSmartLocationText } from '../../core/gps/locationService.js';
 
 const onReasons = ['Pre-trip inspection', 'Pickup / Loading', 'Delivery / Unloading', 'Fuel', 'Waiting', 'Drop Trailer', 'Drop & Hook'];
 const offReasons = ['Off Duty', 'Break', 'Parking', 'Personal Conveyance'];
@@ -44,16 +44,7 @@ function joinReasons(reasons = []) {
 }
 
 function parseLocationTextLocal(value, fallbackState = '') {
-  const raw = String(value || '');
-  if (!raw.trim()) return { city: '', state: '' };
-  const parts = raw.split(',');
-  if (parts.length >= 2) {
-    const state = parts.pop().trim().toUpperCase().slice(0, 2);
-    return { city: parts.join(',').trim(), state };
-  }
-  const trailingState = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
-  if (trailingState) return { city: trailingState[1].trim(), state: trailingState[2].toUpperCase() };
-  return { city: raw.trim(), state: fallbackState || '' };
+  return parseSmartLocationText(value, fallbackState);
 }
 
 function locationString(city = '', state = '') {

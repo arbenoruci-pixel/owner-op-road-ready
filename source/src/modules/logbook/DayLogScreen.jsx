@@ -5,7 +5,7 @@ import EventList from './EventList.jsx';
 import LogCheckPanel from './LogCheckPanel.jsx';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { buildDotOfficerCheck } from '../../core/dot/dotOfficerCheckEngine.js';
-import { estimatedRoadMiles, pointFromLogLocation, recalcMilesByTimeWindow } from '../../core/gps/locationService.js';
+import { estimatedRoadMiles, parseSmartLocationText, pointFromLogLocation, recalcMilesByTimeWindow } from '../../core/gps/locationService.js';
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay, displayEventsForDayFromState } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
@@ -382,26 +382,7 @@ function FormSectionTitle({ children }) {
 }
 
 function parseCityStateEdit(value = '') {
-  const raw = String(value || '').trim();
-  if (!raw) return { city:'', state:'' };
-  const parts = raw.split(',');
-  if (parts.length >= 2) {
-    const state = parts.pop().trim().toUpperCase().slice(0, 2);
-    return { city:parts.join(',').trim(), state };
-  }
-  const trailing = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
-  if (trailing) return { city:trailing[1].trim(), state:trailing[2].toUpperCase() };
-  return { city:raw, state:'' };
-}
-
-function FormRow({ label, value, onClick }) {
-  const Tag = onClick ? 'button' : 'div';
-  return (
-    <Tag type={onClick ? 'button' : undefined} className={`road-form-row ${onClick ? 'editable' : ''}`} onClick={onClick}>
-      <div className="road-form-label">{label}</div>
-      <div className="road-form-value">{value}</div>
-    </Tag>
-  );
+  return parseSmartLocationText(value, '');
 }
 
 function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
