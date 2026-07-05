@@ -1,45 +1,17 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
 import { color, label } from '../../shared/utils/status.js';
 
-function mergePassiveRowsForList(events = []) {
-  const sorted = [...(events || [])].filter(Boolean).sort((a, b) => Number(a.startMin || 0) - Number(b.startMin || 0));
-  const out = [];
-  for (const event of sorted) {
-    const last = out[out.length - 1];
-    const passive = event.status === 'OFF' || event.status === 'SB';
-    const touches = last && Number(event.startMin || 0) <= Number(last.endMin || 0);
-    if (last && passive && last.status === event.status && touches) {
-      out[out.length - 1] = {
-        ...last,
-        endMin: Math.max(Number(last.endMin || 0), Number(event.endMin || 0)),
-        // Keep the first location of the continuous passive status. If the
-        // driver needs to change location, they can still open/edit the row.
-        city: last.city || event.city,
-        state: last.state || event.state,
-        note: last.note || event.note,
-        description: last.description || event.description,
-        mergedIds: [...(last.mergedIds || [last.id]), event.id].filter(Boolean),
-      };
-      continue;
-    }
-    out.push({ ...event });
-  }
-  return out;
-}
-
 export default function EventList({ events, selectedId, selectMode, selectedIds, onSelect, onToggleSelected, onOpenEdit }) {
   const refs = useRef({});
-  const listEvents = useMemo(() => mergePassiveRowsForList(events), [events]);
 
   useEffect(() => {
-    const visibleId = listEvents.find(event => event.id === selectedId || event.mergedIds?.includes(selectedId))?.id || selectedId;
-    if (visibleId && refs.current[visibleId]) {
-      refs.current[visibleId].scrollIntoView({ block:'nearest', behavior:'smooth' });
+    if (selectedId && refs.current[selectedId]) {
+      refs.current[selectedId].scrollIntoView({ block:'nearest', behavior:'smooth' });
     }
-  }, [selectedId, listEvents]);
+  }, [selectedId]);
 
-  if (!listEvents.length) {
+  if (!events.length) {
     return (
       <div className="events clean-events">
         <div className="empty-events-card">
@@ -52,8 +24,8 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
 
   return (
     <div className="events clean-events">
-      {listEvents.map(event => {
-        const selected = selectedId === event.id || event.mergedIds?.includes(selectedId);
+      {events.map(event => {
+        const selected = selectedId === event.id;
         const checked = selectedIds.includes(event.id);
         const loc = `${event.city || ''}${event.state ? `, ${event.state}` : ''}`.trim();
         return (

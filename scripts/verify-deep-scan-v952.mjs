@@ -367,14 +367,4 @@ ok('graph polish: thinner cleaner trace constants', () => {
   assert.ok(cssSrc.includes('v95.43 manual driving focus mode'), 'drive mode CSS missing');
 });
 
-
-// 32) Runtime hotfix: passive OFF/SB list merge is display-only, not global timeline.
-ok('event list: passive OFF/SB merge is display-only hotfix', () => {
-  const eventListSrc = readFileSync(new URL('../source/src/modules/logbook/EventList.jsx', import.meta.url), 'utf8');
-  const timelineSrc = readFileSync(new URL('../source/src/core/timeline/timelineEngine.js', import.meta.url), 'utf8');
-  assert.ok(eventListSrc.includes('mergePassiveRowsForList'), 'EventList passive merge helper missing');
-  assert.ok(eventListSrc.includes("event.status === 'OFF' || event.status === 'SB'"), 'OFF/SB display merge missing');
-  assert.ok(!timelineSrc.includes('OFF DUTY and SLEEPER are passive statuses'), 'global passive merge should be rolled back');
-});
-
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);
