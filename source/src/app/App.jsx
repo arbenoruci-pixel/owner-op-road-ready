@@ -17,7 +17,7 @@ import StatusWorkflowSheet from '../modules/status/StatusWorkflowSheet.jsx';
 import { initialCertifyStatus, initialEventsByDay } from '../state/mockData.js';
 import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
 import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
-import { rawStoredEventsForDay, stripSyntheticEventFields } from '../core/compliance/rawRodsChecks.js';
+import { rawStoredEventsForDay, stripSyntheticEventFields, isSyntheticEvent } from '../core/compliance/rawRodsChecks.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
 import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents, protectLiveTailFromInsert } from '../core/timeline/timelineEngine.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
@@ -123,6 +123,109 @@ function traceDutyWrite(label, day, events) {
     syntheticCoverage: !!e.syntheticCoverage,
     carriedFromPreviousDay: !!e.carriedFromPreviousDay,
   })));
+}
+
+
+function numericMinute(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1440, Math.round(n)));
+}
+
+function statusChangeLooksPreTrip(event = {}) {
+  return isPreTripStatus(event?.status, `${event?.note || ''} ${event?.description || ''}`);
+}
+
+function repairMidnightDrivingCorruption(events = [], inspection = {}, day = '') {
+  const raw = normalizeLogEvents((events || [])
+    .filter(Boolean)
+    .filter(event => !isSyntheticEvent(event))
+    .map(stripSyntheticEventFields));
+  if (!raw.length) return raw;
+
+  const preTrip = raw.find(statusChangeLooksPreTrip) || null;
+  const inspectionStart = inspection?.complete && Number.isFinite(Number(inspection.sourceStartMin))
+    ? numericMinute(inspection.sourceStartMin, 0)
+    : null;
+  const inspectionEnd = inspection?.complete && Number.isFinite(Number(inspection.sourceEndMin))
+    ? Math.max((inspectionStart ?? 0) + 1, numericMinute(inspection.sourceEndMin, (inspectionStart ?? 0) + 15))
+    : null;
+
+  const protectedStart = preTrip ? numericMinute(preTrip.startMin, 0) : inspectionStart;
+  const protectedEnd = preTrip ? Math.max(protectedStart + 1, numericMinute(preTrip.endMin, protectedStart + 15)) : inspectionEnd;
+  if (protectedStart == null || protectedEnd == null || protectedStart <= 0 || protectedEnd <= protectedStart) return raw;
+
+  const broadDrive = raw.find(event => (
+    event.status === 'D'
+    && numericMinute(event.startMin, 0) === 0
+    && numericMinute(event.endMin, 0) > protectedStart
+  ));
+  if (!broadDrive) return raw;
+
+  const hasOwnPreTrip = !!preTrip;
+  const hasDriveAfterProtected = raw.some(event => event.id !== broadDrive.id && event.status === 'D' && numericMinute(event.startMin, 0) >= protectedEnd);
+  const out = [];
+
+  for (const event of raw) {
+    if (event.id !== broadDrive.id) {
+      out.push(event);
+      continue;
+    }
+
+    const end = numericMinute(event.endMin, protectedEnd);
+    // A DRIVING segment that starts at midnight and covers an accepted Pre-trip
+    // is the legacy corruption this patch repairs. Convert the pre-pretrip
+    // portion back to OFF, preserve/restore the ON Pre-trip, then keep Driving
+    // only after the Pre-trip if no separate Driving row already exists.
+    if (protectedStart > 0) {
+      out.push({
+        ...event,
+        id: `${event.id}_repaired_off_${day || 'day'}`,
+        status: 'OFF',
+        startMin: 0,
+        endMin: protectedStart,
+        note: 'Off Duty',
+        description: '',
+        source: 'repair_midnight_driving',
+      });
+    }
+
+    if (!hasOwnPreTrip) {
+      out.push({
+        id: inspection?.sourceEventId || `repaired_pretrip_${day || 'day'}_${protectedStart}`,
+        status: 'ON',
+        startMin: protectedStart,
+        endMin: protectedEnd,
+        city: inspection?.city || event.city || '',
+        state: inspection?.state || event.state || '',
+        note: 'Pre-trip Inspection',
+        description: '',
+        source: 'repair_midnight_driving',
+        locationSource: inspection?.locationSource || event.locationSource || 'manual',
+      });
+    }
+
+    if (!hasDriveAfterProtected && end > protectedEnd) {
+      out.push({
+        ...event,
+        startMin: protectedEnd,
+        endMin: end,
+        note: 'Driving',
+        description: textLooksLikeStatusArtifact(event.description, 'D') ? '' : (event.description || ''),
+        source: event.source || 'manual',
+      });
+    }
+  }
+
+  return normalizeLogEvents(out);
+}
+
+function purgeSyntheticAndRepairEvents(events = [], day = '', stateLike = {}) {
+  const rawOnly = (events || [])
+    .filter(Boolean)
+    .filter(event => !isSyntheticEvent(event))
+    .map(event => stripSyntheticEventFields(event));
+  return repairMidnightDrivingCorruption(rawOnly, stateLike?.inspectionByDay?.[day] || {}, day);
 }
 
 function sanitizeCarryoverEvent(event) {
@@ -308,14 +411,7 @@ function buildCarryoverEvent(lastEvent) {
 
 function refreshCarryoverIfOnlyPlaceholder(eventsByDay, dayKey) {
   const current = eventsByDay[dayKey] || [];
-  if (current.length !== 1 || !current[0]?.carriedFromPreviousDay) return;
-  const lastPrev = previousDayLastEvent(eventsByDay, dayKey);
-  const carry = buildCarryoverEvent(lastPrev);
-  if (carry) {
-    carry.id = current[0].id || carry.id;
-    carry.endMin = current[0].endMin || 1;
-    eventsByDay[dayKey] = [carry];
-  } else {
+  if (current.length === 1 && (current[0]?.carriedFromPreviousDay || String(current[0]?.source || '') === 'carryover')) {
     eventsByDay[dayKey] = [];
   }
 }
@@ -326,11 +422,10 @@ function ensureTodayCarryover(eventsByDay, certifyStatus, today) {
     certifyStatus[today] = 'Active day / Not certified yet';
   }
 
-  if ((eventsByDay[today] || []).length === 0) {
-    const lastPrev = previousDayLastEvent(eventsByDay, today);
-    const carry = buildCarryoverEvent(lastPrev);
-    if (carry) eventsByDay[today] = [carry];
-  }
+  // v95.56: carry-forward is display-only. Never store a synthetic row in
+  // eventsByDay, because stale carryover rows can later be treated as real
+  // midnight duty records by edit/sign/reload flows.
+  refreshCarryoverIfOnlyPlaceholder(eventsByDay, today);
 }
 
 function normalizeState(s) {
@@ -340,7 +435,7 @@ function normalizeState(s) {
 
   // sanitize stale carryover notes copied from previous day
   Object.keys(eventsByDay).forEach(day => {
-    eventsByDay[day] = normalizeLogEvents((eventsByDay[day] || []).map(event => sanitizeDutyEventForStatus(sanitizeCarryoverEvent(event))));
+    eventsByDay[day] = purgeSyntheticAndRepairEvents((eventsByDay[day] || []).map(event => sanitizeDutyEventForStatus(sanitizeCarryoverEvent(event))), day, s);
   });
 
   ensureTodayCarryover(eventsByDay, certifyStatus, today);
@@ -624,11 +719,7 @@ export default function App() {
   }
 
   function commitTimelineForDay(eventsNext, day, s) {
-    const rawOnly = (eventsNext || [])
-      .filter(Boolean)
-      .filter(event => !event.syntheticCoverage && !event.carriedFromPreviousDay && String(event.source || '') !== 'timeline_continuity')
-      .map(event => stripSyntheticEventFields(event));
-    return normalizeLogEvents(rawOnly).map(event => ({ ...event }));
+    return purgeSyntheticAndRepairEvents(eventsNext || [], day, s).map(event => ({ ...event }));
   }
 
   function minuteFromDate(date = new Date()) {

@@ -1,3 +1,11 @@
+# v95.56 — Sign/Overlap Midnight Driving Repair
+
+- Purges legacy carryover/display rows from raw log storage on hydration and commit.
+- Treats `source: carryover`, `display`, and `display_timeline` as synthetic, not real RODS events.
+- Stops Today carryover from being stored in `eventsByDay`; carry-forward is display-only.
+- Adds legacy repair for corrupted midnight DRIVING rows that cover an accepted ON DUTY Pre-trip/inspection window.
+- Adds verifier `verify-sign-overlap-midnight-driving-v9556.mjs`.
+
 # v95.55 — Day Switch Driving Display Guard
 
 - Prevented previous-day/stale DRIVING from being carried into today as synthetic display coverage.

@@ -37,8 +37,17 @@ function usableLocation(...items) {
   return { city:'', state:'' };
 }
 
-function isSyntheticEvent(event = {}) {
-  return !!event.syntheticCoverage || !!event.carriedFromPreviousDay || String(event.source || '') === 'timeline_continuity';
+export function isSyntheticEvent(event = {}) {
+  const source = String(event.source || '').trim().toLowerCase();
+  return !!event.syntheticCoverage
+    || !!event.carriedFromPreviousDay
+    || !!event.displayOnly
+    || !!event.synthetic
+    || !!event.continuityGenerated
+    || source === 'timeline_continuity'
+    || source === 'carryover'
+    || source === 'display'
+    || source === 'display_timeline';
 }
 
 export function stripSyntheticEventFields(event = {}) {

@@ -11,7 +11,9 @@ function isDisplayOnlyCoverage(event = {}) {
     || !!event.carriedFromPreviousDay
     || !!event.displayOnly
     || String(event.source || '') === 'timeline_continuity'
-    || String(event.source || '') === 'carryover';
+    || String(event.source || '') === 'carryover'
+    || String(event.source || '') === 'display'
+    || String(event.source || '') === 'display_timeline';
 }
 
 function realDisplayBase(events = []) {
