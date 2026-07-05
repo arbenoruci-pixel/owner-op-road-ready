@@ -6,11 +6,33 @@ export function sorted(events) {
   return [...events].sort((a,b)=>a.startMin-b.startMin);
 }
 
+function isDisplayOnlyCoverage(event = {}) {
+  return !!event.syntheticCoverage
+    || !!event.carriedFromPreviousDay
+    || !!event.displayOnly
+    || String(event.source || '') === 'timeline_continuity'
+    || String(event.source || '') === 'carryover';
+}
+
+function realDisplayBase(events = []) {
+  return sortEvents(events || [])
+    .filter(Boolean)
+    .filter(event => !event.voided)
+    .filter(event => !isDisplayOnlyCoverage(event));
+}
+
+function safeCarryForwardStatus(status = '') {
+  // Smart paper-log mode must never paint a new day as DRIVING just because
+  // the previous day ended in D. Driving across midnight requires a real
+  // stored event/rollover, not display carry-forward.
+  return status === 'D' ? 'OFF' : (status || 'OFF');
+}
+
 function previousLastEvent(eventsByDay = {}, dayKey = '') {
   let cursor = dayKey;
   for (let i = 0; i < 14; i += 1) {
     cursor = addDays(cursor, -1);
-    const events = sortEvents(eventsByDay?.[cursor] || []).filter(e => Number(e.endMin || 0) > Number(e.startMin || 0));
+    const events = realDisplayBase(eventsByDay?.[cursor] || []).filter(e => Number(e.endMin || 0) > Number(e.startMin || 0));
     if (events.length) return events[events.length - 1];
   }
   return null;
@@ -44,13 +66,13 @@ export function displayEventsForDay(events, isCurrentDay=false, options = {}) {
 
 export function displayEventsForDayFromState(eventsByDay = {}, day, options = {}) {
   const today = localDayKey();
-  const raw = eventsByDay?.[day] || [];
+  const raw = realDisplayBase(eventsByDay?.[day] || []);
   const first = normalizeLogEvents(raw)[0];
   const previous = previousLastEvent(eventsByDay, day);
   const fillStartWith = first && Number(first.startMin || 0) > 0
-    ? (previous?.status || options.fallbackStartStatus || 'OFF')
+    ? safeCarryForwardStatus(previous?.status || options.fallbackStartStatus || 'OFF')
     : options.fillStartWith;
-  const startLocation = previous
+  const startLocation = previous && previous.status !== 'D'
     ? { city: previous.city || 'GPS', state: previous.state || 'UNK' }
     : (options.startLocation || (first ? { city: first.city || 'GPS', state: first.state || 'UNK' } : null));
 

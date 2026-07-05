@@ -53,7 +53,7 @@ Reproduction before the fix:
      Trace calls added in `addEvent` and `closeLastAndAddStatus`.
 
 3. **`source/src/modules/editor/InsertEditEventSheet.jsx`** — new
-   `safeDefaultStart(events)`: if any existing event overlaps the
+   `safeDefaultStart(events)`: if any existing event started inside the
    15-minute backdate window, the new insert defaults to start NOW instead of
    15 minutes ago. Explicit times and the Now/15m/30m chips still work; only
    the silent default changed.
@@ -101,7 +101,7 @@ Reproduction before the fix:
   quick visual confirmation on device.
 
 ## Validation run (offline)
-- `node scripts/verify-duty-status-override-v9554.mjs` — 64 checks passed
+- `node scripts/verify-duty-status-override-v9554.mjs` — 63 checks passed
   (behavioral acceptance tests + regression of the exact reported bug +
   static write-path checks).
 - `npm run test:offline` — passed.

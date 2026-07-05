@@ -4,6 +4,7 @@ import { label } from '../../shared/utils/status.js';
 import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { signableLogDays, validateLogForSigning } from '../logbook/signing.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
+import { rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
 import { nowMin } from '../../shared/utils/time.js';
 
 // v95.52 Roadside 8-day home list
@@ -31,11 +32,16 @@ function hLabel(mins) {
 
 const SHORT = { OFF: 'OFF', SB: 'SB', D: 'DRV', ON: 'ON' };
 
+function safeLiveStatus(status = 'OFF', hasRawToday = false) {
+  // Do not let stale persisted/current Driving paint a whole empty day as D.
+  return status === 'D' && !hasRawToday ? 'OFF' : (status || 'OFF');
+}
+
 function statusSummary(state) {
   const day = localDayKey();
-  const events = state.eventsByDay?.[day] || [];
+  const events = rawStoredEventsForDay(state.eventsByDay || {}, day);
   const last = [...events].sort((a, b) => a.startMin - b.startMin).at(-1);
-  const status = state.currentStatus || last?.status || 'OFF';
+  const status = last?.status || safeLiveStatus(state.currentStatus || 'OFF', events.length > 0);
   const loc = state.currentLocation || {};
   const source = loc.locationSource || state.homeGpsStatus || 'default';
   const hasRealLocation = source === 'gps' || source === 'manual' || (loc.city && loc.state && !(loc.city === 'Chicago' && loc.state === 'IL' && source === 'default'));
@@ -79,14 +85,14 @@ function savedDayKeys(state) {
 }
 
 function hasRealLog(state, day) {
-  return Array.isArray(state.eventsByDay?.[day]) && state.eventsByDay[day].length > 0;
+  return rawStoredEventsForDay(state.eventsByDay || {}, day).length > 0;
 }
 
 function homeCurrentEvents(state, day) {
-  const raw = state.eventsByDay?.[day] || [];
+  const raw = rawStoredEventsForDay(state.eventsByDay || {}, day);
   if (raw.length) return displayEventsForDay(raw, true);
 
-  const status = state.currentStatus || 'OFF';
+  const status = safeLiveStatus(state.currentStatus || 'OFF', false);
   const loc = state.currentLocation || {};
   const endMin = Math.max(1, Math.min(1440, nowMin()));
   return [{
@@ -112,7 +118,7 @@ function certLabelForDay(state, day, anchorDay) {
 
 function DayRow({ state, day, anchorDay, onOpenDay }) {
   const { weekday, date } = dayParts(day);
-  const raw = state.eventsByDay?.[day] || [];
+  const raw = rawStoredEventsForDay(state.eventsByDay || {}, day);
   const evs = displayEventsForDay(raw, day === anchorDay);
   const cert = certLabelForDay(state, day, anchorDay);
   const status = raw.slice(-1)[0]?.status || 'OFF';

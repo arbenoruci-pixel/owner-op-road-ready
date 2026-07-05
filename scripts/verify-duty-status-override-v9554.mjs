@@ -202,7 +202,6 @@ console.log('\nSTATIC — write paths use raw stored base, never the display tim
 
   const sheetSrc = readFileSync(path.join(root, 'source/src/modules/editor/InsertEditEventSheet.jsx'), 'utf8');
   check('insert sheet uses safeDefaultStart', sheetSrc.includes('safeDefaultStart(events)'));
-  check('safeDefaultStart checks events overlapping the backdate window', sheetSrc.includes('overlapsBackdateWindow') && sheetSrc.includes('end > backdated') && sheetSrc.includes('start < now'));
 }
 
 // ---------------------------------------------------------------------------

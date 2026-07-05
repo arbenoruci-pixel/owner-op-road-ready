@@ -278,13 +278,20 @@ function withAcceptedPreTripInspection(next, day, event, accepted) {
 
 function previousDayLastEvent(eventsByDay, dayKey) {
   const prevDay = addDays(dayKey, -1);
-  const prev = [...(eventsByDay[prevDay] || [])].sort((a,b)=>a.startMin-b.startMin);
+  const prev = rawStoredEventsForDay(eventsByDay || {}, prevDay);
   return prev.length ? prev[prev.length - 1] : null;
+}
+
+function safeCarryoverStatus(status = 'OFF') {
+  // In smart paper-log mode, never create/display a new day as DRIVING from
+  // stale previous-day/currentStatus state. A real cross-midnight Driving
+  // segment must be an explicit stored event, not synthetic carry-forward.
+  return status === 'D' ? 'OFF' : (status || 'OFF');
 }
 
 function buildCarryoverEvent(lastEvent) {
   if (!lastEvent) return null;
-  const status = lastEvent.status || 'OFF';
+  const status = safeCarryoverStatus(lastEvent.status || 'OFF');
   return {
     id: `carry_${Date.now()}`,
     status,
@@ -338,7 +345,12 @@ function normalizeState(s) {
 
   ensureTodayCarryover(eventsByDay, certifyStatus, today);
   refreshCarryoverIfOnlyPlaceholder(eventsByDay, today);
+  const todayRawEvents = rawStoredEventsForDay(eventsByDay, today);
+  const currentFromRaw = todayRawEvents.length ? sorted(todayRawEvents)[todayRawEvents.length - 1] : null;
   const currentFromCarry = (eventsByDay[today] || []).length ? sorted(eventsByDay[today])[0] : null;
+  const safePersistedStatus = (!currentFromRaw && s.currentStatus === 'D') ? 'OFF' : (s.currentStatus || '');
+  const safePersistedReason = (!currentFromRaw && s.currentStatus === 'D') ? 'Off Duty' : (s.currentReason || '');
+  const safePersistedLocation = (!currentFromRaw && s.currentStatus === 'D') ? null : (s.currentLocation || null);
 
   const existingSignatureFromDays = Object.values(s.signatureByDay || {}).find(sig => sig?.signatureDataUrl)?.signatureDataUrl || '';
   const driverSignature = s.driverSignature || (existingSignatureFromDays
@@ -366,9 +378,11 @@ function normalizeState(s) {
     eventsByDay,
     certifyStatus,
     currentTrailer: s.currentTrailer || 'No trailer',
-    currentStatus: s.currentStatus || currentFromCarry?.status || 'OFF',
-    currentReason: s.currentReason || currentFromCarry?.note || currentFromCarry?.description || 'Off Duty',
-    currentLocation: s.currentLocation || (currentFromCarry ? { city: currentFromCarry.city || 'GPS', state: currentFromCarry.state || 'UNK', locationSource:'carryover' } : { city:'GPS', state:'UNK', locationSource:'pending' }),
+    currentStatus: currentFromRaw?.status || safePersistedStatus || currentFromCarry?.status || 'OFF',
+    currentReason: currentFromRaw?.note || currentFromRaw?.description || safePersistedReason || currentFromCarry?.note || currentFromCarry?.description || 'Off Duty',
+    currentLocation: currentFromRaw
+      ? { city: currentFromRaw.city || 'GPS', state: currentFromRaw.state || 'UNK', locationSource: currentFromRaw.locationSource || 'manual' }
+      : (safePersistedLocation || (currentFromCarry ? { city: currentFromCarry.city || 'GPS', state: currentFromCarry.state || 'UNK', locationSource:'carryover' } : { city:'GPS', state:'UNK', locationSource:'pending' })),
     inspectionByDay: s.inspectionByDay || {},
     signatureByDay: compactSignatureByDay || {},
     driverSignature,

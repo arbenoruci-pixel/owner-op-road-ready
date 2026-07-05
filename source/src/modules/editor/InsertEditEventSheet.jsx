@@ -127,17 +127,18 @@ function eventToForm(e) {
   };
 }
 
-// v95.54: the old default (always "15 minutes ago") silently backdated a new
+// v95.55: the old default (always "15 minutes ago") silently backdated a new
 // event on top of a status change the driver just made — e.g. a Driving insert
 // defaulted right over a fresh ON DUTY Pre-trip and deleted it. If any existing
-// event overlaps the backdate window, default the new event to start now.
+// real/display event overlaps the backdate window, default the new event to now.
 function safeDefaultStart(events = []) {
   const now = Math.max(0, Math.min(1439, nowMin()));
   const backdated = Math.max(0, now - 15);
   const overlapsBackdateWindow = (events || []).some(e => {
-    const start = Number(e?.startMin ?? -1);
-    const end = Number(e?.endMin ?? start);
-    return Number.isFinite(start) && Number.isFinite(end) && end > backdated && start < now;
+    if (!e || e.isDraft) return false;
+    const start = Number(e.startMin ?? -1);
+    const end = Number(e.endMin ?? start);
+    return start < now && end > backdated;
   });
   if (overlapsBackdateWindow) return now;
   return backdated;
