@@ -1,12 +1,12 @@
 {
-  "version": "95.69.0",
-  "build": "v95.69-intermodal-day-chassis-form",
+  "version": "95.70.0",
+  "build": "v95.70-dot-document-viewer",
   "releasedAt": "2026-07-06T00:00:00.000Z",
   "notes": [
-    "Shows day-level chassis used on the Form tab for intermodal logs instead of falling back to dry-van trailer defaults.",
-    "Dry van / reefer / flatbed still show the normal trailer number.",
-    "Does not change duty-status events, driving events, route legs, or miles."
+    "Opens saved DOT wallet documents inside the app instead of relying on data-url new tabs that fail on iOS/PWA.",
+    "Adds Share / Save and Open in browser fallback actions for saved document attachments.",
+    "Does not change duty-status events, driving events, miles, route legs, or wallet document data."
   ],
-  "label": "v95.69 Intermodal day chassis form",
+  "label": "v95.70 DOT document viewer",
   "updatedAt": "2026-07-06T00:00:00.000Z"
 }

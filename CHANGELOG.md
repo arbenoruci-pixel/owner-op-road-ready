@@ -1,4 +1,11 @@
 
+## v95.70.0 - DOT document viewer fix
+- Replaced direct data-url document links in DOT Roadside Documents with an in-app document viewer.
+- Added Blob/Object URL handling so iOS/PWA can preview saved images/PDFs without blank tabs.
+- Added Share / Save and Open in browser fallback actions.
+- No changes to true driving events, duty-status times, miles, route legs, or wallet document data.
+
+
 ## v95.69.0 — Intermodal day chassis form
 
 - Form tab now shows day-level `Chassis` values for intermodal/container days instead of falling back to the default dry-van trailer number.

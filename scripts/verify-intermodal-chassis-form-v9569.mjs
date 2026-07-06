@@ -21,10 +21,10 @@ const sw = read('public/sw.js');
 const appVersion = JSON.parse(read('public/app-version.json'));
 const pkg = JSON.parse(read('package.json'));
 
-assert(pkg.version === '95.69.0', 'package version is 95.69.0');
-assert(appUpdate.includes("CURRENT_APP_VERSION = '95.69.0'"), 'app update version bumped');
-assert(sw.includes("OWNER_OP_SW_VERSION = '95.69.0'"), 'service worker version bumped');
-assert(appVersion.version === '95.69.0', 'app-version.json bumped');
+assert(/^95\.(69|[7-9]\d)\.0$/.test(pkg.version), 'package version is 95.69.0 or newer');
+assert(/CURRENT_APP_VERSION = '95\.(69|[7-9]\d)\.0'/.test(appUpdate), 'app update version bumped');
+assert(/OWNER_OP_SW_VERSION = '95\.(69|[7-9]\d)\.0'/.test(sw), 'service worker version bumped');
+assert(/^95\.(69|[7-9]\d)\.0$/.test(appVersion.version), 'app-version.json bumped');
 
 assert(dayLog.includes('function equipmentFormSummary'), 'Form has day equipment summary helper');
 assert(dayLog.includes('function chassisUsedForDay'), 'Form collects chassis used for day');

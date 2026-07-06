@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Header } from '../../shared/ui/Chrome.jsx';
 import LogGraph from '../graph/LogGraph.jsx';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
@@ -218,17 +218,162 @@ function logPackageStats(state, days = []) {
   return { rows, missing, unsigned, review };
 }
 
-function WalletDocLink({ row }) {
-  const doc = row.doc || {};
-  if (!doc.attachmentDataUrl) return <span className="dot-doc-no-file">No file saved</span>;
+function guessDocMime(doc = {}) {
+  const explicit = String(doc.attachmentType || doc.fileType || '').trim();
+  if (explicit) return explicit;
+  const dataUrl = String(doc.attachmentDataUrl || doc.photoDataUrl || '').trim();
+  const match = dataUrl.match(/^data:([^;,]+)/i);
+  if (match?.[1]) return match[1];
+  const name = String(doc.attachmentName || doc.fileName || '').toLowerCase();
+  if (name.endsWith('.pdf')) return 'application/pdf';
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.webp')) return 'image/webp';
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+  return 'application/octet-stream';
+}
+
+function safeFileName(name = 'roadside-document', mime = '') {
+  const clean = String(name || 'roadside-document')
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 90) || 'roadside-document';
+  if (/\.[a-z0-9]{2,5}$/i.test(clean)) return clean;
+  if (mime.includes('pdf')) return `${clean}.pdf`;
+  if (mime.includes('png')) return `${clean}.png`;
+  if (mime.includes('webp')) return `${clean}.webp`;
+  if (mime.includes('image')) return `${clean}.jpg`;
+  return `${clean}.bin`;
+}
+
+function dataUrlToBlob(dataUrl = '', fallbackMime = 'application/octet-stream') {
+  const text = String(dataUrl || '');
+  const splitAt = text.indexOf(',');
+  if (!text.startsWith('data:') || splitAt < 0) throw new Error('Unsupported document data');
+  const meta = text.slice(0, splitAt);
+  const payload = text.slice(splitAt + 1);
+  const mime = meta.match(/^data:([^;,]+)/i)?.[1] || fallbackMime || 'application/octet-stream';
+  if (meta.toLowerCase().includes(';base64')) {
+    const binary = window.atob(payload);
+    const chunks = [];
+    for (let i = 0; i < binary.length; i += 8192) {
+      const slice = binary.slice(i, i + 8192);
+      const bytes = new Uint8Array(slice.length);
+      for (let j = 0; j < slice.length; j += 1) bytes[j] = slice.charCodeAt(j);
+      chunks.push(bytes);
+    }
+    return new Blob(chunks, { type: mime });
+  }
+  return new Blob([decodeURIComponent(payload)], { type: mime });
+}
+
+function documentDataUrl(doc = {}) {
+  return String(doc.attachmentDataUrl || doc.photoDataUrl || '').trim();
+}
+
+function DotDocumentViewer({ row, onClose, onStatus }) {
+  const doc = row?.doc || {};
+  const dataUrl = documentDataUrl(doc);
+  const mime = guessDocMime(doc);
+  const fileName = safeFileName(doc.attachmentName || row?.requirement?.title || 'roadside-document', mime);
+  const isPdf = mime.includes('pdf') || dataUrl.startsWith('data:application/pdf');
+  const isImage = mime.startsWith('image/') || dataUrl.startsWith('data:image/');
+  const [objectUrl, setObjectUrl] = useState('');
+
+  useEffect(() => {
+    if (!dataUrl) return undefined;
+    try {
+      const blob = dataUrlToBlob(dataUrl, mime);
+      const url = URL.createObjectURL(blob);
+      setObjectUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } catch (error) {
+      setObjectUrl('');
+      return undefined;
+    }
+  }, [dataUrl, mime]);
+
+  function makeFile() {
+    const blob = dataUrlToBlob(dataUrl, mime);
+    return new File([blob], fileName, { type: blob.type || mime || 'application/octet-stream' });
+  }
+
+  function openInBrowser() {
+    try {
+      const target = objectUrl || dataUrl;
+      const opened = window.open(target, '_blank', 'noopener,noreferrer');
+      if (!opened) onStatus?.('Document preview opened here. Browser pop-up was blocked.');
+    } catch (error) {
+      onStatus?.('Document could not open in a new tab. Use Share / Save instead.');
+    }
+  }
+
+  async function shareOrSave() {
+    try {
+      const file = makeFile();
+      if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+        await navigator.share({ title: row?.requirement?.title || 'DOT document', files: [file] });
+        onStatus?.('DOT document shared.');
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      onStatus?.('DOT document file created.');
+    } catch (error) {
+      onStatus?.('Document could not be shared from this device.');
+    }
+  }
+
   return (
-    <a className="dot-doc-open" href={doc.attachmentDataUrl} target="_blank" rel="noopener noreferrer">
-      Open document
-    </a>
+    <div className="dot-doc-viewer-backdrop" role="dialog" aria-modal="true" aria-label="DOT document viewer">
+      <div className="dot-doc-viewer">
+        <header className="dot-doc-viewer-head">
+          <button type="button" onClick={onClose} aria-label="Close document">‹</button>
+          <div>
+            <span>DOT DOCUMENT</span>
+            <b>{row?.requirement?.title || 'Document'}</b>
+          </div>
+          <button type="button" onClick={shareOrSave}>Share</button>
+        </header>
+        <div className="dot-doc-viewer-meta">
+          <b>{fileName}</b>
+          <span>{documentMetaLine(row)}</span>
+        </div>
+        <div className="dot-doc-viewer-body">
+          {isImage ? <img src={objectUrl || dataUrl} alt={row?.requirement?.title || 'DOT document'} /> : null}
+          {isPdf ? <iframe title={row?.requirement?.title || 'DOT document'} src={objectUrl || dataUrl} /> : null}
+          {!isImage && !isPdf ? (
+            <div className="dot-doc-viewer-fallback">
+              <b>Preview not available for this file type.</b>
+              <span>Use Share / Save or Open in browser.</span>
+            </div>
+          ) : null}
+        </div>
+        <div className="dot-doc-viewer-actions">
+          <button type="button" onClick={openInBrowser}>Open in browser</button>
+          <button type="button" onClick={shareOrSave}>Share / Save file</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function OfficerDocumentList({ state }) {
+function WalletDocLink({ row, onOpen }) {
+  const doc = row.doc || {};
+  if (!documentDataUrl(doc)) return <span className="dot-doc-no-file">No file saved</span>;
+  return (
+    <button className="dot-doc-open" type="button" onClick={() => onOpen?.(row)}>
+      Open document
+    </button>
+  );
+}
+
+function OfficerDocumentList({ state, onOpenDocument }) {
   const rows = officerWalletRows(state);
   const sections = DOC_SECTIONS
     .map(section => ({ section, rows: rows.filter(row => row.requirement.section === section.id) }))
@@ -253,7 +398,7 @@ function OfficerDocumentList({ state }) {
                 </div>
                 <div className="dot-doc-side">
                   <strong>{documentStatusLabel(row)}</strong>
-                  <WalletDocLink row={row} />
+                  <WalletDocLink row={row} onOpen={onOpenDocument} />
                 </div>
               </article>
             ))}
@@ -522,6 +667,7 @@ export default function DotMode({ state, onBack }) {
   const [stage, setStage] = useState('home');
   const [status, setStatus] = useState('');
   const [officerPane, setOfficerPane] = useState('package');
+  const [docViewer, setDocViewer] = useState(null);
   const days = useMemo(() => dayRange(localDayKey()), []);
   const selectedEvents = reportEventsForDay(state, selectedDay);
   const selectedInspection = state.inspectionByDay?.[selectedDay] || {};
@@ -708,7 +854,7 @@ export default function DotMode({ state, onBack }) {
                 <b>Roadside Documents</b>
                 <span>{walletSummary.counts.ok}/{walletSummary.counts.total} ready · {walletSummary.fileCount} file(s) saved</span>
               </div>
-              <OfficerDocumentList state={state} />
+              <OfficerDocumentList state={state} onOpenDocument={setDocViewer} />
             </section>
           )}
 
@@ -772,11 +918,15 @@ export default function DotMode({ state, onBack }) {
           </section>
           <section className="dot-report-cover wallet-doc-report">
             <h1>Roadside Documents</h1>
-            <OfficerDocumentList state={state} />
+            <OfficerDocumentList state={state} onOpenDocument={setDocViewer} />
           </section>
           {days.map(day => <DailyPaper key={day} state={state} day={day} days={days} />)}
         </main>
       )}
+
+      {docViewer ? (
+        <DotDocumentViewer row={docViewer} onClose={() => setDocViewer(null)} onStatus={setStatus} />
+      ) : null}
     </section>
   );
 }
