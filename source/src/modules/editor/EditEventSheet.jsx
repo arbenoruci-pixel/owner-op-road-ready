@@ -6,7 +6,7 @@ import EditorLocationFields from './components/EditorLocationFields.jsx';
 import EditorNotesField from './components/EditorNotesField.jsx';
 import { durLabel, fromInput, toInput, timeLabel } from '../../shared/utils/time.js';
 import { label as statusLabel } from '../../shared/utils/status.js';
-import { applyEditOverride } from '../../core/timeline/timelineEngine.js';
+import { applyPatchWithNeighbors } from '../../core/timeline/timelineEngine.js';
 import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
 
 function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
@@ -72,7 +72,7 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
   }, [event.id]);
 
   const preview = { ...event, status, startMin: fromInput(start), endMin: Math.max(fromInput(start) + 5, fromInput(end)), city, state, description, note, lat, lng, gpsAccuracy, locationSource };
-  const previewEvents = applyEditOverride(events, event.id, preview);
+  const previewEvents = applyPatchWithNeighbors(events, event.id, preview);
   const durationMinutes = Math.max(0, preview.endMin - preview.startMin);
   const header = `${DUTY_SHORT_LABELS[status]} · ${timeLabel(fromInput(start))} - ${timeLabel(preview.endMin)}`;
   const dirty = status !== initialForm.status ||

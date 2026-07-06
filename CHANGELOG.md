@@ -1,3 +1,9 @@
+## v95.66 — Edit time save persist
+- Fixed Edit Duty Status time saves where edited duration appeared saved but Log screen still showed old duration.
+- Time edits now move the linked adjacent event boundary, preserving continuous paper-log coverage.
+- Edit preview now uses the same linked-neighbor timeline as save.
+- Added `scripts/verify-edit-time-save-v9566.mjs`.
+
 ## v95.65 — Edit Event Graph Crash Fix
 
 - Fixed event tap crash caused by missing `color` import in edit graph handle rendering.

@@ -1,11 +1,11 @@
 {
-  "version": "95.65.0",
-  "build": "v95.65-edit-event-graph-crash-fix",
+  "version": "95.66.0",
+  "build": "v95.66-edit-time-save-persist",
   "releasedAt": "2026-07-05T00:00:00.000Z",
   "notes": [
-    "Fixes event tap crash when opening Edit Duty Status.",
-    "No log data/write logic changed."
+    "Fixes Edit Duty Status save for start/end time changes.",
+    "Linked adjacent event boundary moves with the edited event so the list and graph show the saved duration."
   ],
-  "label": "v95.65 Edit event graph crash fix",
+  "label": "v95.66 Edit time save persist",
   "updatedAt": "2026-07-05T00:00:00.000Z"
 }

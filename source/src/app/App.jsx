@@ -21,7 +21,7 @@ import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
 import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
 import { rawStoredEventsForDay, stripSyntheticEventFields, isSyntheticEvent } from '../core/compliance/rawRodsChecks.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
-import { insertManyOverride, applyEditOverride, closePreviousAndStart, normalizeLogEvents, protectLiveTailFromInsert } from '../core/timeline/timelineEngine.js';
+import { insertManyOverride, applyEditOverride, applyPatchWithNeighbors, closePreviousAndStart, normalizeLogEvents, protectLiveTailFromInsert } from '../core/timeline/timelineEngine.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
 import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot, savePreUpdateSnapshot } from '../../../lib/local-db/appState.js';
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
@@ -987,7 +987,17 @@ export default function App() {
       const beforeEdit = (s.eventsByDay[s.activeDay] || []).find(event => event.id === id) || currentEvent || {};
       const patchForSave = sanitizeDutyEventForStatus({ ...beforeEdit, ...patch }, beforeEdit.status);
       const baseEvents = continuousBaseForDay(s, s.activeDay);
-      const evs = commitTimelineForDay(applyEditOverride(baseEvents, id, patchForSave), s.activeDay, s);
+      const hasTimeEdit = patch.startMin !== undefined || patch.endMin !== undefined;
+      // v95.66: editing an event's start/end must persist to the raw log and
+      // move the linked adjacent event boundary with it. The main list uses a
+      // continuous display timeline, so saving only the edited raw row can look
+      // unchanged when the next event still starts at the old time. Keep the
+      // day continuous by trimming/extending the neighboring raw event at the
+      // edited boundary, then commit from raw events only.
+      const editedTimeline = hasTimeEdit
+        ? applyPatchWithNeighbors(baseEvents, id, patchForSave)
+        : applyEditOverride(baseEvents, id, patchForSave);
+      const evs = commitTimelineForDay(editedTimeline, s.activeDay, s);
       let gpsTrip = s.gpsTrip;
 
       // If the driver edits the GPS-created DRIVING event time, keep the raw GPS points,
