@@ -40,6 +40,6 @@ assert(screen.includes('signatureByDay'), 'Import recognizes signature data');
 assert(screen.includes('inspectionByDay'), 'Import recognizes inspection data');
 assert(screen.includes('DOT wallet'), 'Screen mentions wallet data');
 assert(styles.includes('backup-screen'), 'Backup styles exist');
-assert(version.includes("95.67.0"), 'Current app version is 95.67.0');
+assert(/95\.(6[7-9]|[7-9][0-9])\.0/.test(version), 'Current app version is v95.67.0 or newer');
 
 console.log(`verify-backup-logs-v9567: ${checks} checks passed`);

@@ -1,3 +1,8 @@
+
+## v95.68 — Editable day distance
+- Form tab Distance is now editable for the active log day.
+- Saves total day driving miles without touching true DRIVING events.
+- DOT check accepts day-level total miles.
 ## v95.66 — Edit time save persist
 - Fixed Edit Duty Status time saves where edited duration appeared saved but Log screen still showed old duration.
 - Time edits now move the linked adjacent event boundary, preserving continuous paper-log coverage.

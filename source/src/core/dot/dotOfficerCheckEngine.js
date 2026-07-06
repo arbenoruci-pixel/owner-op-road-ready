@@ -208,7 +208,9 @@ function buildFormIssues(state, day, events) {
     event.status === 'D' &&
     Number(event.endMin || 0) > Number(event.startMin || 0)
   );
-  const manualMilesTotal = drivingEvents.reduce((sum, event) => sum + Math.max(0, Number(event.manualMiles || 0)), 0);
+  const eventMilesTotal = drivingEvents.reduce((sum, event) => sum + Math.max(0, Number(event.manualMiles || 0)), 0);
+  const dayMilesTotal = Math.max(0, Number(state.manualMilesByDay?.[day] || 0));
+  const manualMilesTotal = dayMilesTotal || eventMilesTotal;
   if (drivingEvents.length && !(manualMilesTotal > 0)) {
     issues.push(makeIssue('form', {
       id:'missing_total_driving_miles',

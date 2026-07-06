@@ -1,11 +1,11 @@
 {
-  "version": "95.67.0",
-  "build": "v95.67-backup-logs-export-import",
+  "version": "95.68.0",
+  "build": "v95.68-editable-day-distance",
   "releasedAt": "2026-07-06T00:00:00.000Z",
   "notes": [
-    "Adds Backup Logs to Log Tools.",
-    "Manual export/import protects logs, signatures, inspections, route/load data, DOT wallet documents, and attachments before updates."
+    "Makes the Form tab Distance field editable.",
+    "Drivers can enter day-level total driving miles without changing true driving events."
   ],
-  "label": "v95.67 Backup logs export/import",
+  "label": "v95.68 Editable day distance",
   "updatedAt": "2026-07-06T00:00:00.000Z"
 }

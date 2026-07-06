@@ -1646,6 +1646,20 @@ export default function App() {
     });
   }
 
+  function saveDayDistance(miles = 0) {
+    setState(s => {
+      const day = s.activeDay;
+      const value = Math.max(0, Number(miles || 0));
+      const manualMilesByDay = { ...(s.manualMilesByDay || {}) };
+      if (value > 0) {
+        manualMilesByDay[day] = Number(value.toFixed(2));
+      } else {
+        delete manualMilesByDay[day];
+      }
+      return markDayRecert({ ...s, manualMilesByDay }, day);
+    });
+  }
+
   function startDrivingFromMotion(fix) {
     setState(s => {
       const now = new Date();
@@ -2476,6 +2490,7 @@ export default function App() {
         onSaveSignature={saveSignature}
         onRoadGuardFix={applyRoadGuardFix}
         onSaveManualMiles={(id, patch)=>updateEvent(id, patch)}
+        onSaveDayDistance={saveDayDistance}
         onSaveCoverageBlock={saveCoverageBlock}
         onCreateMissingDay={createMissingDay}
       />

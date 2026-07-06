@@ -357,6 +357,7 @@ function formSummary(state, events) {
     : (equipment.trailer || state.driver?.trailer || 'None');
   const notes = safeValue(load.notes || load.note || state.formNotes || '', 'None');
   const manualMiles = manualMilesTotal(events);
+  const dayManualMiles = Math.max(0, Number(state.manualMilesByDay?.[state.activeDay] || 0));
   const hasDriving = (events || []).some(event => event.status === 'D');
   return {
     off: formatDutyMinutes(dutyMap.OFF || 0),
@@ -365,7 +366,9 @@ function formSummary(state, events) {
     on: formatDutyMinutes(dutyMap.ON || 0),
     vehicles: safeValue(state.driver?.truck),
     trailers: safeValue(trailers),
-    distance: manualMiles > 0 ? `${manualMiles.toFixed(2)} mi` : (hasDriving ? 'Missing' : 'None'),
+    distance: dayManualMiles > 0 ? `${dayManualMiles.toFixed(2)} mi` : (manualMiles > 0 ? `${manualMiles.toFixed(2)} mi` : (hasDriving ? 'Missing' : 'None')),
+    distanceRaw: dayManualMiles > 0 ? dayManualMiles : manualMiles,
+    hasDriving,
     odometers: 'No Vehicles',
     shippingDocs: safeValue(shippingDocs),
     driverName: driverNameForState(state),
@@ -407,7 +410,7 @@ function FormRow({ label, value, onClick }) {
   );
 }
 
-function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
+function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer, onSaveDayDistance }) {
   const form = formSummary(state, events);
   const load = state.loadInfo || {};
   function editText(title, current, key) {
@@ -435,6 +438,24 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
     const value = window.prompt('BOL / shipping document / load reference', form.shippingDocs === 'None' ? '' : form.shippingDocs);
     if (value == null) return;
     onSaveLoad?.({ shippingDocs: String(value || '').trim(), loadNo: String(value || '').trim() });
+  }
+  function editDistance() {
+    if (typeof window === 'undefined') return;
+    const current = Number(form.distanceRaw || 0) > 0 ? String(Number(form.distanceRaw || 0)) : '';
+    const rawMiles = window.prompt('Total driving miles for this log day', current);
+    if (rawMiles == null) return;
+    const miles = Number(String(rawMiles).replace(/[^0-9.]/g, ''));
+    if (!Number.isFinite(miles) || miles < 0) {
+      window.alert?.('Enter a valid miles number.');
+      return;
+    }
+    const drivingMinutes = drivingMinutesForDay(events);
+    const highForDay = miles > Math.max(5, (Math.max(1, drivingMinutes) / 60) * 85 + 10);
+    if (highForDay && !window.confirm?.(`${miles.toFixed(2)} mi looks high for ${formatDutyMinutes(drivingMinutes)} driving. Save anyway?`)) {
+      return;
+    }
+    onSaveDayDistance?.(miles);
+    window.alert?.(`Saved ${miles.toFixed(2)} total driving miles for this day.`);
   }
   function addRouteLeg() {
     if (typeof window === 'undefined') return;
@@ -517,10 +538,10 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer }) {
       <FormRow label="Vehicles" value={form.vehicles} onClick={() => editText('Truck / unit number', form.vehicles, 'truck')} />
       <FormRow label="Trailers" value={form.trailers} onClick={onOpenTrailer || (() => editText('Trailer / equipment', form.trailers, 'trailer'))} />
       <div className="road-form-split-row">
-        <div>
+        <button type="button" className="road-form-split-action editable" onClick={editDistance}>
           <div className="road-form-label">Distance</div>
           <div className="road-form-value">{form.distance}</div>
-        </div>
+        </button>
         <div>
           <div className="road-form-label">Odometers</div>
           <div className="road-form-value">{form.odometers}</div>
@@ -1760,7 +1781,7 @@ export default function DayDetail({
   state, liveCurrent, events, selectedEvent, onBack, onSelect, onOpenAdd, onOpenEdit, onDelete,
   onToggleSelectMode, onToggleSelectedId, onSelectAll, onClearSelection, onOpenShift, onMoveSelected,
   onCertify, onTools, onOpenStatus, onOpenTrailer, onDriverFlow, onSaveLoad, onToggleGps,
-  onSaveInspection, onSaveSignature, onRoadGuardFix, onSaveManualMiles, onSaveCoverageBlock, onCreateMissingDay
+  onSaveInspection, onSaveSignature, onRoadGuardFix, onSaveManualMiles, onSaveDayDistance, onSaveCoverageBlock, onCreateMissingDay
 }) {
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveDelta, setMoveDelta] = useState(0);
@@ -2036,7 +2057,7 @@ export default function DayDetail({
         </div>
       )}
 
-      {activeTab === 'form' && <MiniFormPanel state={state} events={displayEvents} onSaveLoad={onSaveLoad} onOpenTrailer={onOpenTrailer} />}
+      {activeTab === 'form' && <MiniFormPanel state={state} events={displayEvents} onSaveLoad={onSaveLoad} onOpenTrailer={onOpenTrailer} onSaveDayDistance={onSaveDayDistance} />}
       {activeTab === 'sign' && <SignatureErrorBoundary day={state.activeDay}><SignaturePanel state={state} onSaveSignature={onSaveSignature} onQuickFix={onRoadGuardFix} onDotIssueAction={handleDotOfficerIssue} /></SignatureErrorBoundary>}
       {activeTab === 'inspection' && <InspectionPanel state={state} events={displayEvents} onSaveInspection={onSaveInspection} />}
 
