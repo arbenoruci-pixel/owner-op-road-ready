@@ -8796,3 +8796,10 @@ body,
 .rr-today-graph-btn{padding:3px 7px 5px!important;margin:0 12px 8px!important;border-radius:12px!important;}
 .log-graph .short-event-marker{filter:drop-shadow(0 1px 1px rgba(15,23,42,.18));}
 .log-graph .violation-bang{font-size:9px!important;font-weight:1000!important;fill:#fff!important;}
+
+
+/* v95.64 day shift selection controls */
+.day-shift-strip{position:sticky;top:calc(env(safe-area-inset-top) + 96px);z-index:12;background:#fff;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;box-shadow:0 4px 12px rgba(15,23,42,.05)}
+.day-shift-strip button:disabled{opacity:.45;background:#f3f4f6!important;color:#9ca3af!important;border-color:#e5e7eb!important}
+.event-check{width:28px;height:28px;margin:3px 0 0 3px;accent-color:#0b7dec}
+.shift-preview{max-height:44vh;overflow:auto}

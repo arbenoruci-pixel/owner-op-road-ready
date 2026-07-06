@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { clamp, round5 } from '../../shared/utils/time.js';
-import { STATUS_ORDER, rowIndex, soft } from '../../shared/utils/status.js';
+import { STATUS_ORDER, rowIndex, soft, color } from '../../shared/utils/status.js';
 
 const W = 1000;
 const EDIT_H = 374;

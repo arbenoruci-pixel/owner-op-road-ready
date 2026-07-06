@@ -817,7 +817,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const rawEvents = useMemo(() => normalizeLogEvents(state.eventsByDay[state.activeDay] || []), [state.eventsByDay, state.activeDay]);
+  const rawEvents = useMemo(() => rawStoredEventsForDay(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);
   const events = useMemo(() => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);
   const liveCurrent = useMemo(() => currentFromEvents(events, state.currentStatus || 'OFF', state.currentLocation || { city:'GPS', state:'UNK' }, state.currentReason || 'Off Duty'), [events, state.currentStatus, state.currentLocation, state.currentReason]);
   const selectedEvent = events.find(e => e.id === state.selectedEventId) || null;
@@ -1053,20 +1053,34 @@ export default function App() {
 
   function applyShift(delta) {
     setState(s => {
-      const selected = new Set(s.selectedIds);
-      const baseEvents = continuousBaseForDay(s, s.activeDay);
+      const selected = new Set(s.selectedIds || []);
+      const baseEvents = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay);
       const selectedEvents = baseEvents.filter(e => selected.has(e.id));
-      if (!selectedEvents.length || !delta) return { ...s, sheet:null };
+      if (!selectedEvents.length || !delta) return { ...s, sheet:null, selectMode:false };
 
       const minStart = Math.min(...selectedEvents.map(e => Number(e.startMin || 0)));
       const maxEnd = Math.max(...selectedEvents.map(e => Number(e.endMin || 0)));
       const boundedDelta = Math.max(-minStart, Math.min(1440 - maxEnd, delta));
-      if (!boundedDelta) return { ...s, sheet:null };
+      if (!boundedDelta) return { ...s, sheet:null, selectMode:false };
 
-      const shifted = selectedEvents.map(e => ({ ...e, startMin:e.startMin + boundedDelta, endMin:e.endMin + boundedDelta }));
+      const shifted = selectedEvents.map(e => ({
+        ...e,
+        startMin:e.startMin + boundedDelta,
+        endMin:e.endMin + boundedDelta,
+        shiftedAt:Date.now(),
+        shiftedByMin:boundedDelta,
+      }));
       const remaining = baseEvents.filter(e => !selected.has(e.id));
       const evs = commitTimelineForDay(insertManyOverride(remaining, shifted), s.activeDay, s);
-      let next = { ...s, eventsByDay:{ ...s.eventsByDay, [s.activeDay]: sorted(evs) }, sheet:null };
+      const eventsByDay = { ...s.eventsByDay, [s.activeDay]: sorted(evs) };
+      let next = {
+        ...s,
+        eventsByDay,
+        routeLegsByDay:syncRouteLegTimes(s.routeLegsByDay || {}, eventsByDay),
+        sheet:null,
+        selectMode:false,
+        selectedIds:[],
+      };
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
     });
@@ -2364,9 +2378,9 @@ export default function App() {
         onDelete={deleteEvent}
         onToggleSelectMode={()=>setState(s=>({ ...s, selectMode:!s.selectMode, selectedIds:!s.selectMode?[]:s.selectedIds }))}
         onToggleSelectedId={(id)=>setState(s=>({ ...s, selectedIds:s.selectedIds.includes(id)?s.selectedIds.filter(x=>x!==id):[...s.selectedIds,id] }))}
-        onSelectAll={()=>setState(s=>({ ...s, selectMode:true, selectedIds:events.map(e=>e.id) }))}
+        onSelectAll={()=>setState(s=>({ ...s, selectMode:true, selectedIds:rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id) }))}
         onClearSelection={()=>setState(s=>({ ...s, selectedIds:[] }))}
-        onOpenShift={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))}
+        onOpenShift={()=>setState(s=>{ const ids = (s.selectedIds || []).length ? s.selectedIds : rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })}
         onMoveSelected={moveSelectedEventInline}
         onCertify={certify}
         onTools={()=>setState(s=>({ ...s, sheet:{ type:'tools' } }))}
@@ -2384,12 +2398,12 @@ export default function App() {
       <DriveTrackerSheet state={state} open={false} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       {state.sheet?.type === 'add' && <InsertEditEventSheet defaults={state.sheet.defaults} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onCreate={addEvent} onSave={addEvent} onUpdate={updateEvent} />}
       {state.sheet?.type === 'edit' && selectedEvent && <EditEventSheet event={selectedEvent} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={(patch)=>updateEvent(selectedEvent.id, patch)} onDelete={()=>deleteEvent(selectedEvent.id)} onSwitch={(id)=>setState(s=>({ ...s, selectedEventId:id, sheet:{ type:'edit', id } }))} />}
-      {state.sheet?.type === 'shift' && <ShiftSheet events={events} selectedIds={state.selectedIds} onApply={applyShift} onClose={()=>setState(s=>({ ...s, sheet:null }))} />}
+      {state.sheet?.type === 'shift' && <ShiftSheet events={rawEvents} selectedIds={state.selectedIds} onApply={applyShift} onClose={()=>setState(s=>({ ...s, sheet:null }))} />}
       {state.sheet?.type === 'equipment' && <EquipmentSheet equipment={state.equipment || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveEquipment} />}
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
       {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
-      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>({ ...s, sheet:{ type:'shift' }, selectMode:true }))} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
+      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>{ const ids = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
     </>
   );
 }

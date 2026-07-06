@@ -12,8 +12,8 @@ const appVersion = JSON.parse(read('public/app-version.json'));
 const graph = read('source/src/modules/graph/LogGraph.jsx');
 const css = read('source/src/styles.css');
 
-ok(pkg.version === '95.63.0', 'package version is 95.63.0');
-ok(appVersion.version === '95.63.0', 'app version is 95.63.0');
+ok(/^95\.(6[3-9]|[7-9]\d)\./.test(pkg.version), 'package version is v95.63 or newer');
+ok(/^95\.(6[3-9]|[7-9]\d)\./.test(appVersion.version), 'app version is v95.63 or newer');
 ok(graph.includes("const TRACE_COLOR = '#1a73e8'"), 'graph uses one Motive-style blue trace color');
 ok(graph.includes('const LINE_W = 5.25'), 'graph line width is slim, not blocky');
 ok(graph.includes('const BASE_H = 300'), 'graph height is compact');

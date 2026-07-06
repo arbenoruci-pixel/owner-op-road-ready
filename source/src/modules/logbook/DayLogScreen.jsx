@@ -2048,6 +2048,15 @@ export default function DayDetail({
         </div>
       )}
 
+      {activeTab === 'log' && state.selectMode && (
+        <div className="bulk-strip day-shift-strip">
+          <button className="primary" onClick={onSelectAll}>All day</button>
+          <button onClick={onClearSelection}>Clear</button>
+          <button disabled={!state.selectedIds?.length} onClick={onOpenShift}>Shift</button>
+          <button onClick={onToggleSelectMode}>Done</button>
+        </div>
+      )}
+
       {activeTab === 'log' && (
         <>
           <EventList events={displayEvents} selectedId={state.selectedEventId} selectMode={state.selectMode} selectedIds={state.selectedIds} onSelect={onSelect} onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />

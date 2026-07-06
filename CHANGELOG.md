@@ -1,3 +1,15 @@
+## v95.65 — Edit Event Graph Crash Fix
+
+- Fixed event tap crash caused by missing `color` import in edit graph handle rendering.
+- Opening an event should now load the Edit Duty Status sheet instead of showing `This page couldn't load`.
+- No log/data/write logic changed.
+
+## v95.64 — Day Shift Events
+- Added Shift day events to Log Tools.
+- Shift can select all real stored events for the active day and move them forward/backward together.
+- Shift uses raw stored events only and does not move synthetic/carry-forward display rows.
+- Route legs are re-synced and signed days recertify after shift.
+
 
 ## v95.63 — Motive-Style Graph Readability
 - Simplified LogGraph to one clean blue paper-log trace instead of per-status graph colors.

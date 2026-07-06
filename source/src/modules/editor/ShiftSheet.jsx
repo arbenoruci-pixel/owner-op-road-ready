@@ -11,7 +11,7 @@ function labelDelta(delta) {
   return `${sign}${m}m`;
 }
 
-export default function ShiftSheet({ events, selectedIds, onApply, onClose }) {
+export default function ShiftSheet({ events, selectedIds = [], onApply, onClose }) {
   const [direction, setDirection] = useState('back');
   const [preset, setPreset] = useState(60);
   const [custom, setCustom] = useState(false);
@@ -20,6 +20,7 @@ export default function ShiftSheet({ events, selectedIds, onApply, onClose }) {
   const amount = custom ? (Number(hours || 0) * 60 + Number(minutes || 0)) : Number(preset || 0);
   const requestedDelta = (direction === 'back' ? -1 : 1) * amount;
   const selected = events.filter(e => selectedIds.includes(e.id));
+  const allSelected = !!events.length && selected.length === events.length;
   const minStart = selected.length ? Math.min(...selected.map(e => Number(e.startMin || 0))) : 0;
   const maxEnd = selected.length ? Math.max(...selected.map(e => Number(e.endMin || 0))) : 1440;
   const delta = Math.max(-minStart, Math.min(1440 - maxEnd, requestedDelta));
@@ -30,9 +31,9 @@ export default function ShiftSheet({ events, selectedIds, onApply, onClose }) {
 
   return (
     <div className="sheet active">
-      <div className="sheet-head"><button onClick={onClose}>‹</button><div>Move Selected Events</div><span></span></div>
+      <div className="sheet-head"><button onClick={onClose}>‹</button><div>{allSelected ? 'Shift Day Events' : 'Move Selected Events'}</div><span></span></div>
       <div className="form">
-        <div className="edit-summary">{selected.length} selected · {labelDelta(delta)}{wasClamped ? ' · limited to stay in day' : ''}</div>
+        <div className="edit-summary">{allSelected ? 'All day events' : `${selected.length} selected`} · {labelDelta(delta)}{wasClamped ? ' · limited to stay in day' : ''}</div>
         <Section title="Direction">
           <div className="two-inputs"><button className={direction==='back'?'active choice':''} onClick={()=>setDirection('back')}>BACKWARD</button><button className={direction==='forward'?'active choice':''} onClick={()=>setDirection('forward')}>FORWARD</button></div>
         </Section>
@@ -45,7 +46,7 @@ export default function ShiftSheet({ events, selectedIds, onApply, onClose }) {
         <Section title="Preview">
           <div className="shift-preview">{preview.map(e => <div key={e.id}><b>{e.status}</b><span>{timeLabel(e.startMin)} - {timeLabel(e.endMin)}</span><em>→ {`${timeLabel(e.ns)} - ${timeLabel(e.ne)}`}</em></div>)}</div>
         </Section>
-        <div className="warning">This moves selected paper-style log events. You are responsible for final log accuracy.{wasClamped && <><br/><br/>Shift was limited so selected events stay inside this log day.</>}</div>
+        <div className="warning">This shifts real stored events only. It will not move synthetic carry-forward/display rows.{wasClamped && <><br/><br/>Shift was limited so selected events stay inside this log day.</>}</div>
         <button className="save-main" disabled={!selected.length || amount<=0 || !delta} onClick={()=>onApply(delta)}>Apply shift</button>
         <button className="cancel-main" onClick={onClose}>Cancel</button>
       </div>

@@ -1,12 +1,11 @@
 {
-  "version": "95.63.0",
-  "build": "v95.63-motive-style-graph",
+  "version": "95.65.0",
+  "build": "v95.65-edit-event-graph-crash-fix",
   "releasedAt": "2026-07-05T00:00:00.000Z",
   "notes": [
-    "Graph now uses one clean blue paper-log trace instead of per-status colors.",
-    "Grid and labels are tighter and lighter, closer to Motive readability.",
-    "Vertical bends and short events no longer look like thick black bars."
+    "Fixes event tap crash when opening Edit Duty Status.",
+    "No log data/write logic changed."
   ],
-  "label": "v95.63 Motive-style graph readability",
+  "label": "v95.65 Edit event graph crash fix",
   "updatedAt": "2026-07-05T00:00:00.000Z"
 }
