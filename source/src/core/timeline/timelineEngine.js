@@ -12,29 +12,34 @@ function hasText(v) {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
-function sameText(a, b) {
-  const aa = typeof a === 'string' ? a.trim().toLowerCase() : '';
-  const bb = typeof b === 'string' ? b.trim().toLowerCase() : '';
-  return aa === bb;
-}
-
 function mergeableSameStatus(last, current) {
   if (!last || !current || last.status !== current.status) return false;
   const touches = Number(current.startMin || 0) === Number(last.endMin || 0);
   const overlaps = Number(current.startMin || 0) < Number(last.endMin || 0);
-  if (!touches && !overlaps) return false;
+  return touches || overlaps;
+}
 
-  // Continuous DRIVING must display as one driving block. Motion-start, GPS,
-  // and manual-start rows can create adjacent D rows with slightly different
-  // notes, but DOT/paper-log view should show one continuous status line.
-  if (last.status === 'D') return true;
+function normalizeTextPart(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
 
-  // Only auto-merge other adjacent/touching same-status rows when their text is
-  // effectively the same or one side is blank. This prevents stale notes from
-  // a replaced ON DUTY Pre-trip event being glued onto a new OFF DUTY block.
-  const notesCompatible = !hasText(last.note) || !hasText(current.note) || sameText(last.note, current.note);
-  const descriptionsCompatible = !hasText(last.description) || !hasText(current.description) || sameText(last.description, current.description);
-  return notesCompatible && descriptionsCompatible;
+function sameText(a, b) {
+  return normalizeTextPart(a).toLowerCase() === normalizeTextPart(b).toLowerCase();
+}
+
+function splitTextParts(value) {
+  return normalizeTextPart(value)
+    .split(/\s+[·•|]\s+|\s*\n\s*/g)
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function combineText(lastText, currentText) {
+  const out = [];
+  for (const part of [...splitTextParts(lastText), ...splitTextParts(currentText)]) {
+    if (!out.some(existing => existing.toLowerCase() === part.toLowerCase())) out.push(part);
+  }
+  return out.join(' · ');
 }
 
 function latestText(lastText, currentText) {
@@ -79,8 +84,8 @@ export function normalizeLogEvents(events = []) {
         lng: preserveStartLocation ? (last.lng ?? ev.lng ?? null) : (ev.lng ?? last.lng ?? null),
         gpsAccuracy: preserveStartLocation ? (last.gpsAccuracy ?? ev.gpsAccuracy ?? null) : (ev.gpsAccuracy ?? last.gpsAccuracy ?? null),
         locationSource: preserveStartLocation ? (last.locationSource || ev.locationSource || 'manual') : (ev.locationSource || last.locationSource || 'manual'),
-        note: last.status === 'D' ? latestText(ev.note, last.note) : latestText(last.note, ev.note),
-        description: last.status === 'D' ? latestText(ev.description, last.description) : latestText(last.description, ev.description),
+        note: combineText(last.note, ev.note),
+        description: combineText(last.description, ev.description),
         source: last.source === ev.source ? last.source : (last.source || ev.source),
         ...(manualMiles > 0 ? {
           manualMiles: Number(manualMiles.toFixed(2)),

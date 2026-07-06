@@ -14,16 +14,16 @@ const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 let checks = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); checks += 1; };
 
-ok(CURRENT_APP_VERSION === '95.60.0', 'current update version is v95.60.0');
-ok(compareVersions('95.60.1', '95.60.0') > 0, 'version compare detects patch increase');
-ok(compareVersions('95.60.0', '95.59.9') > 0, 'version compare detects minor increase');
-ok(compareVersions('95.60.0', '95.60.0') === 0, 'version compare equal');
-ok(isNewerVersion('95.60.1', '95.60.0'), 'isNewerVersion true for remote newer');
-ok(!isNewerVersion('95.57.0', '95.60.0'), 'isNewerVersion false for remote older');
-ok(normalizeRemoteVersionPayload({ version:'95.60.0', notes:['a'] }).version === '95.60.0', 'remote payload normalizes');
+ok(CURRENT_APP_VERSION === '95.61.0', 'current update version is v95.61.0');
+ok(compareVersions('95.61.1', '95.61.0') > 0, 'version compare detects patch increase');
+ok(compareVersions('95.61.0', '95.59.9') > 0, 'version compare detects minor increase');
+ok(compareVersions('95.61.0', '95.61.0') === 0, 'version compare equal');
+ok(isNewerVersion('95.61.1', '95.61.0'), 'isNewerVersion true for remote newer');
+ok(!isNewerVersion('95.57.0', '95.61.0'), 'isNewerVersion false for remote older');
+ok(normalizeRemoteVersionPayload({ version:'95.61.0', notes:['a'] }).version === '95.61.0', 'remote payload normalizes');
 
 const versionJson = JSON.parse(read('public/app-version.json'));
-ok(versionJson.version === '95.60.0', 'public app-version matches patch');
+ok(versionJson.version === '95.61.0', 'public app-version matches patch');
 ok(Array.isArray(versionJson.notes), 'public app-version has notes');
 
 const app = read('source/src/app/App.jsx');
@@ -45,7 +45,7 @@ ok(appState.includes('window.localStorage.setItem(PRE_UPDATE_STATE_KEY'), 'local
 ok(appState.includes('last_pre_update_backup_at'), 'pre-update timestamp is stored');
 
 const sw = read('public/sw.js');
-ok(sw.includes("OWNER_OP_SW_VERSION = '95.60.0'"), 'service worker version updated');
+ok(sw.includes("OWNER_OP_SW_VERSION = '95.61.0'"), 'service worker version updated');
 ok(sw.includes('OWNER_OP_APPLY_UPDATE'), 'service worker handles apply update');
 ok(sw.includes('clearAllCaches'), 'service worker can clear caches');
 ok(sw.includes('skipWaiting'), 'service worker skipWaiting enabled');
@@ -71,6 +71,6 @@ ok(css.includes('update-safe-banner'), 'update banner styles exist');
 ok(css.includes('env(safe-area-inset-bottom)'), 'update banner respects iPhone safe area');
 
 const pkg = JSON.parse(read('package.json'));
-ok(pkg.version === '95.60.0', 'package version updated');
+ok(pkg.version === '95.61.0', 'package version updated');
 
 console.log(`verify-safe-update-v9558: ${checks} checks PASS`);

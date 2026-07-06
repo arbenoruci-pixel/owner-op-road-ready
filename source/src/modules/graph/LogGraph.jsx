@@ -15,7 +15,8 @@ const HIT_MIN_PX = 24;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
 // v95.53 readability: compact Motive-style duty trace, readable on iPhone.
-const LINE_W = 7;
+const LINE_W = 9;
+const LINE_HALO_W = LINE_W + 7;
 const VERTICAL_LINE_W = LINE_W;
 const CORNER_INSET = LINE_W / 2;
 const CORNER_OVERLAP = CORNER_INSET;
@@ -124,9 +125,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       <rect x="0" y="0" width={W} height={graphHeight} fill="#ffffff" />
       {STATUS_ORDER.map((s,i) => (
         <g key={s}>
-          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#ffffff" stroke="#d7dde3" strokeWidth="1.15" />
+          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#ffffff" stroke="#e3e8ee" strokeWidth="1" />
           <text x={LEFT-12} y={CENTER(s)+5} textAnchor="end" className="row-label">{s}</text>
-          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#d7dde3" strokeWidth="1.15" />
+          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#e3e8ee" strokeWidth="1" />
           <rect
             x={LEFT}
             y={TOP+i*ROW_H}
@@ -141,11 +142,11 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           />
         </g>
       ))}
-      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#d7dde3" strokeWidth="1.15" />
+      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#e3e8ee" strokeWidth="1" />
       {Array.from({ length: 97 }).map((_,q) => {
         const x = LEFT + (q/96)*BODY_W;
         const major = q % 4 === 0;
-        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#8f9aa8' : '#d8dee6'} strokeWidth={major ? 1.25 : 0.82} />;
+        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#aab4c2' : '#edf1f5'} strokeWidth={major ? 1.15 : 0.62} />;
       })}
       {Array.from({ length: 25 }).map((_,h) => {
         const x = LEFT + (h/24)*BODY_W;
@@ -223,7 +224,20 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Base duty trace: one continuous paper-log path. */}
+      {/* Base duty trace: white halo + continuous paper-log path.
+          The halo separates the duty line from the grid so the driver can
+          read OFF / SB / D / ON instantly on iPhone Safari. */}
+      {bodyPath ? (
+        <path
+          d={bodyPath}
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth={LINE_HALO_W}
+          strokeLinecap="butt"
+          strokeLinejoin="miter"
+          pointerEvents="none"
+        />
+      ) : null}
       {bodyPath ? (
         <path
           d={bodyPath}
@@ -254,6 +268,17 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               strokeWidth="32"
               strokeLinecap="butt"
               onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
+            />
+            <line
+              x1={x1}
+              x2={x2}
+              y1={y}
+              y2={y}
+              stroke="#ffffff"
+              strokeWidth={LINE_HALO_W}
+              strokeLinecap="butt"
+              strokeLinejoin="miter"
+              pointerEvents="none"
             />
             <line
               x1={x1}
@@ -317,10 +342,10 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
             className="short-event-marker"
             cx={mid}
             cy={y}
-            r={selected ? 8 : 6}
+            r={selected ? 10 : 8}
             fill={c}
             stroke="#fff"
-            strokeWidth="2.5"
+            strokeWidth="3.5"
             pointerEvents="none"
           />
         );

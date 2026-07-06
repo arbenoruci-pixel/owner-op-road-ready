@@ -8,13 +8,13 @@ export default function TrailerSheet({ currentTrailer, onClose, onSave }) {
 
   function save() {
     if (action === 'hook') {
-      onSave({ action, currentTrailer: hookTrailer || 'Trailer 53', note });
+      onSave({ action, currentTrailer: hookTrailer || 'Trailer hooked', note });
     }
     if (action === 'drop') {
       onSave({ action, currentTrailer: 'No trailer', droppedTrailer: dropTrailer || currentTrailer, note });
     }
     if (action === 'drop-hook') {
-      onSave({ action, currentTrailer: hookTrailer || 'New trailer', droppedTrailer: dropTrailer || currentTrailer, hookedTrailer: hookTrailer || 'New trailer', note });
+      onSave({ action, currentTrailer: hookTrailer || 'Trailer hooked', droppedTrailer: dropTrailer || currentTrailer, hookedTrailer: hookTrailer || 'Trailer hooked', note });
     }
   }
 
@@ -49,7 +49,7 @@ export default function TrailerSheet({ currentTrailer, onClose, onSave }) {
         {(action === 'hook' || action === 'drop-hook') && (
           <>
             <div className="form-label">Hook trailer</div>
-            <input value={hookTrailer} onChange={e => setHookTrailer(e.target.value)} placeholder="New trailer number" />
+            <input value={hookTrailer} onChange={e => setHookTrailer(e.target.value)} placeholder="Hooked trailer number" />
           </>
         )}
 

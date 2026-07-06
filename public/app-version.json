@@ -1,10 +1,10 @@
 {
-  "version": "95.60.0",
-  "build": "v95.60-drop-hook-equipment-flow",
+  "version": "95.61.0",
+  "build": "v95.61-graph-drop-hook-merge",
   "releasedAt": "2026-07-05T00:00:00.000Z",
   "notes": [
     "Drop & Hook asks for dropped and hooked container/chassis plus next destination."
   ],
-  "label": "v95.60 Drop & Hook equipment flow",
+  "label": "v95.61 Graph + Drop & Hook merge",
   "updatedAt": "2026-07-05T00:00:00.000Z"
 }

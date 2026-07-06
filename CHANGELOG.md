@@ -1,3 +1,10 @@
+
+## v95.61 — Graph visibility + Drop & Hook wording / adjacent ON merge
+- Made the log graph duty line easier to read with a thicker trace, white halo, lighter grid, and larger short-event markers.
+- Merged back-to-back same-status duty events into one continuous row while preserving distinct notes/descriptions.
+- Cleaned Drop & Hook wording so it never shows vague old/new trailer labels; it uses actual dropped/hooked equipment IDs or “equipment changed”.
+- Added verifier: scripts/verify-graph-drop-hook-merge-v9561.mjs.
+
 # Changelog
 
 ## v95.60 — Drop & Hook Equipment Flow

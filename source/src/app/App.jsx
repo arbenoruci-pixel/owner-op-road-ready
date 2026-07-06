@@ -1359,17 +1359,29 @@ export default function App() {
     );
   }
 
+  function isRealEquipmentLabel(value = '') {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    return !/^(new|old|no|none|n\/?a)\s*(trailer|equipment|container|chassis)?$/i.test(text);
+  }
+
+  function cleanEquipmentLabel(value = '') {
+    const text = String(value || '').trim();
+    return isRealEquipmentLabel(text) ? text : '';
+  }
+
   function buildDropHookNote(payload = {}, currentEquipment = {}) {
     const dropHook = payload.dropHook || {};
-    const droppedContainer = dropHook.droppedContainer || currentEquipment.container || '';
-    const droppedChassis = dropHook.droppedChassis || currentEquipment.chassis || '';
-    const hookedContainer = dropHook.hookedContainer || '';
-    const hookedChassis = dropHook.hookedChassis || '';
+    const droppedContainer = cleanEquipmentLabel(dropHook.droppedContainer || currentEquipment.container || '');
+    const droppedChassis = cleanEquipmentLabel(dropHook.droppedChassis || currentEquipment.chassis || '');
+    const hookedContainer = cleanEquipmentLabel(dropHook.hookedContainer || '');
+    const hookedChassis = cleanEquipmentLabel(dropHook.hookedChassis || '');
     const parts = [];
     const dropped = [droppedContainer, droppedChassis].filter(Boolean).join(' / ');
     const hooked = [hookedContainer, hookedChassis].filter(Boolean).join(' / ');
     if (dropped) parts.push(`dropped ${dropped}`);
     if (hooked) parts.push(`hooked ${hooked}`);
+    if (!dropped && !hooked) parts.push('equipment changed');
     if (dropHook.hookedLoadNo) parts.push(`BOL ${dropHook.hookedLoadNo}`);
     if (dropHook.hookedDestination) parts.push(`to ${dropHook.hookedDestination}`);
     return parts.length ? `Drop & Hook · ${parts.join(' · ')}` : 'Drop & Hook';
@@ -2158,7 +2170,7 @@ export default function App() {
       if (/drop\s*&\s*hook/i.test(reason)) {
         note = buildDropHookNote({ reason, city, state:st, dropHook }, s.equipment || {});
         const hookedLabel = [dropHook?.hookedContainer, dropHook?.hookedChassis].filter(Boolean).join(' / ');
-        trailer = hookedLabel || hookedTrailer || 'New equipment';
+        trailer = hookedLabel || hookedTrailer || 'Equipment hooked';
       }
       const eventId = `live_${Date.now()}`;
       const effectiveShippingDocs = /drop\s*&\s*hook/i.test(reason)
