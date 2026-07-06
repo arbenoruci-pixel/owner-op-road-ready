@@ -1,4 +1,13 @@
 
+## v95.69.0 — Intermodal day chassis form
+
+- Form tab now shows day-level `Chassis` values for intermodal/container days instead of falling back to the default dry-van trailer number.
+- Chassis values are collected from route legs, drop/hook metadata, current intermodal equipment, and Drop & Hook event notes.
+- Dry van / reefer / flatbed trailer display remains unchanged.
+- DOT package, home equipment display, and signing warning fallback now respect intermodal chassis.
+- No duty-status, driving, route, or miles data is modified.
+
+
 ## v95.68 — Editable day distance
 - Form tab Distance is now editable for the active log day.
 - Saves total day driving miles without touching true DRIVING events.

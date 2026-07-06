@@ -1,11 +1,12 @@
 {
-  "version": "95.68.0",
-  "build": "v95.68-editable-day-distance",
+  "version": "95.69.0",
+  "build": "v95.69-intermodal-day-chassis-form",
   "releasedAt": "2026-07-06T00:00:00.000Z",
   "notes": [
-    "Makes the Form tab Distance field editable.",
-    "Drivers can enter day-level total driving miles without changing true driving events."
+    "Shows day-level chassis used on the Form tab for intermodal logs instead of falling back to dry-van trailer defaults.",
+    "Dry van / reefer / flatbed still show the normal trailer number.",
+    "Does not change duty-status events, driving events, route legs, or miles."
   ],
-  "label": "v95.68 Editable day distance",
+  "label": "v95.69 Intermodal day chassis form",
   "updatedAt": "2026-07-06T00:00:00.000Z"
 }

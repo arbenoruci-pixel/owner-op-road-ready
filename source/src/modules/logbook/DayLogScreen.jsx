@@ -172,6 +172,100 @@ function uniqueClean(values = []) {
     });
 }
 
+
+function normalizeEquipmentNumber(value = '') {
+  return String(value || '')
+    .trim()
+    .replace(/^(chassis|chass|container|trailer|ct|cnt)\s*[:#-]?\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
+}
+
+function isGenericEquipmentText(value = '') {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return true;
+  return text === 'none' || text === 'no trailer' || text === 'trailer' || text === 'trailer hooked' || text === 'equipment hooked' || text === 'intermodal missing chassis';
+}
+
+function addChassisValue(values, value = '') {
+  const clean = normalizeEquipmentNumber(value);
+  if (!clean || isGenericEquipmentText(clean)) return;
+  if (/^TRAILER\b/i.test(clean)) return;
+  values.push(clean);
+}
+
+function chassisFromDropHookText(text = '') {
+  const raw = String(text || '').toUpperCase();
+  const found = [];
+  const chassisLabel = /\b(?:CHASSIS|CHASS|CH)\s*[:#-]?\s*([A-Z]{2,5}\s*\d{4,8})\b/g;
+  let match;
+  while ((match = chassisLabel.exec(raw))) addChassisValue(found, match[1]);
+
+  // Drop & Hook notes often come as: dropped CONTAINER / CHASSIS · hooked CONTAINER / CHASSIS.
+  const paired = /\b(?:DROPPED|HOOKED)\s+([A-Z]{2,5}\s*\d{4,8})\s*\/\s*([A-Z]{2,5}\s*\d{4,8})\b/g;
+  while ((match = paired.exec(raw))) addChassisValue(found, match[2]);
+  return found;
+}
+
+function isIntermodalDay(state = {}, day = '', events = [], routeLegs = []) {
+  const equipment = state.equipment || {};
+  const text = [
+    equipment.type,
+    equipment.chassis,
+    equipment.container,
+    state.currentTrailer,
+    ...(routeLegs || []).flatMap(leg => [leg.chassis, leg.droppedChassis, leg.container, leg.droppedContainer, leg.kind, leg.source]),
+    ...(events || []).flatMap(event => [event.note, event.description, event.chassis, event.container]),
+  ].join(' ').toLowerCase();
+  return equipment.type === 'intermodal' || /\b(intermodal|chassis|container)\b/.test(text);
+}
+
+function chassisUsedForDay(state = {}, day = '', events = [], routeLegs = []) {
+  const values = [];
+  const equipment = state.equipment || {};
+  for (const leg of routeLegs || []) {
+    addChassisValue(values, leg.droppedChassis);
+    addChassisValue(values, leg.chassis || leg.hookedChassis);
+  }
+  for (const event of events || []) {
+    addChassisValue(values, event.chassis || event.hookedChassis || event.droppedChassis);
+    for (const chassis of chassisFromDropHookText(`${event.note || ''} ${event.description || ''}`)) addChassisValue(values, chassis);
+  }
+  if (equipment.type === 'intermodal') {
+    addChassisValue(values, equipment.chassis);
+    addChassisValue(values, state.loadInfo?.equipmentChassis);
+    if (/^chassis\b/i.test(String(state.currentTrailer || ''))) addChassisValue(values, state.currentTrailer);
+  }
+  return uniqueClean(values);
+}
+
+function dryVanTrailerText(state = {}) {
+  const equipment = state.equipment || {};
+  const candidates = [
+    state.currentTrailer,
+    equipment.trailer,
+    state.driver?.trailer,
+  ];
+  const value = candidates.find(item => !isGenericEquipmentText(item));
+  return value || 'None';
+}
+
+function equipmentFormSummary(state = {}, day = '', events = [], routeLegs = []) {
+  if (isIntermodalDay(state, day, events, routeLegs)) {
+    const chassis = chassisUsedForDay(state, day, events, routeLegs);
+    return {
+      label: 'Chassis',
+      value: chassis.length ? chassis.join(' · ') : 'Chassis missing',
+      isIntermodal: true,
+    };
+  }
+  return {
+    label: 'Trailers',
+    value: dryVanTrailerText(state),
+    isIntermodal: false,
+  };
+}
+
 function routeLegsForDay(state, day) {
   const all = Object.entries(state.routeLegsByDay || {}).flatMap(([legDay, legs]) => (legs || []).map(leg => ({ ...leg, day:leg.day || legDay })));
   return all
@@ -352,9 +446,8 @@ function formSummary(state, events) {
   const loadDocs = uniqueClean([load.shippingDocs, load.loadNo, load.bol, load.po]);
   const equipmentDocs = uniqueClean([equipment.container, equipment.chassis]);
   const shippingDocs = (routeLegs.length ? legDocs : uniqueClean([...loadDocs, ...equipmentDocs])).join(' · ');
-  const trailers = state.currentTrailer && state.currentTrailer !== 'No trailer'
-    ? state.currentTrailer
-    : (equipment.trailer || state.driver?.trailer || 'None');
+  const equipmentSummary = equipmentFormSummary(state, state.activeDay, events, routeLegs);
+  const trailers = equipmentSummary.value;
   const notes = safeValue(load.notes || load.note || state.formNotes || '', 'None');
   const manualMiles = manualMilesTotal(events);
   const dayManualMiles = Math.max(0, Number(state.manualMilesByDay?.[state.activeDay] || 0));
@@ -365,6 +458,7 @@ function formSummary(state, events) {
     d: formatDutyMinutes(dutyMap.D || 0),
     on: formatDutyMinutes(dutyMap.ON || 0),
     vehicles: safeValue(state.driver?.truck),
+    equipmentLabel: equipmentSummary.label,
     trailers: safeValue(trailers),
     distance: dayManualMiles > 0 ? `${dayManualMiles.toFixed(2)} mi` : (manualMiles > 0 ? `${manualMiles.toFixed(2)} mi` : (hasDriving ? 'Missing' : 'None')),
     distanceRaw: dayManualMiles > 0 ? dayManualMiles : manualMiles,
@@ -536,7 +630,7 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer, onSaveDayDist
 
       <FormSectionTitle>GENERAL</FormSectionTitle>
       <FormRow label="Vehicles" value={form.vehicles} onClick={() => editText('Truck / unit number', form.vehicles, 'truck')} />
-      <FormRow label="Trailers" value={form.trailers} onClick={onOpenTrailer || (() => editText('Trailer / equipment', form.trailers, 'trailer'))} />
+      <FormRow label={form.equipmentLabel || 'Trailers'} value={form.trailers} onClick={onOpenTrailer || (() => editText('Trailer / equipment', form.trailers, 'trailer'))} />
       <div className="road-form-split-row">
         <button type="button" className="road-form-split-action editable" onClick={editDistance}>
           <div className="road-form-label">Distance</div>

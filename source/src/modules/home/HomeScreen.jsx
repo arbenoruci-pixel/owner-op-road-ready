@@ -38,6 +38,16 @@ function safeLiveStatus(status = 'OFF', hasRawToday = false) {
   return status === 'D' && !hasRawToday ? 'OFF' : (status || 'OFF');
 }
 
+function equipmentDisplayName(state = {}) {
+  const equipment = state.equipment || {};
+  if (equipment.type === 'intermodal') {
+    const chassis = String(equipment.chassis || state.loadInfo?.equipmentChassis || '').trim();
+    return chassis ? `Chassis ${chassis}` : 'Intermodal chassis missing';
+  }
+  if (state.currentTrailer && state.currentTrailer !== 'No trailer') return state.currentTrailer;
+  return equipment.trailer || state.driver?.trailer || 'No vehicle';
+}
+
 function statusSummary(state) {
   const day = localDayKey();
   const events = rawStoredEventsForDay(state.eventsByDay || {}, day);
@@ -55,7 +65,7 @@ function statusSummary(state) {
     status,
     label: label(status),
     location,
-    vehicle: state.currentTrailer && state.currentTrailer !== 'No trailer' ? state.currentTrailer : 'No vehicle',
+    vehicle: equipmentDisplayName(state),
   };
 }
 

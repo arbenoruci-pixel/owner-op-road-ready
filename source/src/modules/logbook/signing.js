@@ -482,7 +482,12 @@ export function signingWarnings(state, day) {
   const events = rawStoredEventsForDay(state.eventsByDay || {}, day);
   const signState = logSignState(state, day);
   const inspection = state.inspectionByDay?.[day] || {};
-  const trailer = String(state.currentTrailer || state.driver?.trailer || state.equipment?.trailer || '').trim();
+  const equipment = state.equipment || {};
+  const trailer = String(
+    equipment.type === 'intermodal'
+      ? (equipment.chassis || state.loadInfo?.equipmentChassis || '')
+      : (state.currentTrailer && state.currentTrailer !== 'No trailer' ? state.currentTrailer : state.driver?.trailer || equipment.trailer || '')
+  ).trim();
   const hasOnOrDrive = events.some(event => event.status === 'ON' || event.status === 'D');
 
   validateLogForSigning(state, day).forEach(issue => warnings.push(`${issue.title}: ${issue.detail}`));

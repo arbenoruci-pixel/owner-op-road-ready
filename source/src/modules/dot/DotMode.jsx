@@ -116,7 +116,13 @@ function unitName(state) {
 }
 
 function trailerName(state) {
-  return state.currentTrailer || state.equipment?.trailer || state.driver?.trailer || 'No trailer';
+  const equipment = state.equipment || {};
+  if (equipment.type === 'intermodal') {
+    const chassis = String(equipment.chassis || state.loadInfo?.equipmentChassis || '').trim();
+    return chassis ? `Chassis ${chassis}` : 'Intermodal chassis missing';
+  }
+  if (state.currentTrailer && state.currentTrailer !== 'No trailer') return state.currentTrailer;
+  return equipment.trailer || state.driver?.trailer || 'No trailer';
 }
 
 function dotNumber(state) {

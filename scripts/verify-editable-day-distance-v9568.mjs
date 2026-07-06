@@ -49,9 +49,9 @@ ok('Styles show editable distance affordance', () => {
   assert.ok(styles.includes('road-form-split-action.editable::after'), 'Editable distance shows chevron');
 });
 
-ok('Version bumped to 95.68.0', () => {
-  assert.ok(version.includes("95.68.0"), 'CURRENT_APP_VERSION must be 95.68.0');
-  assert.ok(appVersion.includes('95.68.0'), 'app-version must be 95.68.0');
+ok('Version is v95.68 or newer', () => {
+  assert.ok(/95\.(6[8-9]|[7-9][0-9])\.0/.test(version), 'CURRENT_APP_VERSION must be 95.68.0 or newer');
+  assert.ok(/95\.(6[8-9]|[7-9][0-9])\.0/.test(appVersion), 'app-version must be 95.68.0 or newer');
 });
 
 console.log(`verify-editable-day-distance-v9568: ${checks} checks passed`);
