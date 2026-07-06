@@ -354,10 +354,10 @@ ok('home list: today anchor and readable current graph are protected', () => {
   assert.ok(homeSrc.includes('Array.from({ length: 8 }, (_, i) => addDays(anchorDay, -i))'), 'Today + previous 7 days range missing');
   assert.ok(cssSrc.includes('v95.52 Today anchor + Motive-readable home graph'), 'home graph readability styles missing');
   assert.ok(cssSrc.includes('.rr-today-graph-go{display:none!important;}'), 'home graph Open overlay should be hidden');
-  assert.ok(graphSrc.includes('const LINE_W = 8') || graphSrc.includes('const LINE_W = 9'), 'high-contrast visible duty trace missing');
-  assert.ok(graphSrc.includes("major ? '#d5dce6' : '#f1f4f8'") || graphSrc.includes("major ? '#aab4c2' : '#edf1f5'"), 'lighter high-contrast grid colors missing');
-  assert.ok(graphSrc.includes('const ROW_H = 76'), 'compact graph row height missing');
-  assert.ok(cssSrc.includes('v95.53 compact readable graph pass'), 'compact readable graph styles missing');
+  assert.ok(graphSrc.includes('const LINE_W = 8') || graphSrc.includes('const LINE_W = 9') || graphSrc.includes('const LINE_W = 5.25'), 'high-contrast visible duty trace missing');
+  assert.ok(graphSrc.includes("major ? '#d5dce6' : '#f1f4f8'") || graphSrc.includes("major ? '#aab4c2' : '#edf1f5'") || graphSrc.includes("major ? '#cfd8e3' : '#edf2f7'"), 'lighter high-contrast grid colors missing');
+  assert.ok(graphSrc.includes('const ROW_H = 76') || graphSrc.includes('const ROW_H = 66'), 'compact graph row height missing');
+  assert.ok(cssSrc.includes('v95.53 compact readable graph pass') || cssSrc.includes('v95.63 Motive-style graph readability'), 'compact readable graph styles missing');
 });
 
 console.log(`verify-deep-scan-v952: ${checks} checks passed`);

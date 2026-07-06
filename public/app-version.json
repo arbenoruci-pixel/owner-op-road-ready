@@ -1,12 +1,12 @@
 {
-  "version": "95.62.0",
-  "build": "v95.62-graph-line-note-sanitize",
+  "version": "95.63.0",
+  "build": "v95.63-motive-style-graph",
   "releasedAt": "2026-07-05T00:00:00.000Z",
   "notes": [
-    "Graph duty line uses a slimmer visible bend path and lighter grid.",
-    "Drop & Hook notes remove placeholder equipment labels like New trailer / No trailer.",
-    "Existing log notes are sanitized during load/display without changing duty times."
+    "Graph now uses one clean blue paper-log trace instead of per-status colors.",
+    "Grid and labels are tighter and lighter, closer to Motive readability.",
+    "Vertical bends and short events no longer look like thick black bars."
   ],
-  "label": "v95.62 Graph line + clean Drop & Hook notes",
+  "label": "v95.63 Motive-style graph readability",
   "updatedAt": "2026-07-05T00:00:00.000Z"
 }

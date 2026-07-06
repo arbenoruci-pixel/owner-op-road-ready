@@ -8785,3 +8785,14 @@ body,
 .drop-hook-grid label:last-child{grid-column:1 / -1}
 .drop-hook-grid input{font-variant-numeric:tabular-nums}
 @media (max-width:390px){.drop-hook-grid{grid-template-columns:1fr!important}}
+
+/* v95.63 Motive-style graph readability
+   Single blue paper-log trace, smaller labels, lighter/tighter grid. */
+.log-graph .axis-label{font-size:13px!important;fill:#7b838f!important;font-weight:750!important;letter-spacing:.01em!important;}
+.log-graph .row-label{font-size:16px!important;fill:#47515f!important;font-weight:850!important;}
+.log-graph .total-label{font-size:15px!important;fill:#344054!important;font-weight:850!important;}
+.graph-first-panel{padding:0 8px 6px!important;background:#fff!important;border-top:1px solid #e5e7eb!important;border-bottom:1px solid #e5e7eb!important;}
+.graph-first-panel .log-graph,.rr-today-graph .log-graph,.preview-graph .log-graph,.v30-graph-card .log-graph{border:1px solid #d8dee7!important;border-radius:10px!important;background:#fff!important;box-shadow:none!important;}
+.rr-today-graph-btn{padding:3px 7px 5px!important;margin:0 12px 8px!important;border-radius:12px!important;}
+.log-graph .short-event-marker{filter:drop-shadow(0 1px 1px rgba(15,23,42,.18));}
+.log-graph .violation-bang{font-size:9px!important;font-weight:1000!important;fill:#fff!important;}

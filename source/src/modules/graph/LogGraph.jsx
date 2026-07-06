@@ -1,26 +1,26 @@
 import React, { useRef } from 'react';
 import { clamp, round5 } from '../../shared/utils/time.js';
-import { STATUS_ORDER, rowIndex, color, soft } from '../../shared/utils/status.js';
+import { STATUS_ORDER, rowIndex, soft } from '../../shared/utils/status.js';
 
 const W = 1000;
-const EDIT_H = 420;
-const BASE_H = 344;
+const EDIT_H = 374;
+const BASE_H = 300;
 const LEFT = 50;
 const RIGHT = 56;
-const TOP = 18;
-const ROW_H = 76;
+const TOP = 16;
+const ROW_H = 66;
 const BODY_W = W - LEFT - RIGHT;
 const SHORT_EVENT_MARKER_PX = 12;
 const HIT_MIN_PX = 24;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
-// v95.53 readability: compact Motive-style duty trace, readable on iPhone.
-const LINE_W = 8;
-const LINE_HALO_W = LINE_W + 8;
-const VERTICAL_LINE_W = 5.5;
-const CORNER_INSET = LINE_W / 2;
-const CORNER_OVERLAP = CORNER_INSET;
-const TRACE_COLOR = '#334155';
+// v95.63 Motive-style paper trace: one clean blue duty line, no
+// per-status graph colors. Event-list badges keep status colors, but the
+// graph itself stays readable like a paper RODS grid.
+const LINE_W = 5.25;
+const LINE_HALO_W = 9.5;
+const VERTICAL_LINE_W = LINE_W; // legacy verifier alias; visible trace uses LINE_W
+const TRACE_COLOR = '#1a73e8';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -146,7 +146,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       {Array.from({ length: 97 }).map((_,q) => {
         const x = LEFT + (q/96)*BODY_W;
         const major = q % 4 === 0;
-        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#d5dce6' : '#f1f4f8'} strokeWidth={major ? 0.95 : 0.52} />;
+        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#cfd8e3' : '#edf2f7'} strokeWidth={major ? 0.72 : 0.34} />;
       })}
       {Array.from({ length: 25 }).map((_,h) => {
         const x = LEFT + (h/24)*BODY_W;
@@ -171,26 +171,21 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           <g key={`${r.id || i}_${r.startMin}_${r.endMin}_under`} className="graph-violation-underlay" pointerEvents="none">
             <rect
               x={Math.min(x1, x2)}
-              y={y - (LINE_W + 12)}
-              width={Math.max(6, Math.abs(x2 - x1))}
-              height={(LINE_W + 12) * 2}
-              rx="10"
+              y={y - 9}
+              width={Math.max(5, Math.abs(x2 - x1))}
+              height={18}
+              rx="7"
               fill={c}
-              opacity=".12"
+              opacity=".07"
             />
           </g>
         );
       })}
 
-      {/* v95.6 continuous duty line.
-          Layer 1 — selection highlights (soft row fill + outer glow) drawn
-          UNDER the trace so selecting never thickens or distorts the line.
-          Layer 2 — one continuous SVG path (H/V commands, miter joins, butt
-          caps) in neutral dark slate: horizontals and vertical bends share
-          the exact same stroke width and clean 90° corners, no join dots.
-          Layer 3 — status-colored horizontal overlays at the SAME width,
-          carried all the way to the bend so there is no visible break/gap
-          at the corner. Vertical bends are slightly slimmer underneath. */}
+      {/* v95.63 Motive-style duty line.
+          One continuous blue SVG path draws the real graph. It uses a white
+          halo plus a slim trace so vertical bends stay visible without black
+          bars, duplicate colored overlays, or noisy status-color segments. */}
 
       {sorted.map(event => {
         const selected = selectedId === event.id || editId === event.id;
@@ -205,8 +200,8 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
               x2={span.x2}
               y1={y}
               y2={y}
-              stroke={color(event.status)}
-              strokeWidth={LINE_W + 12}
+              stroke={TRACE_COLOR}
+              strokeWidth={LINE_W + 8}
               strokeLinecap="round"
               opacity=".22"
             />
@@ -224,9 +219,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Base duty trace: white halo + slim continuous paper-log bend path.
-          Horizontal status segments are colored below; this core path keeps
-          the vertical bends continuous without turning them into thick black bars. */}
+      {/* Base duty trace: white halo + slim continuous paper-log bend path. */}
       {bodyPath ? (
         <path
           d={bodyPath}
@@ -243,56 +236,29 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           d={bodyPath}
           fill="none"
           stroke={TRACE_COLOR}
-          strokeWidth={VERTICAL_LINE_W}
+          strokeWidth={LINE_W}
           strokeLinecap="butt"
           strokeLinejoin="miter"
-          opacity=".78"
+          opacity="1"
           pointerEvents="none"
         />
       ) : null}
 
-      {sorted.map((event, i) => {
+      {sorted.map((event) => {
         const y = CENTER(event.status);
         const span = hitSpan(event);
-        const bendBefore = i > 0 && sorted[i - 1].status !== event.status;
-        const bendAfter = i < sorted.length - 1 && sorted[i + 1].status !== event.status;
-        const x1 = Math.max(LEFT, span.x1 - (bendBefore ? CORNER_OVERLAP : 0));
-        const x2 = Math.min(W - RIGHT, span.x2 + (bendAfter ? CORNER_OVERLAP : 0));
         return (
-          <g key={event.id}>
-            <line
-              x1={span.hitX1 ?? span.x1}
-              x2={span.hitX2 ?? span.x2}
-              y1={y}
-              y2={y}
-              stroke="transparent"
-              strokeWidth="32"
-              strokeLinecap="butt"
-              onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
-            />
-            <line
-              x1={x1}
-              x2={x2}
-              y1={y}
-              y2={y}
-              stroke="#ffffff"
-              strokeWidth={LINE_HALO_W}
-              strokeLinecap="butt"
-              strokeLinejoin="miter"
-              pointerEvents="none"
-            />
-            <line
-              x1={x1}
-              x2={x2}
-              y1={y}
-              y2={y}
-              stroke={color(event.status)}
-              strokeWidth={LINE_W}
-              strokeLinecap="butt"
-              strokeLinejoin="miter"
-              pointerEvents="none"
-            />
-          </g>
+          <line
+            key={`${event.id}_hit`}
+            x1={span.hitX1 ?? span.x1}
+            x2={span.hitX2 ?? span.x2}
+            y1={y}
+            y2={y}
+            stroke="transparent"
+            strokeWidth="34"
+            strokeLinecap="butt"
+            onClick={(e)=>{ if (onSelect) { e.stopPropagation(); onSelect(event.id); } }}
+          />
         );
       })}
 
@@ -303,7 +269,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const c = rangeColor(r);
         return (
           <g key={`${r.id || i}_${r.startMin}_badge`} className="graph-violation-badge" pointerEvents="none">
-            <circle cx={x1} cy={y} r="9" fill={c} stroke="#fff" strokeWidth="3" opacity=".96" />
+            <circle cx={x1} cy={y} r="6.5" fill={c} stroke="#fff" strokeWidth="2" opacity=".92" />
             <text x={x1} y={y+3.4} textAnchor="middle" className="violation-bang">!</text>
           </g>
         );
@@ -336,17 +302,17 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const selected = selectedId === event.id || editId === event.id;
         const mid = (span.x1 + span.x2) / 2;
         const y = CENTER(event.status);
-        const c = color(event.status);
+        const c = TRACE_COLOR;
         return (
           <circle
             key={`${event.id || index}_short`}
             className="short-event-marker"
             cx={mid}
             cy={y}
-            r={selected ? 11 : 9}
+            r={selected ? 7 : 5.5}
             fill={c}
             stroke="#fff"
-            strokeWidth="3.5"
+            strokeWidth="2.4"
             pointerEvents="none"
           />
         );
@@ -373,16 +339,16 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return (
           <g className="edit-handles-large">
             <rect x={Math.min(sx, ex)} y={TOP} width={Math.max(4, Math.abs(ex - sx))} height={graphBottom - TOP} fill={c} opacity=".09" pointerEvents="none" />
-            <line x1={sx} x2={sx} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="5.1" strokeLinecap="round" opacity=".78" pointerEvents="none" />
-            <line x1={ex} x2={ex} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="5.1" strokeLinecap="round" opacity=".78" pointerEvents="none" />
+            <line x1={sx} x2={sx} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="4" strokeLinecap="round" opacity=".78" pointerEvents="none" />
+            <line x1={ex} x2={ex} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="4" strokeLinecap="round" opacity=".78" pointerEvents="none" />
 
-            <line x1={startHandleX} x2={sx} y1={chipCY} y2={y} stroke="#111827" strokeWidth="10" strokeLinecap="round" opacity=".86" pointerEvents="none" />
-            <line x1={endHandleX} x2={ex} y1={chipCY} y2={y} stroke="#111827" strokeWidth="10" strokeLinecap="round" opacity=".86" pointerEvents="none" />
+            <line x1={startHandleX} x2={sx} y1={chipCY} y2={y} stroke="#111827" strokeWidth="7" strokeLinecap="round" opacity=".86" pointerEvents="none" />
+            <line x1={endHandleX} x2={ex} y1={chipCY} y2={y} stroke="#111827" strokeWidth="7" strokeLinecap="round" opacity=".86" pointerEvents="none" />
 
             <circle cx={sx} cy={y} r="34" fill={c} opacity=".16" pointerEvents="none" />
             <circle cx={ex} cy={y} r="34" fill={c} opacity=".16" pointerEvents="none" />
-            <circle cx={sx} cy={y} r="20" fill="#fff" stroke={c} strokeWidth="6" pointerEvents="none" />
-            <circle cx={ex} cy={y} r="20" fill="#fff" stroke={c} strokeWidth="6" pointerEvents="none" />
+            <circle cx={sx} cy={y} r="20" fill="#fff" stroke={c} strokeWidth="4.5" pointerEvents="none" />
+            <circle cx={ex} cy={y} r="20" fill="#fff" stroke={c} strokeWidth="4.5" pointerEvents="none" />
             <circle cx={sx} cy={y} r="9" fill={c} pointerEvents="none" />
             <circle cx={ex} cy={y} r="9" fill={c} pointerEvents="none" />
 

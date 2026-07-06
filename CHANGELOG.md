@@ -1,4 +1,11 @@
 
+## v95.63 — Motive-Style Graph Readability
+- Simplified LogGraph to one clean blue paper-log trace instead of per-status graph colors.
+- Lightened and tightened grid lines for easier iPhone reading.
+- Reduced label size and made vertical bends/short events less blocky.
+- No duty-status, signing, DOT, wallet, route, or storage logic changed.
+
+
 ## v95.61 — Graph visibility + Drop & Hook wording / adjacent ON merge
 - Made the log graph duty line easier to read with a thicker trace, white halo, lighter grid, and larger short-event markers.
 - Merged back-to-back same-status duty events into one continuous row while preserving distinct notes/descriptions.

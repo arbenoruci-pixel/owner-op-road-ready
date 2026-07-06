@@ -64,13 +64,11 @@ ok('trace: single continuous <path> with H/V commands is rendered', () => {
   assert.ok(/H \$\{xFromMin/.test(src) && /` V \$\{CENTER/.test(src), 'path is not built from H/V commands');
 });
 
-ok('trace: horizontals and vertical bends share LINE_W', () => {
+ok('trace: horizontals and vertical bends share one slim LINE_W', () => {
   assert.ok(src.includes('const LINE_W'), 'LINE_W constant missing');
+  assert.ok(src.includes('const TRACE_COLOR'), 'TRACE_COLOR constant missing');
   assert.ok(!src.includes('strokeWidth={selected ? 12.6 : 8.1}'), 'old per-selection width change still present');
   assert.ok(!src.includes('selected ? 5.4 : 3.6'), 'old thin transition stroke still present');
-  // No visible graph stroke may use a numeric literal width other than LINE_W
-  // for the duty line: the only literal widths left are hit targets
-  // (transparent), grid strokes, markers and edit-handle chrome.
   assert.ok(!/strokeWidth="8\.1"/.test(src) && !/strokeWidth="3\.6"/.test(src), 'legacy duty-line widths remain');
 });
 
@@ -88,14 +86,14 @@ ok('transitions: no endpoint circles and no separate visible stroke', () => {
   assert.ok(!/stroke="#(?:223047|172033)"/.test(tBlock), 'transitions still draw their own visible stroke');
 });
 
-ok('overlays: colored horizontals inset by half a stroke at bends', () => {
-  assert.ok(src.includes('CORNER_INSET'), 'CORNER_INSET missing');
-  assert.ok(src.includes('bendBefore') && src.includes('bendAfter'), 'bend-aware inset logic missing');
+ok('overlays: no duplicate visible per-event duty overlays', () => {
+  assert.ok(src.includes('stroke="transparent"') && src.includes('_hit'), 'per-event visible overlays must be hit targets only');
+  assert.ok(!src.includes('stroke={color(event.status)}'), 'status-colored visible overlays still present');
 });
 
 // --- rule 8/9/10/11: selection + handles ------------------------------------
 ok('selection: glow layer renders under the trace and never resizes it', () => {
-  const glowIdx = src.indexOf('LINE_W + 12');
+  const glowIdx = src.indexOf('LINE_W + 8');
   const pathIdx = src.indexOf('d={bodyPath}');
   assert.ok(glowIdx !== -1 && pathIdx !== -1 && glowIdx < pathIdx, 'selection glow must render before (under) the duty path');
   assert.ok(!src.includes('strokeWidth="20"'), 'old dark selection underlay still present');
@@ -117,16 +115,16 @@ ok('short events: single dot marker, no spike lines, no boundary masks', () => {
 });
 
 // --- rule 13: violations stay on the line -----------------------------------
-ok('violations: same-width butt-cap overlay, no vertical guide line', () => {
+ok('violations: soft badge only, no duty-line overlay or vertical guide line', () => {
   const vBlock = src.slice(src.indexOf('violationRanges.map'), src.indexOf('Transition tap targets'));
-  assert.ok(vBlock.includes('strokeWidth={LINE_W}'), 'violation overlay width no longer matches duty line');
-  assert.ok(vBlock.includes('strokeLinecap="butt"'), 'violation overlay still uses round caps');
+  assert.ok(vBlock.includes('graph-violation-badge'), 'violation badge missing');
   assert.ok(!vBlock.includes('strokeDasharray'), 'vertical dashed guide line reintroduced');
 });
 
-// --- rule 14/15: status colors preserved ------------------------------------
-ok('colors: per-status overlays still use the status palette', () => {
-  assert.ok(src.includes('stroke={color(event.status)}'), 'status-colored overlays missing');
+// --- rule 14/15: graph line intentionally single-color ----------------------
+ok('colors: graph uses one readable paper-log trace color', () => {
+  assert.ok(src.includes("const TRACE_COLOR = '#1a73e8'"), 'single blue trace color missing');
+  assert.ok(!src.includes('stroke={color(event.status)}'), 'per-status graph colors remain');
 });
 
 // --- css hook ----------------------------------------------------------------
