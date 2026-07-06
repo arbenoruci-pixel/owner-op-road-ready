@@ -1,3 +1,19 @@
+# Changelog
+
+## v95.60 — Drop & Hook Equipment Flow
+- ON DUTY → Drop & Hook now asks for dropped container/chassis and hooked container/chassis.
+- Captures new BOL/load number and next destination during the status change.
+- Updates current equipment, load info, and route legs so the system knows the old container was dropped and the new container/chassis was hooked.
+- Route/shipping rows now show container/chassis and dropped equipment details.
+
+
+## v95.59 — DOT Roadside Package
+- DOT Mode now shows an officer-ready Roadside Package.
+- Added Package / Logs / Documents switch.
+- Wallet docs are grouped and visible in DOT Mode with Open document actions.
+- Printable/share DOT report includes Roadside Documents before daily log pages.
+- No duty-status, signing, GPS, or coverage logic changed.
+
 
 ## v95.58 — Safe Update PWA
 

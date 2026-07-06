@@ -6,6 +6,7 @@ import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { color, label } from '../../shared/utils/status.js';
 import { validateLogForSigning } from '../logbook/signing.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
+import { DOC_SECTIONS, evaluateDotWallet, normalizeWallet } from '../../core/wallet/dotWallet.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_DRIVER_EMAIL = 'arbenoruci@gmail.com';
@@ -130,6 +131,155 @@ function shippingDocs(state) {
 function dutySummary(events = []) {
   const totals = dutyTotals(events);
   return `OFF: ${durLabel(totals.OFF)} | SB: ${durLabel(totals.SB)} | D: ${durLabel(totals.D)} | ON: ${durLabel(totals.ON)}`;
+}
+
+function documentStatusLabel(row = {}) {
+  if (!row.active) return 'Not used';
+  if (row.status === 'missing') return 'Missing';
+  if (row.status === 'expired') return 'Expired';
+  if (row.status === 'expires_soon' || row.status === 'watch') return row.label || 'Review';
+  return 'Ready';
+}
+
+function documentStatusClass(row = {}) {
+  if (row.severity === 'high') return 'bad';
+  if (row.severity === 'review') return 'warn';
+  if (row.severity === 'watch') return 'notice';
+  return 'ok';
+}
+
+function documentMetaLine(row = {}) {
+  const doc = row.doc || {};
+  const parts = [];
+  if (doc.number) parts.push(`# ${doc.number}`);
+  if (doc.policyNo) parts.push(`Policy ${doc.policyNo}`);
+  if (doc.mcNumber) parts.push(`MC ${doc.mcNumber}`);
+  if (doc.usdotNumber) parts.push(`USDOT ${doc.usdotNumber}`);
+  if (doc.unit) parts.push(`Unit ${doc.unit}`);
+  if (doc.trailer) parts.push(`Trailer ${doc.trailer}`);
+  if (doc.plate) parts.push(`Plate ${doc.plate}${doc.state ? ` ${doc.state}` : ''}`);
+  if (doc.vin) parts.push(`VIN ${doc.vin}`);
+  if (doc.loadNo) parts.push(`Load ${doc.loadNo}`);
+  if (doc.bolNo) parts.push(`BOL ${doc.bolNo}`);
+  if (row.expiresOn) parts.push(`Expires ${row.expiresOn}`);
+  if (!parts.length && doc.notes) parts.push(doc.notes);
+  return parts.join(' · ') || 'No details entered';
+}
+
+function officerWalletRows(state) {
+  const summary = evaluateDotWallet(normalizeWallet(state.dotWallet || {}));
+  return summary.rows
+    .filter(row => row.active)
+    .sort((a, b) => {
+      const important = ['roadside','roadside_if_used','trip'];
+      const ai = important.includes(a.requirement.required) ? 0 : 1;
+      const bi = important.includes(b.requirement.required) ? 0 : 1;
+      if (ai !== bi) return ai - bi;
+      const sectionDelta = DOC_SECTIONS.findIndex(s => s.id === a.requirement.section) - DOC_SECTIONS.findIndex(s => s.id === b.requirement.section);
+      if (sectionDelta) return sectionDelta;
+      return a.requirement.title.localeCompare(b.requirement.title);
+    });
+}
+
+function walletSectionTitle(sectionId) {
+  return DOC_SECTIONS.find(section => section.id === sectionId)?.title || sectionId;
+}
+
+function officerWalletSummary(state) {
+  const summary = evaluateDotWallet(normalizeWallet(state.dotWallet || {}));
+  const rows = summary.rows.filter(row => row.active);
+  const withFiles = rows.filter(row => row.doc?.attachmentDataUrl).length;
+  return { ...summary, fileCount: withFiles };
+}
+
+function logPackageStats(state, days = []) {
+  const rows = days.map(day => {
+    const events = reportEventsForDay(state, day);
+    const issues = validateLogForSigning(state, day).filter(issue => issue.code !== 'active_day');
+    const sig = signatureForDay(state, day);
+    return {
+      day,
+      eventCount: events.length,
+      total: totalHours(events),
+      signed: !!sig.signed,
+      issues,
+    };
+  });
+  const missing = rows.filter(row => !row.eventCount).length;
+  const unsigned = rows.filter(row => row.eventCount && !row.signed && row.day !== localDayKey()).length;
+  const review = rows.filter(row => row.issues.length).length;
+  return { rows, missing, unsigned, review };
+}
+
+function WalletDocLink({ row }) {
+  const doc = row.doc || {};
+  if (!doc.attachmentDataUrl) return <span className="dot-doc-no-file">No file saved</span>;
+  return (
+    <a className="dot-doc-open" href={doc.attachmentDataUrl} target="_blank" rel="noopener noreferrer">
+      Open document
+    </a>
+  );
+}
+
+function OfficerDocumentList({ state }) {
+  const rows = officerWalletRows(state);
+  const sections = DOC_SECTIONS
+    .map(section => ({ section, rows: rows.filter(row => row.requirement.section === section.id) }))
+    .filter(group => group.rows.length);
+
+  if (!rows.length) {
+    return <div className="dot-doc-empty">No wallet documents saved yet.</div>;
+  }
+
+  return (
+    <div className="dot-doc-sections">
+      {sections.map(group => (
+        <section className="dot-doc-section" key={group.section.id}>
+          <h3>{group.section.title}</h3>
+          <div className="dot-doc-list">
+            {group.rows.map(row => (
+              <article className={`dot-doc-card ${documentStatusClass(row)}`} key={row.requirement.id}>
+                <div className="dot-doc-main">
+                  <b>{row.requirement.title}</b>
+                  <span>{documentMetaLine(row)}</span>
+                  {row.doc?.attachmentName ? <em>{row.doc.attachmentName}</em> : null}
+                </div>
+                <div className="dot-doc-side">
+                  <strong>{documentStatusLabel(row)}</strong>
+                  <WalletDocLink row={row} />
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function walletReportSectionHtml(state) {
+  const rows = officerWalletRows(state);
+  if (!rows.length) return '<section class="wallet-report"><h2>Roadside Documents</h2><p>No wallet documents saved.</p></section>';
+  const body = rows.map(row => {
+    const doc = row.doc || {};
+    const fileLink = doc.attachmentDataUrl
+      ? `<a href="${htmlEscape(doc.attachmentDataUrl)}">Open saved file</a>`
+      : 'No file saved';
+    return `<tr>
+      <td>${htmlEscape(walletSectionTitle(row.requirement.section))}</td>
+      <td>${htmlEscape(row.requirement.title)}</td>
+      <td>${htmlEscape(documentStatusLabel(row))}</td>
+      <td>${htmlEscape(documentMetaLine(row))}</td>
+      <td>${fileLink}</td>
+    </tr>`;
+  }).join('');
+  return `<section class="wallet-report">
+    <h2>Roadside Documents</h2>
+    <table class="wallet-report-table">
+      <thead><tr><th>Section</th><th>Document</th><th>Status</th><th>Details</th><th>File</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  </section>`;
 }
 
 function recapDays(days = [], state) {
@@ -275,7 +425,7 @@ function reportHtml(state, days, routingCode = '') {
 <style>
   body{margin:0;background:#e5e7eb;color:#111827;font-family:Arial,Helvetica,sans-serif;}
   .package-cover,.daily-log-page{max-width:980px;margin:18px auto;background:#fff;border:1px solid #cfd4dc;padding:22px;box-sizing:border-box;}
-  .package-cover h1{margin:0 0 8px;font-size:26px;}.package-cover p{margin:6px 0;font-size:14px;}.cover-grid{display:grid;grid-template-columns:180px 1fr;gap:0;border:1px solid #9ca3af;margin-top:16px}.cover-grid b,.cover-grid span{padding:8px 10px;border-bottom:1px solid #d1d5db}.cover-grid b{background:#f3f4f6;border-right:1px solid #d1d5db}.cover-grid b:nth-last-child(2),.cover-grid span:last-child{border-bottom:0}
+  .package-cover h1{margin:0 0 8px;font-size:26px;}.package-cover p{margin:6px 0;font-size:14px;}.cover-grid{display:grid;grid-template-columns:180px 1fr;gap:0;border:1px solid #9ca3af;margin-top:16px}.cover-grid b,.cover-grid span{padding:8px 10px;border-bottom:1px solid #d1d5db}.cover-grid b{background:#f3f4f6;border-right:1px solid #d1d5db}.cover-grid b:nth-last-child(2),.cover-grid span:last-child{border-bottom:0}.wallet-report{margin-top:18px}.wallet-report h2{font-size:18px;margin:0 0 8px}.wallet-report-table{width:100%;border-collapse:collapse;font-size:12px}.wallet-report-table th,.wallet-report-table td{border:1px solid #9ca3af;padding:6px;text-align:left;vertical-align:top}.wallet-report-table th{background:#f3f4f6;font-weight:800}
   .daily-log-head{display:grid;grid-template-columns:190px 1fr 210px;align-items:start;gap:12px;border-bottom:2px solid #111827;padding-bottom:10px}.brand{font-size:34px;font-weight:900;font-style:italic}.daily-log-head h1{margin:0;text-align:center;font-size:22px;text-transform:uppercase}.daily-log-head p{text-align:center;margin:3px 0 0}.log-date{text-align:right;font-size:13px;line-height:1.5}.header-table,.event-table,.recap-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}.header-table th,.header-table td,.event-table th,.event-table td,.recap-table th,.recap-table td{border:1px solid #9ca3af;padding:6px;text-align:left;vertical-align:top}.header-table th,.event-table th,.recap-table th{background:#f3f4f6;font-weight:800}.graph-wrap{border:1px solid #d1d5db;margin:12px 0;padding:8px}.report-svg{width:100%;height:auto}.grid-line,.hour-line{stroke:#d1d5db;stroke-width:1}.hour-line.major{stroke:#9ca3af;stroke-width:1.2}.hour-label,.row-label{font-size:12px;fill:#374151;font-weight:700}.cert-block{margin-top:14px;text-align:center}.cert-block> b{display:block;text-align:left}.cert-block p{font-weight:700}.signature-line{height:54px;display:flex;align-items:end;justify-content:center;gap:10px}.signature-line img{max-height:42px;max-width:180px}.signature-line span{border-top:1px solid #111827;min-width:260px;padding-top:6px;font-size:12px;font-weight:700}.review-list{text-align:left;background:#fff7ed;border:1px solid #fed7aa;padding:8px;margin-top:8px}.page-break{break-after:page;}
   @media print{body{background:#fff}.package-cover,.daily-log-page{margin:0 auto 12px;border:0;page-break-after:always}.daily-log-page{min-height:10in}.no-print{display:none!important}}
 </style>
@@ -294,6 +444,7 @@ function reportHtml(state, days, routingCode = '') {
       <b>Main Office</b><span>${htmlEscape(mainOffice(state))}</span>
       <b>Generated</b><span>${htmlEscape(printDate())}</span>
     </div>
+    ${walletReportSectionHtml(state)}
   </section>
   ${days.map(day => dayReportHtml(state, day, days)).join('\n')}
 </body>
@@ -357,17 +508,20 @@ function DailyPaper({ state, day, days }) {
 }
 
 export default function DotMode({ state, onBack }) {
-  const [selectedDay, setSelectedDay] = useState(state.activeDay || localDayKey());
+  const [selectedDay, setSelectedDay] = useState(localDayKey());
   const [officerEmail, setOfficerEmail] = useState('');
   const [routingCode, setRoutingCode] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [stage, setStage] = useState('home');
   const [status, setStatus] = useState('');
-  const days = useMemo(() => dayRange(state.activeDay || localDayKey()), [state.activeDay]);
+  const [officerPane, setOfficerPane] = useState('package');
+  const days = useMemo(() => dayRange(localDayKey()), []);
   const selectedEvents = reportEventsForDay(state, selectedDay);
   const selectedInspection = state.inspectionByDay?.[selectedDay] || {};
   const selectedIssues = validateLogForSigning(state, selectedDay).filter(issue => issue.code !== 'active_day');
   const selectedTotals = dutyTotals(selectedEvents);
+  const walletSummary = officerWalletSummary(state);
+  const logStats = logPackageStats(state, days);
   const htmlPackage = useMemo(() => reportHtml(state, days, routingCode.trim()), [state, days, routingCode]);
 
   function guardedBack() {
@@ -490,8 +644,8 @@ export default function DotMode({ state, onBack }) {
         <main className="dot-officer-view">
           <div className="dot-officer-head">
             <div>
-              <b>DOT Inspection</b>
-              <span>Previous 7 days + today</span>
+              <b>Roadside Package</b>
+              <span>Logs + DOT wallet documents</span>
             </div>
             <button onClick={() => setStage('report')}>Report</button>
           </div>
@@ -503,51 +657,93 @@ export default function DotMode({ state, onBack }) {
             <div><span>Record Type</span><b>Manual RODS</b></div>
           </div>
 
-          <div className="dot-days-strip clean">
-            {days.map(day => (
-              <button key={day} className={day === selectedDay ? 'active' : ''} onClick={() => setSelectedDay(day)}>
-                <b>{dayTitle(day)}</b>
-                <span>{day}</span>
-              </button>
-            ))}
+          <div className="dot-roadside-switch" role="tablist" aria-label="DOT roadside package">
+            <button type="button" className={officerPane === 'package' ? 'active' : ''} onClick={() => setOfficerPane('package')}>Package</button>
+            <button type="button" className={officerPane === 'logs' ? 'active' : ''} onClick={() => setOfficerPane('logs')}>Logs</button>
+            <button type="button" className={officerPane === 'docs' ? 'active' : ''} onClick={() => setOfficerPane('docs')}>Documents</button>
           </div>
 
-          <div className="dot-selected-day-card">
-            <div>
-              <b>{dayTitle(selectedDay, true)}</b>
-              <span>{selectedDay}</span>
-            </div>
-            <em>{signatureLabel(state, selectedDay)}</em>
-          </div>
-
-          <div className="graph-panel dot-graph-panel"><LogGraph events={selectedEvents} /></div>
-
-          <div className="dot-totals-row">
-            <div><b>OFF</b><span>{durLabel(selectedTotals.OFF)}</span></div>
-            <div><b>SB</b><span>{durLabel(selectedTotals.SB)}</span></div>
-            <div><b>D</b><span>{durLabel(selectedTotals.D)}</span></div>
-            <div><b>ON</b><span>{durLabel(selectedTotals.ON)}</span></div>
-          </div>
-
-          <div className="dot-day-status-card pro">
-            <span>Inspection: {inspectionLabel(selectedInspection)}</span>
-            <span>Review: {selectedIssues.length ? `${selectedIssues.length} item(s)` : 'No blocking review items shown'}</span>
-          </div>
-
-          <div className="events dot-events pro">
-            {selectedEvents.map(e => (
-              <div className="event-row" key={e.id}>
-                <div className="event-badge" style={{ background:color(e.status) }}>{e.status}</div>
-                <div className="event-content">
-                  <div className="event-time">{timeLabel(e.startMin, true)} <span>|</span> {durLabel(e.endMin-e.startMin)}</div>
-                  <div className="event-loc">{joinLocation(e)}</div>
-                  <div className="event-note">{e.note || label(e.status)}</div>
-                </div>
+          {(officerPane === 'package' || officerPane === 'logs') && (
+            <section className="dot-roadside-section">
+              <div className="dot-roadside-title">
+                <b>Logs / RODS</b>
+                <span>Today + previous 7 days</span>
               </div>
-            ))}
-            {!selectedEvents.length && <div className="dot-empty-day">No events recorded for this day.</div>}
-          </div>
-        </main>
+              <div className="dot-roadside-cards">
+                <button type="button" onClick={() => setOfficerPane('logs')}>
+                  <b>{days.length}</b>
+                  <span>log days</span>
+                </button>
+                <button type="button" onClick={() => setOfficerPane('logs')}>
+                  <b>{logStats.unsigned}</b>
+                  <span>unsigned previous</span>
+                </button>
+                <button type="button" onClick={() => setOfficerPane('logs')}>
+                  <b>{logStats.review}</b>
+                  <span>review days</span>
+                </button>
+              </div>
+
+              <div className="dot-days-strip clean">
+                {days.map(day => (
+                  <button key={day} className={day === selectedDay ? 'active' : ''} onClick={() => { setSelectedDay(day); setOfficerPane('logs'); }}>
+                    <b>{dayTitle(day)}</b>
+                    <span>{day}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {(officerPane === 'package' || officerPane === 'docs') && (
+            <section className="dot-roadside-section">
+              <div className="dot-roadside-title">
+                <b>Roadside Documents</b>
+                <span>{walletSummary.counts.ok}/{walletSummary.counts.total} ready · {walletSummary.fileCount} file(s) saved</span>
+              </div>
+              <OfficerDocumentList state={state} />
+            </section>
+          )}
+
+          {officerPane === 'logs' && (
+            <section className="dot-roadside-section logs-open">
+              <div className="dot-selected-day-card">
+                <div>
+                  <b>{dayTitle(selectedDay, true)}</b>
+                  <span>{selectedDay}</span>
+                </div>
+                <em>{signatureLabel(state, selectedDay)}</em>
+              </div>
+
+              <div className="graph-panel dot-graph-panel"><LogGraph events={selectedEvents} /></div>
+
+              <div className="dot-totals-row">
+                <div><b>OFF</b><span>{durLabel(selectedTotals.OFF)}</span></div>
+                <div><b>SB</b><span>{durLabel(selectedTotals.SB)}</span></div>
+                <div><b>D</b><span>{durLabel(selectedTotals.D)}</span></div>
+                <div><b>ON</b><span>{durLabel(selectedTotals.ON)}</span></div>
+              </div>
+
+              <div className="dot-day-status-card pro">
+                <span>Inspection: {inspectionLabel(selectedInspection)}</span>
+                <span>Review: {selectedIssues.length ? `${selectedIssues.length} item(s)` : 'No blocking review items shown'}</span>
+              </div>
+
+              <div className="events dot-events pro">
+                {selectedEvents.map(e => (
+                  <div className="event-row" key={e.id}>
+                    <div className="event-badge" style={{ background:color(e.status) }}>{e.status}</div>
+                    <div className="event-content">
+                      <div className="event-time">{timeLabel(e.startMin, true)} <span>|</span> {durLabel(e.endMin-e.startMin)}</div>
+                      <div className="event-loc">{joinLocation(e)}</div>
+                      <div className="event-note">{e.note || label(e.status)}</div>
+                    </div>
+                  </div>
+                ))}
+                {!selectedEvents.length && <div className="dot-empty-day">No events recorded for this day.</div>}
+              </div>
+            </section>
+          )}        </main>
       )}
 
       {stage === 'report' && (
@@ -565,6 +761,11 @@ export default function DotMode({ state, onBack }) {
             <div><b>Truck/Unit:</b> {unitName(state)}</div>
             <div><b>Period:</b> {days.at(-1)} through {days[0]}</div>
             {routingCode.trim() ? <div><b>Routing / Reference Code:</b> {routingCode.trim()}</div> : null}
+            <div><b>Documents:</b> {walletSummary.counts.ok}/{walletSummary.counts.total} ready · {walletSummary.fileCount} file(s) saved</div>
+          </section>
+          <section className="dot-report-cover wallet-doc-report">
+            <h1>Roadside Documents</h1>
+            <OfficerDocumentList state={state} />
           </section>
           {days.map(day => <DailyPaper key={day} state={state} day={day} days={days} />)}
         </main>

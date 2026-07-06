@@ -84,6 +84,13 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   const [gpsStatus, setGpsStatus] = useState('');
   const [shippingDocs, setShippingDocs] = useState(state.loadInfo?.shippingDocs || state.loadInfo?.loadNo || '');
   const [destination, setDestination] = useState([state.loadInfo?.deliveryCity, state.loadInfo?.deliveryState].filter(Boolean).join(', '));
+  const [dropContainer, setDropContainer] = useState(state.equipment?.container || '');
+  const [dropChassis, setDropChassis] = useState(state.equipment?.chassis || '');
+  const [hookContainer, setHookContainer] = useState('');
+  const [hookChassis, setHookChassis] = useState('');
+  const [hookSeal, setHookSeal] = useState('');
+  const [hookLoadNo, setHookLoadNo] = useState('');
+  const [hookDestination, setHookDestination] = useState('');
   const askedOffGps = useRef(false);
   // Set when the driver types or picks a location manually. A late-resolving
   // automatic GPS fix (e.g. the OFF-duty auto lookup) must never overwrite a
@@ -179,6 +186,15 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
       loadNo: shippingDocs.trim(),
       destination: locationString(parsedDest.city, parsedDest.state) || destination.trim(),
       destinationState: parsedDest.state || '',
+      dropHook: {
+        droppedContainer: dropContainer.trim().toUpperCase(),
+        droppedChassis: dropChassis.trim().toUpperCase(),
+        hookedContainer: hookContainer.trim().toUpperCase(),
+        hookedChassis: hookChassis.trim().toUpperCase(),
+        hookedSeal: hookSeal.trim().toUpperCase(),
+        hookedLoadNo: hookLoadNo.trim().toUpperCase(),
+        hookedDestination: hookDestination.trim(),
+      },
       backdateMinutes: Number(startAgoMinutes || 0),
       lat: gpsFix?.lat ?? null,
       lng: gpsFix?.lng ?? null,
@@ -188,6 +204,10 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   }
 
   function save() {
+    if (dropHookSelected && (!hookContainer.trim() || !hookChassis.trim() || !hookDestination.trim())) {
+      setGpsStatus('Add new container, new chassis, and going-to location for Drop & Hook.');
+      return;
+    }
     const p = payload();
     if (status === 'D') {
       onStartDriving({ city:p.city, state:p.state, lat:p.lat, lng:p.lng, gpsAccuracy:p.gpsAccuracy, locationSource:p.locationSource });
@@ -236,6 +256,8 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
 
   const accent = color(status);
   const accentSoft = soft(status);
+  const dropHookSelected = status === 'ON' && reasonHas(selectedReasons, /drop\s*&\s*hook/i);
+  const currentEquipmentText = [state.equipment?.container, state.equipment?.chassis].filter(Boolean).join(' / ') || state.currentTrailer || 'No equipment set';
 
   return (
     <div className="status-page status-driver-picker-v934" style={{ '--driver-accent': accent, '--driver-accent-soft': accentSoft }}>
@@ -291,6 +313,51 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
             ))}
           </div>
         </section>
+
+
+
+        {dropHookSelected && (
+          <section className="picker-section drop-hook-section">
+            <div className="picker-label-row">
+              <label>Drop & hook equipment</label>
+              <span>required for next load</span>
+            </div>
+            <div className="drop-hook-current">
+              <small>Current equipment</small>
+              <b>{currentEquipmentText}</b>
+            </div>
+            <div className="driver-load-grid drop-hook-grid">
+              <label>
+                <span>Drop container</span>
+                <input value={dropContainer} onChange={(e) => setDropContainer(e.target.value.toUpperCase())} placeholder="Old container #" autoComplete="off" />
+              </label>
+              <label>
+                <span>Drop chassis</span>
+                <input value={dropChassis} onChange={(e) => setDropChassis(e.target.value.toUpperCase())} placeholder="Old chassis #" autoComplete="off" />
+              </label>
+              <label>
+                <span>Hook container</span>
+                <input value={hookContainer} onChange={(e) => setHookContainer(e.target.value.toUpperCase())} placeholder="New container #" autoComplete="off" />
+              </label>
+              <label>
+                <span>Hook chassis</span>
+                <input value={hookChassis} onChange={(e) => setHookChassis(e.target.value.toUpperCase())} placeholder="New chassis #" autoComplete="off" />
+              </label>
+              <label>
+                <span>New BOL / load #</span>
+                <input value={hookLoadNo} onChange={(e) => setHookLoadNo(e.target.value.toUpperCase())} placeholder="BOL or pickup #" autoComplete="off" />
+              </label>
+              <label>
+                <span>Going to</span>
+                <input value={hookDestination} onChange={(e) => setHookDestination(e.target.value)} placeholder="City, ST" autoComplete="off" />
+              </label>
+              <label>
+                <span>Seal optional</span>
+                <input value={hookSeal} onChange={(e) => setHookSeal(e.target.value.toUpperCase())} placeholder="Seal #" autoComplete="off" />
+              </label>
+            </div>
+          </section>
+        )}
 
         {reasonNeedsLoadLink(status, selectedReasons) && (
           <section className="picker-section load-link-section">

@@ -195,6 +195,8 @@ function legLabel(leg) {
 function legMeta(leg) {
   const parts = [];
   if (leg.shippingDocs) parts.push(`BOL ${leg.shippingDocs}`);
+  if (leg.container || leg.chassis) parts.push([leg.container, leg.chassis].filter(Boolean).join(' / '));
+  if (leg.droppedContainer || leg.droppedChassis) parts.push(`Dropped ${[leg.droppedContainer, leg.droppedChassis].filter(Boolean).join(' / ')}`);
   parts.push(leg.status === 'delivered' ? 'Delivered' : 'Open');
   if (leg.pickupDay) parts.push(`Pickup ${leg.pickupDay}`);
   return parts.join(' · ');

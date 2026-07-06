@@ -8624,3 +8624,164 @@ body,
   .update-safe-actions button{min-height:34px;padding:0 10px;font-size:12px;}
   .update-safe-copy span{max-width:52vw;}
 }
+
+/* v95.59 DOT Mode roadside package: logs + wallet docs for officer view */
+.dot-roadside-switch{
+  position:sticky;
+  top:0;
+  z-index:3;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  padding:10px 12px;
+  background:rgba(246,248,246,.96);
+  border-bottom:1px solid #e3e7e1;
+  backdrop-filter:blur(10px);
+}
+.dot-roadside-switch button{
+  height:42px;
+  border:1px solid #d9dfd8;
+  border-radius:14px;
+  background:#fff;
+  color:#526070;
+  font-size:13px;
+  font-weight:1000;
+}
+.dot-roadside-switch button.active{
+  background:#111827;
+  border-color:#111827;
+  color:#fff;
+}
+.dot-roadside-section{
+  margin:12px;
+  padding:12px;
+  border:1px solid #dfe5df;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 2px 9px rgba(20,32,51,.04);
+}
+.dot-roadside-section.logs-open{padding-bottom:14px;}
+.dot-roadside-title{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.dot-roadside-title b{
+  font-size:18px;
+  font-weight:1000;
+  letter-spacing:-.02em;
+  color:#111827;
+}
+.dot-roadside-title span{
+  font-size:12px;
+  font-weight:900;
+  color:#667085;
+  text-align:right;
+  line-height:1.25;
+}
+.dot-roadside-cards{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  margin-bottom:10px;
+}
+.dot-roadside-cards button{
+  display:grid;
+  gap:2px;
+  place-items:center;
+  min-height:70px;
+  border:1px solid #e4e7ec;
+  border-radius:15px;
+  background:#f9fafb;
+  color:#111827;
+}
+.dot-roadside-cards b{font-size:23px;font-weight:1000;}
+.dot-roadside-cards span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#667085;font-weight:950;}
+.dot-doc-sections{display:grid;gap:12px;}
+.dot-doc-section{display:grid;gap:8px;}
+.dot-doc-section h3{
+  margin:0;
+  font-size:12px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:#8a928e;
+  font-weight:1000;
+}
+.dot-doc-list{display:grid;gap:8px;}
+.dot-doc-card{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:10px;
+  align-items:center;
+  padding:12px;
+  border:1px solid #dfe5df;
+  border-radius:15px;
+  background:#fff;
+}
+.dot-doc-card.bad{border-color:#f0c9c9;background:#fffafa;}
+.dot-doc-card.warn{border-color:#efd6a8;background:#fffdf8;}
+.dot-doc-card.notice{border-color:#d7e0ff;background:#f8faff;}
+.dot-doc-card.ok{border-color:#cfe7d5;background:#fbfffc;}
+.dot-doc-main{display:grid;gap:4px;min-width:0;}
+.dot-doc-main b{font-size:14px;font-weight:1000;color:#111827;line-height:1.15;}
+.dot-doc-main span{font-size:12px;color:#526070;font-weight:820;line-height:1.25;}
+.dot-doc-main em{font-style:normal;font-size:11px;color:#8a928e;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dot-doc-side{display:grid;justify-items:end;gap:6px;min-width:95px;}
+.dot-doc-side strong{font-size:12px;font-weight:1000;color:#248a52;}
+.dot-doc-card.bad .dot-doc-side strong{color:#b42318;}
+.dot-doc-card.warn .dot-doc-side strong{color:#9b6b1b;}
+.dot-doc-card.notice .dot-doc-side strong{color:#3157d8;}
+.dot-doc-open{
+  display:inline-grid;
+  place-items:center;
+  min-height:34px;
+  padding:0 10px;
+  border:1px solid #cfd8ff;
+  border-radius:999px;
+  background:#eef3ff;
+  color:#3157d8;
+  font-size:12px;
+  font-weight:1000;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.dot-doc-no-file{
+  display:inline-grid;
+  place-items:center;
+  min-height:32px;
+  padding:0 9px;
+  border-radius:999px;
+  background:#f3f4f6;
+  color:#667085;
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.dot-doc-empty{
+  padding:14px;
+  border-radius:14px;
+  background:#f9fafb;
+  color:#667085;
+  font-weight:850;
+  text-align:center;
+}
+.wallet-doc-report .dot-doc-sections{margin-top:12px;}
+.wallet-doc-report .dot-doc-card{break-inside:avoid;}
+@media(max-width:390px){
+  .dot-roadside-cards{grid-template-columns:1fr;}
+  .dot-roadside-title{display:grid;}
+  .dot-roadside-title span{text-align:left;}
+  .dot-doc-card{grid-template-columns:1fr;}
+  .dot-doc-side{justify-items:start;grid-auto-flow:column;justify-content:space-between;align-items:center;}
+}
+
+/* v95.60 — Drop & hook intermodal fields */
+.drop-hook-section{border-color:#d9e5ff!important;background:#f8fbff!important}
+.drop-hook-current{display:grid;gap:3px;margin:0 0 10px;padding:10px 12px;border:1px solid #d7e0ff;border-radius:13px;background:#fff;color:#111827}
+.drop-hook-current small{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:#667085;font-weight:950}
+.drop-hook-current b{font-size:14px;font-weight:1000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drop-hook-grid label:last-child{grid-column:1 / -1}
+.drop-hook-grid input{font-variant-numeric:tabular-nums}
+@media (max-width:390px){.drop-hook-grid{grid-template-columns:1fr!important}}

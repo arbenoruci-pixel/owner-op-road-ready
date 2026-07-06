@@ -1,3 +1,11 @@
+
+## v95.59 — DOT Roadside Package
+- DOT Mode now shows an officer-ready Roadside Package.
+- Added Package / Logs / Documents switch.
+- Wallet docs are grouped and visible in DOT Mode with Open document actions.
+- Printable/share DOT report includes Roadside Documents before daily log pages.
+- No duty-status, signing, GPS, or coverage logic changed.
+
 ## v92.6 — DriverLine Original UI Redesign
 
 - Added a compact original DriverLine UI pass for market testing.
