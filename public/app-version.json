@@ -1,11 +1,11 @@
 {
-  "version": "95.66.0",
-  "build": "v95.66-edit-time-save-persist",
-  "releasedAt": "2026-07-05T00:00:00.000Z",
+  "version": "95.67.0",
+  "build": "v95.67-backup-logs-export-import",
+  "releasedAt": "2026-07-06T00:00:00.000Z",
   "notes": [
-    "Fixes Edit Duty Status save for start/end time changes.",
-    "Linked adjacent event boundary moves with the edited event so the list and graph show the saved duration."
+    "Adds Backup Logs to Log Tools.",
+    "Manual export/import protects logs, signatures, inspections, route/load data, DOT wallet documents, and attachments before updates."
   ],
-  "label": "v95.66 Edit time save persist",
-  "updatedAt": "2026-07-05T00:00:00.000Z"
+  "label": "v95.67 Backup logs export/import",
+  "updatedAt": "2026-07-06T00:00:00.000Z"
 }

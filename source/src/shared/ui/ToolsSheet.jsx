@@ -1,7 +1,7 @@
 import React from 'react';
 import { CURRENT_APP_VERSION } from '../../core/update/appUpdate.js';
 
-export default function ToolsSheet({ onClose, onDot, onWallet, onMove, updateState, onCheckUpdate, onApplyUpdate, onClearTestDates }) {
+export default function ToolsSheet({ onClose, onDot, onWallet, onMove, onBackup, updateState, onCheckUpdate, onApplyUpdate, onClearTestDates }) {
   const available = !!updateState?.available;
   const latest = updateState?.remote?.version || updateState?.latestVersion || CURRENT_APP_VERSION;
   const checking = !!updateState?.checking;
@@ -13,6 +13,7 @@ export default function ToolsSheet({ onClose, onDot, onWallet, onMove, updateSta
       <div className="choice-body">
         <button className="choice-card" onClick={onDot}><b>DOT Inspection</b><span>Email officer report or open inspection-safe DOT Mode on this device.</span></button>
         <button className="choice-card" onClick={onWallet}><b>DOT Digital Wallet</b><span>CDL, medical, registration, insurance, annual inspection, BOL, and expiration reminders.</span></button>
+        <button className="choice-card" onClick={onBackup}><b>Backup Logs</b><span>Export or import logs, signatures, inspections, routes, wallet docs, and attachments.</span></button>
         <button className="choice-card" onClick={onMove}><b>Shift day events</b><span>Select all real events for this day and move them forward or backward together.</span></button>
         <button className={`choice-card ${available ? 'update-ready' : ''}`} onClick={available ? onApplyUpdate : onCheckUpdate} disabled={saving}>
           <b>{available ? 'Update ready' : 'Check app update'}</b>

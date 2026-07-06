@@ -9,6 +9,7 @@ import EditEventSheet from '../modules/editor/EditEventSheet.jsx';
 import ShiftSheet from '../modules/editor/ShiftSheet.jsx';
 import ToolsSheet from '../shared/ui/ToolsSheet.jsx';
 import DigitalWalletScreen from '../modules/wallet/DigitalWalletScreen.jsx';
+import BackupLogsScreen from '../modules/backup/BackupLogsScreen.jsx';
 import UpdateBanner from '../modules/update/UpdateBanner.jsx';
 import DotMode from '../modules/dot/DotMode.jsx';
 import DriveTrackerSheet from '../modules/gps/DriveTrackerSheet.jsx';
@@ -2310,6 +2311,66 @@ export default function App() {
     });
   }
 
+
+
+  async function buildManualBackup(payload = {}) {
+    const now = new Date().toISOString();
+    const cleanPayload = {
+      ...payload,
+      appVersion: payload.appVersion || CURRENT_APP_VERSION,
+      createdAt: payload.createdAt || now,
+      state: {
+        ...(payload.state || state),
+        sheet:null,
+        gpsPanelOpen:false,
+        selectMode:false,
+        selectedIds:[],
+        roadGuardTabRequest:null,
+      },
+    };
+    await saveAppSnapshot(APP_STATE_KEY, cleanPayload.state);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('owner-op-road-ready-last-manual-backup-meta-v1', JSON.stringify({
+          createdAt: cleanPayload.createdAt,
+          appVersion: cleanPayload.appVersion,
+          summary: cleanPayload.summary || {},
+        }));
+        window.localStorage.setItem('owner-op-road-ready-emergency-export-copy-v1', JSON.stringify(cleanPayload));
+      }
+    } catch {}
+    return cleanPayload;
+  }
+
+  async function importManualBackup(payload = {}, meta = {}) {
+    const imported = payload?.state || payload?.appState || payload;
+    if (!imported || typeof imported !== 'object' || (!imported.eventsByDay && !imported.signatureByDay && !imported.inspectionByDay)) {
+      throw new Error('Backup file is missing log data.');
+    }
+    const restored = normalizeState({
+      ...imported,
+      view:'logs',
+      sheet:null,
+      selectMode:false,
+      selectedIds:[],
+      roadGuardTabRequest:null,
+      _restoredBackupMeta:{
+        importedAt:new Date().toISOString(),
+        filename:meta?.filename || '',
+        sourceVersion:payload?.appVersion || '',
+        schemaVersion:payload?.schemaVersion || '',
+      },
+    });
+    await saveAppSnapshot(APP_STATE_KEY, restored);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('owner-op-road-ready-last-import-meta-v1', JSON.stringify(restored._restoredBackupMeta));
+      }
+    } catch {}
+    lastEventsByDayRef.current = restored.eventsByDay || {};
+    lastInspectionByDayRef.current = restored.inspectionByDay || {};
+    setState(restored);
+  }
   const updateBanner = (
     <UpdateBanner
       updateState={updateState}
@@ -2348,6 +2409,19 @@ export default function App() {
       onSaveDocument={saveWalletDocument}
       onOpenLogs={()=>setState(s=>({ ...s, view:'logs', sheet:null }))}
       onOpenLoad={()=>setState(s=>({ ...s, view:'day', roadGuardTabRequest:{ tab:'form', at:Date.now(), source:'wallet-load' } }))}
+      />
+    </>
+  );
+
+
+  if (state.view === 'backup') return (
+    <>
+      {updateBanner}
+      <BackupLogsScreen
+        state={state}
+        onBack={()=>setState(s=>({ ...s, view:'logs', sheet:null }))}
+        onBuildBackup={buildManualBackup}
+        onImportBackup={importManualBackup}
       />
     </>
   );
@@ -2413,7 +2487,7 @@ export default function App() {
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
       {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
-      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>{ const ids = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
+      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>{ const ids = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} onBackup={()=>setState(s=>({ ...s, sheet:null, view:'backup' }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
     </>
   );
 }
