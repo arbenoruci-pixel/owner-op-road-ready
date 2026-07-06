@@ -15,12 +15,12 @@ const HIT_MIN_PX = 24;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
 // v95.53 readability: compact Motive-style duty trace, readable on iPhone.
-const LINE_W = 9;
-const LINE_HALO_W = LINE_W + 7;
-const VERTICAL_LINE_W = LINE_W;
+const LINE_W = 8;
+const LINE_HALO_W = LINE_W + 8;
+const VERTICAL_LINE_W = 5.5;
 const CORNER_INSET = LINE_W / 2;
 const CORNER_OVERLAP = CORNER_INSET;
-const TRACE_COLOR = '#111827';
+const TRACE_COLOR = '#334155';
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -146,7 +146,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       {Array.from({ length: 97 }).map((_,q) => {
         const x = LEFT + (q/96)*BODY_W;
         const major = q % 4 === 0;
-        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#aab4c2' : '#edf1f5'} strokeWidth={major ? 1.15 : 0.62} />;
+        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#d5dce6' : '#f1f4f8'} strokeWidth={major ? 0.95 : 0.52} />;
       })}
       {Array.from({ length: 25 }).map((_,h) => {
         const x = LEFT + (h/24)*BODY_W;
@@ -224,9 +224,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Base duty trace: white halo + continuous paper-log path.
-          The halo separates the duty line from the grid so the driver can
-          read OFF / SB / D / ON instantly on iPhone Safari. */}
+      {/* Base duty trace: white halo + slim continuous paper-log bend path.
+          Horizontal status segments are colored below; this core path keeps
+          the vertical bends continuous without turning them into thick black bars. */}
       {bodyPath ? (
         <path
           d={bodyPath}
@@ -243,9 +243,10 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           d={bodyPath}
           fill="none"
           stroke={TRACE_COLOR}
-          strokeWidth={LINE_W}
+          strokeWidth={VERTICAL_LINE_W}
           strokeLinecap="butt"
           strokeLinejoin="miter"
+          opacity=".78"
           pointerEvents="none"
         />
       ) : null}
@@ -342,7 +343,7 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
             className="short-event-marker"
             cx={mid}
             cy={y}
-            r={selected ? 10 : 8}
+            r={selected ? 11 : 9}
             fill={c}
             stroke="#fff"
             strokeWidth="3.5"

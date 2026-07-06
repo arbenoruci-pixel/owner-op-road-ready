@@ -1,10 +1,12 @@
 {
-  "version": "95.61.0",
-  "build": "v95.61-graph-drop-hook-merge",
+  "version": "95.62.0",
+  "build": "v95.62-graph-line-note-sanitize",
   "releasedAt": "2026-07-05T00:00:00.000Z",
   "notes": [
-    "Drop & Hook asks for dropped and hooked container/chassis plus next destination."
+    "Graph duty line uses a slimmer visible bend path and lighter grid.",
+    "Drop & Hook notes remove placeholder equipment labels like New trailer / No trailer.",
+    "Existing log notes are sanitized during load/display without changing duty times."
   ],
-  "label": "v95.61 Graph + Drop & Hook merge",
+  "label": "v95.62 Graph line + clean Drop & Hook notes",
   "updatedAt": "2026-07-05T00:00:00.000Z"
 }

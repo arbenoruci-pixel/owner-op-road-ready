@@ -28,6 +28,7 @@ import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../.
 import { installOwnerOpAuthBridge } from '../../../lib/supabase/authBridge.js';
 import { normalizeWallet } from '../core/wallet/dotWallet.js';
 import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, updateReloadUrl } from '../core/update/appUpdate.js';
+import { sanitizeLogText } from '../shared/utils/logText.js';
 
 const ROADGUARD_DEFAULT_PROFILE = {
   driverName: 'Arben Oruci',
@@ -100,6 +101,9 @@ function sanitizeDutyEventForStatus(event = {}, previousStatus = null) {
 
   if (noteStale) next.note = statusDefaultNote(status);
   if (descStale) next.description = '';
+
+  next.note = sanitizeLogText(next.note || '');
+  next.description = sanitizeLogText(next.description || '');
 
   // A non-ON event must never keep the identity of an ON DUTY Pre-trip / inspection event.
   if (status !== 'ON') {
@@ -1379,9 +1383,9 @@ export default function App() {
     const parts = [];
     const dropped = [droppedContainer, droppedChassis].filter(Boolean).join(' / ');
     const hooked = [hookedContainer, hookedChassis].filter(Boolean).join(' / ');
-    if (dropped) parts.push(`dropped ${dropped}`);
-    if (hooked) parts.push(`hooked ${hooked}`);
-    if (!dropped && !hooked) parts.push('equipment changed');
+    if (dropped) parts.push(`Dropped ${dropped}`);
+    if (hooked) parts.push(`Hooked ${hooked}`);
+    if (!dropped && !hooked) parts.push('Equipment changed');
     if (dropHook.hookedLoadNo) parts.push(`BOL ${dropHook.hookedLoadNo}`);
     if (dropHook.hookedDestination) parts.push(`to ${dropHook.hookedDestination}`);
     return parts.length ? `Drop & Hook · ${parts.join(' · ')}` : 'Drop & Hook';
@@ -1396,11 +1400,11 @@ export default function App() {
       chassis: dropHook.hookedChassis || '',
       container: dropHook.hookedContainer || '',
       seal: dropHook.hookedSeal || '',
-      note: [
-        dropHook.droppedContainer || dropHook.droppedChassis ? `Dropped ${[dropHook.droppedContainer, dropHook.droppedChassis].filter(Boolean).join(' / ')}` : '',
+      note: sanitizeLogText([
+        cleanEquipmentLabel(dropHook.droppedContainer) || cleanEquipmentLabel(dropHook.droppedChassis) ? `Dropped ${[cleanEquipmentLabel(dropHook.droppedContainer), cleanEquipmentLabel(dropHook.droppedChassis)].filter(Boolean).join(' / ')}` : '',
         dropHook.hookedLoadNo ? `BOL ${dropHook.hookedLoadNo}` : '',
         dropHook.hookedDestination ? `Going to ${dropHook.hookedDestination}` : '',
-      ].filter(Boolean).join(' · '),
+      ].filter(Boolean).join(' · ')),
       updatedAt: Date.now(),
       source:'drop_hook_status',
     };

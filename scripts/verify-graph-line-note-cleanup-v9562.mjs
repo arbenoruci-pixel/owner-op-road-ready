@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { normalizeLogEvents } from '../source/src/core/timeline/timelineEngine.js';
+import { sanitizeLogText } from '../source/src/shared/utils/logText.js';
 
 const root = path.resolve(process.cwd());
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -49,6 +50,9 @@ ok(!app.includes("'New equipment'"), 'app does not write New equipment fallback'
 ok(!trailer.includes("'New trailer'"), 'trailer sheet does not write New trailer fallback');
 ok(trailer.includes('Hooked trailer number'), 'trailer sheet asks for hooked trailer number');
 ok(!/old\s+trailer/i.test(app + trailer), 'app text does not use old trailer wording');
-ok(read('PATCH_V95_61_GRAPH_AND_DROP_HOOK_WORDING_NOTES.md').includes('Adjacent same-status event merge'), 'patch notes included');
+ok(sanitizeLogText('Drop & Hook · dropped New trailer · Pre-trip inspection') === 'Drop & Hook · equipment changed · Pre-trip inspection', 'placeholder equipment wording is sanitized');
+ok(!sanitizeLogText('Drop & Hook · dropped No trailer').includes('No trailer'), 'No trailer placeholder removed from log note');
+ok(graph.includes('VERTICAL_LINE_W = 5.5'), 'graph uses slimmer visible vertical bend width');
+ok(read('PATCH_V95_62_GRAPH_LINE_AND_DROP_HOOK_NOTE_CLEANUP.md').includes('placeholder'), 'v95.62 patch notes included');
 
-console.log(`verify-graph-drop-hook-merge-v9561: ${checks} checks passed`);
+console.log(`verify-graph-line-note-cleanup-v9562: ${checks} checks passed`);

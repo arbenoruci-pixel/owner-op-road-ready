@@ -1,3 +1,5 @@
+import { sanitizeLogText, combineLogText } from '../../shared/utils/logText.js';
+
 export function sortEvents(events) {
   return [...(events || [])].filter(Boolean).sort((a, b) => Number(a.startMin || 0) - Number(b.startMin || 0));
 }
@@ -5,7 +7,13 @@ export function sortEvents(events) {
 function cleanEvent(e) {
   const start = Math.max(0, Math.min(1439, Math.round(Number(e.startMin || 0))));
   const end = Math.max(start + 1, Math.min(1440, Math.round(Number(e.endMin ?? start + 1))));
-  return { ...e, startMin: start, endMin: end };
+  return {
+    ...e,
+    startMin: start,
+    endMin: end,
+    note: sanitizeLogText(e.note || ''),
+    description: sanitizeLogText(e.description || ''),
+  };
 }
 
 function hasText(v) {
@@ -20,7 +28,7 @@ function mergeableSameStatus(last, current) {
 }
 
 function normalizeTextPart(value) {
-  return typeof value === 'string' ? value.trim() : '';
+  return sanitizeLogText(typeof value === 'string' ? value.trim() : '');
 }
 
 function sameText(a, b) {
@@ -35,11 +43,7 @@ function splitTextParts(value) {
 }
 
 function combineText(lastText, currentText) {
-  const out = [];
-  for (const part of [...splitTextParts(lastText), ...splitTextParts(currentText)]) {
-    if (!out.some(existing => existing.toLowerCase() === part.toLowerCase())) out.push(part);
-  }
-  return out.join(' · ');
+  return combineLogText(lastText, currentText);
 }
 
 function latestText(lastText, currentText) {

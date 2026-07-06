@@ -45,7 +45,7 @@ ok(css.includes('.dot-roadside-switch'), 'CSS for roadside switch exists');
 ok(css.includes('.dot-doc-card'), 'CSS for doc card exists');
 ok(css.includes('.dot-doc-open'), 'CSS for Open document action exists');
 ok(css.includes('.wallet-doc-report'), 'CSS for report wallet section exists');
-ok(pkg.version === '95.61.0', 'package version is 95.61.0');
-ok(appVersion.version === '95.61.0', 'app-version is 95.61.0');
+ok(/^95\.(6[1-9]|[7-9]\d)\.0$/.test(pkg.version), 'package version is 95.61.0 or newer');
+ok(/^95\.(6[1-9]|[7-9]\d)\.0$/.test(appVersion.version), 'app-version is 95.61.0 or newer');
 
 console.log(`verify-dot-roadside-package-v9559: ${pass} checks passed`);

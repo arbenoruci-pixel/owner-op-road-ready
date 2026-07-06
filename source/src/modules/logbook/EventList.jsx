@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
 import { color, label } from '../../shared/utils/status.js';
+import { sanitizeLogText } from '../../shared/utils/logText.js';
 
 export default function EventList({ events, selectedId, selectMode, selectedIds, onSelect, onToggleSelected, onOpenEdit }) {
   const refs = useRef({});
@@ -28,6 +29,7 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
         const selected = selectedId === event.id;
         const checked = selectedIds.includes(event.id);
         const loc = `${event.city || ''}${event.state ? `, ${event.state}` : ''}`.trim();
+        const cleanNote = sanitizeLogText(event.note || '');
         return (
           <div
             key={event.id}
@@ -47,7 +49,7 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
                 <span>{timeLabel(event.startMin, true)} · {durLabel(event.endMin - event.startMin)}</span>
               </div>
               <div className="event-loc">{loc}</div>
-              {event.note && <div className="event-note">{event.note}</div>}
+              {cleanNote && <div className="event-note">{cleanNote}</div>}
             </div>
 
             <button className="blue-edit" onClick={(e)=>{ e.stopPropagation(); onOpenEdit(event.id); }}>Edit</button>

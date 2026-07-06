@@ -13,8 +13,8 @@ const day = read('source/src/modules/logbook/DayLogScreen.jsx');
 const pkg = JSON.parse(read('package.json'));
 const version = JSON.parse(read('public/app-version.json'));
 
-ok(pkg.version === '95.61.0', 'package version is v95.61.0');
-ok(version.version === '95.61.0', 'public app-version is v95.61.0');
+ok(/^95\.(6[1-9]|[7-9]\d)\.0$/.test(pkg.version), 'package version is v95.61.0 or newer');
+ok(/^95\.(6[1-9]|[7-9]\d)\.0$/.test(version.version), 'public app-version is v95.61.0 or newer');
 ok(status.includes('dropHookSelected'), 'status sheet detects Drop & Hook reason');
 ok(status.includes('Drop & hook equipment'), 'status sheet shows drop/hook equipment card');
 ok(status.includes('Drop container'), 'status sheet asks dropped container');

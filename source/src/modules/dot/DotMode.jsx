@@ -7,6 +7,7 @@ import { color, label } from '../../shared/utils/status.js';
 import { validateLogForSigning } from '../logbook/signing.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { DOC_SECTIONS, evaluateDotWallet, normalizeWallet } from '../../core/wallet/dotWallet.js';
+import { sanitizeLogText } from '../../shared/utils/logText.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_DRIVER_EMAIL = 'arbenoruci@gmail.com';
@@ -372,7 +373,7 @@ function dayReportHtml(state, day, days) {
       <td>${htmlEscape(durLabel(Number(event.endMin || 0) - Number(event.startMin || 0)))}</td>
       <td>${htmlEscape(joinLocation(event))}</td>
       <td>${htmlEscape(unitName(state))}</td>
-      <td>${htmlEscape(event.note || event.description || label(event.status))}</td>
+      <td>${htmlEscape(sanitizeLogText(event.note || event.description || label(event.status)))}</td>
     </tr>`).join('') : '<tr><td colspan="7">No events recorded</td></tr>';
   const recapRows = recaps.map(({ day: d, total }) => `<td><b>${htmlEscape(shortDate(d))}</b><br/>${(total / 60).toFixed(2)}</td>`).join('');
   const signatureDataUrl = sig.signatureDataUrl || (sig.signatureRef === 'driverSignature' ? state.driverSignature?.dataUrl : '') || '';
@@ -486,7 +487,7 @@ function DailyPaper({ state, day, days }) {
               <td>{durLabel(Number(event.endMin || 0) - Number(event.startMin || 0))}</td>
               <td>{joinLocation(event)}</td>
               <td>{unitName(state)}</td>
-              <td>{event.note || event.description || label(event.status)}</td>
+              <td>{sanitizeLogText(event.note || event.description || label(event.status))}</td>
             </tr>
           )) : <tr><td colSpan="7">No events recorded</td></tr>}
         </tbody>
@@ -736,7 +737,7 @@ export default function DotMode({ state, onBack }) {
                     <div className="event-content">
                       <div className="event-time">{timeLabel(e.startMin, true)} <span>|</span> {durLabel(e.endMin-e.startMin)}</div>
                       <div className="event-loc">{joinLocation(e)}</div>
-                      <div className="event-note">{e.note || label(e.status)}</div>
+                      <div className="event-note">{sanitizeLogText(e.note || label(e.status))}</div>
                     </div>
                   </div>
                 ))}
