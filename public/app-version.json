@@ -1,13 +1,13 @@
 {
-  "version": "95.71.0",
-  "build": "v95.71-intermodal-drop-off-only",
+  "version": "95.72.0",
+  "build": "v95.72-post-save-log-view",
   "releasedAt": "2026-07-06T00:00:00.000Z",
   "notes": [
-    "Adds a separate Drop Off ON DUTY reason for intermodal port/yard drop-only events.",
-    "Drop Off requires only the equipment being dropped and does not require a new container, chassis, BOL, or going-to location.",
-    "Drop Off clears current intermodal equipment and closes the open route leg without touching driving events.",
-    "DOT document viewer and officer-safe package behavior are preserved."
+    "Returns the Log tab to the normal event-list view after saving a status or edit.",
+    "Prevents the selected-event graph-focus mode from hiding event rows after Save.",
+    "Removes the tall blank graph-only area by allowing the SVG graph to use its natural height.",
+    "Does not change driving events, duty times, miles, route/load data, DOT wallet, or backup/import data."
   ],
-  "label": "v95.71 Intermodal drop-off only workflow",
+  "label": "v95.72 Post-save log view cleanup",
   "updatedAt": "2026-07-06T00:00:00.000Z"
 }

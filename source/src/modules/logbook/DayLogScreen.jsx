@@ -2135,7 +2135,7 @@ export default function DayDetail({
   }
 
   return (
-    <section className={`screen active graph-first-screen ${selectedEvent ? "editing-graph" : ""} ${moveOpen ? "inline-moving" : ""}`}>
+    <section className={`screen active graph-first-screen ${moveOpen ? "inline-moving" : ""}`}>
       <Header title={title(state.activeDay)} onBack={onBack} onRight={onTools} />
       <Tabs active={activeTab} onTab={setActiveTab} />
 

@@ -1,3 +1,11 @@
+# v95.72 — Post-save Log View Cleanup
+
+- Cleared selected event after status/edit saves so Log tab returns to the normal event-list view.
+- Removed automatic selected-event graph-focus class from DayLogScreen.
+- Added CSS safety override to prevent event rows/log check/certification from being hidden after Save.
+- Restored graph natural height to remove tall blank graph-only area.
+- No driving, duty-time, mileage, route/load, DOT wallet, or backup/import logic changed.
+
 
 ## v95.71.0 - Intermodal Drop Off Only
 - Added ON DUTY `Drop Off` for port/yard drop-only intermodal moves.

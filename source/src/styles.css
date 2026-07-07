@@ -9017,3 +9017,23 @@ body,
 .status-page-body.driver-picker-body{
   padding-bottom:110px;
 }
+
+
+/* v95.72 post-save log return: no graph-only blank screen */
+.graph-first-screen .graph-first-panel .log-graph,
+.graph-first-screen.editing-graph .graph-first-panel .log-graph{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+}
+.graph-first-screen.editing-graph .events,
+.graph-first-screen.editing-graph .clean-events,
+.graph-first-screen.editing-graph .logcheck-compact,
+.graph-first-screen.editing-graph .logcheck-panel,
+.graph-first-screen.editing-graph .log-check-panel,
+.graph-first-screen.editing-graph .cert-line{
+  display:block!important;
+}
+.graph-first-screen.editing-graph .cert-line{
+  display:grid!important;
+}

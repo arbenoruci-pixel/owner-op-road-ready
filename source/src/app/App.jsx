@@ -971,7 +971,7 @@ export default function App() {
         }
       }
       routeLegsByDay = syncRouteLegTimes(routeLegsByDay, eventsByDay);
-      let next = { ...s, eventsByDay, routeLegsByDay, selectedEventId: toAdd[toAdd.length-1]?.id || null, sheet:null };
+      let next = { ...s, eventsByDay, routeLegsByDay, selectedEventId:null, sheet:null };
       const preTripAdded = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
       next = withAcceptedPreTripInspection(next, s.activeDay, preTripAdded, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
@@ -1037,7 +1037,7 @@ export default function App() {
         }, editedEvent.id, editedEvent.startMin);
         routeLegsByDay = syncRouteLegTimes(routeLegsByDay, eventsByDay);
       }
-      let next = { ...s, gpsTrip, routeLegsByDay, eventsByDay };
+      let next = { ...s, gpsTrip, routeLegsByDay, eventsByDay, selectedEventId:null, sheet:null };
       next = withAcceptedPreTripInspection(next, s.activeDay, editedEvent, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
@@ -1091,6 +1091,7 @@ export default function App() {
         sheet:null,
         selectMode:false,
         selectedIds:[],
+        selectedEventId:null,
       };
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
@@ -1637,7 +1638,7 @@ export default function App() {
         currentReason,
         currentLocation,
         routeLegsByDay,
-        selectedEventId: toAdd[toAdd.length - 1]?.id || s.selectedEventId,
+        selectedEventId:null,
         eventsByDay,
       };
       const workflowPreTrip = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
@@ -1721,7 +1722,7 @@ export default function App() {
         currentStatus:'D',
         currentReason:'Driving',
         currentLocation:{ city:s.currentLocation?.city || 'GPS', state:stateCode },
-        selectedEventId: ev.id,
+        selectedEventId:null,
         activeDay,
         eventsByDay:{ ...s.eventsByDay, [activeDay]: updated },
         gpsTrip:{
@@ -2300,7 +2301,7 @@ export default function App() {
         currentReason: reason,
         currentLocation: { city, state: st, lat, lng, gpsAccuracy, locationSource },
         currentTrailer: trailer,
-        selectedEventId: ev.id,
+        selectedEventId:null,
         sheet: null,
         eventsByDay,
         routeLegsByDay,
@@ -2352,7 +2353,7 @@ export default function App() {
         currentStatus:'ON',
         currentReason:'Stopped / On Duty',
         currentLocation:{ city, state:stateCode, lat:fix?.lat ?? base.currentLocation?.lat, lng:fix?.lng ?? base.currentLocation?.lng, locationSource: fix ? 'gps' : (base.currentLocation?.locationSource || 'manual') },
-        selectedEventId: ev.id,
+        selectedEventId:null,
         gpsTrip: base.gpsTrip ? { ...base.gpsTrip, status:'stopped', stoppedAt:Date.now() } : base.gpsTrip,
         eventsByDay:{ ...base.eventsByDay, [day]: updated },
         sheet:null,
@@ -2531,7 +2532,7 @@ export default function App() {
       />
       <DriveTrackerSheet state={state} open={false} onClose={()=>setState(s=>({ ...s, gpsPanelOpen:false }))} onStartDriving={startGpsDriving} onStopDriving={stopGpsDriving} onUpdateTrip={updateGpsTrip} onMotionDetected={startDrivingFromMotion} onAutoStopped={stopDrivingToOnDuty} />
       {state.sheet?.type === 'add' && <InsertEditEventSheet defaults={state.sheet.defaults} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onCreate={addEvent} onSave={addEvent} onUpdate={updateEvent} />}
-      {state.sheet?.type === 'edit' && selectedEvent && <EditEventSheet event={selectedEvent} events={events} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={(patch)=>updateEvent(selectedEvent.id, patch)} onDelete={()=>deleteEvent(selectedEvent.id)} onSwitch={(id)=>setState(s=>({ ...s, selectedEventId:id, sheet:{ type:'edit', id } }))} />}
+      {state.sheet?.type === 'edit' && selectedEvent && <EditEventSheet event={selectedEvent} events={events} onClose={()=>setState(s=>({ ...s, sheet:null, selectedEventId:null }))} onSave={(patch)=>updateEvent(selectedEvent.id, patch)} onDelete={()=>deleteEvent(selectedEvent.id)} onSwitch={(id)=>setState(s=>({ ...s, selectedEventId:id, sheet:{ type:'edit', id } }))} />}
       {state.sheet?.type === 'shift' && <ShiftSheet events={rawEvents} selectedIds={state.selectedIds} onApply={applyShift} onClose={()=>setState(s=>({ ...s, sheet:null }))} />}
       {state.sheet?.type === 'equipment' && <EquipmentSheet equipment={state.equipment || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveEquipment} />}
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
