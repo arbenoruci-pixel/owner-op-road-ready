@@ -36,7 +36,7 @@ ok(dot.includes('selectedDay'), 'Officer can open specific log day');
 ok(dot.includes('LogGraph events={selectedEvents}'), 'Officer logs still show graph');
 ok(dot.includes('selectedEvents.map'), 'Officer logs still show event rows');
 ok(dot.includes('attachmentDataUrl'), 'Wallet attachment data URLs are used');
-ok(dot.includes('target="_blank"') || dot.includes('DotDocumentViewer'), 'Document links open separately or in the iOS-safe document viewer');
+ok(dot.includes('target="_blank"') || dot.includes('DotDocumentViewer'), 'Document links open separately or in-app viewer opens saved files');
 ok(wallet.includes('driver_license'), 'Wallet still has CDL requirement');
 ok(wallet.includes('medical_certificate'), 'Wallet still has medical certificate requirement');
 ok(wallet.includes('truck_registration'), 'Wallet still has truck registration requirement');

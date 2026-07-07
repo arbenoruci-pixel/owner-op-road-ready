@@ -21,10 +21,19 @@ const sw = read('public/sw.js');
 const appVersion = JSON.parse(read('public/app-version.json'));
 const pkg = JSON.parse(read('package.json'));
 
-assert(/^95\.(69|[7-9]\d)\.0$/.test(pkg.version), 'package version is 95.69.0 or newer');
-assert(/CURRENT_APP_VERSION = '95\.(69|[7-9]\d)\.0'/.test(appUpdate), 'app update version bumped');
-assert(/OWNER_OP_SW_VERSION = '95\.(69|[7-9]\d)\.0'/.test(sw), 'service worker version bumped');
-assert(/^95\.(69|[7-9]\d)\.0$/.test(appVersion.version), 'app-version.json bumped');
+const versionAtLeast = (version, base = '95.69.0') => {
+  const a = String(version || '').split('.').map(n => Number(n || 0));
+  const b = base.split('.').map(n => Number(n || 0));
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    if ((a[i] || 0) > (b[i] || 0)) return true;
+    if ((a[i] || 0) < (b[i] || 0)) return false;
+  }
+  return true;
+};
+assert(versionAtLeast(pkg.version), 'package version is 95.69.0 or newer');
+assert(appUpdate.includes(`CURRENT_APP_VERSION = '${pkg.version}'`), 'app update version bumped');
+assert(sw.includes(`OWNER_OP_SW_VERSION = '${pkg.version}'`), 'service worker version bumped');
+assert(versionAtLeast(appVersion.version), 'app-version.json bumped');
 
 assert(dayLog.includes('function equipmentFormSummary'), 'Form has day equipment summary helper');
 assert(dayLog.includes('function chassisUsedForDay'), 'Form collects chassis used for day');

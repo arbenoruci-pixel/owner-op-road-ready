@@ -1,12 +1,13 @@
 {
-  "version": "95.70.0",
-  "build": "v95.70-dot-document-viewer",
+  "version": "95.71.0",
+  "build": "v95.71-intermodal-drop-off-only",
   "releasedAt": "2026-07-06T00:00:00.000Z",
   "notes": [
-    "Opens saved DOT wallet documents inside the app instead of relying on data-url new tabs that fail on iOS/PWA.",
-    "Adds Share / Save and Open in browser fallback actions for saved document attachments.",
-    "Does not change duty-status events, driving events, miles, route legs, or wallet document data."
+    "Adds a separate Drop Off ON DUTY reason for intermodal port/yard drop-only events.",
+    "Drop Off requires only the equipment being dropped and does not require a new container, chassis, BOL, or going-to location.",
+    "Drop Off clears current intermodal equipment and closes the open route leg without touching driving events.",
+    "DOT document viewer and officer-safe package behavior are preserved."
   ],
-  "label": "v95.70 DOT document viewer",
+  "label": "v95.71 Intermodal drop-off only workflow",
   "updatedAt": "2026-07-06T00:00:00.000Z"
 }

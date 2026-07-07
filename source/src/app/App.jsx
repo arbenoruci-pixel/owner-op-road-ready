@@ -1399,8 +1399,21 @@ export default function App() {
     return isRealEquipmentLabel(text) ? text : '';
   }
 
+  function isDropHookReason(reason = '', dropHook = {}) {
+    return /drop\s*&\s*hook/i.test(String(reason || '')) || String(dropHook?.mode || '') === 'drop_hook';
+  }
+
+  function isDropOffReason(reason = '', dropHook = {}) {
+    return /\bdrop\s*off\b/i.test(String(reason || '')) || String(dropHook?.mode || '') === 'drop_off';
+  }
+
+  function isIntermodalDropReason(reason = '', dropHook = {}) {
+    return isDropHookReason(reason, dropHook) || isDropOffReason(reason, dropHook);
+  }
+
   function buildDropHookNote(payload = {}, currentEquipment = {}) {
     const dropHook = payload.dropHook || {};
+    const dropOnly = isDropOffReason(payload.reason, dropHook);
     const droppedContainer = cleanEquipmentLabel(dropHook.droppedContainer || currentEquipment.container || '');
     const droppedChassis = cleanEquipmentLabel(dropHook.droppedChassis || currentEquipment.chassis || '');
     const hookedContainer = cleanEquipmentLabel(dropHook.hookedContainer || '');
@@ -1409,35 +1422,54 @@ export default function App() {
     const dropped = [droppedContainer, droppedChassis].filter(Boolean).join(' / ');
     const hooked = [hookedContainer, hookedChassis].filter(Boolean).join(' / ');
     if (dropped) parts.push(`Dropped ${dropped}`);
-    if (hooked) parts.push(`Hooked ${hooked}`);
-    if (!dropped && !hooked) parts.push('Equipment changed');
-    if (dropHook.hookedLoadNo) parts.push(`BOL ${dropHook.hookedLoadNo}`);
-    if (dropHook.hookedDestination) parts.push(`to ${dropHook.hookedDestination}`);
-    return parts.length ? `Drop & Hook · ${parts.join(' · ')}` : 'Drop & Hook';
+    if (!dropOnly && hooked) parts.push(`Hooked ${hooked}`);
+    if (!dropped && !hooked) parts.push(dropOnly ? 'Equipment dropped' : 'Equipment changed');
+    if (!dropOnly && dropHook.hookedLoadNo) parts.push(`BOL ${dropHook.hookedLoadNo}`);
+    if (!dropOnly && dropHook.hookedDestination) parts.push(`to ${dropHook.hookedDestination}`);
+    const prefix = dropOnly ? 'Drop Off' : 'Drop & Hook';
+    return parts.length ? `${prefix} · ${parts.join(' · ')}` : prefix;
   }
 
   function buildEquipmentFromDropHook(equipment = {}, payload = {}) {
     const dropHook = payload.dropHook || {};
     if (!dropHookHasData(dropHook)) return equipment || {};
+    const dropOnly = isDropOffReason(payload.reason, dropHook) && !dropHook.hookedContainer && !dropHook.hookedChassis;
     return {
       ...(equipment || {}),
       type:'intermodal',
-      chassis: dropHook.hookedChassis || '',
-      container: dropHook.hookedContainer || '',
-      seal: dropHook.hookedSeal || '',
+      chassis: dropOnly ? '' : (dropHook.hookedChassis || ''),
+      container: dropOnly ? '' : (dropHook.hookedContainer || ''),
+      seal: dropOnly ? '' : (dropHook.hookedSeal || ''),
       note: sanitizeLogText([
         cleanEquipmentLabel(dropHook.droppedContainer) || cleanEquipmentLabel(dropHook.droppedChassis) ? `Dropped ${[cleanEquipmentLabel(dropHook.droppedContainer), cleanEquipmentLabel(dropHook.droppedChassis)].filter(Boolean).join(' / ')}` : '',
-        dropHook.hookedLoadNo ? `BOL ${dropHook.hookedLoadNo}` : '',
-        dropHook.hookedDestination ? `Going to ${dropHook.hookedDestination}` : '',
+        !dropOnly && dropHook.hookedLoadNo ? `BOL ${dropHook.hookedLoadNo}` : '',
+        !dropOnly && dropHook.hookedDestination ? `Going to ${dropHook.hookedDestination}` : '',
       ].filter(Boolean).join(' · ')),
       updatedAt: Date.now(),
-      source:'drop_hook_status',
+      source: dropOnly ? 'drop_off_status' : 'drop_hook_status',
     };
   }
 
   function buildDropHookLoadPatch(payload = {}, eventId = '') {
     const dropHook = payload.dropHook || {};
     if (!dropHookHasData(dropHook)) return null;
+    const dropOnly = isDropOffReason(payload.reason, dropHook) && !dropHook.hookedContainer && !dropHook.hookedChassis;
+    if (dropOnly) {
+      return {
+        sourceEventId:eventId,
+        sourceEventReason:payload.reason || 'Drop Off',
+        shippingDocs:'',
+        loadNo:'',
+        pickupCity:'',
+        pickupState:'',
+        deliveryCity:payload.city || '',
+        deliveryState:payload.state || '',
+        updatedAt:Date.now(),
+        equipmentContainer:'',
+        equipmentChassis:'',
+        equipmentSeal:'',
+      };
+    }
     const nextDestination = parseCityStateInput(dropHook.hookedDestination || payload.destination || '', payload.destinationState || '');
     const nextLoadNo = String(dropHook.hookedLoadNo || payload.shippingDocs || payload.loadNo || '').trim();
     return {
@@ -2206,20 +2238,23 @@ export default function App() {
       const existing = continuousBaseForDay(s, day);
       let note = reason;
       let trailer = s.currentTrailer;
-      if (/drop trailer/i.test(reason) && !/drop\s*&\s*hook/i.test(reason)) {
+      const isDropHook = isDropHookReason(reason, dropHook);
+      const isDropOff = isDropOffReason(reason, dropHook);
+      const isIntermodalDrop = isIntermodalDropReason(reason, dropHook);
+      if (/drop trailer/i.test(reason) && !isIntermodalDrop) {
         note = `Drop Trailer · ${droppedTrailer || trailer}`;
         trailer = 'No trailer';
       }
-      if (/drop\s*&\s*hook/i.test(reason)) {
+      if (isIntermodalDrop) {
         note = buildDropHookNote({ reason, city, state:st, dropHook }, s.equipment || {});
         const hookedLabel = [dropHook?.hookedContainer, dropHook?.hookedChassis].filter(Boolean).join(' / ');
-        trailer = hookedLabel || hookedTrailer || 'Equipment hooked';
+        trailer = isDropOff ? 'No equipment' : (hookedLabel || hookedTrailer || 'Equipment hooked');
       }
       const eventId = `live_${Date.now()}`;
-      const effectiveShippingDocs = /drop\s*&\s*hook/i.test(reason)
+      const effectiveShippingDocs = isDropHook
         ? String(dropHook?.hookedLoadNo || shippingDocs || loadNo || '').trim()
         : String(shippingDocs || loadNo || '').trim();
-      const loadDescription = /drop\s*&\s*hook/i.test(reason)
+      const loadDescription = isIntermodalDrop
         ? buildDropHookNote({ reason, city, state:st, dropHook }, s.equipment || {})
         : loadDescriptionForStatusPayload({ status, reason, city, state:st, shippingDocs, loadNo, destination, destinationState });
       const ev = {
@@ -2248,14 +2283,14 @@ export default function App() {
         source: 'live_status',
       };
       const loadPayload = { status, reason, city, state:st, shippingDocs:effectiveShippingDocs, loadNo:effectiveShippingDocs, destination, destinationState, dropHook };
-      const dropHookLoadPatch = /drop\s*&\s*hook/i.test(reason) ? buildDropHookLoadPatch(loadPayload, eventId) : null;
-      const dropHookEquipment = /drop\s*&\s*hook/i.test(reason) ? buildEquipmentFromDropHook(s.equipment || {}, loadPayload) : null;
+      const dropHookLoadPatch = isIntermodalDrop ? buildDropHookLoadPatch(loadPayload, eventId) : null;
+      const dropHookEquipment = isIntermodalDrop ? buildEquipmentFromDropHook(s.equipment || {}, loadPayload) : null;
       const loadInfoPatch = buildLoadPatchForStatusPayload(loadPayload, eventId);
       traceDutyWrite('liveStatus:before', day, existing);
       const continuous = normalizeLogEvents(closePreviousAndStart(existing, ev));
       traceDutyWrite('liveStatus:after', day, continuous);
       const eventsByDay = { ...s.eventsByDay, [day]: continuous };
-      const routeBase = /drop\s*&\s*hook/i.test(reason)
+      const routeBase = isIntermodalDrop
         ? updateRouteLegsForDropHook(s.routeLegsByDay || {}, day, loadPayload, eventId, changeAt, s)
         : updateRouteLegsForStatus(s.routeLegsByDay || {}, day, loadPayload, eventId, changeAt);
       const routeLegsByDay = syncRouteLegTimes(routeBase, eventsByDay);

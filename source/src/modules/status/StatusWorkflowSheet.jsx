@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { color, label, soft } from '../../shared/utils/status.js';
 import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
 
-const onReasons = ['Pre-trip inspection', 'Fuel', 'Pickup / Loading', 'Delivery / Unloading', 'Waiting', 'Drop Trailer', 'Drop & Hook'];
+const onReasons = ['Pre-trip inspection', 'Fuel', 'Pickup / Loading', 'Delivery / Unloading', 'Waiting', 'Drop Trailer', 'Drop Off', 'Drop & Hook'];
 const offReasons = ['Off Duty', 'Break', 'Parking', 'Personal Conveyance'];
 const sbReasons = ['Sleeper Berth', 'Rest'];
 const dReasons = ['Driving', 'Yard Move'];
@@ -46,6 +46,14 @@ function reasonHas(reasons = [], pattern) {
 
 function reasonNeedsLoadLink(status, reasons) {
   return status === 'ON' && reasonHas(reasons, /pickup|loading|delivery|unloading/i);
+}
+
+function reasonNeedsDropOff(status, reasons) {
+  return status === 'ON' && reasonHas(reasons, /\bdrop\s*off\b/i);
+}
+
+function reasonNeedsDropHook(status, reasons) {
+  return status === 'ON' && reasonHas(reasons, /drop\s*&\s*hook/i);
 }
 
 function uniqueSuggestions(values = []) {
@@ -187,6 +195,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
       destination: locationString(parsedDest.city, parsedDest.state) || destination.trim(),
       destinationState: parsedDest.state || '',
       dropHook: {
+        mode: reasonNeedsDropOff(status, selectedReasons) ? 'drop_off' : (reasonNeedsDropHook(status, selectedReasons) ? 'drop_hook' : ''),
         droppedContainer: dropContainer.trim().toUpperCase(),
         droppedChassis: dropChassis.trim().toUpperCase(),
         hookedContainer: hookContainer.trim().toUpperCase(),
@@ -204,6 +213,10 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   }
 
   function save() {
+    if (dropOffSelected && !dropContainer.trim() && !dropChassis.trim()) {
+      setGpsStatus('Add the container or chassis you dropped off.');
+      return;
+    }
     if (dropHookSelected && (!hookContainer.trim() || !hookChassis.trim() || !hookDestination.trim())) {
       setGpsStatus('Add new container, new chassis, and going-to location for Drop & Hook.');
       return;
@@ -256,7 +269,9 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
 
   const accent = color(status);
   const accentSoft = soft(status);
-  const dropHookSelected = status === 'ON' && reasonHas(selectedReasons, /drop\s*&\s*hook/i);
+  const dropHookSelected = reasonNeedsDropHook(status, selectedReasons);
+  const dropOffSelected = reasonNeedsDropOff(status, selectedReasons);
+  const equipmentDropSelected = dropHookSelected || dropOffSelected;
   const currentEquipmentText = [state.equipment?.container, state.equipment?.chassis].filter(Boolean).join(' / ') || state.currentTrailer || 'No equipment set';
 
   return (
@@ -316,11 +331,11 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
 
 
 
-        {dropHookSelected && (
+        {equipmentDropSelected && (
           <section className="picker-section drop-hook-section">
             <div className="picker-label-row">
-              <label>Drop & hook equipment</label>
-              <span>required for next load</span>
+              <label>{dropOffSelected ? 'Drop off equipment' : 'Drop & hook equipment'}</label>
+              <span>{dropOffSelected ? 'drop only' : 'required for next load'}</span>
             </div>
             <div className="drop-hook-current">
               <small>Current equipment</small>
@@ -335,26 +350,35 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
                 <span>Drop chassis</span>
                 <input value={dropChassis} onChange={(e) => setDropChassis(e.target.value.toUpperCase())} placeholder="Old chassis #" autoComplete="off" />
               </label>
-              <label>
-                <span>Hook container</span>
-                <input value={hookContainer} onChange={(e) => setHookContainer(e.target.value.toUpperCase())} placeholder="New container #" autoComplete="off" />
-              </label>
-              <label>
-                <span>Hook chassis</span>
-                <input value={hookChassis} onChange={(e) => setHookChassis(e.target.value.toUpperCase())} placeholder="New chassis #" autoComplete="off" />
-              </label>
-              <label>
-                <span>New BOL / load #</span>
-                <input value={hookLoadNo} onChange={(e) => setHookLoadNo(e.target.value.toUpperCase())} placeholder="BOL or pickup #" autoComplete="off" />
-              </label>
-              <label>
-                <span>Going to</span>
-                <input value={hookDestination} onChange={(e) => setHookDestination(e.target.value)} placeholder="City, ST" autoComplete="off" />
-              </label>
-              <label>
-                <span>Seal optional</span>
-                <input value={hookSeal} onChange={(e) => setHookSeal(e.target.value.toUpperCase())} placeholder="Seal #" autoComplete="off" />
-              </label>
+              {dropHookSelected && (
+                <>
+                  <label>
+                    <span>Hook container</span>
+                    <input value={hookContainer} onChange={(e) => setHookContainer(e.target.value.toUpperCase())} placeholder="New container #" autoComplete="off" />
+                  </label>
+                  <label>
+                    <span>Hook chassis</span>
+                    <input value={hookChassis} onChange={(e) => setHookChassis(e.target.value.toUpperCase())} placeholder="New chassis #" autoComplete="off" />
+                  </label>
+                  <label>
+                    <span>New BOL / load #</span>
+                    <input value={hookLoadNo} onChange={(e) => setHookLoadNo(e.target.value.toUpperCase())} placeholder="BOL or pickup #" autoComplete="off" />
+                  </label>
+                  <label>
+                    <span>Going to</span>
+                    <input value={hookDestination} onChange={(e) => setHookDestination(e.target.value)} placeholder="City, ST" autoComplete="off" />
+                  </label>
+                  <label>
+                    <span>Seal optional</span>
+                    <input value={hookSeal} onChange={(e) => setHookSeal(e.target.value.toUpperCase())} placeholder="Seal #" autoComplete="off" />
+                  </label>
+                </>
+              )}
+              {dropOffSelected && (
+                <div className="drop-hook-note drop-off-note">
+                  Drop Off saves an ON DUTY drop-only event and clears current intermodal equipment. No new container or chassis required.
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -428,7 +452,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
             ))}
           </div>
           <div className={`gps-hint ${gpsFix ? 'ok' : ''}`}>
-            {gpsStatus || 'Tap GPS or type city/state.'}
+            {gpsStatus || (dropOffSelected ? 'Set the port/yard where you dropped the equipment.' : 'Tap GPS or type city/state.')}
           </div>
         </section>
 

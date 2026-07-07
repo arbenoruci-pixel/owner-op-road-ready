@@ -1,4 +1,4 @@
-export const CURRENT_APP_VERSION = '95.70.0';
+export const CURRENT_APP_VERSION = '95.71.0';
 export const APP_VERSION_URL = '/app-version.json';
 export const UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
 

@@ -84,6 +84,10 @@ function inspectionLabel(inspection = {}) {
   return `Completed${when ? ` · ${when}` : ''}${where ? ` · ${where}` : ''}`;
 }
 
+function officerInspectionLabel(inspection = {}) {
+  return inspection.complete ? inspectionLabel(inspection) : '—';
+}
+
 function signatureForDay(state, day) {
   return state.signatureByDay?.[day] || {};
 }
@@ -188,15 +192,61 @@ function officerWalletRows(state) {
     });
 }
 
+function hasOfficerPresentableDoc(row = {}) {
+  const doc = row.doc || {};
+  const keys = ['number','policyNo','mcNumber','usdotNumber','unit','trailer','plate','vin','loadNo','bolNo','expiresOn','notes','state'];
+  return Boolean(
+    doc.attachmentDataUrl ||
+    doc.attachmentName ||
+    row.expiresOn ||
+    keys.some(key => String(doc[key] || '').trim())
+  );
+}
+
+function officerPresentationWalletRows(state) {
+  return officerWalletRows(state).filter(row => hasOfficerPresentableDoc(row));
+}
+
+function officerDocumentLabel(row = {}) {
+  const doc = row.doc || {};
+  if (doc.attachmentDataUrl) return 'Open file';
+  if (hasOfficerPresentableDoc(row)) return 'Details';
+  return '—';
+}
+
+function officerSignatureLabel(state, day) {
+  const sig = signatureForDay(state, day);
+  if (!sig.signed) return 'Certification';
+  try { return `Signed · ${new Date(sig.signedAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}`; }
+  catch { return 'Signed'; }
+}
+
+function driverInspectionReadiness(state, days = []) {
+  const logStats = logPackageStats(state, days);
+  const wallet = evaluateDotWallet(normalizeWallet(state.dotWallet || {}));
+  const requiredRoadside = row => ['roadside','roadside_if_used','trip'].includes(row.requirement?.required);
+  const missingDocs = wallet.rows.filter(row => row.active && requiredRoadside(row) && row.status === 'missing');
+  const expiredDocs = wallet.rows.filter(row => row.active && requiredRoadside(row) && row.status === 'expired');
+  const reviewDocs = wallet.rows.filter(row => row.active && requiredRoadside(row) && (row.status === 'expires_soon' || row.status === 'watch'));
+  const items = [];
+  if (logStats.missing) items.push(`${logStats.missing} log day${logStats.missing === 1 ? '' : 's'} need review`);
+  if (logStats.unsigned) items.push(`${logStats.unsigned} previous log${logStats.unsigned === 1 ? '' : 's'} need signing`);
+  if (logStats.review) items.push(`${logStats.review} log day${logStats.review === 1 ? '' : 's'} have driver review items`);
+  if (missingDocs.length) items.push(`${missingDocs.length} roadside document${missingDocs.length === 1 ? '' : 's'} missing`);
+  if (expiredDocs.length) items.push(`${expiredDocs.length} roadside document${expiredDocs.length === 1 ? '' : 's'} expired`);
+  if (reviewDocs.length) items.push(`${reviewDocs.length} document${reviewDocs.length === 1 ? '' : 's'} expiring soon`);
+  return { count: items.length, items, logStats, missingDocs, expiredDocs, reviewDocs };
+}
+
 function walletSectionTitle(sectionId) {
   return DOC_SECTIONS.find(section => section.id === sectionId)?.title || sectionId;
 }
 
 function officerWalletSummary(state) {
   const summary = evaluateDotWallet(normalizeWallet(state.dotWallet || {}));
-  const rows = summary.rows.filter(row => row.active);
+  const rows = officerPresentationWalletRows(state);
   const withFiles = rows.filter(row => row.doc?.attachmentDataUrl).length;
-  return { ...summary, fileCount: withFiles };
+  return { ...summary, rows, count: rows.length, fileCount: withFiles };
 }
 
 function logPackageStats(state, days = []) {
@@ -365,7 +415,7 @@ function DotDocumentViewer({ row, onClose, onStatus }) {
 
 function WalletDocLink({ row, onOpen }) {
   const doc = row.doc || {};
-  if (!documentDataUrl(doc)) return <span className="dot-doc-no-file">No file saved</span>;
+  if (!documentDataUrl(doc)) return <span className="dot-doc-no-file">Details saved</span>;
   return (
     <button className="dot-doc-open" type="button" onClick={() => onOpen?.(row)}>
       Open document
@@ -373,14 +423,15 @@ function WalletDocLink({ row, onOpen }) {
   );
 }
 
-function OfficerDocumentList({ state, onOpenDocument }) {
-  const rows = officerWalletRows(state);
+
+function OfficerDocumentList({ state, officerSafe = true, onOpen }) {
+  const rows = officerSafe ? officerPresentationWalletRows(state) : officerWalletRows(state);
   const sections = DOC_SECTIONS
     .map(section => ({ section, rows: rows.filter(row => row.requirement.section === section.id) }))
     .filter(group => group.rows.length);
 
   if (!rows.length) {
-    return <div className="dot-doc-empty">No wallet documents saved yet.</div>;
+    return <div className="dot-doc-empty">No documents selected for display.</div>;
   }
 
   return (
@@ -390,15 +441,15 @@ function OfficerDocumentList({ state, onOpenDocument }) {
           <h3>{group.section.title}</h3>
           <div className="dot-doc-list">
             {group.rows.map(row => (
-              <article className={`dot-doc-card ${documentStatusClass(row)}`} key={row.requirement.id}>
+              <article className={`dot-doc-card ${officerSafe ? 'present' : documentStatusClass(row)}`} key={row.requirement.id}>
                 <div className="dot-doc-main">
                   <b>{row.requirement.title}</b>
                   <span>{documentMetaLine(row)}</span>
                   {row.doc?.attachmentName ? <em>{row.doc.attachmentName}</em> : null}
                 </div>
                 <div className="dot-doc-side">
-                  <strong>{documentStatusLabel(row)}</strong>
-                  <WalletDocLink row={row} onOpen={onOpenDocument} />
+                  <strong>{officerSafe ? officerDocumentLabel(row) : documentStatusLabel(row)}</strong>
+                  <WalletDocLink row={row} onOpen={onOpen} />
                 </div>
               </article>
             ))}
@@ -410,17 +461,16 @@ function OfficerDocumentList({ state, onOpenDocument }) {
 }
 
 function walletReportSectionHtml(state) {
-  const rows = officerWalletRows(state);
-  if (!rows.length) return '<section class="wallet-report"><h2>Roadside Documents</h2><p>No wallet documents saved.</p></section>';
+  const rows = officerPresentationWalletRows(state);
+  if (!rows.length) return '<section class="wallet-report"><h2>Roadside Documents</h2><p>No documents selected for display.</p></section>';
   const body = rows.map(row => {
     const doc = row.doc || {};
     const fileLink = doc.attachmentDataUrl
       ? `<a href="${htmlEscape(doc.attachmentDataUrl)}">Open saved file</a>`
-      : 'No file saved';
+      : 'Details saved';
     return `<tr>
       <td>${htmlEscape(walletSectionTitle(row.requirement.section))}</td>
       <td>${htmlEscape(row.requirement.title)}</td>
-      <td>${htmlEscape(documentStatusLabel(row))}</td>
       <td>${htmlEscape(documentMetaLine(row))}</td>
       <td>${fileLink}</td>
     </tr>`;
@@ -428,7 +478,7 @@ function walletReportSectionHtml(state) {
   return `<section class="wallet-report">
     <h2>Roadside Documents</h2>
     <table class="wallet-report-table">
-      <thead><tr><th>Section</th><th>Document</th><th>Status</th><th>Details</th><th>File</th></tr></thead>
+      <thead><tr><th>Section</th><th>Document</th><th>Details</th><th>File</th></tr></thead>
       <tbody>${body}</tbody>
     </table>
   </section>`;
@@ -514,7 +564,6 @@ function dayReportHtml(state, day, days) {
   const totals = dutyTotals(events);
   const inspection = state.inspectionByDay?.[day] || {};
   const sig = signatureForDay(state, day);
-  const issues = validateLogForSigning(state, day).filter(issue => issue.code !== 'active_day');
   const recaps = recapDays(days, state);
   const eventRows = events.length ? events.map((event, index) => `
     <tr>
@@ -525,7 +574,7 @@ function dayReportHtml(state, day, days) {
       <td>${htmlEscape(joinLocation(event))}</td>
       <td>${htmlEscape(unitName(state))}</td>
       <td>${htmlEscape(sanitizeLogText(event.note || event.description || label(event.status)))}</td>
-    </tr>`).join('') : '<tr><td colspan="7">No events recorded</td></tr>';
+    </tr>`).join('') : '<tr><td colspan="7">No rows to display</td></tr>';
   const recapRows = recaps.map(({ day: d, total }) => `<td><b>${htmlEscape(shortDate(d))}</b><br/>${(total / 60).toFixed(2)}</td>`).join('');
   const signatureDataUrl = sig.signatureDataUrl || (sig.signatureRef === 'driverSignature' ? state.driverSignature?.dataUrl : '') || '';
   const signatureHtml = signatureDataUrl ? `<img src="${htmlEscape(signatureDataUrl)}" alt="Driver signature" />` : '';
@@ -542,7 +591,7 @@ function dayReportHtml(state, day, days) {
         <tr><th>Driver License</th><td>${htmlEscape(state.driver?.license || 'Not set')}</td><th>Trailer/Equipment</th><td>${htmlEscape(trailerName(state))}</td></tr>
         <tr><th>Carrier and DOT#</th><td>${htmlEscape(carrierName(state))} (${htmlEscape(dotNumber(state))})</td><th>Shipping Docs</th><td>${htmlEscape(shippingDocs(state))}</td></tr>
         <tr><th>Main Office</th><td colspan="3">${htmlEscape(mainOffice(state))}</td></tr>
-        <tr><th>24-Period Starting</th><td>Midnight</td><th>Inspection</th><td>${htmlEscape(inspectionLabel(inspection))}</td></tr>
+        <tr><th>24-Period Starting</th><td>Midnight</td><th>Inspection</th><td>${htmlEscape(officerInspectionLabel(inspection))}</td></tr>
         <tr><th>Data Diagnostic Indicators</th><td>No</td><th>Malfunction Indicators</th><td>No</td></tr>
       </tbody>
     </table>
@@ -558,8 +607,7 @@ function dayReportHtml(state, day, days) {
       </tbody>
     </table>
     <div class="cert-block">
-      <b>Certification:</b> ${htmlEscape(signatureLabel(state, day))}
-      ${issues.length ? `<div class="review-list"><b>Review items:</b> ${htmlEscape(issues.map(issue => `${issue.where}: ${issue.title}`).join('; '))}</div>` : ''}
+      <b>Certification:</b> ${htmlEscape(officerSignatureLabel(state, day))}
       <p>I hereby certify that my data entries and my record of duty status for this day are true and correct.</p>
       <div class="signature-line">${signatureHtml}<span>Driver Signature</span></div>
     </div>
@@ -608,7 +656,6 @@ function DailyPaper({ state, day, days }) {
   const totals = dutyTotals(events);
   const inspection = state.inspectionByDay?.[day] || {};
   const sig = signatureForDay(state, day);
-  const issues = validateLogForSigning(state, day).filter(issue => issue.code !== 'active_day');
   const recaps = recapDays(days, state);
   return (
     <article className="dot-paper-log">
@@ -622,7 +669,7 @@ function DailyPaper({ state, day, days }) {
         <b>Driver</b><span>{driverName(state)}<small>{driverEmail(state)}</small></span><b>Truck/Unit</b><span>{unitName(state)}</span>
         <b>Carrier and DOT#</b><span>{carrierName(state)} ({dotNumber(state)})</span><b>Trailer/Equipment</b><span>{trailerName(state)}</span>
         <b>Main Office</b><span className="wide">{mainOffice(state)}</span>
-        <b>Shipping Docs</b><span>{shippingDocs(state)}</span><b>Inspection</b><span>{inspectionLabel(inspection)}</span>
+        <b>Shipping Docs</b><span>{shippingDocs(state)}</span><b>Inspection</b><span>{officerInspectionLabel(inspection)}</span>
       </div>
 
       <div className="dot-paper-graph"><LogGraph events={events} /></div>
@@ -640,7 +687,7 @@ function DailyPaper({ state, day, days }) {
               <td>{unitName(state)}</td>
               <td>{sanitizeLogText(event.note || event.description || label(event.status))}</td>
             </tr>
-          )) : <tr><td colSpan="7">No events recorded</td></tr>}
+          )) : <tr><td colSpan="7">No rows to display</td></tr>}
         </tbody>
       </table>
 
@@ -650,8 +697,7 @@ function DailyPaper({ state, day, days }) {
 
       <div className="dot-paper-cert">
         <div><b>Totals:</b> OFF {durLabel(totals.OFF)} | SB {durLabel(totals.SB)} | D {durLabel(totals.D)} | ON {durLabel(totals.ON)}</div>
-        <div><b>Certification:</b> {signatureLabel(state, day)}</div>
-        {issues.length ? <div className="dot-paper-review"><b>Review:</b> {issues.map(issue => `${issue.where}: ${issue.title}`).join('; ')}</div> : null}
+        <div><b>Certification:</b> {officerSignatureLabel(state, day)}</div>
         <p>I hereby certify that my data entries and my record of duty status for this day are true and correct.</p>
         <div className="dot-sign-line">{(sig.signatureDataUrl || (sig.signatureRef === 'driverSignature' ? state.driverSignature?.dataUrl : '')) ? <img src={sig.signatureDataUrl || state.driverSignature?.dataUrl} alt="Driver signature" /> : null}<span>Driver Signature</span></div>
       </div>
@@ -671,10 +717,12 @@ export default function DotMode({ state, onBack }) {
   const days = useMemo(() => dayRange(localDayKey()), []);
   const selectedEvents = reportEventsForDay(state, selectedDay);
   const selectedInspection = state.inspectionByDay?.[selectedDay] || {};
-  const selectedIssues = validateLogForSigning(state, selectedDay).filter(issue => issue.code !== 'active_day');
   const selectedTotals = dutyTotals(selectedEvents);
   const walletSummary = officerWalletSummary(state);
   const logStats = logPackageStats(state, days);
+  const driverReadiness = driverInspectionReadiness(state, days);
+  const availableLogDays = logStats.rows.filter(row => row.eventCount).length;
+  const signedLogDays = logStats.rows.filter(row => row.signed).length;
   const htmlPackage = useMemo(() => reportHtml(state, days, routingCode.trim()), [state, days, routingCode]);
 
   function guardedBack() {
@@ -763,14 +811,26 @@ export default function DotMode({ state, onBack }) {
         <main className="dot-mode-home">
           <div className="dot-mode-intro">
             <div className="dot-shield">◎</div>
-            <h1>Inspect logs for previous 7 days + today</h1>
-            <p>Open an inspection-safe view on this device or send a clean log package if the officer asks for a copy.</p>
+            <h1>Roadside package</h1>
+            <p>Officer view shows the log package and saved documents only. Driver review items stay on this screen.</p>
             <button className="dot-begin-btn" onClick={beginInspection}>Begin Inspection</button>
             <label className="dot-access-code">
               <span>Optional access code for locked officer view</span>
               <input value={accessCode} onChange={e => setAccessCode(e.target.value)} placeholder="Set code before handing phone" inputMode="numeric" />
             </label>
           </div>
+
+          <section className={`dot-driver-review-card ${driverReadiness.count ? 'needs-review' : 'ready'}`}>
+            <div>
+              <b>Driver review</b>
+              <span>{driverReadiness.count ? 'Fix these before handing the phone over.' : 'No driver review items found.'}</span>
+            </div>
+            {driverReadiness.count ? (
+              <ul>
+                {driverReadiness.items.map(item => <li key={item}>{item}</li>)}
+              </ul>
+            ) : <p>Package is ready to show.</p>}
+          </section>
 
           <div className="dot-mode-card">
             <h2>Send log package</h2>
@@ -798,7 +858,7 @@ export default function DotMode({ state, onBack }) {
           <div className="dot-officer-head">
             <div>
               <b>Roadside Package</b>
-              <span>Logs + DOT wallet documents</span>
+              <span>Logs + saved documents</span>
             </div>
             <button onClick={() => setStage('report')}>Report</button>
           </div>
@@ -822,18 +882,18 @@ export default function DotMode({ state, onBack }) {
                 <b>Logs / RODS</b>
                 <span>Today + previous 7 days</span>
               </div>
-              <div className="dot-roadside-cards">
+              <div className="dot-roadside-cards officer-safe">
                 <button type="button" onClick={() => setOfficerPane('logs')}>
-                  <b>{days.length}</b>
-                  <span>log days</span>
+                  <b>{availableLogDays}</b>
+                  <span>days displayed</span>
                 </button>
                 <button type="button" onClick={() => setOfficerPane('logs')}>
-                  <b>{logStats.unsigned}</b>
-                  <span>unsigned previous</span>
+                  <b>{signedLogDays}</b>
+                  <span>signed logs</span>
                 </button>
-                <button type="button" onClick={() => setOfficerPane('logs')}>
-                  <b>{logStats.review}</b>
-                  <span>review days</span>
+                <button type="button" onClick={() => setOfficerPane('docs')}>
+                  <b>{walletSummary.count}</b>
+                  <span>documents</span>
                 </button>
               </div>
 
@@ -852,9 +912,9 @@ export default function DotMode({ state, onBack }) {
             <section className="dot-roadside-section">
               <div className="dot-roadside-title">
                 <b>Roadside Documents</b>
-                <span>{walletSummary.counts.ok}/{walletSummary.counts.total} ready · {walletSummary.fileCount} file(s) saved</span>
+                <span>{walletSummary.count} document(s) · {walletSummary.fileCount} file(s)</span>
               </div>
-              <OfficerDocumentList state={state} onOpenDocument={setDocViewer} />
+              <OfficerDocumentList state={state} onOpen={setDocViewer} />
             </section>
           )}
 
@@ -865,7 +925,7 @@ export default function DotMode({ state, onBack }) {
                   <b>{dayTitle(selectedDay, true)}</b>
                   <span>{selectedDay}</span>
                 </div>
-                <em>{signatureLabel(state, selectedDay)}</em>
+                <em>{officerSignatureLabel(state, selectedDay)}</em>
               </div>
 
               <div className="graph-panel dot-graph-panel"><LogGraph events={selectedEvents} /></div>
@@ -878,8 +938,8 @@ export default function DotMode({ state, onBack }) {
               </div>
 
               <div className="dot-day-status-card pro">
-                <span>Inspection: {inspectionLabel(selectedInspection)}</span>
-                <span>Review: {selectedIssues.length ? `${selectedIssues.length} item(s)` : 'No blocking review items shown'}</span>
+                <span>Inspection: {officerInspectionLabel(selectedInspection)}</span>
+                <span>Certification: {officerSignatureLabel(state, selectedDay)}</span>
               </div>
 
               <div className="events dot-events pro">
@@ -893,7 +953,7 @@ export default function DotMode({ state, onBack }) {
                     </div>
                   </div>
                 ))}
-                {!selectedEvents.length && <div className="dot-empty-day">No events recorded for this day.</div>}
+                {!selectedEvents.length && <div className="dot-empty-day">No rows to display.</div>}
               </div>
             </section>
           )}        </main>
@@ -914,19 +974,16 @@ export default function DotMode({ state, onBack }) {
             <div><b>Truck/Unit:</b> {unitName(state)}</div>
             <div><b>Period:</b> {days.at(-1)} through {days[0]}</div>
             {routingCode.trim() ? <div><b>Routing / Reference Code:</b> {routingCode.trim()}</div> : null}
-            <div><b>Documents:</b> {walletSummary.counts.ok}/{walletSummary.counts.total} ready · {walletSummary.fileCount} file(s) saved</div>
+            <div><b>Documents:</b> {walletSummary.count} document(s) · {walletSummary.fileCount} file(s)</div>
           </section>
           <section className="dot-report-cover wallet-doc-report">
             <h1>Roadside Documents</h1>
-            <OfficerDocumentList state={state} onOpenDocument={setDocViewer} />
+            <OfficerDocumentList state={state} onOpen={setDocViewer} />
           </section>
           {days.map(day => <DailyPaper key={day} state={state} day={day} days={days} />)}
         </main>
       )}
-
-      {docViewer ? (
-        <DotDocumentViewer row={docViewer} onClose={() => setDocViewer(null)} onStatus={setStatus} />
-      ) : null}
+      {docViewer ? <DotDocumentViewer row={docViewer} onClose={() => setDocViewer(null)} onStatus={setStatus} /> : null}
     </section>
   );
 }

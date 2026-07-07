@@ -1,9 +1,16 @@
 
-## v95.70.0 - DOT document viewer fix
-- Replaced direct data-url document links in DOT Roadside Documents with an in-app document viewer.
-- Added Blob/Object URL handling so iOS/PWA can preview saved images/PDFs without blank tabs.
-- Added Share / Save and Open in browser fallback actions.
-- No changes to true driving events, duty-status times, miles, route legs, or wallet document data.
+## v95.71.0 - Intermodal Drop Off Only
+- Added ON DUTY `Drop Off` for port/yard drop-only intermodal moves.
+- Drop Off requires only dropped container/chassis and does not require new container, chassis, BOL, or going-to location.
+- Drop Off clears current intermodal equipment and closes the open route leg without touching driving events.
+- Preserved DOT document viewer and officer-safe DOT Inspection package behavior.
+
+
+## v95.70 — DOT Inspection Officer-Safe Package
+- Added driver-only review card before DOT handoff.
+- Officer view now shows only package data: logs and saved documents.
+- Hidden missing/review document status and log review counts from officer-facing DOT Mode and printable report.
+- No duty status, miles, route, wallet storage, or backup data changes.
 
 
 ## v95.69.0 — Intermodal day chassis form

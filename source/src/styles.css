@@ -8979,110 +8979,41 @@ body,
 .road-form-split-row>button.road-form-split-action.editable .road-form-value{padding-right:18px!important;color:var(--dl-ink)!important}
 .road-form-split-row>button.road-form-split-action.editable:active{background:#f4f8ff!important}
 
-/* v95.70 DOT saved document viewer: iOS/PWA-safe open flow */
-.dot-doc-open{
-  appearance:none;
-  -webkit-appearance:none;
-  cursor:pointer;
-  font-family:inherit;
-}
-.dot-doc-viewer-backdrop{
-  position:fixed;
-  inset:0;
-  z-index:80;
-  background:rgba(17,24,39,.52);
-  display:flex;
-  align-items:flex-end;
-  justify-content:center;
-}
-.dot-doc-viewer{
-  width:100%;
-  max-width:860px;
-  max-height:96vh;
-  background:#f5f7f4;
-  border-radius:24px 24px 0 0;
-  overflow:hidden;
-  box-shadow:0 -16px 38px rgba(16,24,40,.24);
-  color:#111827;
-}
-.dot-doc-viewer-head{
+/* v95.70 DOT Inspection officer-safe package
+   Driver review items stay before handoff. Officer view presents only package rows. */
+.dot-driver-review-card{
   display:grid;
-  grid-template-columns:50px 1fr 74px;
-  align-items:center;
-  gap:8px;
-  padding:12px;
-  background:#15233b;
-  color:#fff;
-}
-.dot-doc-viewer-head button{
-  height:44px;
-  border:1px solid rgba(255,255,255,.18);
-  border-radius:14px;
-  background:rgba(255,255,255,.1);
-  color:#fff;
-  font-size:22px;
-  font-weight:1000;
-}
-.dot-doc-viewer-head button:last-child{font-size:13px;color:#fff;}
-.dot-doc-viewer-head div{display:grid;text-align:center;min-width:0;}
-.dot-doc-viewer-head span{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:#b8c3d6;font-weight:1000;}
-.dot-doc-viewer-head b{font-size:17px;font-weight:1000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.dot-doc-viewer-meta{
-  margin:10px 12px 0;
-  padding:10px 12px;
-  border-radius:14px;
-  background:#fff;
-  border:1px solid #dfe5df;
-  display:grid;
-  gap:3px;
-}
-.dot-doc-viewer-meta b{font-size:13px;font-weight:1000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.dot-doc-viewer-meta span{font-size:12px;color:#667085;font-weight:800;line-height:1.25;}
-.dot-doc-viewer-body{
-  margin:10px 12px;
-  height:min(66vh,740px);
-  border-radius:16px;
-  border:1px solid #dfe5df;
-  background:#fff;
-  overflow:auto;
-  display:grid;
-  place-items:center;
-}
-.dot-doc-viewer-body img{
-  width:100%;
-  height:auto;
-  max-height:none;
-  display:block;
-}
-.dot-doc-viewer-body iframe{
-  width:100%;
-  height:100%;
-  min-height:62vh;
-  border:0;
-  background:#fff;
-}
-.dot-doc-viewer-fallback{
-  padding:24px;
-  display:grid;
-  gap:8px;
-  text-align:center;
-}
-.dot-doc-viewer-fallback b{font-size:16px;font-weight:1000;}
-.dot-doc-viewer-fallback span{font-size:13px;color:#667085;font-weight:800;}
-.dot-doc-viewer-actions{
-  display:grid;
-  grid-template-columns:1fr 1fr;
   gap:10px;
-  padding:0 12px calc(14px + env(safe-area-inset-bottom,0px));
-}
-.dot-doc-viewer-actions button{
-  min-height:48px;
-  border-radius:15px;
-  border:1px solid #cfd8ff;
+  margin:12px;
+  padding:14px;
+  border:1px solid #dfe5df;
+  border-radius:18px;
   background:#fff;
-  color:#3157d8;
-  font-weight:1000;
-  font-size:14px;
+  box-shadow:0 2px 9px rgba(20,32,51,.04);
 }
-.dot-doc-viewer-actions button:last-child{background:#3157d8;color:#fff;border-color:#3157d8;}
-@media(max-width:390px){.dot-doc-viewer-actions{grid-template-columns:1fr}.dot-doc-viewer-body{height:60vh}}
+.dot-driver-review-card>div{display:grid;gap:3px;}
+.dot-driver-review-card b{font-size:18px;font-weight:1000;color:#111827;letter-spacing:-.02em;}
+.dot-driver-review-card span{font-size:13px;font-weight:850;color:#667085;line-height:1.3;}
+.dot-driver-review-card ul{margin:0;padding-left:18px;display:grid;gap:6px;color:#7a4a08;font-weight:900;font-size:13px;line-height:1.35;}
+.dot-driver-review-card p{margin:0;color:#248a52;font-size:13px;font-weight:900;}
+.dot-driver-review-card.needs-review{border-color:#efd6a8;background:#fffaf0;}
+.dot-driver-review-card.ready{border-color:#cfe7d5;background:#fbfffc;}
+.dot-roadside-cards.officer-safe button{background:#fff;border-color:#dfe5df;}
+.dot-doc-card.present{border-color:#dfe5df;background:#fff;}
+.dot-doc-card.present .dot-doc-side strong{color:#3157d8;}
+
+/* v95.71 intermodal drop-off only workflow */
+.drop-hook-note.drop-off-note{
+  grid-column:1 / -1;
+  border:1px dashed #b9c7da;
+  border-radius:16px;
+  background:#f8fbff;
+  color:#667085;
+  font-size:14px;
+  font-weight:900;
+  line-height:1.25;
+  padding:12px 14px;
+}
+.status-page-body.driver-picker-body{
+  padding-bottom:110px;
+}
