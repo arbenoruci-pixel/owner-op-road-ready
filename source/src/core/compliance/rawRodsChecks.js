@@ -92,6 +92,37 @@ function previousRawEvent(eventsByDay = {}, day = '') {
   return null;
 }
 
+function statusCanCarryAcrossMidnight(status = '') {
+  // Paper-log status carries through midnight for rest/off-duty records.
+  // Never silently carry DRIVING into the next day; that must be an explicit
+  // stored driving event because it affects HOS and officer review.
+  return status === 'OFF' || status === 'SB' || status === 'ON';
+}
+
+function carryStartCoverageFromPreviousDay(events = [], previousDayEvent = null) {
+  const completed = [...(events || [])];
+  if (!completed.length) return completed;
+  const first = completed[0];
+  const firstStart = Number(first.startMin || 0);
+  if (firstStart <= 1) return completed;
+  const previousStatus = previousDayEvent?.status || '';
+  const firstStatus = first?.status || '';
+  const previousEndedAtMidnight = Number(previousDayEvent?.endMin || 0) >= 1438;
+
+  if (
+    previousEndedAtMidnight &&
+    previousStatus === firstStatus &&
+    statusCanCarryAcrossMidnight(firstStatus)
+  ) {
+    completed[0] = {
+      ...first,
+      startMin: 0,
+      carriedStartCoverageFromPreviousDay: true,
+    };
+  }
+  return completed;
+}
+
 function suggestedStatusForBlock(type, previous, next, durationMin) {
   const previousStatus = previous?.status || '';
   const nextStatus = next?.status || '';
@@ -148,7 +179,8 @@ export function rawCoverageIssues(eventsByDay = {}, day = '', options = {}) {
   const targetEnd = future ? 0 : (current ? nowMin() : 1440);
   const previousDayEvent = previousRawEvent(eventsByDay, day);
   const events = rawStoredEventsForDay(eventsByDay, day);
-  const completed = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+  const rawCompleted = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+  const completed = carryStartCoverageFromPreviousDay(rawCompleted, previousDayEvent);
   const total = completed.reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);
   const issues = [];
 

@@ -8,15 +8,28 @@ const appVersion = fs.readFileSync('source/src/core/update/appUpdate.js', 'utf8'
 const sw = fs.readFileSync('public/sw.js', 'utf8');
 const remote = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
+
+function versionAtLeast(version, min) {
+  const a = String(version || '').split('.').map(Number);
+  const b = String(min || '').split('.').map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const av = a[i] || 0;
+    const bv = b[i] || 0;
+    if (av > bv) return true;
+    if (av < bv) return false;
+  }
+  return true;
+}
+
 const checks = [];
 function check(name, ok) {
   checks.push({ name, ok: !!ok });
 }
 
-check('package version is 95.72.0', pkg.version === '95.72.0');
-check('current app version is 95.72.0', /CURRENT_APP_VERSION\s*=\s*'95\.72\.0'/.test(appVersion));
-check('service worker version is 95.72.0', /OWNER_OP_SW_VERSION\s*=\s*'95\.72\.0'/.test(sw));
-check('remote app version is 95.72.0', remote.version === '95.72.0');
+check('package version is 95.72.0 or newer', versionAtLeast(pkg.version, '95.72.0'));
+check('current app version is 95.72.0 or newer', versionAtLeast((appVersion.match(/CURRENT_APP_VERSION\s*=\s*'([^']+)'/) || [])[1], '95.72.0'));
+check('service worker version is 95.72.0 or newer', versionAtLeast((sw.match(/OWNER_OP_SW_VERSION\s*=\s*'([^']+)'/) || [])[1], '95.72.0'));
+check('remote app version is 95.72.0 or newer', versionAtLeast(remote.version, '95.72.0'));
 check('DayLogScreen does not enter editing-graph only because selectedEvent exists', !day.includes('selectedEvent ? "editing-graph"'));
 check('DayLogScreen root still includes graph-first-screen', day.includes('graph-first-screen'));
 check('live status save clears selectedEventId', /currentTrailer:\s*trailer,[\s\S]{0,260}selectedEventId:null,[\s\S]{0,120}sheet:\s*null/.test(app));

@@ -30,9 +30,23 @@ function sameEventLocation(a = {}, b = {}) {
 function estimatedLocationMiles(a = {}, b = {}) {
   const pa = pointFromLogLocation(a);
   const pb = pointFromLogLocation(b);
-  if (!pa || !pb) return 0;
+  if (!pa || !pb) return null;
   const miles = haversineMiles(pa, pb);
-  return Number.isFinite(miles) ? miles : 0;
+  return Number.isFinite(miles) ? miles : null;
+}
+
+function locationsAreEffectivelySamePlace(a = {}, b = {}) {
+  if (sameEventLocation(a, b)) return true;
+  const miles = estimatedLocationMiles(a, b);
+  return miles != null && miles <= 5;
+}
+
+function isGenericDrivingStart(event = {}) {
+  return event.status === 'D' && /driving started|manual driving|^driving$/i.test(`${event.note || ''} ${event.description || ''}`.trim());
+}
+
+function isConnectedOnDutyStart(event = {}) {
+  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop|hook|delivery|unloading/i.test(`${event.note || ''} ${event.description || ''}`);
 }
 
 function buildLocationContinuityIssues(events = []) {
@@ -42,7 +56,7 @@ function buildLocationContinuityIssues(events = []) {
     if (!next) return;
     if (event.status === 'D' || next.status === 'D') return;
     if (!safeText(event.city) || !safeText(event.state) || !safeText(next.city) || !safeText(next.state)) return;
-    if (sameEventLocation(event, next)) return;
+    if (locationsAreEffectivelySamePlace(event, next)) return;
     const touches = Math.abs(Number(next.startMin || 0) - Number(event.endMin || 0)) <= 5;
     if (!touches) return;
     const miles = estimatedLocationMiles(event, next);
@@ -51,7 +65,7 @@ function buildLocationContinuityIssues(events = []) {
       id:`location_jump_${event.id || index}_${next.id || index + 1}`,
       severity:'fix',
       title:'Location jump with no driving',
-      detail:`${eventTitle(next)} starts in ${cityState(next.city, next.state)} right after ${eventTitle(event)} in ${cityState(event.city, event.state)}${miles ? ` · about ${miles.toFixed(0)} mi apart` : ''}`,
+      detail:`${eventTitle(next)} starts in ${cityState(next.city, next.state)} right after ${eventTitle(event)} in ${cityState(event.city, event.state)}${miles != null ? ` · about ${miles.toFixed(0)} mi apart` : ''}`,
       fixAction:'FIX_LOCATION_CONTINUITY',
       previousEventId:event.id || '',
       eventId:next.id || event.id || '',
@@ -340,7 +354,8 @@ function buildInspectionIssues(state, day, events) {
     Math.abs(Number(firstDriving.startMin || 0) - Number(preTrip.endMin || 0)) <= 5 &&
     safeText(preTrip.city) && safeText(preTrip.state) &&
     safeText(firstDriving.city) && safeText(firstDriving.state) &&
-    !sameEventLocation(preTrip, firstDriving)
+    !locationsAreEffectivelySamePlace(preTrip, firstDriving) &&
+    !(isConnectedOnDutyStart(preTrip) && isGenericDrivingStart(firstDriving))
   ) {
     issues.push(makeIssue('inspection', {
       id:`location_jump_pretrip_drive_${preTrip.id || preTrip.startMin}_${firstDriving.id || firstDriving.startMin}`,

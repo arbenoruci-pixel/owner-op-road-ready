@@ -1,6 +1,6 @@
 {
-  "version": "95.72.0",
-  "build": "v95.72-post-save-log-view",
+  "version": "95.73.0",
+  "build": "v95.73-location-coverage-repair",
   "releasedAt": "2026-07-06T00:00:00.000Z",
   "notes": [
     "Returns the Log tab to the normal event-list view after saving a status or edit.",
@@ -8,6 +8,6 @@
     "Removes the tall blank graph-only area by allowing the SVG graph to use its natural height.",
     "Does not change driving events, duty times, miles, route/load data, DOT wallet, or backup/import data."
   ],
-  "label": "v95.72 Post-save log view cleanup",
+  "label": "v95.73 Location + coverage repair",
   "updatedAt": "2026-07-06T00:00:00.000Z"
 }

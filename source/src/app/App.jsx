@@ -229,12 +229,46 @@ function repairMidnightDrivingCorruption(events = [], inspection = {}, day = '')
   return normalizeLogEvents(out);
 }
 
+function isGenericDrivingLocationEvent(event = {}) {
+  if (event.status !== 'D') return false;
+  if (event.lat != null && event.lng != null) return false;
+  return /driving started|manual driving|^driving$/i.test(`${event.note || ''} ${event.description || ''}`.trim());
+}
+
+function isConnectedOnDutyLocationSource(event = {}) {
+  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop|hook|delivery|unloading/i.test(`${event.note || ''} ${event.description || ''}`);
+}
+
+function repairContiguousDrivingStartLocations(events = []) {
+  const ordered = [...(events || [])].filter(Boolean).sort((a, b) => Number(a.startMin || 0) - Number(b.startMin || 0));
+  return ordered.map((event, index) => {
+    const previous = ordered[index - 1];
+    if (!previous || !isGenericDrivingLocationEvent(event) || !isConnectedOnDutyLocationSource(previous)) return event;
+    const touches = Math.abs(Number(event.startMin || 0) - Number(previous.endMin || 0)) <= 5;
+    if (!touches) return event;
+    if (!previous.city || !previous.state) return event;
+    const sameCity = String(event.city || '').trim().toLowerCase() === String(previous.city || '').trim().toLowerCase();
+    const sameState = String(event.state || '').trim().toUpperCase() === String(previous.state || '').trim().toUpperCase();
+    if (sameCity && sameState) return event;
+    return {
+      ...event,
+      city: previous.city,
+      state: previous.state,
+      lat: previous.lat ?? null,
+      lng: previous.lng ?? null,
+      gpsAccuracy: previous.gpsAccuracy ?? null,
+      locationSource: previous.locationSource || 'manual',
+      repairedFromPreviousOnDutyLocation: true,
+    };
+  });
+}
+
 function purgeSyntheticAndRepairEvents(events = [], day = '', stateLike = {}) {
   const rawOnly = (events || [])
     .filter(Boolean)
     .filter(event => !isSyntheticEvent(event))
     .map(event => stripSyntheticEventFields(event));
-  return repairMidnightDrivingCorruption(rawOnly, stateLike?.inspectionByDay?.[day] || {}, day);
+  return repairContiguousDrivingStartLocations(repairMidnightDrivingCorruption(rawOnly, stateLike?.inspectionByDay?.[day] || {}, day));
 }
 
 function sanitizeCarryoverEvent(event) {
@@ -2258,6 +2292,21 @@ export default function App() {
       const loadDescription = isIntermodalDrop
         ? buildDropHookNote({ reason, city, state:st, dropHook }, s.equipment || {})
         : loadDescriptionForStatusPayload({ status, reason, city, state:st, shippingDocs, loadNo, destination, destinationState });
+      const previousAtChange = [...existing]
+        .filter(event => Number(event.endMin || 0) <= changeAt)
+        .sort((a, b) => Number(a.endMin || 0) - Number(b.endMin || 0))
+        .at(-1);
+      const shouldInheritPreviousOnDutyLocation = status === 'D' && previousAtChange &&
+        isConnectedOnDutyLocationSource(previousAtChange) &&
+        Math.abs(Number(previousAtChange.endMin || 0) - changeAt) <= 5 &&
+        previousAtChange.city && previousAtChange.state &&
+        !(lat != null && lng != null);
+      const effectiveCity = shouldInheritPreviousOnDutyLocation ? previousAtChange.city : city;
+      const effectiveState = shouldInheritPreviousOnDutyLocation ? previousAtChange.state : st;
+      const effectiveLat = shouldInheritPreviousOnDutyLocation ? (previousAtChange.lat ?? null) : lat;
+      const effectiveLng = shouldInheritPreviousOnDutyLocation ? (previousAtChange.lng ?? null) : lng;
+      const effectiveGpsAccuracy = shouldInheritPreviousOnDutyLocation ? (previousAtChange.gpsAccuracy ?? null) : gpsAccuracy;
+      const effectiveLocationSource = shouldInheritPreviousOnDutyLocation ? (previousAtChange.locationSource || 'manual') : locationSource;
       const ev = {
         id: eventId,
         status,
@@ -2268,8 +2317,8 @@ export default function App() {
         // old status for that whole backdated window instead of creating an
         // ON block followed by stale OFF time.
         endMin: Math.max(changeAt + 1, Math.min(1439, nowLiveMin || changeAt + 1)),
-        city,
-        state: st,
+        city: effectiveCity,
+        state: effectiveState,
         description: description || loadDescription,
         note,
         shippingDocs: effectiveShippingDocs,
@@ -2277,13 +2326,13 @@ export default function App() {
         destination,
         destinationState,
         loadLinkId: eventId,
-        lat,
-        lng,
-        gpsAccuracy,
-        locationSource,
+        lat: effectiveLat,
+        lng: effectiveLng,
+        gpsAccuracy: effectiveGpsAccuracy,
+        locationSource: effectiveLocationSource,
         source: 'live_status',
       };
-      const loadPayload = { status, reason, city, state:st, shippingDocs:effectiveShippingDocs, loadNo:effectiveShippingDocs, destination, destinationState, dropHook };
+      const loadPayload = { status, reason, city:effectiveCity, state:effectiveState, shippingDocs:effectiveShippingDocs, loadNo:effectiveShippingDocs, destination, destinationState, dropHook };
       const dropHookLoadPatch = isIntermodalDrop ? buildDropHookLoadPatch(loadPayload, eventId) : null;
       const dropHookEquipment = isIntermodalDrop ? buildEquipmentFromDropHook(s.equipment || {}, loadPayload) : null;
       const loadInfoPatch = buildLoadPatchForStatusPayload(loadPayload, eventId);
@@ -2299,7 +2348,7 @@ export default function App() {
         ...s,
         currentStatus: status,
         currentReason: reason,
-        currentLocation: { city, state: st, lat, lng, gpsAccuracy, locationSource },
+        currentLocation: { city:effectiveCity, state:effectiveState, lat:effectiveLat, lng:effectiveLng, gpsAccuracy:effectiveGpsAccuracy, locationSource:effectiveLocationSource },
         currentTrailer: trailer,
         selectedEventId:null,
         sheet: null,

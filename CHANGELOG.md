@@ -395,3 +395,9 @@ What was deliberately NOT changed (logic preserved verbatim)
 - Added expiration statuses: missing, expired, expires soon, watch, OK.
 - Added Wallet screen routes from Home and Tools, plus quick links back to logs/RODS and load docs.
 - Preserved existing logbook, DOT Check, signing, graph, and duty-status override fixes.
+
+## v95.73 - Location + Coverage Repair
+- Prevent false start-of-day coverage gaps when a previous OFF/SB/ON status carries across midnight.
+- Suppress false location-jump blockers when coordinate distance is effectively the same place.
+- Keep connected ON DUTY pickup/pre-trip/drop location aligned with the following generic Driving Started event.
+- Preserve true driving times and all load/miles/equipment data.

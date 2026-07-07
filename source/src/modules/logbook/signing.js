@@ -2,6 +2,7 @@ import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
+import { haversineMiles, pointFromLogLocation } from '../../core/gps/locationService.js';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
 
 function hasRealEvents(events = []) {
@@ -54,6 +55,28 @@ function sameLocation(a = {}, b = {}) {
   return !!ac && !!as && ac === bc && as === bs;
 }
 
+function estimatedLocationMiles(a = {}, b = {}) {
+  const pa = pointFromLogLocation(a);
+  const pb = pointFromLogLocation(b);
+  if (!pa || !pb) return null;
+  const miles = haversineMiles(pa, pb);
+  return Number.isFinite(miles) ? miles : null;
+}
+
+function effectivelySameLocation(a = {}, b = {}) {
+  if (sameLocation(a, b)) return true;
+  const miles = estimatedLocationMiles(a, b);
+  return miles != null && miles <= 5;
+}
+
+function isGenericDrivingStart(event = {}) {
+  return event.status === 'D' && /driving started|manual driving|^driving$/i.test(`${event.note || ''} ${event.description || ''}`.trim());
+}
+
+function isConnectedPreTripStart(event = {}) {
+  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop|hook|delivery|unloading/i.test(`${event.note || ''} ${event.description || ''}`);
+}
+
 function locationContinuityIssues(events = [], day = '') {
   const issues = [];
   const ordered = sortedEvents(events).filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
@@ -62,7 +85,7 @@ function locationContinuityIssues(events = [], day = '') {
     if (!next) return;
     if (event.status === 'D' || next.status === 'D') return;
     if (!event.city || !event.state || !next.city || !next.state) return;
-    if (sameLocation(event, next)) return;
+    if (effectivelySameLocation(event, next)) return;
     const touches = Math.abs(Number(next.startMin || 0) - Number(event.endMin || 0)) <= 5;
     if (!touches) return;
     const preferPreviousToCurrent = next.status === 'ON';
@@ -392,7 +415,8 @@ export function validateLogForSigning(state, day) {
     Number(preTrip.endMin || 0) <= Number(firstDriving.startMin || 0) &&
     Math.abs(Number(firstDriving.startMin || 0) - Number(preTrip.endMin || 0)) <= 5 &&
     preTrip.city && preTrip.state && firstDriving.city && firstDriving.state &&
-    !sameLocation(preTrip, firstDriving)
+    !effectivelySameLocation(preTrip, firstDriving) &&
+    !(isConnectedPreTripStart(preTrip) && isGenericDrivingStart(firstDriving))
   ) {
     issues.push({
       code:`location_jump_pretrip_drive_${preTrip.id || preTrip.startMin}_${firstDriving.id || firstDriving.startMin}`,
