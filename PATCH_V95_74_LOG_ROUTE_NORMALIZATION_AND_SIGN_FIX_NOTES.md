@@ -1,4 +1,4 @@
-# Owner-Op Road Ready v95.74.0 — Log Route Normalization + Sign Fix
+# Owner-Op Road Ready v95.74.0 / v9574b — Log Route Normalization + Sign Fix
 
 ## Product intent
 
@@ -73,7 +73,7 @@ DRIVING (`D`) events remain the true driver record. The new normalizers repair o
 
 ## Version/update
 
-- App version bumped from `95.73.0` to `95.74.0`.
+- App version bumped from `95.73.0` to `95.74.0`; v9574b keeps the v95.74 no-root scope and tightens real-backup route/sign normalization before deploy.
 - Service worker version string was bumped only for safe update metadata.
 - No service-worker cache behavior was changed.
 
@@ -89,3 +89,21 @@ New v95.74 verifiers were added for:
 - `verify-jul06-miles-suggestion-v9574`
 - `verify-import-normalizes-legacy-route-data-v9574`
 - `verify-driving-events-unchanged-v9574`
+
+
+## v9574b real-backup follow-up
+
+- Fixed July 6 route-mile recommendation so daily miles use the leg primary/pickup driving day instead of every leg that merely touches the day. The real-backup regression now recommends `206 mi` for `113NRH53Z` and does not add the previous-day `114RMB689` `33 mi` leg.
+- Tightened shipping-doc parsing so UI display text such as `Delivered ... · Picked up ...` is never treated as raw shipping-document tokens. Validation uses real load/BOL-like tokens and `transitionLoadNos`; `transitionSummary` remains display-only.
+- Normalized legacy July 7 drop-hook/drop-off equipment moves with no explicit new BOL as `empty/reposition`. Stale `113NRH53Z` carryover is cleared from current load fields and preserved only as stale audit metadata where useful.
+- Cleared stale top-level `loadInfo` fields, including `bol` and `po`, when current equipment is `No equipment` after a Drop Off and there is no open loaded move.
+- Added derived, check-only ON-duty continuity for short adjacent transition/pre-trip gaps of five minutes or less. This does not write stored events and does not alter driving records.
+- Treated tiny restored/import artifact days as reviewable package artifacts so hidden one-minute leftovers do not block otherwise good active logs.
+- Added real-backup regression verifiers:
+  - `verify-real-backup-jul06-miles-206-v9574b`
+  - `verify-real-backup-no-transition-word-duplicates-v9574b`
+  - `verify-real-backup-jul07-empty-reposition-no-113NRH53Z-carryover-v9574b`
+  - `verify-real-backup-loadinfo-clears-after-dropoff-v9574b`
+  - `verify-real-backup-driving-unchanged-v9574b`
+
+Driving event `status`, `startMin`, and `endMin` remain authoritative and are not changed by these normalizers.

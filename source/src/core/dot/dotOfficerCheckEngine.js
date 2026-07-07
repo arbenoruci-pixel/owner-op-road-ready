@@ -3,7 +3,7 @@ import { durLabel, nowMin, timeLabel } from '../../shared/utils/time.js';
 import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
 import { analyzeLinkedHos, violationRangesForDay } from '../hos/hosEngine.js';
 import { haversineMiles, pointFromLogLocation } from '../gps/locationService.js';
-import { routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../routes/routeNormalization.js';
+import { docsTokensForTransition, routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../routes/routeNormalization.js';
 
 const STATUS_LABEL = { OFF:'OFF DUTY', SB:'SLEEPER', D:'DRIVING', ON:'ON DUTY' };
 
@@ -136,8 +136,8 @@ function shippingDocsForDay(state, day, events = []) {
   const equipment = state.equipment || {};
   const routeLegs = routeLegsForDay(state, day);
   return uniqueDocValues([
-    ...routeLegs.map(leg => leg.displayShippingDocs || leg.shippingDocs || leg.loadNo),
-    ...events.map(event => event.displayShippingDocs || event.shippingDocs || event.loadNo),
+    ...routeLegs.flatMap(leg => [leg.shippingDocs, leg.loadNo, ...(Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : [])]),
+    ...events.flatMap(event => [event.shippingDocs, event.loadNo, ...(Array.isArray(event.transitionLoadNos) ? event.transitionLoadNos : [])]),
     ...(routeLegs.length ? [] : [load.loadNo, load.po, load.bol, load.shippingDocs]),
     equipment.container,
     equipment.chassis,
@@ -145,10 +145,7 @@ function shippingDocsForDay(state, day, events = []) {
 }
 
 function splitDocTokens(values = []) {
-  return values
-    .flatMap(value => String(value || '').split(/[,\s]+/))
-    .map(item => item.trim())
-    .filter(Boolean);
+  return values.flatMap(value => docsTokensForTransition(value));
 }
 
 function classifyIssue(issue) {

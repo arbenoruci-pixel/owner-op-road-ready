@@ -4,7 +4,7 @@ import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
 import { haversineMiles, pointFromLogLocation } from '../../core/gps/locationService.js';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
-import { routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
+import { docsTokensForTransition, routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
 
 function hasRealEvents(events = []) {
   return (events || []).some(event => !event.carriedFromPreviousDay && Number(event.endMin || 0) > Number(event.startMin || 0));
@@ -144,12 +144,12 @@ function shippingDocsText(state, day = state.activeDay) {
   const routeLegs = routeLegsForDayCanonical(state, day);
   const dayEvents = state.eventsByDay?.[day] || [];
   const docs = uniqueText([
-    ...routeLegs.map(leg => leg.displayShippingDocs || leg.shippingDocs || leg.loadNo),
-    ...dayEvents.map(event => event.displayShippingDocs || event.shippingDocs || event.loadNo),
+    ...routeLegs.flatMap(leg => [leg.shippingDocs, leg.loadNo, ...(Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : [])]),
+    ...dayEvents.flatMap(event => [event.shippingDocs, event.loadNo, ...(Array.isArray(event.transitionLoadNos) ? event.transitionLoadNos : [])]),
     ...(routeLegs.length ? [] : [load.loadNo, load.po, load.bol, load.shippingDocs]),
     equipment.container,
     equipment.chassis,
-  ]).join(' ');
+  ].flatMap(value => docsTokensForTransition(value))).join(' ');
   if (docs) return docs;
   const mentionsEmpty = routeLegs.some(leg => /empty|reposition|return/i.test(`${leg.kind || ''} ${leg.source || ''}`))
     || dayEvents.some(e => /empty|bobtail|no trailer|deadhead|reposition/i.test(`${e.note || ''} ${e.description || ''}`));
@@ -588,6 +588,17 @@ export function signBlockMessage(state, day) {
   return `Cannot sign this log yet. Fix these items first:\n\n${issues.map(issue => `• ${issue.where}: ${issue.title} — ${issue.detail}`).join('\n')}`;
 }
 
+function isStaleImportArtifactDay(state = {}, day = '', events = []) {
+  const real = sortedEvents(events).filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+  if (!real.length || real.length > 2) return false;
+  if (real.some(event => event.status === 'D' || event.status === 'ON')) return false;
+  const total = real.reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);
+  if (total > 5) return false;
+  const text = real.map(event => `${event.id || ''} ${event.source || ''} ${event.note || ''} ${event.description || ''} ${event.shippingDocs || ''} ${event.loadNo || ''}`).join(' ').toLowerCase();
+  const restored = !!state._restoredBackupMeta || /import|restore|legacy|test|bol\s+[a-z0-9]/i.test(text);
+  return restored && day < String(state.activeDay || day);
+}
+
 
 export function buildSignGuardSummary(state, day) {
   const dayIssues = validateLogForSigning(state, day);
@@ -603,6 +614,18 @@ export function buildSignGuardSummary(state, day) {
     const statusText = state.certifyStatus?.[prevDay] || '';
     const needsRecert = statusText === 'Needs Recertification';
     const certified = statusText === 'Certified' && signed && !needsRecert;
+
+    if (isStaleImportArtifactDay(state, prevDay, prevEvents)) {
+      dotRows.push({
+        day: prevDay,
+        total: durLabel(coverage.total || 0),
+        signed,
+        status: 'Reviewable import artifact',
+        issue: null,
+        artifact: true,
+      });
+      return;
+    }
 
     if (!prevEvents.length) {
       const issue = {

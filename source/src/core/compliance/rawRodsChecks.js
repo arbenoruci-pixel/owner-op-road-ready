@@ -143,6 +143,40 @@ function carryStartCoverageFromPreviousDay(events = [], previousDayEvent = null)
   return completed;
 }
 
+function isShortOnDutyTransitionGap(previous = {}, next = {}, gap = 0) {
+  if (Number(gap || 0) <= 1 || Number(gap || 0) > 5) return false;
+  if (previous.status !== 'ON' || next.status !== 'ON') return false;
+  const text = `${previous.note || ''} ${previous.description || ''} ${next.note || ''} ${next.description || ''}`.toLowerCase();
+  return /drop\s*&\s*hook|drop\s*off|hook|pre[-\s]?trip|inspection|pickup|delivery|loading|unloading/.test(text);
+}
+
+function deriveShortOnDutyTransitionCoverage(events = []) {
+  const completed = [];
+  (events || []).forEach((event, index) => {
+    if (index > 0) {
+      const previous = events[index - 1];
+      const gap = Number(event.startMin || 0) - Number(previous.endMin || 0);
+      if (isShortOnDutyTransitionGap(previous, event, gap)) {
+        completed.push({
+          id:`transition_gap_${previous.id || index - 1}_${event.id || index}`,
+          status:'ON',
+          startMin:Number(previous.endMin || 0),
+          endMin:Number(event.startMin || 0),
+          city:previous.city || event.city || '',
+          state:previous.state || event.state || '',
+          note:'On Duty',
+          description:'Short transition/pre-trip continuity',
+          source:'transition_gap_derived',
+          displayOnly:true,
+          syntheticCoverage:true,
+        });
+      }
+    }
+    completed.push(event);
+  });
+  return completed;
+}
+
 function suggestedStatusForBlock(type, previous, next, durationMin) {
   const previousStatus = previous?.status || '';
   const nextStatus = next?.status || '';
@@ -200,7 +234,7 @@ export function rawCoverageIssues(eventsByDay = {}, day = '', options = {}) {
   const previousDayEvent = previousRawEvent(eventsByDay, day);
   const events = rawStoredEventsForDay(eventsByDay, day);
   const rawCompleted = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
-  const completed = carryStartCoverageFromPreviousDay(rawCompleted, previousDayEvent);
+  const completed = deriveShortOnDutyTransitionCoverage(carryStartCoverageFromPreviousDay(rawCompleted, previousDayEvent));
   const total = completed.reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);
   const issues = [];
 

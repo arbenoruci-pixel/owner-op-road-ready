@@ -29,14 +29,54 @@ function firstRealText(...values) {
   return values.map(safeText).find(Boolean) || '';
 }
 
+const NON_DOC_WORDS = new Set([
+  'BOL', 'LOAD', 'LOADED', 'DELIVERED', 'PICKED', 'PICKUP', 'PICK', 'UP', 'DROPPED', 'DROP', 'HOOKED', 'HOOK',
+  'EMPTY', 'REPOSITION', 'RETURN', 'RETURNED', 'MOVE', 'MOVEMENT', 'OFF', 'ON', 'DUTY', 'SLEEPER', 'BERTH',
+  'FROM', 'TO', 'THE', 'AND', 'WITH', 'AT', 'IN', 'OUT', 'PRE', 'TRIP', 'INSPECTION', 'STATUS', 'EVENT',
+]);
+
+function normalizeDocToken(value = '') {
+  return safeUpper(value)
+    .replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, '')
+    .replace(/[^A-Z0-9-]/g, '');
+}
+
+function isRealLoadToken(value = '') {
+  const token = normalizeDocToken(value);
+  if (!token || token.length < 4 || token.length > 32) return false;
+  if (NON_DOC_WORDS.has(token)) return false;
+  if (!/\d/.test(token)) return false;
+  if (!/^[A-Z0-9][A-Z0-9-]*$/.test(token)) return false;
+  return true;
+}
+
 function splitLoadTokens(value = '') {
-  return uniqueClean(String(value || '')
-    .replace(/\bBOL\b/gi, ' ')
-    .replace(/\bLOAD\s*#?/gi, ' ')
+  const normalized = String(value || '')
+    .replace(/[→➡–—]/g, ' ')
+    .replace(/[()\[\]{}:;#]/g, ' ')
+    .replace(/\b(?:BOL|LOAD|SHIPPING\s*DOCS?|DOCS?|NUMBER|NO)\b/gi, ' ');
+  return uniqueClean(normalized
     .split(/[\s,/|+·•]+/g)
-    .map(item => item.trim())
-    .filter(Boolean)
-    .filter(item => /[A-Z0-9]/i.test(item)));
+    .map(normalizeDocToken)
+    .filter(isRealLoadToken));
+}
+
+function explicitLoadTokensInText(value = '') {
+  const text = String(value || '');
+  const found = [];
+  const patterns = [
+    /\b(?:LOAD\s*NO|LOAD\s*#|SHIPPING\s*DOCS?|DOCS?|BOL|LOAD)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{3,31})\b/gi,
+    /\b(?:BOL|LOAD)\s+([A-Z0-9][A-Z0-9-]{3,31})\b/gi,
+  ];
+  patterns.forEach(pattern => {
+    let match = pattern.exec(text);
+    while (match) {
+      const token = normalizeDocToken(match[1] || '');
+      if (isRealLoadToken(token)) found.push(token);
+      match = pattern.exec(text);
+    }
+  });
+  return uniqueClean(found);
 }
 
 function hasNoLoadChoice(value = '') {
@@ -165,8 +205,28 @@ export function routeLegsForDayCanonical(state = {}, day = '') {
     .sort((a, b) => String(a.pickupDay || a.day).localeCompare(String(b.pickupDay || b.day)) || Number(a.pickupMin ?? 9999) - Number(b.pickupMin ?? 9999));
 }
 
+function primaryMilesDayForLeg(leg = {}, fallbackDay = '') {
+  return firstRealText(
+    leg.primaryDrivingDay,
+    leg.milesDay,
+    leg.drivingDay,
+    leg.pickupDay,
+    leg.day,
+    fallbackDay
+  );
+}
+
+export function routeLegsForDayMiles(state = {}, day = '') {
+  return Object.entries(state.routeLegsByDay || {}).flatMap(([legDay, legs]) => (
+    (Array.isArray(legs) ? legs : []).map(leg => ({ ...leg, day: leg.day || legDay }))
+  ))
+    .filter(leg => primaryMilesDayForLeg(leg) === day)
+    .filter(leg => leg.status !== 'cancelled')
+    .sort((a, b) => Number(a.pickupMin ?? 9999) - Number(b.pickupMin ?? 9999) || String(a.id || '').localeCompare(String(b.id || '')));
+}
+
 export function suggestedMilesForDayFromRoute(state = {}, day = '') {
-  const legs = routeLegsForDayCanonical(state, day);
+  const legs = routeLegsForDayMiles(state, day);
   const miles = legs.reduce((sum, leg) => sum + Math.max(0, Number(leg.miles || leg.distanceMiles || leg.manualMiles || 0)), 0);
   return miles > 0 ? Number(miles.toFixed(2)) : 0;
 }
@@ -202,15 +262,110 @@ function sortedRouteMap(routeLegsByDay = {}) {
   return out;
 }
 
+function buildEventById(eventsByDay = {}) {
+  const events = new Map();
+  Object.values(eventsByDay || {}).forEach(dayEvents => {
+    (Array.isArray(dayEvents) ? dayEvents : []).forEach(event => {
+      if (event?.id) events.set(event.id, event);
+    });
+  });
+  return events;
+}
+
+function routeLegIndicatesEquipmentMove(leg = {}, event = {}) {
+  const text = `${leg.source || ''} ${leg.kind || ''} ${event.note || ''} ${event.description || ''}`.toLowerCase();
+  return /drop[_\s-]*hook|drop[_\s-]*off|hook[_\s-]*empty|reposition|return|empty/.test(text);
+}
+
+function eventExplicitNewLoadTokens(event = {}) {
+  return explicitLoadTokensInText(`${event.note || ''} ${event.description || ''}`);
+}
+
+function docsMatch(a = '', b = '') {
+  const left = normalizeDocToken(a);
+  const right = normalizeDocToken(b);
+  return !!left && !!right && left === right;
+}
+
+function blankLoadCarryoverFields(leg = {}, staleDocs = '') {
+  const next = {
+    ...leg,
+    staleCarryoverLoadNo: firstRealText(leg.staleCarryoverLoadNo, staleDocs),
+    shippingDocs:'',
+    loadNo:'',
+    bol:'',
+    po:'',
+    pickedUpLoadNo:'',
+    kind:EMPTY_MOVE_KIND,
+    currentMoveKind:EMPTY_MOVE_KIND,
+    routeIntent:EMPTY_MOVE_KIND,
+  };
+  next.transitionLoadNos = uniqueClean([
+    ...(Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : splitLoadTokens(leg.transitionLoadNos || '')),
+    leg.deliveredLoadNo,
+  ]);
+  return next;
+}
+
+function normalizeLegacyIntermodalRouteIntent(routeLegsByDay = {}, eventsByDay = {}) {
+  const eventsById = buildEventById(eventsByDay);
+  const deliveredDocsByEvent = new Map();
+
+  allRouteLegs(routeLegsByDay).forEach(leg => {
+    const docs = firstRealText(leg.shippingDocs, leg.loadNo);
+    if (leg.deliveryEventId && isLoadedKind(leg) && docs && leg.status !== 'cancelled') {
+      deliveredDocsByEvent.set(leg.deliveryEventId, docs);
+    }
+  });
+
+  const repaired = {};
+  Object.entries(routeLegsByDay || {}).forEach(([day, legs]) => {
+    const nextLegs = [];
+    (Array.isArray(legs) ? legs : []).forEach(leg => {
+      const pickupEvent = eventsById.get(leg.pickupEventId || '') || {};
+      const deliveryEvent = eventsById.get(leg.deliveryEventId || '') || {};
+      const anchorEvent = pickupEvent.id ? pickupEvent : deliveryEvent;
+      const anchorText = `${anchorEvent.note || ''} ${anchorEvent.description || ''}`;
+      const explicitTokens = eventExplicitNewLoadTokens(anchorEvent);
+      const docs = firstRealText(leg.shippingDocs, leg.loadNo);
+      const deliveredAtPickup = deliveredDocsByEvent.get(leg.pickupEventId || '') || '';
+      const isDropOffOnly = /drop\s*off/i.test(anchorText)
+        && !firstRealText(leg.container, leg.chassis, leg.hookedContainer, leg.hookedChassis)
+        && (!leg.deliveryEventId || String(leg.fromCity || '').toLowerCase() === String(leg.toCity || '').toLowerCase());
+
+      if (isDropOffOnly && !explicitTokens.length) return;
+
+      let next = leg;
+      const sourceIsEquipmentMove = routeLegIndicatesEquipmentMove(leg, anchorEvent);
+      const staleDeliveredCarryover = docsMatch(docs, deliveredAtPickup);
+      const noExplicitBolEntered = explicitTokens.length === 0;
+      const shouldClearCarryover = sourceIsEquipmentMove
+        && noExplicitBolEntered
+        && docs
+        && (staleDeliveredCarryover || /drop[_\s-]*off/i.test(String(leg.source || '')) || /drop\s*off|empty|reposition/i.test(anchorText));
+
+      if (shouldClearCarryover) {
+        next = blankLoadCarryoverFields(leg, docs);
+      }
+      nextLegs.push(next);
+    });
+    if (nextLegs.length) repaired[day] = nextLegs;
+  });
+
+  return sortedRouteMap(repaired);
+}
+
 export function normalizeRouteLegs(state = {}) {
   const loadInfo = state.loadInfo && typeof state.loadInfo === 'object' ? state.loadInfo : {};
   const { routeLegsByDay: legacyLoadInfoRouteLegsByDay, ...loadInfoWithoutLegacyRoute } = loadInfo;
   const canonical = {};
   addRouteGroup(canonical, state.routeLegsByDay || {}, 'state.routeLegsByDay');
   addRouteGroup(canonical, legacyLoadInfoRouteLegsByDay || {}, 'loadInfo.routeLegsByDay');
+  const sorted = sortedRouteMap(canonical);
+  const routeLegsByDay = normalizeLegacyIntermodalRouteIntent(sorted, state.eventsByDay || {});
   return {
     ...state,
-    routeLegsByDay: sortedRouteMap(canonical),
+    routeLegsByDay,
     loadInfo: loadInfoWithoutLegacyRoute,
   };
 }
@@ -238,22 +393,26 @@ export function normalizeLoadInfoFromRouteLegs(state = {}) {
   const latestAny = latestRouteLeg(withCanonical.routeLegsByDay || {});
   const latestOpenLoaded = latestOpenLoadedRouteLeg(withCanonical.routeLegsByDay || {});
   const latestAnyIsEmptyMove = latestAny && normalizeKind(latestAny) === EMPTY_MOVE_KIND;
+  const equipment = withCanonical.equipment || {};
+  const noCurrentEquipment = /no\s+(equipment|trailer)/i.test(safeText(withCanonical.currentTrailer))
+    || /drop[_\s-]*off/i.test(safeText(equipment.source))
+    || (!safeText(equipment.container) && !safeText(equipment.chassis) && /dropped/i.test(safeText(equipment.note)));
 
   let nextLoad = { ...load };
   delete nextLoad.routeLegsByDay;
 
-  if (latestAnyIsEmptyMove && !firstRealText(latestAny.shippingDocs, latestAny.loadNo)) {
+  if ((noCurrentEquipment && !latestOpenLoaded) || (latestAnyIsEmptyMove && !firstRealText(latestAny.shippingDocs, latestAny.loadNo))) {
     nextLoad = {
       ...nextLoad,
       loadNo:'',
       shippingDocs:'',
       bol:'',
       po:'',
-      pickupCity:safeText(latestAny.fromCity || nextLoad.pickupCity),
-      pickupState:safeUpper(latestAny.fromState || nextLoad.pickupState).slice(0, 2),
-      deliveryCity:safeText(latestAny.toCity || nextLoad.deliveryCity),
-      deliveryState:safeUpper(latestAny.toState || nextLoad.deliveryState).slice(0, 2),
-      currentMoveKind:EMPTY_MOVE_KIND,
+      pickupCity:'',
+      pickupState:'',
+      deliveryCity:noCurrentEquipment ? '' : safeText(latestAny?.toCity || ''),
+      deliveryState:noCurrentEquipment ? '' : safeUpper(latestAny?.toState || '').slice(0, 2),
+      currentMoveKind:noCurrentEquipment ? 'no_equipment' : EMPTY_MOVE_KIND,
       routeSource:'canonical_routeLegsByDay',
     };
   } else if (latestOpenLoaded) {
@@ -262,8 +421,8 @@ export function normalizeLoadInfoFromRouteLegs(state = {}) {
       ...nextLoad,
       loadNo:docs || nextLoad.loadNo || '',
       shippingDocs:docs || nextLoad.shippingDocs || '',
-      bol:nextLoad.bol || docs || '',
-      po:nextLoad.po || docs || '',
+      bol:docs || '',
+      po:docs || '',
       pickupCity:safeText(latestOpenLoaded.fromCity || nextLoad.pickupCity),
       pickupState:safeUpper(latestOpenLoaded.fromState || nextLoad.pickupState).slice(0, 2),
       deliveryCity:safeText(latestOpenLoaded.toCity || nextLoad.deliveryCity),
@@ -321,22 +480,36 @@ function routeLegsLinkedToEvent(routeLegsByDay = {}, eventId = '') {
 }
 
 function transitionSummaryFromEventAndLegs(event = {}, linkedLegs = []) {
-  const text = `${event.note || ''} ${event.description || ''} ${event.shippingDocs || ''} ${event.loadNo || ''}`;
-  const tokens = splitLoadTokens(text).filter(token => /\d/.test(token));
+  const explicitTokens = explicitLoadTokensInText(`${event.note || ''} ${event.description || ''}`);
+  const deliveryLeg = linkedLegs.find(leg => leg.deliveryEventId === event.id && isLoadedKind(leg));
+  const pickupLoadedLeg = linkedLegs.find(leg => leg.pickupEventId === event.id && normalizeKind(leg) !== EMPTY_MOVE_KIND);
   const delivered = firstRealText(
     event.deliveredLoadNo,
-    linkedLegs.find(leg => leg.deliveryEventId === event.id)?.shippingDocs,
-    linkedLegs.find(leg => leg.deliveryEventId === event.id)?.loadNo,
-    tokens[0]
+    deliveryLeg?.shippingDocs,
+    deliveryLeg?.loadNo,
+    explicitTokens[0]
   );
   const picked = firstRealText(
     event.pickedUpLoadNo,
     event.hookedLoadNo,
-    linkedLegs.find(leg => leg.pickupEventId === event.id && normalizeKind(leg) !== EMPTY_MOVE_KIND)?.shippingDocs,
-    linkedLegs.find(leg => leg.pickupEventId === event.id && normalizeKind(leg) !== EMPTY_MOVE_KIND)?.loadNo,
-    tokens.length > 1 ? tokens[tokens.length - 1] : ''
+    pickupLoadedLeg?.shippingDocs,
+    pickupLoadedLeg?.loadNo,
+    explicitTokens.length > 1 ? explicitTokens[explicitTokens.length - 1] : ''
   );
-  return { delivered, picked, transitionLoadNos: uniqueClean([delivered, picked, ...tokens]) };
+  return { delivered, picked, transitionLoadNos: uniqueClean([delivered, picked, ...explicitTokens]) };
+}
+
+function shouldClearEventLoadCarryover(event = {}, linkedLegs = []) {
+  if (event.status === 'D') return false;
+  const docs = firstRealText(event.shippingDocs, event.loadNo);
+  if (!docs) return false;
+  const text = `${event.note || ''} ${event.description || ''}`;
+  if (eventExplicitNewLoadTokens(event).length) return false;
+  const deliveryLeg = linkedLegs.find(leg => leg.deliveryEventId === event.id && isLoadedKind(leg));
+  const pickupEmptyLeg = linkedLegs.find(leg => leg.pickupEventId === event.id && normalizeKind(leg) === EMPTY_MOVE_KIND);
+  return /drop\s*off|empty|reposition/i.test(text)
+    || (pickupEmptyLeg && !linkedLegs.some(leg => leg.pickupEventId === event.id && normalizeKind(leg) !== EMPTY_MOVE_KIND))
+    || (deliveryLeg && docsMatch(docs, firstRealText(deliveryLeg.shippingDocs, deliveryLeg.loadNo)));
 }
 
 function repairEventLocationFromRoute(event = {}, day = '', routeLegs = []) {
@@ -379,15 +552,33 @@ export function normalizeTransitionEvents(state = {}) {
       if (event.status === 'D') return next;
       const linked = routeLegsLinkedToEvent(routeLegsByDay, event.id || '');
       const transitionText = `${event.note || ''} ${event.description || ''}`;
-      const isTransition = /drop\s*&\s*hook|delivered.+picked|picked.+delivered/i.test(transitionText)
+      const isTransition = /drop\s*&\s*hook|drop\s*off|delivered.+picked|picked.+delivered/i.test(transitionText)
         || linked.some(leg => leg.pickupEventId === event.id) && linked.some(leg => leg.deliveryEventId === event.id);
+
+      const clearCarryover = shouldClearEventLoadCarryover(event, linked);
+      if (clearCarryover) {
+        next = {
+          ...next,
+          staleCarryoverLoadNo:firstRealText(next.staleCarryoverLoadNo, next.shippingDocs, next.loadNo),
+          shippingDocs:'',
+          loadNo:'',
+          bol:'',
+          po:'',
+        };
+        changed = true;
+      }
+
       if (!isTransition) return next;
-      const summary = transitionSummaryFromEventAndLegs(event, linked);
+      const summary = transitionSummaryFromEventAndLegs(next, linked);
       if (!summary.delivered && !summary.picked && !summary.transitionLoadNos.length) return next;
       changed = true;
       const transitionSummary = summary.delivered && summary.picked
         ? `Delivered ${summary.delivered} · Picked up ${summary.picked}`
-        : summary.transitionLoadNos.join(' · ');
+        : summary.delivered
+          ? `Delivered ${summary.delivered}`
+          : summary.picked
+            ? `Picked up ${summary.picked}`
+            : summary.transitionLoadNos.join(' · ');
       return {
         ...next,
         deliveredLoadNo: summary.delivered || next.deliveredLoadNo || '',
