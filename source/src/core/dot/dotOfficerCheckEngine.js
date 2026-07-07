@@ -3,6 +3,7 @@ import { durLabel, nowMin, timeLabel } from '../../shared/utils/time.js';
 import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
 import { analyzeLinkedHos, violationRangesForDay } from '../hos/hosEngine.js';
 import { haversineMiles, pointFromLogLocation } from '../gps/locationService.js';
+import { routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../routes/routeNormalization.js';
 
 const STATUS_LABEL = { OFF:'OFF DUTY', SB:'SLEEPER', D:'DRIVING', ON:'ON DUTY' };
 
@@ -60,12 +61,13 @@ function buildLocationContinuityIssues(events = []) {
     const touches = Math.abs(Number(next.startMin || 0) - Number(event.endMin || 0)) <= 5;
     if (!touches) return;
     const miles = estimatedLocationMiles(event, next);
+    if (miles == null || miles <= 5) return;
     const preferPreviousToCurrent = next.status === 'ON';
     issues.push(makeIssue('location', {
       id:`location_jump_${event.id || index}_${next.id || index + 1}`,
-      severity:'fix',
-      title:'Location jump with no driving',
-      detail:`${eventTitle(next)} starts in ${cityState(next.city, next.state)} right after ${eventTitle(event)} in ${cityState(event.city, event.state)}${miles != null ? ` · about ${miles.toFixed(0)} mi apart` : ''}`,
+      severity:'review',
+      title:'Location continuity review',
+      detail:`${eventTitle(next)} starts in ${cityState(next.city, next.state)} right after ${eventTitle(event)} in ${cityState(event.city, event.state)} · about ${miles.toFixed(0)} mi apart`,
       fixAction:'FIX_LOCATION_CONTINUITY',
       previousEventId:event.id || '',
       eventId:next.id || event.id || '',
@@ -113,33 +115,33 @@ function isNoLoadText(text = '') {
 }
 
 function routeLegsForDay(state, day) {
-  const all = Object.entries(state.routeLegsByDay || {}).flatMap(([legDay, legs]) => (
-    (legs || []).map(leg => ({ ...leg, day:leg.day || legDay }))
-  ));
+  return routeLegsForDayCanonical(state, day);
+}
 
-  return all
-    .filter(leg => {
-      if (leg.day === day || leg.pickupDay === day || leg.deliveryDay === day) return true;
-      return String(leg.pickupDay || leg.day || '') < String(day || '') && leg.status !== 'delivered' && leg.status !== 'cancelled';
-    })
-    .sort((a,b) => String(a.pickupDay || a.day).localeCompare(String(b.pickupDay || b.day)) || Number(a.pickupMin ?? 9999) - Number(b.pickupMin ?? 9999));
+function uniqueDocValues(values = []) {
+  const seen = new Set();
+  return values
+    .map(safeText)
+    .filter(Boolean)
+    .filter(value => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function shippingDocsForDay(state, day, events = []) {
   const load = state.loadInfo || {};
   const equipment = state.equipment || {};
   const routeLegs = routeLegsForDay(state, day);
-  const values = [
-    load.loadNo,
-    load.po,
-    load.bol,
-    load.shippingDocs,
+  return uniqueDocValues([
+    ...routeLegs.map(leg => leg.displayShippingDocs || leg.shippingDocs || leg.loadNo),
+    ...events.map(event => event.displayShippingDocs || event.shippingDocs || event.loadNo),
+    ...(routeLegs.length ? [] : [load.loadNo, load.po, load.bol, load.shippingDocs]),
     equipment.container,
     equipment.chassis,
-    ...routeLegs.map(leg => leg.shippingDocs || leg.loadNo),
-    ...events.map(event => event.shippingDocs || event.loadNo),
-  ].map(safeText).filter(Boolean);
-  return values;
+  ]);
 }
 
 function splitDocTokens(values = []) {
@@ -225,22 +227,32 @@ function buildFormIssues(state, day, events) {
   const eventMilesTotal = drivingEvents.reduce((sum, event) => sum + Math.max(0, Number(event.manualMiles || 0)), 0);
   const dayMilesTotal = Math.max(0, Number(state.manualMilesByDay?.[day] || 0));
   const manualMilesTotal = dayMilesTotal || eventMilesTotal;
+  const routeMilesSuggestion = suggestedMilesForDayFromRoute(state, day);
   if (drivingEvents.length && !(manualMilesTotal > 0)) {
     issues.push(makeIssue('form', {
       id:'missing_total_driving_miles',
       severity:'fix',
       title:'Total driving miles missing',
-      detail:'Enter total miles driven today.',
+      detail: routeMilesSuggestion > 0
+        ? `Enter total miles driven today. Recommendation: ${routeMilesSuggestion.toFixed(2)} mi.`
+        : 'Enter total miles driven today.',
       fixAction:'OPEN_MANUAL_MILES',
       eventId:drivingEvents[0]?.id || '',
+      suggestedMiles:routeMilesSuggestion || undefined,
       actionLabel:'Add total miles',
     }));
   }
 
   const docTokens = splitDocTokens(docs);
   const dupes = [...new Set(docTokens.filter((item, index) => docTokens.indexOf(item) !== index))];
-  if (dupes.length) {
-    issues.push(makeIssue('form', { id:'duplicate_shipping_docs', severity:'review', title:'Shipping docs duplicated', detail:`Review: ${dupes.join(', ')}`, fixAction:'OPEN_FORM_FIELD', target:'shippingDocs', actionLabel:'Review' }));
+  const transitionTokens = new Set(events.flatMap(event => [
+    ...(Array.isArray(event.transitionLoadNos) ? event.transitionLoadNos : []),
+    event.deliveredLoadNo,
+    event.pickedUpLoadNo,
+  ]).map(value => safeText(value).toLowerCase()).filter(Boolean));
+  const unexpectedDupes = dupes.filter(item => !transitionTokens.has(String(item || '').toLowerCase()));
+  if (unexpectedDupes.length) {
+    issues.push(makeIssue('form', { id:'duplicate_shipping_docs', severity:'review', title:'Shipping docs duplicated', detail:`Review: ${unexpectedDupes.join(', ')}`, fixAction:'OPEN_FORM_FIELD', target:'shippingDocs', actionLabel:'Review' }));
   }
 
   return issues;
@@ -359,8 +371,8 @@ function buildInspectionIssues(state, day, events) {
   ) {
     issues.push(makeIssue('inspection', {
       id:`location_jump_pretrip_drive_${preTrip.id || preTrip.startMin}_${firstDriving.id || firstDriving.startMin}`,
-      severity:'fix',
-      title:'Pre-trip / driving location mismatch',
+      severity:'review',
+      title:'Pre-trip / driving location review',
       detail:`Pre-trip ${cityState(preTrip.city, preTrip.state)} → Driving ${cityState(firstDriving.city, firstDriving.state)}`,
       fixAction:'FIX_LOCATION_CONTINUITY',
       previousEventId:preTrip.id || '',

@@ -29,7 +29,11 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
         const selected = selectedId === event.id;
         const checked = selectedIds.includes(event.id);
         const loc = `${event.city || ''}${event.state ? `, ${event.state}` : ''}`.trim();
+        const transitionSummary = sanitizeLogText(event.transitionSummary || '');
         const cleanNote = sanitizeLogText(event.note || '');
+        const displayNote = transitionSummary && !cleanNote.includes(transitionSummary)
+          ? [cleanNote, transitionSummary].filter(Boolean).join(' · ')
+          : cleanNote;
         return (
           <div
             key={event.id}
@@ -49,7 +53,7 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
                 <span>{timeLabel(event.startMin, true)} · {durLabel(event.endMin - event.startMin)}</span>
               </div>
               <div className="event-loc">{loc}</div>
-              {cleanNote && <div className="event-note">{cleanNote}</div>}
+              {displayNote && <div className="event-note">{displayNote}</div>}
             </div>
 
             <button className="blue-edit" onClick={(e)=>{ e.stopPropagation(); onOpenEdit(event.id); }}>Edit</button>

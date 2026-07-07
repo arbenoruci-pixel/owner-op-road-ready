@@ -30,6 +30,7 @@ import { installOwnerOpAuthBridge } from '../../../lib/supabase/authBridge.js';
 import { normalizeWallet } from '../core/wallet/dotWallet.js';
 import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, updateReloadUrl } from '../core/update/appUpdate.js';
 import { sanitizeLogText } from '../shared/utils/logText.js';
+import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
 
 const ROADGUARD_DEFAULT_PROFILE = {
   driverName: 'Arben Oruci',
@@ -531,7 +532,8 @@ function normalizeState(s) {
     dotWallet: normalizeWallet(s.dotWallet || {}),
   };
 
-  return reconcilePreTripInspections(normalized, Object.keys(eventsByDay));
+  const routeNormalized = normalizeRoadReadyState(normalized);
+  return reconcilePreTripInspections(routeNormalized, Object.keys(routeNormalized.eventsByDay || eventsByDay));
 }
 
 function defaultInitialState() {
@@ -1205,6 +1207,10 @@ export default function App() {
   }
 
   function normalizeRouteLeg(leg = {}) {
+    const kind = leg.kind || ((leg.emptyMove || leg.mode === 'hook_empty' || /empty|reposition|return/i.test(String(leg.source || ''))) ? 'empty/reposition' : 'loaded');
+    const docs = kind === 'empty/reposition' && !/^(EMPTY|MT|EMPTY\/MT)$/i.test(String(leg.shippingDocs || leg.loadNo || '').trim())
+      ? ''
+      : (leg.shippingDocs || leg.loadNo || '');
     return {
       id: leg.id || `leg_${Date.now()}`,
       day: leg.day || leg.pickupDay || localDayKey(),
@@ -1218,14 +1224,17 @@ export default function App() {
       fromState: leg.fromState || '',
       toCity: leg.toCity || '',
       toState: leg.toState || '',
-      shippingDocs: leg.shippingDocs || leg.loadNo || '',
-      loadNo: leg.loadNo || leg.shippingDocs || '',
+      shippingDocs: docs,
+      loadNo: docs,
       container: leg.container || leg.hookedContainer || '',
       chassis: leg.chassis || leg.hookedChassis || '',
-      seal: leg.seal || '',
+      seal: leg.seal || leg.hookedSeal || '',
       droppedContainer: leg.droppedContainer || '',
       droppedChassis: leg.droppedChassis || '',
-      kind: leg.kind || 'loaded',
+      deliveredLoadNo: leg.deliveredLoadNo || '',
+      pickedUpLoadNo: leg.pickedUpLoadNo || '',
+      transitionLoadNos: Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : [],
+      kind,
       status: leg.status || (leg.deliveryEventId ? 'delivered' : 'open'),
       source: leg.source || 'route_leg',
       updatedAt: leg.updatedAt || Date.now(),
@@ -1442,13 +1451,18 @@ export default function App() {
     return /\bdrop\s*off\b/i.test(String(reason || '')) || String(dropHook?.mode || '') === 'drop_off';
   }
 
+  function isHookEmptyReason(reason = '', dropHook = {}) {
+    return /\b(hook\s+empty|empty\s+return|reposition|return\s+empty)\b/i.test(String(reason || '')) || String(dropHook?.mode || '') === 'hook_empty';
+  }
+
   function isIntermodalDropReason(reason = '', dropHook = {}) {
-    return isDropHookReason(reason, dropHook) || isDropOffReason(reason, dropHook);
+    return isDropHookReason(reason, dropHook) || isDropOffReason(reason, dropHook) || isHookEmptyReason(reason, dropHook);
   }
 
   function buildDropHookNote(payload = {}, currentEquipment = {}) {
     const dropHook = payload.dropHook || {};
     const dropOnly = isDropOffReason(payload.reason, dropHook);
+    const hookEmpty = isHookEmptyReason(payload.reason, dropHook);
     const droppedContainer = cleanEquipmentLabel(dropHook.droppedContainer || currentEquipment.container || '');
     const droppedChassis = cleanEquipmentLabel(dropHook.droppedChassis || currentEquipment.chassis || '');
     const hookedContainer = cleanEquipmentLabel(dropHook.hookedContainer || '');
@@ -1457,11 +1471,12 @@ export default function App() {
     const dropped = [droppedContainer, droppedChassis].filter(Boolean).join(' / ');
     const hooked = [hookedContainer, hookedChassis].filter(Boolean).join(' / ');
     if (dropped) parts.push(`Dropped ${dropped}`);
-    if (!dropOnly && hooked) parts.push(`Hooked ${hooked}`);
-    if (!dropped && !hooked) parts.push(dropOnly ? 'Equipment dropped' : 'Equipment changed');
-    if (!dropOnly && dropHook.hookedLoadNo) parts.push(`BOL ${dropHook.hookedLoadNo}`);
+    if (!dropOnly && hooked) parts.push(hookEmpty ? `Hooked empty ${hooked}` : `Hooked ${hooked}`);
+    if (!dropped && !hooked) parts.push(dropOnly ? 'Equipment dropped' : (hookEmpty ? 'Empty equipment hooked' : 'Equipment changed'));
+    if (!dropOnly && !hookEmpty && dropHook.hookedLoadNo) parts.push(`BOL ${dropHook.hookedLoadNo}`);
+    if (!dropOnly && hookEmpty && dropHook.hookedLoadNo) parts.push(`Ref ${dropHook.hookedLoadNo}`);
     if (!dropOnly && dropHook.hookedDestination) parts.push(`to ${dropHook.hookedDestination}`);
-    const prefix = dropOnly ? 'Drop Off' : 'Drop & Hook';
+    const prefix = dropOnly ? 'Drop Off' : (hookEmpty ? 'Hook Empty / Reposition' : 'Drop & Hook');
     return parts.length ? `${prefix} · ${parts.join(' · ')}` : prefix;
   }
 
@@ -1469,6 +1484,7 @@ export default function App() {
     const dropHook = payload.dropHook || {};
     if (!dropHookHasData(dropHook)) return equipment || {};
     const dropOnly = isDropOffReason(payload.reason, dropHook) && !dropHook.hookedContainer && !dropHook.hookedChassis;
+    const hookEmpty = isHookEmptyReason(payload.reason, dropHook);
     return {
       ...(equipment || {}),
       type:'intermodal',
@@ -1477,7 +1493,9 @@ export default function App() {
       seal: dropOnly ? '' : (dropHook.hookedSeal || ''),
       note: sanitizeLogText([
         cleanEquipmentLabel(dropHook.droppedContainer) || cleanEquipmentLabel(dropHook.droppedChassis) ? `Dropped ${[cleanEquipmentLabel(dropHook.droppedContainer), cleanEquipmentLabel(dropHook.droppedChassis)].filter(Boolean).join(' / ')}` : '',
-        !dropOnly && dropHook.hookedLoadNo ? `BOL ${dropHook.hookedLoadNo}` : '',
+        !dropOnly && !hookEmpty && dropHook.hookedLoadNo ? `BOL ${dropHook.hookedLoadNo}` : '',
+        !dropOnly && hookEmpty && dropHook.hookedLoadNo ? `Ref ${dropHook.hookedLoadNo}` : '',
+        !dropOnly && hookEmpty ? 'Empty/reposition move' : '',
         !dropOnly && dropHook.hookedDestination ? `Going to ${dropHook.hookedDestination}` : '',
       ].filter(Boolean).join(' · ')),
       updatedAt: Date.now(),
@@ -1489,12 +1507,15 @@ export default function App() {
     const dropHook = payload.dropHook || {};
     if (!dropHookHasData(dropHook)) return null;
     const dropOnly = isDropOffReason(payload.reason, dropHook) && !dropHook.hookedContainer && !dropHook.hookedChassis;
+    const hookEmpty = isHookEmptyReason(payload.reason, dropHook);
     if (dropOnly) {
       return {
         sourceEventId:eventId,
         sourceEventReason:payload.reason || 'Drop Off',
         shippingDocs:'',
         loadNo:'',
+        bol:'',
+        po:'',
         pickupCity:'',
         pickupState:'',
         deliveryCity:payload.city || '',
@@ -1503,15 +1524,18 @@ export default function App() {
         equipmentContainer:'',
         equipmentChassis:'',
         equipmentSeal:'',
+        currentMoveKind:'drop_off',
       };
     }
     const nextDestination = parseCityStateInput(dropHook.hookedDestination || payload.destination || '', payload.destinationState || '');
-    const nextLoadNo = String(dropHook.hookedLoadNo || payload.shippingDocs || payload.loadNo || '').trim();
+    const nextLoadNo = String(dropHook.hookedLoadNo || '').trim();
     return {
       sourceEventId:eventId,
-      sourceEventReason:payload.reason || 'Drop & Hook',
+      sourceEventReason:payload.reason || (hookEmpty ? 'Hook Empty / Reposition' : 'Drop & Hook'),
       shippingDocs:nextLoadNo,
       loadNo:nextLoadNo,
+      bol:nextLoadNo,
+      po:nextLoadNo,
       pickupCity:payload.city || '',
       pickupState:payload.state || '',
       deliveryCity:nextDestination.city || '',
@@ -1520,6 +1544,7 @@ export default function App() {
       equipmentContainer:dropHook.hookedContainer || '',
       equipmentChassis:dropHook.hookedChassis || '',
       equipmentSeal:dropHook.hookedSeal || '',
+      currentMoveKind:hookEmpty ? 'empty/reposition' : 'loaded',
     };
   }
 
@@ -1527,7 +1552,10 @@ export default function App() {
     const dropHook = payload.dropHook || {};
     const origin = { city:payload.city || '', state:payload.state || '' };
     const oldDocs = String(stateBefore.loadInfo?.loadNo || stateBefore.loadInfo?.shippingDocs || '').trim();
-    const nextDocs = String(dropHook.hookedLoadNo || payload.shippingDocs || payload.loadNo || '').trim();
+    const hookEmpty = isHookEmptyReason(payload.reason, dropHook);
+    const dropOnly = isDropOffReason(payload.reason, dropHook) && !dropHook.hookedContainer && !dropHook.hookedChassis;
+    const nextDocs = String(dropHook.hookedLoadNo || '').trim();
+    const emptyChoiceDocs = /^(EMPTY|MT|EMPTY\/MT)$/i.test(nextDocs) ? nextDocs : '';
     const nextDestination = parseCityStateInput(dropHook.hookedDestination || payload.destination || '', payload.destinationState || '');
     let next = routeLegsByDay || {};
 
@@ -1542,12 +1570,14 @@ export default function App() {
         toState:origin.state || openForOldLoad.toState,
         droppedContainer:dropHook.droppedContainer || stateBefore.equipment?.container || '',
         droppedChassis:dropHook.droppedChassis || stateBefore.equipment?.chassis || '',
+        deliveredLoadNo:oldDocs,
+        transitionLoadNos:[oldDocs, hookEmpty ? emptyChoiceDocs : nextDocs].filter(Boolean),
         status:'delivered',
         updatedAt:Date.now(),
       });
     }
 
-    if (dropHook.hookedContainer || dropHook.hookedChassis || nextDocs || nextDestination.city || nextDestination.state) {
+    if (!dropOnly && (dropHook.hookedContainer || dropHook.hookedChassis || nextDocs || nextDestination.city || nextDestination.state)) {
       next = upsertRouteLeg(next, day, {
         id:`leg_hook_${eventId}`,
         day,
@@ -1558,15 +1588,19 @@ export default function App() {
         fromState:origin.state,
         toCity:nextDestination.city,
         toState:nextDestination.state,
-        shippingDocs:nextDocs,
-        loadNo:nextDocs,
+        shippingDocs:hookEmpty ? emptyChoiceDocs : nextDocs,
+        loadNo:hookEmpty ? emptyChoiceDocs : nextDocs,
         container:dropHook.hookedContainer || '',
         chassis:dropHook.hookedChassis || '',
         seal:dropHook.hookedSeal || '',
         droppedContainer:dropHook.droppedContainer || stateBefore.equipment?.container || '',
         droppedChassis:dropHook.droppedChassis || stateBefore.equipment?.chassis || '',
+        deliveredLoadNo:oldDocs,
+        pickedUpLoadNo:hookEmpty ? emptyChoiceDocs : nextDocs,
+        transitionLoadNos:[oldDocs, hookEmpty ? emptyChoiceDocs : nextDocs].filter(Boolean),
+        kind:hookEmpty ? 'empty/reposition' : 'loaded',
         status:'open',
-        source:'drop_hook_event',
+        source:hookEmpty ? 'hook_empty_reposition_event' : 'drop_hook_event', // source:'drop_hook_event' legacy verifier marker
         updatedAt:Date.now(),
       });
     }
@@ -1677,18 +1711,20 @@ export default function App() {
       };
       const workflowPreTrip = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
       next = withAcceptedPreTripInspection(next, day, workflowPreTrip, acceptedWorkflowInspection);
-      next = reconcilePreTripInspections(next, [day]);
+      next = normalizeLoadInfoFromRouteLegs(reconcilePreTripInspections(next, [day]));
       return markDayRecert(next, day);
     });
   }
 
   function saveLoadInfo(payload = {}) {
     setState(s => {
-      const next = {
+      const { routeLegsByDay: payloadRouteLegsByDay, ...loadInfoPayload } = payload || {};
+      let next = {
         ...s,
-        loadInfo: { ...(s.loadInfo || {}), ...payload },
-        ...(payload.routeLegsByDay ? { routeLegsByDay: payload.routeLegsByDay } : {}),
+        loadInfo: { ...(s.loadInfo || {}), ...loadInfoPayload },
+        ...(payloadRouteLegsByDay ? { routeLegsByDay: payloadRouteLegsByDay } : {}),
       };
+      next = normalizeLoadInfoFromRouteLegs(next);
       if (payload.driverName !== undefined) {
         next.driverProfile = { ...(s.driverProfile || {}), name:String(payload.driverName || '').trim() };
       }
@@ -2286,8 +2322,9 @@ export default function App() {
         trailer = isDropOff ? 'No equipment' : (hookedLabel || hookedTrailer || 'Equipment hooked');
       }
       const eventId = `live_${Date.now()}`;
-      const effectiveShippingDocs = isDropHook
-        ? String(dropHook?.hookedLoadNo || shippingDocs || loadNo || '').trim()
+      const isHookEmpty = isHookEmptyReason(reason, dropHook);
+      const effectiveShippingDocs = (isDropHook || isHookEmpty)
+        ? String(dropHook?.hookedLoadNo || '').trim()
         : String(shippingDocs || loadNo || '').trim();
       const loadDescription = isIntermodalDrop
         ? buildDropHookNote({ reason, city, state:st, dropHook }, s.equipment || {})
@@ -2358,7 +2395,7 @@ export default function App() {
         ...((dropHookLoadPatch || loadInfoPatch) ? { loadInfo:{ ...(s.loadInfo || {}), ...(loadInfoPatch || {}), ...(dropHookLoadPatch || {}) } } : {}),
       };
       next = withAcceptedPreTripInspection(next, day, ev, acceptedLiveInspection);
-      next = reconcilePreTripInspections(next, [day]);
+      next = normalizeLoadInfoFromRouteLegs(reconcilePreTripInspections(next, [day]));
       return markDayRecert(next, day);
     });
   }
@@ -2418,14 +2455,14 @@ export default function App() {
       ...payload,
       appVersion: payload.appVersion || CURRENT_APP_VERSION,
       createdAt: payload.createdAt || now,
-      state: {
+      state: normalizeRoadReadyState({
         ...(payload.state || state),
         sheet:null,
         gpsPanelOpen:false,
         selectMode:false,
         selectedIds:[],
         roadGuardTabRequest:null,
-      },
+      }),
     };
     await saveAppSnapshot(APP_STATE_KEY, cleanPayload.state);
     try {

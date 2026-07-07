@@ -4,6 +4,7 @@ import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
 import { haversineMiles, pointFromLogLocation } from '../../core/gps/locationService.js';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
+import { routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
 
 function hasRealEvents(events = []) {
   return (events || []).some(event => !event.carriedFromPreviousDay && Number(event.endMin || 0) > Number(event.startMin || 0));
@@ -124,18 +125,35 @@ function stateText(state, ...paths) {
   return '';
 }
 
-function shippingDocsText(state) {
+function uniqueText(values = []) {
+  const seen = new Set();
+  return values
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .filter(value => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function shippingDocsText(state, day = state.activeDay) {
   const load = state.loadInfo || {};
   const equipment = state.equipment || {};
-  const docs = [load.loadNo, load.po, load.bol, load.shippingDocs, equipment.container, equipment.chassis]
-    .filter(Boolean)
-    .map(v => String(v).trim())
-    .filter(Boolean)
-    .join(' ');
+  const routeLegs = routeLegsForDayCanonical(state, day);
+  const dayEvents = state.eventsByDay?.[day] || [];
+  const docs = uniqueText([
+    ...routeLegs.map(leg => leg.displayShippingDocs || leg.shippingDocs || leg.loadNo),
+    ...dayEvents.map(event => event.displayShippingDocs || event.shippingDocs || event.loadNo),
+    ...(routeLegs.length ? [] : [load.loadNo, load.po, load.bol, load.shippingDocs]),
+    equipment.container,
+    equipment.chassis,
+  ]).join(' ');
   if (docs) return docs;
-  const dayEvents = state.eventsByDay?.[state.activeDay] || [];
-  const mentionsEmpty = dayEvents.some(e => /empty|bobtail|no trailer|deadhead/i.test(`${e.note || ''} ${e.description || ''}`));
-  return mentionsEmpty ? 'Empty / bobtail noted in log' : '';
+  const mentionsEmpty = routeLegs.some(leg => /empty|reposition|return/i.test(`${leg.kind || ''} ${leg.source || ''}`))
+    || dayEvents.some(e => /empty|bobtail|no trailer|deadhead|reposition/i.test(`${e.note || ''} ${e.description || ''}`));
+  return mentionsEmpty ? 'Empty / reposition move noted in log' : '';
 }
 
 function previousSevenDays(day) {
@@ -154,6 +172,14 @@ function issueSeverity(issue = {}) {
   if (/location_jump|pretrip_after_driving|inspection_unlinked/i.test(text)) return 'review';
   if (/missing|invalid|overlap|gap|total|vehicle|shipping|location|inspection|driver|carrier|office/i.test(text)) return 'fix';
   return 'review';
+}
+
+export function isFatalSigningIssue(issue = {}) {
+  const severity = issueSeverity(issue);
+  const code = String(issue.code || issue.id || '').toLowerCase();
+  if (severity === 'notice' || severity === 'review') return false;
+  if (/active_day|location_jump|duplicate_shipping_docs|pretrip_after_driving|inspection_unlinked|inspection_complete_unlinked/.test(code)) return false;
+  return severity === 'fix' || severity === 'violation' || severity === 'dot';
 }
 
 function issueRuleLabel(issue = {}) {
@@ -282,7 +308,7 @@ export function validateLogForSigning(state, day) {
   const driverName = stateText(state, 'driverProfile.name', 'driver.name');
   const carrier = stateText(state, 'carrierName', 'driver.carrier');
   const mainOffice = stateText(state, 'mainOfficeAddress', 'driver.mainOffice');
-  const shipping = shippingDocsText(state);
+  const shipping = shippingDocsText(state, day);
 
   if (coverageGroup) {
     issues.push({
@@ -350,6 +376,26 @@ export function validateLogForSigning(state, day) {
       title: 'Vehicle is missing',
       detail: 'Add the truck/unit number before signing this log.',
       where: 'Form tab → Vehicles',
+    });
+  }
+
+  const drivingEvents = events.filter(event => event.status === 'D' && Number(event.endMin || 0) > Number(event.startMin || 0));
+  const eventMilesTotal = drivingEvents.reduce((sum, event) => sum + Math.max(0, Number(event.manualMiles || 0)), 0);
+  const dayMilesTotal = Math.max(0, Number(state.manualMilesByDay?.[day] || 0));
+  const routeMilesSuggestion = suggestedMilesForDayFromRoute(state, day);
+  if (drivingEvents.length && !(dayMilesTotal > 0 || eventMilesTotal > 0)) {
+    issues.push({
+      code:'missing_total_driving_miles',
+      title:'Total driving miles missing',
+      detail: routeMilesSuggestion > 0
+        ? `Enter total miles driven today. Recommendation: ${routeMilesSuggestion.toFixed(2)} mi.`
+        : 'Enter total miles driven today.',
+      where:'Form tab → Distance',
+      day,
+      eventId:drivingEvents[0]?.id || '',
+      recommendedMiles:routeMilesSuggestion || undefined,
+      fixAction:'OPEN_MANUAL_MILES',
+      actionLabel:'Add miles',
     });
   }
 
@@ -537,7 +583,7 @@ export function signConfirmMessage(state, day) {
 }
 
 export function signBlockMessage(state, day) {
-  const issues = validateLogForSigning(state, day);
+  const issues = validateLogForSigning(state, day).filter(isFatalSigningIssue);
   if (!issues.length) return '';
   return `Cannot sign this log yet. Fix these items first:\n\n${issues.map(issue => `• ${issue.where}: ${issue.title} — ${issue.detail}`).join('\n')}`;
 }
@@ -613,8 +659,8 @@ export function buildSignGuardSummary(state, day) {
     dotRows.push({ day: prevDay, total: durLabel(coverage.total || 0), signed, status: 'Ready', issue: null });
   });
 
-  const fixRequired = dayIssues.filter(issue => issueSeverity(issue) === 'fix');
-  const hosViolations = dayIssues.filter(issue => issueSeverity(issue) === 'violation');
+  const fixRequired = dayIssues.filter(issue => isFatalSigningIssue(issue) && issueSeverity(issue) === 'fix');
+  const hosViolations = dayIssues.filter(issue => isFatalSigningIssue(issue) && issueSeverity(issue) === 'violation');
   const notices = dayIssues.filter(issue => issueSeverity(issue) === 'notice');
   const review = dayIssues.filter(issue => issueSeverity(issue) === 'review');
   const ready = fixRequired.length === 0 && hosViolations.length === 0;
@@ -689,7 +735,7 @@ export function buildChatGptLogReviewPrompt(state, day) {
     `Main office: ${stateText(state, 'mainOfficeAddress', 'driver.mainOffice') || 'Not set'}`,
     `Truck/unit: ${stateText(state, 'driver.truck') || 'Not set'}`,
     `Trailer/equipment: ${stateText(state, 'currentTrailer', 'equipment.trailer', 'driver.trailer') || 'Not set'}`,
-    `Shipping docs / load reference: ${shippingDocsText(state) || 'Not set'}`,
+    `Shipping docs / load reference: ${shippingDocsText(state, day) || 'Not set'}`,
     `Log date: ${day} (${fullDayTitle(day)})`,
     '24-hour period starts: Midnight',
     '',

@@ -1,13 +1,14 @@
 {
-  "version": "95.73.0",
-  "build": "v95.73-location-coverage-repair",
-  "releasedAt": "2026-07-06T00:00:00.000Z",
+  "version": "95.74.0",
+  "build": "v95.74-log-route-normalization-and-sign-fix",
+  "releasedAt": "2026-07-07T00:00:00.000Z",
   "notes": [
-    "Returns the Log tab to the normal event-list view after saving a status or edit.",
-    "Prevents the selected-event graph-focus mode from hiding event rows after Save.",
-    "Removes the tall blank graph-only area by allowing the SVG graph to use its natural height.",
-    "Does not change driving events, duty times, miles, route/load data, DOT wallet, or backup/import data."
+    "Normalizes route legs to the top-level canonical routeLegsByDay source and removes stale legacy loadInfo.routeLegsByDay on load/import/export.",
+    "Fixes day-boundary coverage and cross-midnight rest checks without creating fake driving events.",
+    "Treats Drop & Hook transition shipping documents as expected delivered/picked-up records, and supports Drop Off plus Hook Empty/Reposition intermodal moves without reusing the old load number.",
+    "Adds route-based miles recommendations, intermodal chassis form display, and safer Sign/DOT checks for stale location labels.",
+    "Does not change DRIVING event start times, end times, or duty status."
   ],
-  "label": "v95.73 Location + coverage repair",
-  "updatedAt": "2026-07-06T00:00:00.000Z"
+  "label": "v95.74 Log route normalization + sign fix",
+  "updatedAt": "2026-07-07T00:00:00.000Z"
 }

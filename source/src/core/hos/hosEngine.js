@@ -38,6 +38,42 @@ function isRestStatus(status) {
   return status === 'OFF' || status === 'SB';
 }
 
+function addCrossMidnightRestCarryovers(timeline = []) {
+  const evs = sortByStart(timeline);
+  if (!evs.length) return evs;
+  const out = [...evs];
+  const firstByDay = new Map();
+  for (const event of evs) {
+    if (!event.dayKey) continue;
+    const existing = firstByDay.get(event.dayKey);
+    if (!existing || event.startAbs < existing.startAbs) firstByDay.set(event.dayKey, event);
+  }
+
+  for (const [dayKey, first] of firstByDay.entries()) {
+    const dayStart = dayStartAbs(dayKey);
+    if (first.startAbs <= dayStart + 1) continue;
+    const previous = evs
+      .filter(event => event.endAbs <= dayStart + 1)
+      .sort((a, b) => b.endAbs - a.endAbs)[0] || null;
+    if (!previous || !isRestStatus(previous.status) || previous.endAbs < dayStart - 1) continue;
+    out.push({
+      ...previous,
+      id:`hos_carry_${dayKey}_${previous.id || 'rest'}`,
+      dayKey,
+      startAbs:dayStart,
+      endAbs:first.startAbs,
+      startMin:0,
+      endMin:Math.max(1, Math.min(1440, first.startMin || 0)),
+      source:'hos_rest_carryover',
+      syntheticCoverage:true,
+      carriedStartCoverageFromPreviousDay:true,
+      note:previous.status === 'SB' ? 'Sleeper carry-over' : 'Off Duty carry-over',
+      description:'Rest continued across midnight',
+    });
+  }
+  return sortByStart(out);
+}
+
 function isOnDuty(status) {
   return status === 'ON' || status === 'D';
 }
@@ -158,7 +194,7 @@ export function buildContinuousTimeline(eventsByDay = {}, activeDay) {
     });
   });
 
-  return sortByStart(out);
+  return addCrossMidnightRestCarryovers(out);
 }
 
 export function findGapsAndOverlaps(timeline) {

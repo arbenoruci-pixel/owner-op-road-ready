@@ -108,18 +108,38 @@ function carryStartCoverageFromPreviousDay(events = [], previousDayEvent = null)
   const previousStatus = previousDayEvent?.status || '';
   const firstStatus = first?.status || '';
   const previousEndedAtMidnight = Number(previousDayEvent?.endMin || 0) >= 1438;
+  if (!previousEndedAtMidnight || !statusCanCarryAcrossMidnight(previousStatus)) return completed;
 
-  if (
-    previousEndedAtMidnight &&
-    previousStatus === firstStatus &&
-    statusCanCarryAcrossMidnight(firstStatus)
-  ) {
+  if (previousStatus === firstStatus) {
     completed[0] = {
       ...first,
       startMin: 0,
       carriedStartCoverageFromPreviousDay: true,
     };
+    return completed;
   }
+
+  // v95.74: derive a display/check-only carryover block when a previous OFF/SB
+  // rest segment crosses midnight but the first real event after midnight is a
+  // different duty status. This fixes the false 38m start-gap without writing a
+  // fake stored event or changing any DRIVING event.
+  if (previousStatus === 'OFF' || previousStatus === 'SB') {
+    const loc = cleanLocation(previousDayEvent || {});
+    return [{
+      id:`carry_start_${previousDayEvent?.id || 'previous'}_${first.id || 'first'}`,
+      status:previousStatus,
+      startMin:0,
+      endMin:Math.max(1, Math.min(1440, firstStart)),
+      city:loc.city || first.city || '',
+      state:loc.state || first.state || '',
+      note:statusNote(previousStatus),
+      description:'Carry-over from previous day',
+      source:'carryover_derived',
+      displayOnly:true,
+      carriedStartCoverageFromPreviousDay:true,
+    }, ...completed];
+  }
+
   return completed;
 }
 

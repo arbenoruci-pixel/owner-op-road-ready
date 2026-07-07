@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { CURRENT_APP_VERSION } from '../../core/update/appUpdate.js';
+import { normalizeRoadReadyState } from '../../core/routes/routeNormalization.js';
 
 const BACKUP_KIND = 'owner_op_road_ready_backup';
 const BACKUP_SCHEMA_VERSION = 1;
@@ -43,14 +44,14 @@ function backupSummary(state = {}) {
 }
 
 function compactStateForBackup(state = {}) {
-  return {
+  return normalizeRoadReadyState({
     ...state,
     sheet: null,
     gpsPanelOpen: false,
     selectMode: false,
     selectedIds: [],
     roadGuardTabRequest: null,
-  };
+  });
 }
 
 function buildFileName() {

@@ -11,6 +11,7 @@ import { displayEventsForDay, displayEventsForDayFromState } from '../../core/ti
 import { isToday, localDayKey } from '../../shared/utils/date.js';
 import { durLabel } from '../../shared/utils/time.js';
 import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
+import { routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_CARRIER_NAME = 'Narta express llc';
@@ -267,14 +268,7 @@ function equipmentFormSummary(state = {}, day = '', events = [], routeLegs = [])
 }
 
 function routeLegsForDay(state, day) {
-  const all = Object.entries(state.routeLegsByDay || {}).flatMap(([legDay, legs]) => (legs || []).map(leg => ({ ...leg, day:leg.day || legDay })));
-  return all
-    .filter(leg => {
-      if (leg.day === day || leg.pickupDay === day || leg.deliveryDay === day) return true;
-      // Carry only open/in-progress legs into newer days; completed legs stay on their own day.
-      return String(leg.pickupDay || leg.day || '') < String(day || '') && leg.status !== 'delivered' && leg.status !== 'cancelled';
-    })
-    .sort((a,b)=>String(a.pickupDay || a.day).localeCompare(String(b.pickupDay || b.day)) || Number(a.pickupMin ?? 9999)-Number(b.pickupMin ?? 9999));
+  return routeLegsForDayCanonical(state, day);
 }
 
 function legLabel(leg) {
@@ -288,7 +282,16 @@ function legLabel(leg) {
 
 function legMeta(leg) {
   const parts = [];
-  if (leg.shippingDocs) parts.push(`BOL ${leg.shippingDocs}`);
+  const delivered = String(leg.deliveredLoadNo || '').trim();
+  const picked = String(leg.pickedUpLoadNo || '').trim();
+  const kind = String(leg.kind || '').toLowerCase();
+  if (delivered && picked && delivered !== picked) {
+    parts.push(`Delivered ${delivered} · Picked up ${picked}`);
+  } else if (/empty|reposition/.test(kind)) {
+    parts.push(leg.shippingDocs ? `Empty / reposition · ${leg.shippingDocs}` : 'Empty / reposition');
+  } else if (leg.shippingDocs) {
+    parts.push(`BOL ${leg.shippingDocs}`);
+  }
   if (leg.container || leg.chassis) parts.push([leg.container, leg.chassis].filter(Boolean).join(' / '));
   if (leg.droppedContainer || leg.droppedChassis) parts.push(`Dropped ${[leg.droppedContainer, leg.droppedChassis].filter(Boolean).join(' / ')}`);
   parts.push(leg.status === 'delivered' ? 'Delivered' : 'Open');
@@ -451,6 +454,7 @@ function formSummary(state, events) {
   const notes = safeValue(load.notes || load.note || state.formNotes || '', 'None');
   const manualMiles = manualMilesTotal(events);
   const dayManualMiles = Math.max(0, Number(state.manualMilesByDay?.[state.activeDay] || 0));
+  const suggestedRouteMiles = suggestedMilesForDayFromRoute(state, state.activeDay);
   const hasDriving = (events || []).some(event => event.status === 'D');
   return {
     off: formatDutyMinutes(dutyMap.OFF || 0),
@@ -460,8 +464,9 @@ function formSummary(state, events) {
     vehicles: safeValue(state.driver?.truck),
     equipmentLabel: equipmentSummary.label,
     trailers: safeValue(trailers),
-    distance: dayManualMiles > 0 ? `${dayManualMiles.toFixed(2)} mi` : (manualMiles > 0 ? `${manualMiles.toFixed(2)} mi` : (hasDriving ? 'Missing' : 'None')),
+    distance: dayManualMiles > 0 ? `${dayManualMiles.toFixed(2)} mi` : (manualMiles > 0 ? `${manualMiles.toFixed(2)} mi` : (hasDriving && suggestedRouteMiles > 0 ? `Missing · suggestion ${suggestedRouteMiles.toFixed(2)} mi` : (hasDriving ? 'Missing' : 'None'))),
     distanceRaw: dayManualMiles > 0 ? dayManualMiles : manualMiles,
+    distanceSuggestion: suggestedRouteMiles,
     hasDriving,
     odometers: 'No Vehicles',
     shippingDocs: safeValue(shippingDocs),
@@ -535,7 +540,9 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer, onSaveDayDist
   }
   function editDistance() {
     if (typeof window === 'undefined') return;
-    const current = Number(form.distanceRaw || 0) > 0 ? String(Number(form.distanceRaw || 0)) : '';
+    const current = Number(form.distanceRaw || 0) > 0
+      ? String(Number(form.distanceRaw || 0))
+      : (Number(form.distanceSuggestion || 0) > 0 ? String(Number(form.distanceSuggestion || 0)) : '');
     const rawMiles = window.prompt('Total driving miles for this log day', current);
     if (rawMiles == null) return;
     const miles = Number(String(rawMiles).replace(/[^0-9.]/g, ''));
