@@ -1,3 +1,10 @@
+# v95.79 — Rest-Only Coverage Clean
+
+- Treats OFF DUTY/SLEEPER-only restored days as full rest/off-duty coverage for DOT Check/signing.
+- Prevents one-minute imported OFF/SB artifacts from opening a missing-coverage Fix Wizard on old off-duty days.
+- Keeps true missing coverage checks active for driving/ON DUTY working days.
+- Added verifier for the real backup Jun 29 / Jun 30 rest-only days.
+
 # v95.78 — Quiet DOT Review Items
 
 - Hid non-actionable rest progress review cards from the main DOT Check panel.

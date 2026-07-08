@@ -177,6 +177,19 @@ function deriveShortOnDutyTransitionCoverage(events = []) {
   return completed;
 }
 
+
+function isRestOnlyCoverageDay(events = []) {
+  const real = (events || []).filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+  if (!real.length) return false;
+  return real.every(event => event.status === 'OFF' || event.status === 'SB');
+}
+
+function restOnlyCoverageStatus(events = []) {
+  const real = (events || []).filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+  const sleeper = real.find(event => event.status === 'SB');
+  return sleeper?.status || real[0]?.status || 'OFF';
+}
+
 function suggestedStatusForBlock(type, previous, next, durationMin) {
   const previousStatus = previous?.status || '';
   const nextStatus = next?.status || '';
@@ -234,13 +247,45 @@ export function rawCoverageIssues(eventsByDay = {}, day = '', options = {}) {
   const previousDayEvent = previousRawEvent(eventsByDay, day);
   const events = rawStoredEventsForDay(eventsByDay, day);
   const rawCompleted = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
-  const completed = deriveShortOnDutyTransitionCoverage(carryStartCoverageFromPreviousDay(rawCompleted, previousDayEvent));
-  const total = completed.reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);
   const issues = [];
 
   if (future) {
     return { events, issues:[makeCoverageIssue('future_day', { severity:'notice', title:'Future log date', detail:'Open today to make current records.', fixAction:'OPEN_LOG', actionLabel:'Open log' })], total, targetEnd, current, future };
   }
+
+  if (isRestOnlyCoverageDay(rawCompleted) && targetEnd > 0) {
+    // v95.79: A rest-only/off-duty day can be represented by a tiny imported
+    // OFF/SB artifact (for example a one-minute OFF event restored from backup).
+    // For DOT Check/signing, treat the uncovered portions as the same OFF/SB
+    // status without writing synthetic rows or changing the driver record.
+    const status = restOnlyCoverageStatus(rawCompleted);
+    const loc = usableLocation(rawCompleted[0], rawCompleted[rawCompleted.length - 1], previousDayEvent, options.currentLocation);
+    return {
+      events,
+      issues,
+      total: targetEnd,
+      targetEnd,
+      current,
+      future,
+      restOnlyDerivedCoverage: true,
+      derivedCoverageEvent: {
+        id:`rest_only_coverage_${day}`,
+        status,
+        startMin:0,
+        endMin:targetEnd,
+        city:loc.city || '',
+        state:loc.state || '',
+        note:statusNote(status),
+        description:'Rest/off-duty day coverage derived for checks only',
+        source:'rest_only_coverage_derived',
+        displayOnly:true,
+        syntheticCoverage:true,
+      },
+    };
+  }
+
+  const completed = deriveShortOnDutyTransitionCoverage(carryStartCoverageFromPreviousDay(rawCompleted, previousDayEvent));
+  const total = completed.reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);
 
   if (!completed.length) {
     if (targetEnd > 0) {

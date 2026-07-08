@@ -1,14 +1,13 @@
 {
-  "version": "95.78.0",
-  "build": "v95.78-quiet-dot-review",
+  "version": "95.79.0",
+  "build": "v95.79-rest-only-coverage",
   "releasedAt": "2026-07-07T00:00:00.000Z",
   "notes": [
-    "Keeps noisy review-only DOT Check items out of the main panel for valid work days.",
-    "Hides short rest progress cards unless there is a real HOS violation/action.",
-    "Pre-trip/inspection review logic now uses the relevant ON DUTY/start-work context before first driving instead of a later pre-trip event.",
-    "Delivery route-link metadata review is no longer shown as a main DOT Check issue when route/shipping data is otherwise valid.",
+    "Treats OFF DUTY/SLEEPER-only restored days as rest-only days for DOT Check coverage.",
+    "A tiny imported OFF/SB artifact no longer creates a missing-coverage Fix Wizard item.",
+    "Keeps missing coverage checks for real working/driving days.",
     "Does not change DRIVING event start times, end times, or duty status."
   ],
-  "label": "v95.78 quiet DOT review items",
+  "label": "v95.79 rest-only coverage clean",
   "updatedAt": "2026-07-07T00:00:00.000Z"
 }
