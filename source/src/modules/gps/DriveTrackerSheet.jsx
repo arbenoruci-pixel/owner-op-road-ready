@@ -14,6 +14,7 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
   const [stoppedSince, setStoppedSince] = useState(null);
   const stoppedSinceRef = useRef(null);
   const autoStoppedRef = useRef(false);
+  const PAPER_RODS_NO_AUTO_DUTY_EVENTS = true;
   const AUTO_MOTION = false;
 
   const totalMiles = useMemo(() => {
@@ -21,7 +22,7 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
     return Object.values(m).reduce((a, b) => a + Number(b || 0), 0);
   }, [state.gpsTrip]);
 
-  const shouldWatch = active || armed || AUTO_MOTION;
+  const shouldWatch = PAPER_RODS_NO_AUTO_DUTY_EVENTS ? false : (active || armed || AUTO_MOTION);
 
   useEffect(() => {
     if (!shouldWatch) return;
@@ -46,7 +47,7 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
 
         setLastFix(fix);
 
-        if (!active && (armed || AUTO_MOTION) && mph >= MOTION_MPH) {
+        if (!PAPER_RODS_NO_AUTO_DUTY_EVENTS && !active && (armed || AUTO_MOTION) && mph >= MOTION_MPH) {
           setArmed(false);
           onMotionDetected?.(fix);
           return;
@@ -60,7 +61,7 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
             stoppedSinceRef.current = firstStopped;
             setStoppedSince(firstStopped);
 
-            if (!autoStoppedRef.current && Date.now() - firstStopped > STOP_SECONDS * 1000) {
+            if (!PAPER_RODS_NO_AUTO_DUTY_EVENTS && !autoStoppedRef.current && Date.now() - firstStopped > STOP_SECONDS * 1000) {
               autoStoppedRef.current = true;
               onAutoStopped?.(fix);
             }
@@ -140,8 +141,8 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
 
         {!active && !armed && (
           <div className="gps-actions">
-            <button className="drive-main" onClick={() => setArmed(true)}>ARM MOTION WATCH</button>
-            <button className="drive-secondary" onClick={onStartDriving}>START DRIVING + GPS</button>
+            <button className="drive-main" disabled>Motion auto-driving disabled</button>
+            <button className="drive-secondary" onClick={onStartDriving}>CHANGE STATUS MANUALLY</button>
           </div>
         )}
 
@@ -154,7 +155,7 @@ export default function GpsDriveTracker({ state, open = false, onClose, onStartD
         )}
 
         <div className="gps-warning">
-          Field-test GPS works while the web app is open. iPhone/Safari may pause tracking when locked/backgrounded. Production needs native app background GPS.
+          Smart paper RODS mode does not create automatic driving events. Change duty status manually.
         </div>
       </div>
     </div>

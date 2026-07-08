@@ -7,6 +7,7 @@ import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
 import { nowMin } from '../../shared/utils/time.js';
 import { evaluateDotWallet, walletCardLabel } from '../../core/wallet/dotWallet.js';
+import HosCompactClocks from '../drive/HosCompactClocks.jsx';
 
 // v95.52 Roadside 8-day home list
 // Home always anchors to the real local calendar day, then the previous 7 days.
@@ -199,6 +200,8 @@ export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer
           <span className="rr-veh-sub">Vehicle</span>
         </button>
       </div>
+
+      <HosCompactClocks state={state} />
 
       {unsigned > 0 && (
         <button type="button" className="rr-attention" onClick={() => onOpenUnsigned?.()}>

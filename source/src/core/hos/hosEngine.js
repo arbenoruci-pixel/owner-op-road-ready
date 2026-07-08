@@ -1,5 +1,6 @@
 import { durLabel, nowMin } from '../../shared/utils/time.js';
 import { makeContinuousLogEvents } from '../timeline/timelineEngine.js';
+import { rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
 
 const HOUR = 60;
 
@@ -574,6 +575,387 @@ export function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}
     cycle,
     violationRanges: violationRangesForDay(eventsByDay, activeDay),
   };
+}
+
+
+function nowDateFromInput(nowInput = new Date()) {
+  const d = nowInput instanceof Date ? new Date(nowInput.getTime()) : new Date(nowInput || Date.now());
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+function localDayKeyFromDate(date = new Date()) {
+  const d = nowDateFromInput(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function minuteOfDate(date = new Date()) {
+  const d = nowDateFromInput(date);
+  return Math.max(0, Math.min(1440, d.getHours() * 60 + d.getMinutes()));
+}
+
+function validDayKey(value = '') {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function clampDuration(value = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+}
+
+function mergeClockTimeline(events = []) {
+  const ordered = sortByStart(events)
+    .filter(event => event && event.endAbs > event.startAbs)
+    .map(event => ({ ...event }));
+  const merged = [];
+
+  for (const event of ordered) {
+    const last = merged[merged.length - 1];
+    if (last && last.status === event.status && event.startAbs <= last.endAbs + 1) {
+      last.endAbs = Math.max(last.endAbs, event.endAbs);
+      last.endMin = Math.min(1440, Math.max(last.endMin || 0, event.endMin || 0));
+      last.source = last.source === event.source ? last.source : (last.source || event.source || 'hos');
+      continue;
+    }
+    merged.push(event);
+  }
+
+  return merged;
+}
+
+function currentStatusFromState(stateLike = {}, timeline = []) {
+  const status = String(stateLike?.currentStatus || '').trim().toUpperCase();
+  if (['OFF', 'SB', 'D', 'ON'].includes(status)) return status;
+  return timeline[timeline.length - 1]?.status || 'OFF';
+}
+
+function cycleSettingsFromState(stateLike = {}, options = {}) {
+  const buckets = [
+    options,
+    stateLike?.hosSettings,
+    stateLike?.carrierSettings,
+    stateLike?.settings,
+  ].filter(Boolean);
+
+  for (const bucket of buckets) {
+    const rawHours = Number(bucket.cycleHours ?? bucket.hosCycleHours ?? bucket.cycleLimitHours);
+    const rawDays = Number(bucket.cycleDays ?? bucket.hosCycleDays ?? bucket.cycleLimitDays);
+    if (rawHours === 60 || rawDays === 7 || /60\s*\/?\s*7/i.test(String(bucket.cycleRule || bucket.hosCycle || ''))) {
+      return { cycleHours:60, cycleDays:7 };
+    }
+    if (rawHours === 70 || rawDays === 8 || /70\s*\/?\s*8/i.test(String(bucket.cycleRule || bucket.hosCycle || ''))) {
+      return { cycleHours:70, cycleDays:8 };
+    }
+  }
+
+  return { cycleHours:70, cycleDays:8 };
+}
+
+function rawClockEventsForDay(eventsByDay = {}, dayKey = '') {
+  try {
+    return rawStoredEventsForDay(eventsByDay, dayKey);
+  } catch {
+    return makeContinuousLogEvents(eventsByDay?.[dayKey] || [], { isCurrentDay:false })
+      .filter(Boolean)
+      .map(event => ({ ...event }));
+  }
+}
+
+function buildHosClockTimeline(stateLike = {}, nowInput = new Date(), options = {}) {
+  const nowDate = nowDateFromInput(nowInput);
+  const nowDay = localDayKeyFromDate(nowDate);
+  const nowMinute = minuteOfDate(nowDate);
+  const nowAbs = absMin(nowDay, nowMinute);
+  const eventsByDay = stateLike?.eventsByDay || stateLike || {};
+  const lookbackDays = Math.max(10, Number(options.lookbackDays || 21));
+  const floorAbs = nowAbs - lookbackDays * 1440;
+  const changes = [];
+
+  Object.keys(eventsByDay || {})
+    .filter(validDayKey)
+    .filter(dayKey => dayStartAbs(dayKey) <= nowAbs && dayStartAbs(dayKey) + 1440 >= floorAbs)
+    .sort()
+    .forEach(dayKey => {
+      const dayStart = dayStartAbs(dayKey);
+      const rawEvents = rawClockEventsForDay(eventsByDay, dayKey);
+      rawEvents.forEach((event, index) => {
+        const status = String(event.status || 'OFF').toUpperCase();
+        if (!['OFF', 'SB', 'D', 'ON'].includes(status)) return;
+        const startMin = Math.max(0, Math.min(1440, Number(event.startMin || 0)));
+        const endMin = Math.max(startMin + 1, Math.min(1440, Number(event.endMin ?? startMin + 1)));
+        const startAbs = dayStart + startMin;
+        if (startAbs > nowAbs) return;
+        changes.push({
+          ...event,
+          id: event.id || `hos_change_${dayKey}_${index}_${status}_${startMin}`,
+          dayKey,
+          status,
+          startMin,
+          endMin,
+          startAbs,
+          rawEndAbs: dayStart + endMin,
+          endAbs: dayStart + endMin,
+          source: event.source || 'manual',
+        });
+      });
+    });
+
+  const ordered = changes.sort((a, b) => a.startAbs - b.startAbs || a.rawEndAbs - b.rawEndAbs || String(a.id).localeCompare(String(b.id)));
+  const currentStatus = currentStatusFromState(stateLike, ordered);
+  const out = [];
+
+  for (let i = 0; i < ordered.length; i += 1) {
+    const event = ordered[i];
+    const next = ordered.slice(i + 1).find(candidate => candidate.startAbs > event.startAbs) || null;
+    const dayEnd = dayStartAbs(event.dayKey) + 1440;
+    const rawEnd = Math.max(event.startAbs + 1, Math.min(dayEnd, event.rawEndAbs || event.startAbs + 1));
+    let endAbs = rawEnd;
+
+    if (next) {
+      endAbs = Math.min(nowAbs, Math.max(event.startAbs + 1, next.startAbs));
+    } else if (event.dayKey === nowDay) {
+      // The last duty-status event on the active day is an open status for the
+      // advisory clocks. A stored one-minute live row is extended only in
+      // derived HOS math; the raw event is not edited.
+      endAbs = Math.max(rawEnd, nowAbs);
+    } else if (event.status === 'D') {
+      endAbs = currentStatus === 'D' ? nowAbs : rawEnd;
+    } else if (isRestStatus(event.status)) {
+      endAbs = nowAbs;
+    } else {
+      endAbs = currentStatus === event.status ? nowAbs : rawEnd;
+    }
+
+    endAbs = Math.min(nowAbs, Math.max(event.startAbs + 1, endAbs));
+    if (endAbs <= event.startAbs) continue;
+
+    out.push({
+      ...event,
+      endAbs,
+      endMin: Math.max(1, Math.min(1440, Math.round(endAbs - dayStartAbs(event.dayKey)))),
+      derivedForHosClock: endAbs !== event.rawEndAbs,
+    });
+  }
+
+  return {
+    timeline: mergeClockTimeline(out),
+    nowAbs,
+    nowMinute,
+    nowDay,
+    currentStatus,
+  };
+}
+
+function latestRestReset(restBlocks = [], nowAbs = 0) {
+  return restBlocks
+    .filter(block => block.duration >= 10 * HOUR && block.startAbs + 10 * HOUR <= nowAbs)
+    .map(block => ({ ...block, resetAbs: block.startAbs + 10 * HOUR }))
+    .sort((a, b) => b.resetAbs - a.resetAbs)[0] || null;
+}
+
+function latestCycleRestart(restBlocks = [], nowAbs = 0) {
+  return restBlocks
+    .filter(block => block.duration >= 34 * HOUR && block.startAbs + 34 * HOUR <= nowAbs)
+    .map(block => ({ ...block, restartAbs: block.startAbs + 34 * HOUR }))
+    .sort((a, b) => b.restartAbs - a.restartAbs)[0] || null;
+}
+
+function currentRestBlock(restBlocks = [], nowAbs = 0) {
+  return restBlocks
+    .filter(block => block.startAbs <= nowAbs && block.endAbs >= nowAbs)
+    .sort((a, b) => b.startAbs - a.startAbs)[0] || null;
+}
+
+function clipDuration(event, startAbs, endAbs) {
+  const s = Math.max(event.startAbs, startAbs);
+  const e = Math.min(event.endAbs, endAbs);
+  return Math.max(0, e - s);
+}
+
+function sumClockDuration(timeline = [], startAbs = -Infinity, endAbs = Infinity, predicate = () => true) {
+  return timeline.reduce((sum, event) => {
+    if (!predicate(event)) return sum;
+    return sum + clipDuration(event, startAbs, endAbs);
+  }, 0);
+}
+
+function findDutyStartAfterReset(timeline = [], resetAbs = -Infinity, nowAbs = 0) {
+  return sortByStart(timeline)
+    .filter(event => event.endAbs > resetAbs && event.startAbs <= nowAbs && isOnDuty(event.status))
+    .map(event => ({ ...event, effectiveStartAbs: Math.max(event.startAbs, resetAbs) }))
+    .find(event => event.effectiveStartAbs <= nowAbs) || null;
+}
+
+function calculateBreakClockFromTimeline(timeline = [], resetAbs = -Infinity, nowAbs = 0, currentStatus = 'OFF') {
+  const startAbs = Number.isFinite(resetAbs) ? resetAbs : -Infinity;
+  const evs = sortByStart(timeline).filter(event => event.endAbs > startAbs && event.startAbs <= nowAbs);
+  let driveSinceBreak = 0;
+  let nonDrivingStartAbs = null;
+  let lastBreakAbs = Number.isFinite(resetAbs) ? resetAbs : null;
+
+  for (const event of evs) {
+    const s = Math.max(event.startAbs, startAbs);
+    const e = Math.min(event.endAbs, nowAbs);
+    if (e <= s) continue;
+
+    if (event.status === 'D') {
+      if (nonDrivingStartAbs != null && s - nonDrivingStartAbs >= 30) {
+        driveSinceBreak = 0;
+        lastBreakAbs = nonDrivingStartAbs + 30;
+      }
+      nonDrivingStartAbs = null;
+      driveSinceBreak += e - s;
+    } else {
+      if (nonDrivingStartAbs == null) nonDrivingStartAbs = s;
+      if (e - nonDrivingStartAbs >= 30) {
+        driveSinceBreak = 0;
+        lastBreakAbs = nonDrivingStartAbs + 30;
+      }
+    }
+  }
+
+  const remaining = Math.max(0, 8 * HOUR - driveSinceBreak);
+  const requiresBreakBeforeDriving = driveSinceBreak >= 8 * HOUR;
+  const expired = currentStatus === 'D' && driveSinceBreak > 8 * HOUR;
+  return {
+    usedMinutes: clampDuration(driveSinceBreak),
+    remainingMinutes: clampDuration(remaining),
+    limitMinutes: 8 * HOUR,
+    warning: remaining <= HOUR || requiresBreakBeforeDriving,
+    expired,
+    requiresBreakBeforeDriving,
+    lastBreakAbs,
+  };
+}
+
+function clockTone(remainingMinutes = 0, expired = false, warningWindow = HOUR) {
+  if (expired || remainingMinutes <= 0) return 'red';
+  if (remainingMinutes <= warningWindow) return 'yellow';
+  return 'green';
+}
+
+function buildClockWarnings({ drive, shift, breakClock, cycle }) {
+  const warnings = [];
+  if (drive.expired) warnings.push({ type:'drive', severity:'high', text:'Drive clock expired.' });
+  else if (drive.remainingMinutes <= HOUR) warnings.push({ type:'drive', severity:'medium', text:'Drive clock under 1 hour.' });
+
+  if (shift.expired) warnings.push({ type:'shift', severity:'high', text:'Shift clock expired.' });
+  else if (shift.remainingMinutes <= HOUR) warnings.push({ type:'shift', severity:'medium', text:'Shift clock under 1 hour.' });
+
+  if (breakClock.expired) warnings.push({ type:'break', severity:'high', text:'30-minute break required now.' });
+  else if (breakClock.remainingMinutes <= HOUR || breakClock.requiresBreakBeforeDriving) warnings.push({ type:'break', severity:'medium', text:'Break required soon.' });
+
+  if (cycle.expired) warnings.push({ type:'cycle', severity:'high', text:'Cycle clock expired.' });
+  else if (cycle.remainingMinutes <= 4 * HOUR) warnings.push({ type:'cycle', severity:'medium', text:'Cycle low.' });
+
+  return warnings;
+}
+
+/**
+ * Pure, deterministic advisory HOS clock calculation for smart paper RODS.
+ * Source of truth is manual duty-status events. This function never writes,
+ * edits, creates, or persists duty events.
+ */
+export function calculateHosClocks(stateLike = {}, nowInput = new Date(), options = {}) {
+  const { timeline, nowAbs, nowMinute, nowDay, currentStatus } = buildHosClockTimeline(stateLike, nowInput, options);
+  const restBlocks = findRestBlocks(timeline);
+  const fullReset = latestRestReset(restBlocks, nowAbs);
+  const resetAbs = fullReset ? fullReset.resetAbs : -Infinity;
+  const afterResetStartAbs = Number.isFinite(resetAbs) ? resetAbs : -Infinity;
+  const { cycleHours, cycleDays } = cycleSettingsFromState(stateLike, options);
+
+  const driveUsed = sumClockDuration(timeline, afterResetStartAbs, nowAbs, event => event.status === 'D');
+  const dutyStart = findDutyStartAfterReset(timeline, afterResetStartAbs, nowAbs);
+  const shiftUsed = dutyStart ? Math.max(0, nowAbs - dutyStart.effectiveStartAbs) : 0;
+  const breakClock = calculateBreakClockFromTimeline(timeline, afterResetStartAbs, nowAbs, currentStatus);
+  const restart = latestCycleRestart(restBlocks, nowAbs);
+  const cycleWindowStart = Math.max(
+    nowAbs - cycleDays * 1440,
+    restart ? restart.restartAbs : -Infinity
+  );
+  const cycleUsed = sumClockDuration(timeline, cycleWindowStart, nowAbs, event => isOnDuty(event.status));
+
+  const drive = {
+    label:'DRIVE',
+    usedMinutes: clampDuration(driveUsed),
+    remainingMinutes: clampDuration(Math.max(0, 11 * HOUR - driveUsed)),
+    limitMinutes: 11 * HOUR,
+    expired: driveUsed > 11 * HOUR,
+    resetAbs: fullReset?.resetAbs ?? null,
+    tone: clockTone(11 * HOUR - driveUsed, driveUsed > 11 * HOUR),
+  };
+
+  const shift = {
+    label:'SHIFT',
+    usedMinutes: clampDuration(shiftUsed),
+    remainingMinutes: clampDuration(Math.max(0, 14 * HOUR - shiftUsed)),
+    limitMinutes: 14 * HOUR,
+    expired: shiftUsed > 14 * HOUR,
+    shiftStartAbs: dutyStart?.effectiveStartAbs ?? null,
+    resetAbs: fullReset?.resetAbs ?? null,
+    tone: clockTone(14 * HOUR - shiftUsed, shiftUsed > 14 * HOUR),
+  };
+
+  const cycle = {
+    label:'CYCLE',
+    usedMinutes: clampDuration(cycleUsed),
+    remainingMinutes: clampDuration(Math.max(0, cycleHours * HOUR - cycleUsed)),
+    limitMinutes: cycleHours * HOUR,
+    cycleHours,
+    cycleDays,
+    expired: cycleUsed > cycleHours * HOUR,
+    restartAbs: restart?.restartAbs ?? null,
+    tone: clockTone(cycleHours * HOUR - cycleUsed, cycleUsed > cycleHours * HOUR, 4 * HOUR),
+  };
+
+  const breakOut = {
+    label:'BREAK',
+    ...breakClock,
+    tone: breakClock.expired ? 'red' : (breakClock.remainingMinutes <= HOUR || breakClock.requiresBreakBeforeDriving ? 'yellow' : 'green'),
+  };
+
+  const restProgress = currentRestBlock(restBlocks, nowAbs);
+  const clocks = [breakOut, drive, shift, cycle];
+  const warnings = buildClockWarnings({ drive, shift, breakClock: breakOut, cycle });
+
+  return {
+    advisory:true,
+    source:'manual-duty-events',
+    currentStatus,
+    nowAbs,
+    nowMinute,
+    nowDay,
+    generatedAt: nowDateFromInput(nowInput).toISOString(),
+    timeline,
+    drive,
+    shift,
+    break: breakOut,
+    cycle,
+    clocks,
+    warnings,
+    reset: {
+      last10HourResetAbs: fullReset?.resetAbs ?? null,
+      fullReset,
+      currentRest: restProgress ? {
+        startAbs: restProgress.startAbs,
+        endAbs: restProgress.endAbs,
+        durationMinutes: clampDuration(restProgress.duration),
+        minutesTo10HourReset: clampDuration(Math.max(0, 10 * HOUR - restProgress.duration)),
+        minutesTo34HourRestart: clampDuration(Math.max(0, 34 * HOUR - restProgress.duration)),
+      } : null,
+    },
+    splitSleeper: {
+      supported:false,
+      enabled:false,
+      reason:'Split sleeper clocks are hidden/disabled until the full paired-period rule is implemented in the Drive Mode UI.',
+    },
+  };
+}
+
+export function formatHosClockMinutes(minutes = 0) {
+  const safe = clampDuration(minutes);
+  const h = Math.floor(safe / 60);
+  const m = safe % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 // Backward-compatible wrapper used by older UI

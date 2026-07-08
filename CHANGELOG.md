@@ -1,3 +1,9 @@
+# v95.82 — Drive Mode HOS clocks safe bump
+
+- Corrects service-worker version metadata for the v95.81 Drive Mode/HOS patch.
+- Keeps HOS clocks advisory and derived from manual duty-status events.
+- Does not change driving events, duty times, route/load data, miles, signing data, or service-worker cache behavior.
+
 # v95.79 — Rest-Only Coverage Clean
 
 - Treats OFF DUTY/SLEEPER-only restored days as full rest/off-duty coverage for DOT Check/signing.

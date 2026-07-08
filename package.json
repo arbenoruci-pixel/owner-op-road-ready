@@ -1,13 +1,23 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.79.0",
+  "version": "95.82.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "test:offline": "node scripts/offline-sync-smoke-test.mjs"
+    "test:offline": "node scripts/offline-sync-smoke-test.mjs",
+    "verify-hos-drive-clock-no-midnight-reset-v9581": "node scripts/verify-hos-drive-clock-no-midnight-reset-v9581.mjs",
+    "verify-hos-drive-clock-resets-after-10h-off-v9581": "node scripts/verify-hos-drive-clock-resets-after-10h-off-v9581.mjs",
+    "verify-hos-shift-clock-no-midnight-reset-v9581": "node scripts/verify-hos-shift-clock-no-midnight-reset-v9581.mjs",
+    "verify-hos-break-clock-30min-rule-v9581": "node scripts/verify-hos-break-clock-30min-rule-v9581.mjs",
+    "verify-hos-cycle-70hr-8day-v9581": "node scripts/verify-hos-cycle-70hr-8day-v9581.mjs",
+    "verify-hos-34hr-restart-v9581": "node scripts/verify-hos-34hr-restart-v9581.mjs",
+    "verify-drive-mode-opens-on-driving-v9581": "node scripts/verify-drive-mode-opens-on-driving-v9581.mjs",
+    "verify-drive-mode-recalculates-after-reopen-v9581": "node scripts/verify-drive-mode-recalculates-after-reopen-v9581.mjs",
+    "verify-driving-events-unchanged-v9581": "node scripts/verify-driving-events-unchanged-v9581.mjs",
+    "verify-no-gps-auto-driving-v9581": "node scripts/verify-no-gps-auto-driving-v9581.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
