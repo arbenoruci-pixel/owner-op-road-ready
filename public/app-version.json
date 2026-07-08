@@ -1,14 +1,12 @@
 {
-  "version": "95.74.0",
-  "build": "v95.74-log-route-normalization-and-sign-fix",
+  "version": "95.76.0",
+  "build": "v95.76-v9574b-safe-bump",
   "releasedAt": "2026-07-07T00:00:00.000Z",
   "notes": [
-    "Normalizes route legs to the top-level canonical routeLegsByDay source and removes stale legacy loadInfo.routeLegsByDay on load/import/export.",
-    "Fixes day-boundary coverage and cross-midnight rest checks without creating fake driving events.",
-    "Treats Drop & Hook transition shipping documents as expected delivered/picked-up records, and supports Drop Off plus Hook Empty/Reposition intermodal moves without reusing the old load number.",
-    "Adds route-based miles recommendations, intermodal chassis form display, and safer Sign/DOT checks for stale location labels.",
+    "Safe version bump of the reviewed v9574b route/sign normalization patch so it can supersede v95.74 and v95.75 rollback deployments.",
+    "Keeps the v9574b fixes for Jul 06 206-mile suggestion, transition shipping-doc parsing, Jul 07 empty/reposition carryover, and stale loadInfo clearing.",
     "Does not change DRIVING event start times, end times, or duty status."
   ],
-  "label": "v95.74 Log route normalization + sign fix",
+  "label": "v95.76 v9574b safe route/sign fix",
   "updatedAt": "2026-07-07T00:00:00.000Z"
 }
