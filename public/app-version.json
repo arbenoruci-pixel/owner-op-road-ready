@@ -1,12 +1,14 @@
 {
-  "version": "95.77.0",
-  "build": "v95.77-off-duty-no-shipping-docs",
+  "version": "95.78.0",
+  "build": "v95.78-quiet-dot-review",
   "releasedAt": "2026-07-07T00:00:00.000Z",
   "notes": [
-    "Stops Sign/Fix Wizard from requiring shipping documents on OFF DUTY/SLEEPER-only days with no driving or load work.",
-    "Keeps v9574b route/sign normalization fixes for Jul 06 miles, transition-doc parsing, Jul 07 empty/reposition carryover, and stale loadInfo clearing.",
+    "Keeps noisy review-only DOT Check items out of the main panel for valid work days.",
+    "Hides short rest progress cards unless there is a real HOS violation/action.",
+    "Pre-trip/inspection review logic now uses the relevant ON DUTY/start-work context before first driving instead of a later pre-trip event.",
+    "Delivery route-link metadata review is no longer shown as a main DOT Check issue when route/shipping data is otherwise valid.",
     "Does not change DRIVING event start times, end times, or duty status."
   ],
-  "label": "v95.77 off-duty no shipping docs fix",
+  "label": "v95.78 quiet DOT review items",
   "updatedAt": "2026-07-07T00:00:00.000Z"
 }

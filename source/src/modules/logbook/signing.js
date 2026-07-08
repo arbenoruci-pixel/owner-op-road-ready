@@ -18,6 +18,26 @@ function isPreTripEvent(event = {}) {
   return event.status === 'ON' && /pre[- ]?trip|inspection/i.test(`${event.note || ''} ${event.description || ''}`);
 }
 
+function isStartDutyContextEvent(event = {}) {
+  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop\s*&\s*hook|hook|delivery|unloading|drop\s*off/i.test(`${event.note || ''} ${event.description || ''}`);
+}
+
+function latestOnDutyBefore(events = [], firstDriving = null, predicate = () => true) {
+  if (!firstDriving) return null;
+  return [...(events || [])]
+    .filter(event => event.status === 'ON')
+    .filter(event => Number(event.endMin || 0) <= Number(firstDriving.startMin || 0))
+    .filter(predicate)
+    .sort((a, b) => Number(b.endMin || 0) - Number(a.endMin || 0))[0] || null;
+}
+
+function relevantPreTripContext(events = [], firstDriving = null) {
+  if (!firstDriving) return (events || []).find(isPreTripEvent) || null;
+  return latestOnDutyBefore(events, firstDriving, isPreTripEvent)
+    || latestOnDutyBefore(events, firstDriving, isStartDutyContextEvent)
+    || null;
+}
+
 function eventLabel(event = {}) {
   const start = Number(event.startMin || 0);
   const end = Number(event.endMin || 0);
@@ -327,7 +347,8 @@ export function validateLogForSigning(state, day) {
   const vehicle = String(state.driver?.truck || '').trim();
   const hasOnOrDrive = events.some(event => event.status === 'ON' || event.status === 'D');
   const firstDriving = events.find(event => event.status === 'D');
-  const preTrip = events.find(isPreTripEvent);
+  const preTrip = relevantPreTripContext(events, firstDriving);
+  const preTripIsActualPreTrip = !!preTrip && isPreTripEvent(preTrip);
   const completedEvents = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
   const driverName = stateText(state, 'driverProfile.name', 'driver.name');
   const carrier = stateText(state, 'carrierName', 'driver.carrier');
@@ -467,21 +488,10 @@ export function validateLogForSigning(state, day) {
     });
   }
 
-  if (firstDriving && preTrip && Number(preTrip.endMin || 0) > Number(firstDriving.startMin || 0)) {
-    issues.push({
-      code: `pretrip_after_driving_${preTrip.id || preTrip.startMin}`,
-      title: 'Pre-trip timing needs review',
-      detail: `Pre-trip ends at ${timeLabel(preTrip.endMin, true)}, but driving starts at ${timeLabel(firstDriving.startMin, true)}.`,
-      where: 'Log tab → Pre-trip / first driving',
-      day,
-      eventId: preTrip.id || '',
-      startMin: preTrip.startMin,
-    });
-  }
-
   if (
     firstDriving &&
     preTrip &&
+    preTripIsActualPreTrip &&
     Number(preTrip.endMin || 0) <= Number(firstDriving.startMin || 0) &&
     Math.abs(Number(firstDriving.startMin || 0) - Number(preTrip.endMin || 0)) <= 5 &&
     preTrip.city && preTrip.state && firstDriving.city && firstDriving.state &&
@@ -513,38 +523,8 @@ export function validateLogForSigning(state, day) {
     });
   }
 
-  if (inspection.complete && preTrip && !inspection.sourceEventId) {
-    issues.push({
-      code:'inspection_complete_unlinked_pretrip',
-      title:'Inspection complete but Pre-trip link missing',
-      detail:`Inspection is complete, but it is not linked to the ON DUTY Pre-trip event at ${timeLabel(preTrip.startMin, true)}.`,
-      where:'Inspection tab',
-      day,
-      eventId:preTrip.id || '',
-    });
-  }
-
-  if (inspection.complete && preTrip && inspection.sourceEventId && inspection.sourceEventId !== preTrip.id) {
-    issues.push({
-      code:'inspection_unlinked_pretrip',
-      title:'Inspection is not linked to the ON DUTY Pre-trip event',
-      detail:`Pre-trip event starts at ${timeLabel(preTrip.startMin, true)}. Review inspection link.`,
-      where:'Inspection tab',
-      day,
-      eventId:preTrip.id || '',
-    });
-  }
-
-  if (inspection.complete && preTrip && inspection.sourceEventId && inspection.sourceEventId === preTrip.id) {
-    if (Number(inspection.sourceStartMin) !== Number(preTrip.startMin)) {
-      issues.push({
-        code: 'inspection_time_mismatch',
-        title: 'Inspection time does not match ON DUTY Pre-trip',
-        detail: `Inspection shows ${timeLabel(inspection.sourceStartMin, true)}, but the ON DUTY Pre-trip event starts at ${timeLabel(preTrip.startMin, true)}.`,
-        where: 'Inspection tab',
-      });
-    }
-  }
+  // Completed inspection with a valid ON DUTY/start-work context should not block signing
+  // because of stale sourceEventId/link metadata.
 
   issues.push(...locationContinuityIssues(completedEvents, day));
 

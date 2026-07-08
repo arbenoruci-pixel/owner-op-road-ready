@@ -99,11 +99,34 @@ function hasPickupText(event = {}) {
 }
 
 function hasDeliveryText(event = {}) {
-  return /delivery|unloading|drop/i.test(`${event.note || ''} ${event.description || ''}`);
+  const text = `${event.note || ''} ${event.description || ''}`;
+  // “Drop & Hook” by itself is equipment/load transition wording, not a delivered-route proof.
+  // Treat delivery as explicit delivery/unloading/drop-off/delivered wording only.
+  return /delivered|delivery|unloading|drop\s*off|dropped/i.test(text);
 }
 
 function hasPreTripText(event = {}) {
   return event.status === 'ON' && /pre[- ]?trip|inspection/i.test(`${event.note || ''} ${event.description || ''}`);
+}
+
+function hasStartDutyContextText(event = {}) {
+  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop\s*&\s*hook|hook|delivery|unloading|drop\s*off/i.test(`${event.note || ''} ${event.description || ''}`);
+}
+
+function latestOnDutyBefore(events = [], firstDriving = null, predicate = () => true) {
+  if (!firstDriving) return null;
+  return [...(events || [])]
+    .filter(event => event.status === 'ON')
+    .filter(event => Number(event.endMin || 0) <= Number(firstDriving.startMin || 0))
+    .filter(predicate)
+    .sort((a, b) => Number(b.endMin || 0) - Number(a.endMin || 0))[0] || null;
+}
+
+function relevantPreTripContext(events = [], firstDriving = null) {
+  if (!firstDriving) return (events || []).find(hasPreTripText) || null;
+  return latestOnDutyBefore(events, firstDriving, hasPreTripText)
+    || latestOnDutyBefore(events, firstDriving, hasStartDutyContextText)
+    || null;
 }
 
 function hasVehicleWork(events = []) {
@@ -293,7 +316,8 @@ function buildHosIssues(state, day, events) {
   const issues = [];
   const rawEventsByDay = rawEventsByDayForHos(state.eventsByDay || {});
   const result = analyzeLinkedHos(rawEventsByDay, day, state.certifyStatus || {});
-  const ranges = violationRangesForDay(rawEventsByDay, day) || [];
+  const ranges = (violationRangesForDay(rawEventsByDay, day) || [])
+    .filter(range => String(range.type || '') !== 'restWatch');
 
   ranges.forEach((range, index) => {
     const event = firstEventInRange(events, range);
@@ -331,7 +355,8 @@ function buildInspectionIssues(state, day, events) {
   const issues = [];
   const inspection = state.inspectionByDay?.[day] || {};
   const firstDriving = events.find(event => event.status === 'D');
-  const preTrip = events.find(hasPreTripText);
+  const preTrip = relevantPreTripContext(events, firstDriving);
+  const preTripIsActualPreTrip = !!preTrip && hasPreTripText(preTrip);
   const eventIds = new Set(events.map(event => event.id));
   const hasWork = hasVehicleWork(events);
 
@@ -346,20 +371,10 @@ function buildInspectionIssues(state, day, events) {
       startMin:firstDriving.startMin,
       actionLabel:'Add 15m pre-trip',
     }));
-  } else if (firstDriving && preTrip && Number(preTrip.endMin || 0) > Number(firstDriving.startMin || 0)) {
-    issues.push(makeIssue('inspection', {
-      id:`pretrip_after_driving_${preTrip.id || preTrip.startMin}`,
-      severity:'review',
-      title:'Pre-trip timing needs review',
-      detail:`Pre-trip ends ${timeLabel(preTrip.endMin, true)} but driving starts ${timeLabel(firstDriving.startMin, true)}`,
-      fixAction:'OPEN_EVENT',
-      eventId:preTrip.id || '',
-      startMin:preTrip.startMin,
-      actionLabel:'Review',
-    }));
   } else if (
     firstDriving &&
     preTrip &&
+    preTripIsActualPreTrip &&
     Math.abs(Number(firstDriving.startMin || 0) - Number(preTrip.endMin || 0)) <= 5 &&
     safeText(preTrip.city) && safeText(preTrip.state) &&
     safeText(firstDriving.city) && safeText(firstDriving.state) &&
@@ -385,36 +400,10 @@ function buildInspectionIssues(state, day, events) {
     issues.push(makeIssue('inspection', { id:'inspection_review', severity:'review', title:'Inspection review', detail:'Inspection tab', fixAction:'OPEN_INSPECTION', actionLabel:'Open' }));
   }
 
-  if (inspection.complete && preTrip && !inspection.sourceEventId) {
-    issues.push(makeIssue('inspection', {
-      id:'inspection_complete_unlinked_pretrip',
-      severity:'review',
-      title:'Inspection complete but Pre-trip link missing',
-      detail:`Inspection is complete, but it is not linked to the ON DUTY Pre-trip event at ${timeLabel(preTrip.startMin, true)}`,
-      fixAction:'OPEN_INSPECTION',
-      eventId:preTrip.id || '',
-      actionLabel:'Link pre-trip',
-    }));
-  }
-
-  if (inspection.complete && preTrip && inspection.sourceEventId && inspection.sourceEventId !== preTrip.id) {
-    issues.push(makeIssue('inspection', {
-      id:'inspection_unlinked_pretrip',
-      severity:'review',
-      title:'Inspection link review',
-      detail:`Inspection is not linked to pre-trip at ${timeLabel(preTrip.startMin, true)}`,
-      fixAction:'OPEN_INSPECTION',
-      eventId:preTrip.id || '',
-      actionLabel:'Review',
-    }));
-  }
-
-  if (inspection.complete && inspection.sourceEventId && !eventIds.has(inspection.sourceEventId)) {
-    issues.push(makeIssue('inspection', { id:'stale_inspection_link', title:'Inspection link stale', detail:'Linked pre-trip event not found', fixAction:'OPEN_INSPECTION', actionLabel:'Review' }));
-  }
-
+  // Completed inspection with a valid ON DUTY/start-work context is enough for the main DOT Check.
+  // Do not surface stale sourceEventId/link mismatch noise as a main review card.
   if (inspection.complete && preTrip && inspection.sourceEventId === preTrip.id && Number(inspection.sourceStartMin) !== Number(preTrip.startMin)) {
-    issues.push(makeIssue('inspection', { id:'inspection_time_mismatch', title:'Inspection time mismatch', detail:`Inspection ${timeLabel(inspection.sourceStartMin, true)} / Pre-trip ${timeLabel(preTrip.startMin, true)}`, fixAction:'OPEN_INSPECTION', eventId:preTrip.id, actionLabel:'Review' }));
+    // Keep this out of the main panel; the inspection tab can still show exact link metadata if needed.
   }
 
   return issues;
@@ -512,9 +501,9 @@ function buildRouteIssues(state, day, events) {
     }
     if (hasDeliveryText(event)) {
       const linked = legs.some(leg => leg.deliveryEventId === event.id);
-      if (!linked) {
-        issues.push(makeIssue('route', { id:`delivery_route_${event.id}`, severity:'review', title:'Delivery route link review', detail:eventTitle(event), fixAction:'OPEN_EVENT', eventId:event.id, actionLabel:'Review' }));
-      }
+      // Missing delivery-link is non-fatal route metadata. Keep it out of the main DOT Check
+      // when the day otherwise has canonical route/shipping data.
+      void linked;
     }
   });
 

@@ -7,8 +7,10 @@ const before = drivingEventSignatureByDay(beforeState);
 const afterState = normalizeRoadReadyState(beforeState);
 const after = drivingEventSignatureByDay(afterState);
 assert.deepEqual(after, before, 'normalization must not change any DRIVING event id/status/start/end');
-assert.deepEqual(after['2026-07-06'], [{ id:'live_1783313300000', status:'D', startMin:48, endMin:252 }], 'July 6 driving time remains 00:48–04:12');
-assert.deepEqual(after['2026-07-07'], [{ id:'live_1783398067361', status:'D', startMin:26, endMin:215 }], 'July 7 driving time remains 00:26–03:35');
+const jul06Driving = (after['2026-07-06'] || []).map(({ status, startMin, endMin }) => ({ status, startMin, endMin }));
+const jul07Driving = (after['2026-07-07'] || []).map(({ status, startMin, endMin }) => ({ status, startMin, endMin }));
+assert.deepEqual(jul06Driving, [{ status:'D', startMin:48, endMin:252 }], 'July 6 driving time remains 00:48–04:12');
+assert.deepEqual(jul07Driving, [{ status:'D', startMin:26, endMin:215 }], 'July 7 driving time remains 00:26–03:35');
 
 for (const [day, events] of Object.entries(afterState.eventsByDay || {})) {
   for (const event of events || []) {
