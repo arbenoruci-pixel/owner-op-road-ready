@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.82.0",
+  "version": "95.83.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,10 @@
     "build": "next build",
     "start": "next start",
     "test:offline": "node scripts/offline-sync-smoke-test.mjs",
+    "verify-motive-style-graph-v9563": "node scripts/verify-motive-style-graph-v9563.mjs",
+    "verify-graph-drop-hook-merge-v9561": "node scripts/verify-graph-drop-hook-merge-v9561.mjs",
+    "verify-graph-line-note-cleanup-v9562": "node scripts/verify-graph-line-note-cleanup-v9562.mjs",
+    "verify-post-save-log-view-v9572": "node scripts/verify-post-save-log-view-v9572.mjs",
     "verify-hos-drive-clock-no-midnight-reset-v9581": "node scripts/verify-hos-drive-clock-no-midnight-reset-v9581.mjs",
     "verify-hos-drive-clock-resets-after-10h-off-v9581": "node scripts/verify-hos-drive-clock-resets-after-10h-off-v9581.mjs",
     "verify-hos-shift-clock-no-midnight-reset-v9581": "node scripts/verify-hos-shift-clock-no-midnight-reset-v9581.mjs",
@@ -17,7 +21,12 @@
     "verify-drive-mode-opens-on-driving-v9581": "node scripts/verify-drive-mode-opens-on-driving-v9581.mjs",
     "verify-drive-mode-recalculates-after-reopen-v9581": "node scripts/verify-drive-mode-recalculates-after-reopen-v9581.mjs",
     "verify-driving-events-unchanged-v9581": "node scripts/verify-driving-events-unchanged-v9581.mjs",
-    "verify-no-gps-auto-driving-v9581": "node scripts/verify-no-gps-auto-driving-v9581.mjs"
+    "verify-no-gps-auto-driving-v9581": "node scripts/verify-no-gps-auto-driving-v9581.mjs",
+    "verify-graph-main-duty-line-thicker-v9583": "node scripts/verify-graph-main-duty-line-thicker-v9583.mjs",
+    "verify-graph-vertical-grid-lighter-v9583": "node scripts/verify-graph-vertical-grid-lighter-v9583.mjs",
+    "verify-graph-readonly-no-dot-markers-v9583": "node scripts/verify-graph-readonly-no-dot-markers-v9583.mjs",
+    "verify-graph-edit-handles-only-when-selected-v9583": "node scripts/verify-graph-edit-handles-only-when-selected-v9583.mjs",
+    "verify-event-data-unchanged-v9583": "node scripts/verify-event-data-unchanged-v9583.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

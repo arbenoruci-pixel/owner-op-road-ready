@@ -1,15 +1,14 @@
 {
-  "version": "95.82.0",
-  "build": "v95.82-drive-mode-hos-clocks-sw-bump",
+  "version": "95.83.0",
+  "build": "v95.83-graph-line-weight-grid-readability",
   "releasedAt": "2026-07-08T00:00:00.000Z",
   "notes": [
-    "Safe-bumps the Drive Mode HOS patch so service worker version matches the app version and update detection is reliable.",
-    "Adds a Motive-style Drive Mode screen for manual DRIVING status.",
-    "Adds pure advisory HOS clock calculation from manual duty-status events across days.",
-    "Prevents 11-hour, 14-hour, break, and cycle clocks from resetting at midnight.",
-    "Keeps split sleeper clocks disabled until full paired-period support is implemented.",
-    "Does not add GPS auto-driving or automatic driving events, and does not change existing duty event times."
+    "Makes the DOT log graph duty-status trace about 10% thicker for cleaner paper-log readability.",
+    "Makes vertical grid lines about 40% thinner/lighter while keeping hour lines slightly stronger than quarter-hour lines.",
+    "Removes read-only short-event dots and warning/exclamation circles from the graph; short events render as minimum blue trace segments.",
+    "Keeps edit handles visible only while actively editing, with smaller cleaner handle visuals.",
+    "UI/rendering-only patch; no duty events, driving events, HOS logic, route/load metadata, signing, backup/import, GPS, or Drive Mode behavior changed."
   ],
-  "label": "v95.82 Drive Mode HOS clocks safe bump",
+  "label": "v95.83 Graph line weight and grid readability",
   "updatedAt": "2026-07-08T00:00:00.000Z"
 }

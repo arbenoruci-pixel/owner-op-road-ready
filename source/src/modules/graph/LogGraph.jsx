@@ -5,22 +5,31 @@ import { STATUS_ORDER, rowIndex, soft, color } from '../../shared/utils/status.j
 const W = 1000;
 const EDIT_H = 374;
 const BASE_H = 300;
-const LEFT = 50;
-const RIGHT = 56;
+const LEFT = 46;
+const RIGHT = 50;
 const TOP = 16;
 const ROW_H = 66;
 const BODY_W = W - LEFT - RIGHT;
 const SHORT_EVENT_MARKER_PX = 12;
 const HIT_MIN_PX = 24;
+const MIN_SHORT_TRACE_PX = 7;
 // v95.6 continuous duty line: one stroke width for horizontals AND vertical
 // bends, drawn as a single SVG path so corners are clean 90° miter joins.
 // v95.63 Motive-style paper trace: one clean blue duty line, no
 // per-status graph colors. Event-list badges keep status colors, but the
 // graph itself stays readable like a paper RODS grid.
-const LINE_W = 5.25;
-const LINE_HALO_W = 9.5;
+const LINE_W = 5.8; // v95.83: about 10% thicker than the prior 5.25px trace
+const LINE_HALO_W = 10.4;
 const VERTICAL_LINE_W = LINE_W; // legacy verifier alias; visible trace uses LINE_W
 const TRACE_COLOR = '#1a73e8';
+const ROW_LINE_COLOR = '#e6ebf1';
+const ROW_LINE_W = 0.85;
+const HOUR_GRID_COLOR = '#d6dee8';
+const QUARTER_GRID_COLOR = '#eef3f8';
+const HOUR_GRID_W = 0.43; // v95.83: 40% thinner than prior 0.72px hour grid
+const QUARTER_GRID_W = 0.2; // v95.83: 40% thinner than prior 0.34px quarter grid
+const HOUR_GRID_OPACITY = 0.72;
+const QUARTER_GRID_OPACITY = 0.64;
 const CENTER = (status) => TOP + rowIndex(status) * ROW_H + ROW_H / 2;
 
 function xFromMin(m) {
@@ -93,9 +102,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
   const editable = editId ? sorted.find(e => e.id === editId) : null;
   const graphHeight = editable && onEditTime ? EDIT_H : BASE_H;
   const bodyPath = continuousPath(sorted);
-  const shortEvents = sorted
+  const shortTraceBoosts = sorted
     .map((event, index) => ({ event, index, span: exactSpan(event) }))
-    .filter(item => item.span.short);
+    .filter(item => item.span.short && item.span.width > 0);
 
   function startHandleDrag(e, edge, event) {
     if (!onEditTime) return;
@@ -125,9 +134,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
       <rect x="0" y="0" width={W} height={graphHeight} fill="#ffffff" />
       {STATUS_ORDER.map((s,i) => (
         <g key={s}>
-          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#ffffff" stroke="#e3e8ee" strokeWidth="1" />
+          <rect x="0" y={TOP+i*ROW_H} width={LEFT} height={ROW_H} fill="#ffffff" stroke={ROW_LINE_COLOR} strokeWidth={ROW_LINE_W} />
           <text x={LEFT-12} y={CENTER(s)+5} textAnchor="end" className="row-label">{s}</text>
-          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke="#e3e8ee" strokeWidth="1" />
+          <line x1={LEFT} x2={W-RIGHT} y1={TOP+i*ROW_H} y2={TOP+i*ROW_H} stroke={ROW_LINE_COLOR} strokeWidth={ROW_LINE_W} />
           <rect
             x={LEFT}
             y={TOP+i*ROW_H}
@@ -142,11 +151,24 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           />
         </g>
       ))}
-      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke="#e3e8ee" strokeWidth="1" />
+      <line x1={LEFT} x2={W-RIGHT} y1={TOP+4*ROW_H} y2={TOP+4*ROW_H} stroke={ROW_LINE_COLOR} strokeWidth={ROW_LINE_W} />
       {Array.from({ length: 97 }).map((_,q) => {
         const x = LEFT + (q/96)*BODY_W;
         const major = q % 4 === 0;
-        return <line key={q} x1={x} x2={x} y1={TOP} y2={TOP+4*ROW_H} stroke={major ? '#cfd8e3' : '#edf2f7'} strokeWidth={major ? 0.72 : 0.34} />;
+        return (
+          <line
+            key={q}
+            className={major ? 'graph-hour-grid-line' : 'graph-quarter-grid-line'}
+            x1={x}
+            x2={x}
+            y1={TOP}
+            y2={TOP+4*ROW_H}
+            stroke={major ? HOUR_GRID_COLOR : QUARTER_GRID_COLOR}
+            strokeWidth={major ? HOUR_GRID_W : QUARTER_GRID_W}
+            opacity={major ? HOUR_GRID_OPACITY : QUARTER_GRID_OPACITY}
+            shapeRendering="crispEdges"
+          />
+        );
       })}
       {Array.from({ length: 25 }).map((_,h) => {
         const x = LEFT + (h/24)*BODY_W;
@@ -158,10 +180,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         return <text key={s} x={W-5} y={CENTER(s)+5} textAnchor="end" className="total-label">{(mins/60).toFixed(2).padStart(5,'0')}</text>;
       })}
 
-      {/* v95.7 warning underlay.
-          HOS/review markers should not look like a second duty line sitting
-          on top of the trace. They are now soft background bands + small
-          badges under the real continuous duty path. */}
+      {/* v95.7/v95.83 warning underlay.
+          HOS/review ranges stay as soft background bands only; read-only
+          graph warnings no longer draw exclamation badges or dot markers. */}
       {violationRanges.map((r, i) => {
         const y = CENTER(r.status);
         const x1 = xFromMin(r.startMin);
@@ -262,18 +283,9 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Small issue badges only — no colored line overlay. */}
-      {violationRanges.map((r, i) => {
-        const y = CENTER(r.status);
-        const x1 = xFromMin(r.startMin);
-        const c = rangeColor(r);
-        return (
-          <g key={`${r.id || i}_${r.startMin}_badge`} className="graph-violation-badge" pointerEvents="none">
-            <circle cx={x1} cy={y} r="6.5" fill={c} stroke="#fff" strokeWidth="2" opacity=".92" />
-            <text x={x1} y={y+3.4} textAnchor="middle" className="violation-bang">!</text>
-          </g>
-        );
-      })}
+      {/* v95.83 read-only graph cleanup: warnings stay in Log Check/list UI.
+          The graph itself avoids exclamation circles so the paper-log trace
+          remains the visual priority. */}
 
       {/* Transition tap targets only: the visible vertical bend is part of the
           continuous base path above — no separate stroke, no endpoint dots. */}
@@ -294,25 +306,26 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         );
       })}
 
-      {/* Short 1–15 minute events: the base path already dips to the true row
-          as part of the continuous body; one small status-colored dot marks
-          the event so it stays visible. No spike lines, no boundary masks,
-          no double rendering. */}
-      {shortEvents.map(({ event, span }, index) => {
-        const selected = selectedId === event.id || editId === event.id;
+      {/* Short 1–15 minute events: keep them visible as a minimum-length
+          piece of the same blue trace. No read-only dot markers, warning
+          circles, or endpoint bubbles. */}
+      {shortTraceBoosts.map(({ event, span }, index) => {
         const mid = (span.x1 + span.x2) / 2;
+        const half = MIN_SHORT_TRACE_PX / 2;
+        const x1 = Math.max(LEFT, mid - half);
+        const x2 = Math.min(W - RIGHT, mid + half);
         const y = CENTER(event.status);
-        const c = TRACE_COLOR;
         return (
-          <circle
-            key={`${event.id || index}_short`}
-            className="short-event-marker"
-            cx={mid}
-            cy={y}
-            r={selected ? 7 : 5.5}
-            fill={c}
-            stroke="#fff"
-            strokeWidth="2.4"
+          <line
+            key={`${event.id || index}_short_trace`}
+            className="short-event-trace-boost"
+            x1={x1}
+            x2={x2}
+            y1={y}
+            y2={y}
+            stroke={TRACE_COLOR}
+            strokeWidth={LINE_W}
+            strokeLinecap="butt"
             pointerEvents="none"
           />
         );
@@ -327,42 +340,42 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
         const graphBottom = TOP + 4 * ROW_H;
         // Keep grabber chips below the graph so they never hide the duty-status line.
         const chipY = graphBottom + 28;
-        const chipW = 118;
-        const chipH = 58;
+        const chipW = 104;
+        const chipH = 50;
         const chipCY = chipY + chipH / 2;
         const chipPadX = chipW / 2 + 6;
         const chipMinX = LEFT + chipPadX;
         const chipMaxX = W - RIGHT - chipPadX;
-        const startHandleX = Math.max(chipMinX, Math.min(chipMaxX, tooClose ? sx - 62 : sx));
-        const endHandleX = Math.max(chipMinX, Math.min(chipMaxX, tooClose ? ex + 62 : ex));
+        const startHandleX = Math.max(chipMinX, Math.min(chipMaxX, tooClose ? sx - 56 : sx));
+        const endHandleX = Math.max(chipMinX, Math.min(chipMaxX, tooClose ? ex + 56 : ex));
 
         return (
           <g className="edit-handles-large">
             <rect x={Math.min(sx, ex)} y={TOP} width={Math.max(4, Math.abs(ex - sx))} height={graphBottom - TOP} fill={c} opacity=".09" pointerEvents="none" />
-            <line x1={sx} x2={sx} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="4" strokeLinecap="round" opacity=".78" pointerEvents="none" />
-            <line x1={ex} x2={ex} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="4" strokeLinecap="round" opacity=".78" pointerEvents="none" />
+            <line x1={sx} x2={sx} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="3.25" strokeLinecap="round" opacity=".72" pointerEvents="none" />
+            <line x1={ex} x2={ex} y1={TOP} y2={graphBottom} stroke={c} strokeWidth="3.25" strokeLinecap="round" opacity=".72" pointerEvents="none" />
 
-            <line x1={startHandleX} x2={sx} y1={chipCY} y2={y} stroke="#111827" strokeWidth="7" strokeLinecap="round" opacity=".86" pointerEvents="none" />
-            <line x1={endHandleX} x2={ex} y1={chipCY} y2={y} stroke="#111827" strokeWidth="7" strokeLinecap="round" opacity=".86" pointerEvents="none" />
+            <line x1={startHandleX} x2={sx} y1={chipCY} y2={y} stroke="#111827" strokeWidth="5.5" strokeLinecap="round" opacity=".78" pointerEvents="none" />
+            <line x1={endHandleX} x2={ex} y1={chipCY} y2={y} stroke="#111827" strokeWidth="5.5" strokeLinecap="round" opacity=".78" pointerEvents="none" />
 
-            <circle cx={sx} cy={y} r="34" fill={c} opacity=".16" pointerEvents="none" />
-            <circle cx={ex} cy={y} r="34" fill={c} opacity=".16" pointerEvents="none" />
-            <circle cx={sx} cy={y} r="20" fill="#fff" stroke={c} strokeWidth="4.5" pointerEvents="none" />
-            <circle cx={ex} cy={y} r="20" fill="#fff" stroke={c} strokeWidth="4.5" pointerEvents="none" />
-            <circle cx={sx} cy={y} r="9" fill={c} pointerEvents="none" />
-            <circle cx={ex} cy={y} r="9" fill={c} pointerEvents="none" />
+            <circle cx={sx} cy={y} r="25" fill={c} opacity=".12" pointerEvents="none" />
+            <circle cx={ex} cy={y} r="25" fill={c} opacity=".12" pointerEvents="none" />
+            <circle cx={sx} cy={y} r="15" fill="#fff" stroke={c} strokeWidth="3.5" pointerEvents="none" />
+            <circle cx={ex} cy={y} r="15" fill="#fff" stroke={c} strokeWidth="3.5" pointerEvents="none" />
+            <circle cx={sx} cy={y} r="6.5" fill={c} pointerEvents="none" />
+            <circle cx={ex} cy={y} r="6.5" fill={c} pointerEvents="none" />
 
-            <circle cx={sx} cy={y} r="74" fill="transparent" onPointerDown={(e)=>startHandleDrag(e,'start',editable)} onTouchStart={(e)=>startHandleDrag(e,'start',editable)} />
-            <circle cx={ex} cy={y} r="74" fill="transparent" onPointerDown={(e)=>startHandleDrag(e,'end',editable)} onTouchStart={(e)=>startHandleDrag(e,'end',editable)} />
+            <circle cx={sx} cy={y} r="64" fill="transparent" onPointerDown={(e)=>startHandleDrag(e,'start',editable)} onTouchStart={(e)=>startHandleDrag(e,'start',editable)} />
+            <circle cx={ex} cy={y} r="64" fill="transparent" onPointerDown={(e)=>startHandleDrag(e,'end',editable)} onTouchStart={(e)=>startHandleDrag(e,'end',editable)} />
 
-            <rect x={startHandleX-chipW/2-16} y={chipY-16} width={chipW+32} height={chipH+32} rx="26" fill="transparent" onPointerDown={(e)=>startHandleDrag(e,'start',editable)} onTouchStart={(e)=>startHandleDrag(e,'start',editable)} />
-            <rect x={endHandleX-chipW/2-16} y={chipY-16} width={chipW+32} height={chipH+32} rx="26" fill="transparent" onPointerDown={(e)=>startHandleDrag(e,'end',editable)} onTouchStart={(e)=>startHandleDrag(e,'end',editable)} />
+            <rect x={startHandleX-chipW/2-14} y={chipY-14} width={chipW+28} height={chipH+28} rx="24" fill="transparent" onPointerDown={(e)=>startHandleDrag(e,'start',editable)} onTouchStart={(e)=>startHandleDrag(e,'start',editable)} />
+            <rect x={endHandleX-chipW/2-14} y={chipY-14} width={chipW+28} height={chipH+28} rx="24" fill="transparent" onPointerDown={(e)=>startHandleDrag(e,'end',editable)} onTouchStart={(e)=>startHandleDrag(e,'end',editable)} />
 
-            <rect x={startHandleX-chipW/2} y={chipY} width={chipW} height={chipH} rx="20" fill="#111827" stroke="#fff" strokeWidth="5" onPointerDown={(e)=>startHandleDrag(e,'start',editable)} onTouchStart={(e)=>startHandleDrag(e,'start',editable)} />
-            <text x={startHandleX} y={chipY+37} textAnchor="middle" className="handle-grip">START</text>
+            <rect x={startHandleX-chipW/2} y={chipY} width={chipW} height={chipH} rx="18" fill="#111827" stroke="#fff" strokeWidth="4" onPointerDown={(e)=>startHandleDrag(e,'start',editable)} onTouchStart={(e)=>startHandleDrag(e,'start',editable)} />
+            <text x={startHandleX} y={chipY+32} textAnchor="middle" className="handle-grip">START</text>
 
-            <rect x={endHandleX-chipW/2} y={chipY} width={chipW} height={chipH} rx="20" fill="#111827" stroke="#fff" strokeWidth="5" onPointerDown={(e)=>startHandleDrag(e,'end',editable)} onTouchStart={(e)=>startHandleDrag(e,'end',editable)} />
-            <text x={endHandleX} y={chipY+37} textAnchor="middle" className="handle-grip">END</text>
+            <rect x={endHandleX-chipW/2} y={chipY} width={chipW} height={chipH} rx="18" fill="#111827" stroke="#fff" strokeWidth="4" onPointerDown={(e)=>startHandleDrag(e,'end',editable)} onTouchStart={(e)=>startHandleDrag(e,'end',editable)} />
+            <text x={endHandleX} y={chipY+32} textAnchor="middle" className="handle-grip">END</text>
           </g>
         );
       })()}

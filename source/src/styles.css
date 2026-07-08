@@ -9292,3 +9292,42 @@ body,
   .hos-compact-grid{gap:5px;}
   .hos-compact-item b{font-size:13px;}
 }
+
+/* v95.83 Graph line weight and grid readability
+   Visual-only DOT log graph polish: cleaner grid, thicker blue trace, no read-only dot markers. */
+.log-graph .graph-hour-grid-line,
+.log-graph .graph-quarter-grid-line{
+  vector-effect:non-scaling-stroke;
+  pointer-events:none;
+}
+.log-graph .short-event-trace-boost{
+  vector-effect:non-scaling-stroke;
+  filter:none!important;
+  pointer-events:none;
+}
+.log-graph .short-event-marker,
+.log-graph .graph-violation-badge,
+.log-graph .violation-bang{
+  display:none!important;
+}
+.graph-first-panel{
+  padding:0 6px 4px!important;
+}
+.graph-first-panel .log-graph,
+.rr-today-graph .log-graph,
+.preview-graph .log-graph,
+.v30-graph-card .log-graph{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+}
+.clean-events,
+.events{
+  margin-top:4px!important;
+}
+.edit-handles-large circle{
+  filter:drop-shadow(0 1px 3px rgba(29,78,216,.16));
+}
+.edit-handles-large rect{
+  filter:drop-shadow(0 2px 5px rgba(15,23,42,.16));
+}

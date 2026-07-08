@@ -107,18 +107,19 @@ ok('handles: drag chrome only inside editable && onEditTime block', () => {
 });
 
 // --- rule 12: short events visible, no spikes, no masks --------------------
-ok('short events: single dot marker, no spike lines, no boundary masks', () => {
-  assert.ok(src.includes('class' + 'Name="short-event-marker"'), 'short-event marker missing');
+ok('short events: minimum trace segment, no spikes, no masks', () => {
+  assert.ok(src.includes('short-event-trace-boost') || src.includes('class' + 'Name="short-event-marker"'), 'short-event visibility rendering missing');
   assert.ok(!src.includes('y1={y-15}') && !src.includes('y1={y-17}'), 'short-event spike lines still rendered');
   assert.ok(!src.includes('_cut_'), 'short-event boundary masks still rendered');
   assert.ok(!src.includes('short_clear'), 'duplicate short-event pass still rendered');
 });
 
 // --- rule 13: violations stay on the line -----------------------------------
-ok('violations: soft badge only, no duty-line overlay or vertical guide line', () => {
+ok('violations: soft underlay only, no duty-line overlay or vertical guide line', () => {
   const vBlock = src.slice(src.indexOf('violationRanges.map'), src.indexOf('Transition tap targets'));
-  assert.ok(vBlock.includes('graph-violation-badge'), 'violation badge missing');
+  assert.ok(vBlock.includes('graph-violation-underlay') || vBlock.includes('graph-violation-badge'), 'violation underlay/badge handling missing');
   assert.ok(!vBlock.includes('strokeDasharray'), 'vertical dashed guide line reintroduced');
+  assert.ok(!vBlock.includes('violation-bang'), 'read-only violation exclamation marker reintroduced');
 });
 
 // --- rule 14/15: graph line intentionally single-color ----------------------
@@ -128,8 +129,8 @@ ok('colors: graph uses one readable paper-log trace color', () => {
 });
 
 // --- css hook ----------------------------------------------------------------
-ok('css: v95.6 marker rule present, no new width overrides on the trace', () => {
-  assert.ok(css.includes('.log-graph circle.short-event-marker'), 'v95.6 CSS rule missing');
+ok('css: short-event visual hook present, no new width overrides on the trace', () => {
+  assert.ok(css.includes('.log-graph circle.short-event-marker') || css.includes('.short-event-trace-boost'), 'short-event CSS hook missing');
   assert.ok(!/\.log-graph[^{]*\{[^}]*stroke-width/i.test(css), 'CSS stroke-width override on log-graph detected');
 });
 
