@@ -138,6 +138,30 @@ function uniqueText(values = []) {
     });
 }
 
+function hasShippingDocsRequirementForDay(state, day = state.activeDay, eventsOverride = null) {
+  const routeLegs = routeLegsForDayCanonical(state, day);
+  const dayEvents = Array.isArray(eventsOverride) ? eventsOverride : (state.eventsByDay?.[day] || []);
+  const hasDriving = dayEvents.some(event =>
+    event.status === 'D' && Number(event.endMin || 0) > Number(event.startMin || 0)
+  );
+  const hasLoadedRoute = routeLegs.some(leg => {
+    const kind = String(leg.kind || '').toLowerCase();
+    const status = String(leg.status || '').toLowerCase();
+    const hasDocs = docsTokensForTransition([leg.shippingDocs, leg.loadNo, ...(Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : [])].join(' ')).length > 0;
+    const emptyLike = /empty|reposition|return|bobtail|deadhead/.test(`${kind} ${status} ${leg.source || ''}`);
+    return hasDocs && !emptyLike;
+  });
+  const hasLoadWorkText = dayEvents.some(event =>
+    /pickup|loading|delivery|unloading|drop\s*&\s*hook|drop and hook|hooked|picked up|delivered|shipper|receiver/i.test(`${event.note || ''} ${event.description || ''}`)
+  );
+  const hasOnDutyWork = dayEvents.some(event =>
+    event.status === 'ON' &&
+    Number(event.endMin || 0) > Number(event.startMin || 0) &&
+    /pickup|loading|delivery|unloading|drop\s*&\s*hook|drop and hook|hooked|picked up|delivered|shipper|receiver/i.test(`${event.note || ''} ${event.description || ''}`)
+  );
+  return hasDriving || hasLoadedRoute || hasOnDutyWork || hasLoadWorkText;
+}
+
 function shippingDocsText(state, day = state.activeDay) {
   const load = state.loadInfo || {};
   const equipment = state.equipment || {};
@@ -348,7 +372,7 @@ export function validateLogForSigning(state, day) {
   if (!mainOffice) {
     issues.push({ code:'missing_main_office', title:'Main office address is missing', detail:'Add the carrier main office address before signing this log.', where:'Form tab → Carrier' });
   }
-  if (!shipping) {
+  if (!shipping && hasShippingDocsRequirementForDay(state, day, events)) {
     issues.push({ code:'missing_shipping_docs', title:'Shipping document information is missing', detail:'Add the shipping document number, load reference, shipper/commodity, or note that the truck is empty/bobtail if that is accurate.', where:'Form tab → Shipping Docs' });
   }
 

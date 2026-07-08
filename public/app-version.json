@@ -1,12 +1,12 @@
 {
-  "version": "95.76.0",
-  "build": "v95.76-v9574b-safe-bump",
+  "version": "95.77.0",
+  "build": "v95.77-off-duty-no-shipping-docs",
   "releasedAt": "2026-07-07T00:00:00.000Z",
   "notes": [
-    "Safe version bump of the reviewed v9574b route/sign normalization patch so it can supersede v95.74 and v95.75 rollback deployments.",
-    "Keeps the v9574b fixes for Jul 06 206-mile suggestion, transition shipping-doc parsing, Jul 07 empty/reposition carryover, and stale loadInfo clearing.",
+    "Stops Sign/Fix Wizard from requiring shipping documents on OFF DUTY/SLEEPER-only days with no driving or load work.",
+    "Keeps v9574b route/sign normalization fixes for Jul 06 miles, transition-doc parsing, Jul 07 empty/reposition carryover, and stale loadInfo clearing.",
     "Does not change DRIVING event start times, end times, or duty status."
   ],
-  "label": "v95.76 v9574b safe route/sign fix",
+  "label": "v95.77 off-duty no shipping docs fix",
   "updatedAt": "2026-07-07T00:00:00.000Z"
 }
