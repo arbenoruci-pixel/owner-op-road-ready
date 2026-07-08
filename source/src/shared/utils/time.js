@@ -1,9 +1,10 @@
+import { getStoredHomeTerminalTimeZone, homeTerminalMinute } from '../../core/time/homeTerminalTime.js';
+
 export function clamp(n, min, max) {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
-export function nowMin() {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
+export function nowMin(timeZone = getStoredHomeTerminalTimeZone()) {
+  return homeTerminalMinute(new Date(), timeZone);
 }
 export function toInput(min) {
   const m = clamp(min, 0, 1439);

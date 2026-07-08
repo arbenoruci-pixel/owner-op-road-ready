@@ -8,6 +8,7 @@ import InsertEditEventSheet from '../modules/editor/InsertEditEventSheet.jsx';
 import EditEventSheet from '../modules/editor/EditEventSheet.jsx';
 import ShiftSheet from '../modules/editor/ShiftSheet.jsx';
 import ToolsSheet from '../shared/ui/ToolsSheet.jsx';
+import TimeZoneSheet from '../shared/ui/TimeZoneSheet.jsx';
 import DigitalWalletScreen from '../modules/wallet/DigitalWalletScreen.jsx';
 import BackupLogsScreen from '../modules/backup/BackupLogsScreen.jsx';
 import UpdateBanner from '../modules/update/UpdateBanner.jsx';
@@ -31,6 +32,16 @@ import { normalizeWallet } from '../core/wallet/dotWallet.js';
 import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, updateReloadUrl } from '../core/update/appUpdate.js';
 import { sanitizeLogText } from '../shared/utils/logText.js';
 import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
+import {
+  DEFAULT_HOME_TERMINAL_ADDRESS,
+  DEFAULT_HOME_TERMINAL_TIMEZONE,
+  getHomeTerminalTimeZone,
+  homeTerminalMinute,
+  normalizeTimeZone,
+  persistHomeTerminalTimeZone,
+  timeZoneDisplayName,
+  timeZoneShortLabel,
+} from '../core/time/homeTerminalTime.js';
 
 const ROADGUARD_DEFAULT_PROFILE = {
   driverName: 'Arben Oruci',
@@ -510,6 +521,16 @@ function normalizeState(s) {
     }];
   }));
 
+  const homeTerminalTimeZone = normalizeTimeZone(getHomeTerminalTimeZone(s), DEFAULT_HOME_TERMINAL_TIMEZONE);
+  const homeTerminalSettings = {
+    ...(s.settings || {}),
+    homeTerminalTimeZone,
+    homeTerminalTimeZoneLabel: timeZoneDisplayName(homeTerminalTimeZone),
+    homeTerminalTimeZoneShort: timeZoneShortLabel(homeTerminalTimeZone),
+    homeTerminalAddress: s.settings?.homeTerminalAddress || s.homeTerminalAddress || DEFAULT_HOME_TERMINAL_ADDRESS,
+  };
+  persistHomeTerminalTimeZone(homeTerminalTimeZone);
+
   const normalized = {
     ...s,
     migratedTodayCleanV65: true,
@@ -530,6 +551,10 @@ function normalizeState(s) {
     loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
     routeLegsByDay: s.routeLegsByDay || {},
     dotWallet: normalizeWallet(s.dotWallet || {}),
+    homeTerminalTimeZone,
+    homeTerminalTimeZoneLabel: homeTerminalSettings.homeTerminalTimeZoneLabel,
+    homeTerminalTimeZoneShort: homeTerminalSettings.homeTerminalTimeZoneShort,
+    settings: homeTerminalSettings,
   };
 
   const routeNormalized = normalizeRoadReadyState(normalized);
@@ -559,6 +584,12 @@ function defaultInitialState() {
     signatureByDay: {},
     driverSignature: null,
     dotWallet: normalizeWallet(),
+    homeTerminalTimeZone: DEFAULT_HOME_TERMINAL_TIMEZONE,
+    settings: {
+      homeTerminalTimeZone: DEFAULT_HOME_TERMINAL_TIMEZONE,
+      homeTerminalTimeZoneLabel: 'Eastern Time',
+      homeTerminalAddress: DEFAULT_HOME_TERMINAL_ADDRESS,
+    },
     homeGpsStatus: 'pending',
     gpsPanelOpen: false,
   });
@@ -871,8 +902,8 @@ export default function App() {
     return purgeSyntheticAndRepairEvents(eventsNext || [], day, s).map(event => ({ ...event }));
   }
 
-  function minuteFromDate(date = new Date()) {
-    return Math.max(0, Math.min(1439, date.getHours() * 60 + date.getMinutes()));
+  function minuteFromDate(date = new Date(), sourceState = state) {
+    return homeTerminalMinute(date, getHomeTerminalTimeZone(sourceState));
   }
 
   function findEventDayById(eventsByDay = {}, id = '') {
@@ -881,8 +912,9 @@ export default function App() {
   }
 
   function rolloverActiveDrivingIfNeeded(s, now = new Date()) {
-    const today = localDayKey(now);
-    const nowMinute = minuteFromDate(now);
+    const tz = getHomeTerminalTimeZone(s);
+    const today = localDayKey(now, tz);
+    const nowMinute = minuteFromDate(now, s);
     const gpsId = s.gpsTrip?.eventId || '';
     const gpsDay = findEventDayById(s.eventsByDay || {}, gpsId);
     const sourceDay = gpsDay || (s.currentStatus === 'D' ? s.activeDay : '');
@@ -1167,9 +1199,8 @@ export default function App() {
   }
 
 
-  function nowMinute() {
-    const n = new Date();
-    return n.getHours() * 60 + n.getMinutes();
+  function nowMinute(sourceState = state) {
+    return homeTerminalMinute(new Date(), getHomeTerminalTimeZone(sourceState));
   }
 
   function loadLocation(s, kind) {
@@ -2411,6 +2442,24 @@ export default function App() {
 
 
 
+  function saveHomeTerminalTimeZone(payload = {}) {
+    const zone = persistHomeTerminalTimeZone(payload.timeZone || payload.homeTerminalTimeZone);
+    setState(s => ({
+      ...s,
+      homeTerminalTimeZone: zone,
+      homeTerminalTimeZoneLabel: timeZoneDisplayName(zone),
+      homeTerminalTimeZoneShort: timeZoneShortLabel(zone),
+      settings: {
+        ...(s.settings || {}),
+        homeTerminalTimeZone: zone,
+        homeTerminalTimeZoneLabel: timeZoneDisplayName(zone),
+        homeTerminalTimeZoneShort: timeZoneShortLabel(zone),
+        homeTerminalAddress: s.settings?.homeTerminalAddress || s.homeTerminalAddress || DEFAULT_HOME_TERMINAL_ADDRESS,
+      },
+      sheet:null,
+    }));
+  }
+
   async function buildManualBackup(payload = {}) {
     const now = new Date().toISOString();
     const cleanPayload = {
@@ -2600,7 +2649,8 @@ export default function App() {
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
       {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
-      {state.sheet?.type === 'tools' && <ToolsSheet onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>{ const ids = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} onBackup={()=>setState(s=>({ ...s, sheet:null, view:'backup' }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
+      {state.sheet?.type === 'tools' && <ToolsSheet state={state} onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>{ const ids = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} onBackup={()=>setState(s=>({ ...s, sheet:null, view:'backup' }))} onTimeZone={()=>setState(s=>({ ...s, sheet:{ type:'timezone' } }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
+      {state.sheet?.type === 'timezone' && <TimeZoneSheet state={state} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveHomeTerminalTimeZone} />}
     </>
   );
 }

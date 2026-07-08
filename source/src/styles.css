@@ -9331,3 +9331,109 @@ body,
 .edit-handles-large rect{
   filter:drop-shadow(0 2px 5px rgba(15,23,42,.16));
 }
+
+/* v95.84 home-terminal time zone settings */
+.rr-timezone-note,
+.log-timezone-note{
+  margin:6px 14px 8px;
+  padding:8px 10px;
+  border:1px solid #e4e7ec;
+  border-radius:12px;
+  background:#fff;
+  color:#667085;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.01em;
+}
+.log-timezone-note{margin:0 12px 8px;}
+.timezone-current-card,
+.timezone-custom-card{
+  border:1px solid #e4e7ec;
+  background:#fff;
+  border-radius:18px;
+  padding:14px;
+  box-shadow:0 1px 2px rgba(16,24,40,.04);
+}
+.timezone-current-card span,
+.timezone-custom-card label{
+  display:block;
+  color:#667085;
+  font-size:12px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  margin-bottom:7px;
+}
+.timezone-current-card b{
+  display:block;
+  color:#101828;
+  font-size:17px;
+  line-height:1.2;
+  margin-bottom:5px;
+}
+.timezone-current-card em,
+.timezone-current-card small,
+.timezone-custom-card small,
+.timezone-custom-card strong{
+  display:block;
+  color:#667085;
+  font-size:13px;
+  font-style:normal;
+  line-height:1.35;
+}
+.timezone-current-card small{margin-top:8px;}
+.timezone-list{
+  display:grid;
+  gap:8px;
+}
+.timezone-option{
+  width:100%;
+  border:1px solid #e4e7ec;
+  background:#fff;
+  border-radius:16px;
+  padding:12px 13px;
+  text-align:left;
+  display:grid;
+  gap:3px;
+}
+.timezone-option.active{
+  border-color:#2563eb;
+  background:#eff6ff;
+}
+.timezone-option b{
+  color:#101828;
+  font-size:15px;
+}
+.timezone-option span{
+  color:#344054;
+  font-size:13px;
+  font-weight:800;
+}
+.timezone-option em{
+  color:#667085;
+  font-size:12px;
+  font-style:normal;
+}
+.timezone-custom-card input{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid #d0d5dd;
+  border-radius:14px;
+  padding:13px 12px;
+  font-size:16px;
+  font-weight:800;
+  color:#101828;
+  margin-bottom:8px;
+}
+.timezone-custom-card strong{color:#d92d20;margin-bottom:8px;}
+.timezone-custom-card button{
+  width:100%;
+  border:0;
+  border-radius:14px;
+  background:#111827;
+  color:#fff;
+  font-size:15px;
+  font-weight:900;
+  padding:13px;
+  margin-top:10px;
+}

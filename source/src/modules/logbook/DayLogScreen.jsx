@@ -12,6 +12,7 @@ import { isToday, localDayKey } from '../../shared/utils/date.js';
 import { durLabel } from '../../shared/utils/time.js';
 import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
 import { routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
+import { homeTerminalConfigFromState } from '../../core/time/homeTerminalTime.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_CARRIER_NAME = 'Narta express llc';
@@ -2141,9 +2142,12 @@ export default function DayDetail({
     window.setTimeout(() => onOpenEdit?.(eventId), 0);
   }
 
+  const tz = homeTerminalConfigFromState(state);
+
   return (
     <section className={`screen active graph-first-screen ${moveOpen ? "inline-moving" : ""}`}>
       <Header title={title(state.activeDay)} onBack={onBack} onRight={onTools} />
+      <div className="log-timezone-note">Home terminal time: {tz.label} ({tz.timeZone} · {tz.shortLabel})</div>
       <Tabs active={activeTab} onTab={setActiveTab} />
 
       {activeTab === 'log' && (

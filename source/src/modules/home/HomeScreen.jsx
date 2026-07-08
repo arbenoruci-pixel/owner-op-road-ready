@@ -6,6 +6,7 @@ import { signableLogDays, validateLogForSigning } from '../logbook/signing.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
 import { nowMin } from '../../shared/utils/time.js';
+import { homeTerminalConfigFromState } from '../../core/time/homeTerminalTime.js';
 import { evaluateDotWallet, walletCardLabel } from '../../core/wallet/dotWallet.js';
 import HosCompactClocks from '../drive/HosCompactClocks.jsx';
 
@@ -169,6 +170,7 @@ export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer
   const walletSummary = evaluateDotWallet(state.dotWallet || {});
   const walletCard = walletCardLabel(walletSummary);
   const anchorCert = certLabelForDay(state, anchorDay, anchorDay);
+  const tz = homeTerminalConfigFromState(state);
 
   const roadsideDays = useMemo(() => Array.from({ length: 8 }, (_, i) => addDays(anchorDay, -i)), [anchorDay]);
   const roadsideSet = useMemo(() => new Set(roadsideDays), [roadsideDays]);
@@ -189,6 +191,8 @@ export default function LogsList({ state, onOpenDay, onOpenStatus, onOpenTrailer
         </div>
         <button type="button" className="rr-dot-btn" onClick={onOpenDot}>DOT Mode</button>
       </header>
+
+      <div className="rr-timezone-note">Log time zone: {tz.label} ({tz.timeZone} · {tz.shortLabel})</div>
 
       <div className="rr-strip">
         <button type="button" className="rr-strip-cell" onClick={onOpenStatus}>

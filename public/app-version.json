@@ -1,14 +1,14 @@
 {
-  "version": "95.83.0",
-  "build": "v95.83-graph-line-weight-grid-readability",
+  "version": "95.84.0",
+  "build": "v95.84-home-terminal-timezone-settings",
   "releasedAt": "2026-07-08T00:00:00.000Z",
   "notes": [
-    "Makes the DOT log graph duty-status trace about 10% thicker for cleaner paper-log readability.",
-    "Makes vertical grid lines about 40% thinner/lighter while keeping hour lines slightly stronger than quarter-hour lines.",
-    "Removes read-only short-event dots and warning/exclamation circles from the graph; short events render as minimum blue trace segments.",
-    "Keeps edit handles visible only while actively editing, with smaller cleaner handle visuals.",
-    "UI/rendering-only patch; no duty events, driving events, HOS logic, route/load metadata, signing, backup/import, GPS, or Drive Mode behavior changed."
+    "Defaults DOT log-day time to Eastern Time / America/New_York for MC871792 / Narta Express.",
+    "Adds a Log Time Zone setting with common U.S. time zones and custom IANA time-zone entry.",
+    "Uses the configured home-terminal time zone for Today, log-day keys, current minute, open driving rollover, HOS clocks, and Drive Mode advisory clocks.",
+    "Does not convert or rewrite existing duty-event start/end minutes; source-of-truth event times are preserved.",
+    "Shows the active log time zone on the home log list and Log Day screen."
   ],
-  "label": "v95.83 Graph line weight and grid readability",
+  "label": "v95.84 Home terminal time zone settings",
   "updatedAt": "2026-07-08T00:00:00.000Z"
 }

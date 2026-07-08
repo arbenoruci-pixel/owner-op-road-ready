@@ -1,3 +1,11 @@
+# v95.84 Home terminal time zone settings
+
+- Defaults DOT log-day time to Eastern Time (`America/New_York`) for MC871792 / Narta Express.
+- Adds a Log Time Zone setting from Log Tools with common U.S. zones plus custom IANA timezone entry.
+- Uses configured home-terminal time for `localDayKey`, Today, current minute, open-driving rollover, HOS/Drive Mode clocks, and log-day displays.
+- Shows the active log timezone on Home and Log Day screens.
+- Does not convert or rewrite existing duty-event start/end minutes.
+
 
 ## v95.59 — DOT Roadside Package
 - DOT Mode now shows an officer-ready Roadside Package.

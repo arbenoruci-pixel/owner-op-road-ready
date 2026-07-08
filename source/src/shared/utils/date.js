@@ -1,19 +1,20 @@
-export function localDayKey(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+import {
+  addDaysToDayKey,
+  dayKeyDateParts,
+  getStoredHomeTerminalTimeZone,
+  homeTerminalDayKey,
+} from '../../core/time/homeTerminalTime.js';
+
+export function localDayKey(date = new Date(), timeZone = getStoredHomeTerminalTimeZone()) {
+  return homeTerminalDayKey(date, timeZone);
 }
 
 export function addDays(dayKey, delta) {
-  const [y, m, d] = dayKey.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + delta);
-  return localDayKey(dt);
+  return addDaysToDayKey(dayKey, delta);
 }
 
-export function isToday(dayKey) {
-  return dayKey === localDayKey();
+export function isToday(dayKey, timeZone = getStoredHomeTerminalTimeZone()) {
+  return dayKey === localDayKey(new Date(), timeZone);
 }
 
 export function lastNDays(count, fromKey = localDayKey()) {
@@ -21,18 +22,14 @@ export function lastNDays(count, fromKey = localDayKey()) {
 }
 
 export function dayTitle(dayKey) {
-  const [y, m, d] = dayKey.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  const dow = dt.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-  const mon = dt.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-  return `${dow} | ${mon} ${String(d).padStart(2, '0')}`;
+  const parts = dayKeyDateParts(dayKey);
+  return `${parts.weekdayShort.toUpperCase()} | ${parts.monthShort.toUpperCase()} ${parts.day}`;
 }
 
 export function dayRowTitle(dayKey) {
-  const [y, m, d] = dayKey.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
+  const parts = dayKeyDateParts(dayKey);
   return {
-    day: dt.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase(),
-    date: `${dt.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()} ${String(d).padStart(2, '0')}`,
+    day: parts.weekdayLong.toUpperCase(),
+    date: `${parts.monthShort.toUpperCase()} ${parts.day}`,
   };
 }

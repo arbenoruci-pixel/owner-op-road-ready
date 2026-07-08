@@ -19,7 +19,7 @@ ok(graph.includes('const VERTICAL_LINE_W = LINE_W'), 'horizontal and vertical tr
 ok(graph.includes('strokeWidth={LINE_W}'), 'visible duty path uses LINE_W directly');
 ok(graph.includes('stroke={TRACE_COLOR}'), 'visible duty path remains one blue paper-log trace');
 ok(!graph.includes('stroke={color(event.status)}'), 'graph still avoids per-status colored duty overlays');
-ok(pkg.version === '95.83.0', 'package version bumped to v95.83.0');
+ok(/^95\.(8[3-9]|[9-9][0-9])\./.test(pkg.version), 'package version includes v95.83 graph readability or newer');
 ok(notes.includes('Increased the main blue duty-status trace'), 'v95.83 notes describe line weight change');
 
 console.log('verify-graph-main-duty-line-thicker-v9583 passed');

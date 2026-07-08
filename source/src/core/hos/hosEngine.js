@@ -1,4 +1,6 @@
 import { durLabel, nowMin } from '../../shared/utils/time.js';
+import { localDayKey } from '../../shared/utils/date.js';
+import { getHomeTerminalTimeZone, homeTerminalMinute } from '../time/homeTerminalTime.js';
 import { makeContinuousLogEvents } from '../timeline/timelineEngine.js';
 import { rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
 
@@ -9,9 +11,8 @@ function dayIndex(dayKey) {
   return Math.floor(Date.UTC(y, (m || 1) - 1, d || 1) / 86400000);
 }
 
-function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function todayKey(timeZone) {
+  return localDayKey(new Date(), timeZone);
 }
 
 function absMin(dayKey, min) {
@@ -166,9 +167,10 @@ function eventPartOnDay(e, activeDay, startAbs, endAbs, type, text, severity = '
   };
 }
 
-export function buildContinuousTimeline(eventsByDay = {}, activeDay) {
-  const today = todayKey();
-  const n = nowMin();
+export function buildContinuousTimeline(eventsByDay = {}, activeDay, options = {}) {
+  const timeZone = options.timeZone || getHomeTerminalTimeZone(options.state || null);
+  const today = todayKey(timeZone);
+  const n = nowMin(timeZone);
   const out = [];
 
   Object.entries(eventsByDay || {}).forEach(([dayKey, rawEvents]) => {
@@ -583,14 +585,12 @@ function nowDateFromInput(nowInput = new Date()) {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
-function localDayKeyFromDate(date = new Date()) {
-  const d = nowDateFromInput(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function localDayKeyFromDate(date = new Date(), timeZone = getHomeTerminalTimeZone()) {
+  return localDayKey(nowDateFromInput(date), timeZone);
 }
 
-function minuteOfDate(date = new Date()) {
-  const d = nowDateFromInput(date);
-  return Math.max(0, Math.min(1440, d.getHours() * 60 + d.getMinutes()));
+function minuteOfDate(date = new Date(), timeZone = getHomeTerminalTimeZone()) {
+  return homeTerminalMinute(nowDateFromInput(date), timeZone);
 }
 
 function validDayKey(value = '') {
@@ -662,8 +662,9 @@ function rawClockEventsForDay(eventsByDay = {}, dayKey = '') {
 
 function buildHosClockTimeline(stateLike = {}, nowInput = new Date(), options = {}) {
   const nowDate = nowDateFromInput(nowInput);
-  const nowDay = localDayKeyFromDate(nowDate);
-  const nowMinute = minuteOfDate(nowDate);
+  const timeZone = getHomeTerminalTimeZone(stateLike);
+  const nowDay = localDayKeyFromDate(nowDate, timeZone);
+  const nowMinute = minuteOfDate(nowDate, timeZone);
   const nowAbs = absMin(nowDay, nowMinute);
   const eventsByDay = stateLike?.eventsByDay || stateLike || {};
   const lookbackDays = Math.max(10, Number(options.lookbackDays || 21));

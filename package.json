@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.83.0",
+  "version": "95.84.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -26,7 +26,14 @@
     "verify-graph-vertical-grid-lighter-v9583": "node scripts/verify-graph-vertical-grid-lighter-v9583.mjs",
     "verify-graph-readonly-no-dot-markers-v9583": "node scripts/verify-graph-readonly-no-dot-markers-v9583.mjs",
     "verify-graph-edit-handles-only-when-selected-v9583": "node scripts/verify-graph-edit-handles-only-when-selected-v9583.mjs",
-    "verify-event-data-unchanged-v9583": "node scripts/verify-event-data-unchanged-v9583.mjs"
+    "verify-event-data-unchanged-v9583": "node scripts/verify-event-data-unchanged-v9583.mjs",
+    "verify-home-terminal-timezone-et-default-v9584": "node scripts/verify-home-terminal-timezone-et-default-v9584.mjs",
+    "verify-custom-timezone-option-v9584": "node scripts/verify-custom-timezone-option-v9584.mjs",
+    "verify-local-day-key-uses-home-terminal-v9584": "node scripts/verify-local-day-key-uses-home-terminal-v9584.mjs",
+    "verify-now-min-uses-home-terminal-v9584": "node scripts/verify-now-min-uses-home-terminal-v9584.mjs",
+    "verify-hos-no-device-timezone-v9584": "node scripts/verify-hos-no-device-timezone-v9584.mjs",
+    "verify-log-day-does-not-shift-in-kosovo-device-time-v9584": "node scripts/verify-log-day-does-not-shift-in-kosovo-device-time-v9584.mjs",
+    "verify-existing-events-not-converted-v9584": "node scripts/verify-existing-events-not-converted-v9584.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
