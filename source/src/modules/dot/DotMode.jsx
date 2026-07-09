@@ -383,7 +383,7 @@ function DotDocumentViewer({ row, onClose, onStatus }) {
     <div className="dot-doc-viewer-backdrop" role="dialog" aria-modal="true" aria-label="DOT document viewer">
       <div className="dot-doc-viewer">
         <header className="dot-doc-viewer-head">
-          <button type="button" onClick={onClose} aria-label="Close document">‹</button>
+          <button type="button" onClick={onClose} aria-label="Back to DOT package">‹ Back</button>
           <div>
             <span>DOT DOCUMENT</span>
             <b>{row?.requirement?.title || 'Document'}</b>
@@ -460,28 +460,116 @@ function OfficerDocumentList({ state, officerSafe = true, onOpen }) {
   );
 }
 
+function walletReportFileLinkHtml(row) {
+  const doc = row?.doc || {};
+  const dataUrl = documentDataUrl(doc);
+  if (!dataUrl) return '<span class="roadside-doc-details-only">Details saved</span>';
+  const mime = guessDocMime(doc);
+  const fileName = safeFileName(doc.attachmentName || row?.requirement?.title || 'roadside-document', mime);
+  const title = row?.requirement?.title || 'Roadside document';
+  return `<a class="roadside-doc-link" href="${htmlEscape(dataUrl)}" data-roadside-doc="1" data-doc-title="${htmlEscape(title)}" data-doc-file="${htmlEscape(fileName)}" data-doc-mime="${htmlEscape(mime)}">Open full screen</a>`;
+}
+
 function walletReportSectionHtml(state) {
   const rows = officerPresentationWalletRows(state);
   if (!rows.length) return '<section class="wallet-report"><h2>Roadside Documents</h2><p>No documents selected for display.</p></section>';
-  const body = rows.map(row => {
-    const doc = row.doc || {};
-    const fileLink = doc.attachmentDataUrl
-      ? `<a href="${htmlEscape(doc.attachmentDataUrl)}">Open saved file</a>`
-      : 'Details saved';
-    return `<tr>
+  const body = rows.map(row => `<tr class="roadside-doc-row">
       <td>${htmlEscape(walletSectionTitle(row.requirement.section))}</td>
       <td>${htmlEscape(row.requirement.title)}</td>
       <td>${htmlEscape(documentMetaLine(row))}</td>
-      <td>${fileLink}</td>
-    </tr>`;
-  }).join('');
+      <td>${walletReportFileLinkHtml(row)}</td>
+    </tr>`).join('');
   return `<section class="wallet-report">
     <h2>Roadside Documents</h2>
+    <p class="roadside-doc-help">Tap any saved document to open a full-screen DOT preview. Use Back to return to the log package.</p>
     <table class="wallet-report-table">
       <thead><tr><th>Section</th><th>Document</th><th>Details</th><th>File</th></tr></thead>
       <tbody>${body}</tbody>
     </table>
   </section>`;
+}
+
+function roadsideDocumentViewerScriptHtml() {
+  return `<script>
+(function(){
+  var modal;
+  var titleEl;
+  var fileEl;
+  var bodyEl;
+  var directLink;
+  function createModal(){
+    if (modal) return;
+    modal = document.createElement('div');
+    modal.className = 'roadside-doc-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Roadside document preview');
+    modal.innerHTML = '<div class="roadside-doc-viewer"><header class="roadside-doc-viewer-head"><button type="button" class="roadside-doc-back" aria-label="Back to DOT package">‹ Back</button><div><span>ROADSIDE DOCUMENT</span><b></b><em></em></div><a class="roadside-doc-direct" target="_blank" rel="noopener noreferrer">Open</a></header><main class="roadside-doc-viewer-body"></main></div>';
+    document.body.appendChild(modal);
+    titleEl = modal.querySelector('b');
+    fileEl = modal.querySelector('em');
+    bodyEl = modal.querySelector('.roadside-doc-viewer-body');
+    directLink = modal.querySelector('.roadside-doc-direct');
+    modal.querySelector('.roadside-doc-back').addEventListener('click', closeDoc);
+    modal.addEventListener('click', function(e){ if (e.target === modal) closeDoc(); });
+  }
+  function closeDoc(){
+    if (!modal) return;
+    modal.classList.remove('open');
+    document.body.classList.remove('roadside-doc-open');
+    if (bodyEl) bodyEl.innerHTML = '';
+  }
+  function mimeFrom(src, explicit){
+    if (explicit) return explicit;
+    var m = String(src || '').match(/^data:([^;,]+)/i);
+    return m ? m[1] : '';
+  }
+  function openDoc(link){
+    createModal();
+    var src = link.getAttribute('href') || '';
+    var title = link.getAttribute('data-doc-title') || 'Roadside document';
+    var file = link.getAttribute('data-doc-file') || 'Saved file';
+    var mime = mimeFrom(src, link.getAttribute('data-doc-mime') || '');
+    titleEl.textContent = title;
+    fileEl.textContent = file;
+    directLink.href = src;
+    bodyEl.innerHTML = '';
+    if (!src) {
+      bodyEl.innerHTML = '<div class="roadside-doc-fallback"><b>No saved file is embedded for this document.</b><span>Return to the package and use the details line.</span></div>';
+    } else if (mime.indexOf('image/') === 0 || /^data:image\//i.test(src)) {
+      var img = document.createElement('img');
+      img.alt = title;
+      img.src = src;
+      bodyEl.appendChild(img);
+    } else if (mime.indexOf('pdf') >= 0 || /^data:application\/pdf/i.test(src)) {
+      var iframe = document.createElement('iframe');
+      iframe.title = title;
+      iframe.src = src;
+      bodyEl.appendChild(iframe);
+    } else {
+      var fallback = document.createElement('div');
+      fallback.className = 'roadside-doc-fallback';
+      fallback.innerHTML = '<b>Preview not available for this file type.</b><span>Use Open to view the saved file.</span>';
+      bodyEl.appendChild(fallback);
+    }
+    modal.classList.add('open');
+    document.body.classList.add('roadside-doc-open');
+  }
+  document.addEventListener('click', function(e){
+    var target = e.target;
+    if (!target || !target.closest) return;
+    var link = target.closest('a[data-roadside-doc="1"]');
+    if (!link) {
+      var row = target.closest('tr.roadside-doc-row');
+      if (row) link = row.querySelector('a[data-roadside-doc="1"]');
+    }
+    if (!link) return;
+    e.preventDefault();
+    openDoc(link);
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeDoc(); });
+})();
+</script>`;
 }
 
 function recapDays(days = [], state) {
@@ -625,7 +713,7 @@ function reportHtml(state, days, routingCode = '') {
 <style>
   body{margin:0;background:#e5e7eb;color:#111827;font-family:Arial,Helvetica,sans-serif;}
   .package-cover,.daily-log-page{max-width:980px;margin:18px auto;background:#fff;border:1px solid #cfd4dc;padding:22px;box-sizing:border-box;}
-  .package-cover h1{margin:0 0 8px;font-size:26px;}.package-cover p{margin:6px 0;font-size:14px;}.cover-grid{display:grid;grid-template-columns:180px 1fr;gap:0;border:1px solid #9ca3af;margin-top:16px}.cover-grid b,.cover-grid span{padding:8px 10px;border-bottom:1px solid #d1d5db}.cover-grid b{background:#f3f4f6;border-right:1px solid #d1d5db}.cover-grid b:nth-last-child(2),.cover-grid span:last-child{border-bottom:0}.wallet-report{margin-top:18px}.wallet-report h2{font-size:18px;margin:0 0 8px}.wallet-report-table{width:100%;border-collapse:collapse;font-size:12px}.wallet-report-table th,.wallet-report-table td{border:1px solid #9ca3af;padding:6px;text-align:left;vertical-align:top}.wallet-report-table th{background:#f3f4f6;font-weight:800}
+  .package-cover h1{margin:0 0 8px;font-size:26px;}.package-cover p{margin:6px 0;font-size:14px;}.cover-grid{display:grid;grid-template-columns:180px 1fr;gap:0;border:1px solid #9ca3af;margin-top:16px}.cover-grid b,.cover-grid span{padding:8px 10px;border-bottom:1px solid #d1d5db}.cover-grid b{background:#f3f4f6;border-right:1px solid #d1d5db}.cover-grid b:nth-last-child(2),.cover-grid span:last-child{border-bottom:0}.wallet-report{margin-top:18px}.wallet-report h2{font-size:18px;margin:0 0 8px}.wallet-report-table{width:100%;border-collapse:collapse;font-size:12px}.wallet-report-table th,.wallet-report-table td{border:1px solid #9ca3af;padding:6px;text-align:left;vertical-align:top}.wallet-report-table th{background:#f3f4f6;font-weight:800}.roadside-doc-help{margin:4px 0 10px;color:#4b5563;font-size:12px;font-weight:700}.roadside-doc-row{cursor:pointer}.roadside-doc-row:hover{background:#f8fafc}.roadside-doc-link{display:inline-grid;place-items:center;min-height:32px;padding:0 10px;border-radius:999px;background:#eef3ff;border:1px solid #cfd8ff;color:#3157d8;font-weight:900;text-decoration:none;white-space:nowrap}.roadside-doc-details-only{color:#6b7280;font-weight:800}.roadside-doc-open{overflow:hidden}.roadside-doc-modal{position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.72);display:none}.roadside-doc-modal.open{display:block}.roadside-doc-viewer{height:100dvh;background:#fff;display:flex;flex-direction:column}.roadside-doc-viewer-head{min-height:58px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;border-bottom:1px solid #d1d5db;background:#fff}.roadside-doc-back{border:0;border-radius:12px;background:#111827;color:#fff;padding:10px 12px;font-weight:900;font-size:15px}.roadside-doc-viewer-head div{display:grid;gap:2px;min-width:0}.roadside-doc-viewer-head span{font-size:10px;letter-spacing:.12em;color:#6b7280;font-weight:900}.roadside-doc-viewer-head b{font-size:15px;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.roadside-doc-viewer-head em{font-style:normal;font-size:11px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.roadside-doc-direct{border:1px solid #d1d5db;border-radius:12px;background:#f9fafb;color:#111827;padding:10px 12px;text-decoration:none;font-weight:900;font-size:13px}.roadside-doc-viewer-body{flex:1;min-height:0;background:#0b1220;display:flex;align-items:center;justify-content:center;overflow:auto;padding:12px}.roadside-doc-viewer-body img{max-width:100%;max-height:100%;object-fit:contain;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}.roadside-doc-viewer-body iframe{width:100%;height:100%;border:0;background:#fff}.roadside-doc-fallback{display:grid;gap:8px;max-width:420px;border-radius:16px;background:#fff;padding:20px;color:#111827;text-align:center}.roadside-doc-open{overflow:hidden}
   .daily-log-head{display:grid;grid-template-columns:190px 1fr 210px;align-items:start;gap:12px;border-bottom:2px solid #111827;padding-bottom:10px}.brand{font-size:34px;font-weight:900;font-style:italic}.daily-log-head h1{margin:0;text-align:center;font-size:22px;text-transform:uppercase}.daily-log-head p{text-align:center;margin:3px 0 0}.log-date{text-align:right;font-size:13px;line-height:1.5}.header-table,.event-table,.recap-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}.header-table th,.header-table td,.event-table th,.event-table td,.recap-table th,.recap-table td{border:1px solid #9ca3af;padding:6px;text-align:left;vertical-align:top}.header-table th,.event-table th,.recap-table th{background:#f3f4f6;font-weight:800}.graph-wrap{border:1px solid #d1d5db;margin:12px 0;padding:8px}.report-svg{width:100%;height:auto}.grid-line,.hour-line{stroke:#d1d5db;stroke-width:1}.hour-line.major{stroke:#9ca3af;stroke-width:1.2}.hour-label,.row-label{font-size:12px;fill:#374151;font-weight:700}.cert-block{margin-top:14px;text-align:center}.cert-block> b{display:block;text-align:left}.cert-block p{font-weight:700}.signature-line{height:54px;display:flex;align-items:end;justify-content:center;gap:10px}.signature-line img{max-height:42px;max-width:180px}.signature-line span{border-top:1px solid #111827;min-width:260px;padding-top:6px;font-size:12px;font-weight:700}.review-list{text-align:left;background:#fff7ed;border:1px solid #fed7aa;padding:8px;margin-top:8px}.page-break{break-after:page;}
   @media print{body{background:#fff}.package-cover,.daily-log-page{margin:0 auto 12px;border:0;page-break-after:always}.daily-log-page{min-height:10in}.no-print{display:none!important}}
 </style>
@@ -647,6 +735,7 @@ function reportHtml(state, days, routingCode = '') {
     ${walletReportSectionHtml(state)}
   </section>
   ${days.map(day => dayReportHtml(state, day, days)).join('\n')}
+  ${roadsideDocumentViewerScriptHtml()}
 </body>
 </html>`;
 }

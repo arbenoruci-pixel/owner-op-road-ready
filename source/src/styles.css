@@ -9437,3 +9437,150 @@ body,
   padding:13px;
   margin-top:10px;
 }
+
+/* v95.85 DOT saved document full-screen viewer */
+.dot-doc-viewer-backdrop{
+  position:fixed!important;
+  inset:0!important;
+  z-index:9999!important;
+  background:rgba(15,23,42,.74)!important;
+  display:flex!important;
+  align-items:stretch!important;
+  justify-content:stretch!important;
+}
+.dot-doc-viewer{
+  width:100%!important;
+  height:100dvh!important;
+  background:#fff!important;
+  color:#111827!important;
+  display:flex!important;
+  flex-direction:column!important;
+  overflow:hidden!important;
+}
+.dot-doc-viewer-head{
+  min-height:58px!important;
+  display:grid!important;
+  grid-template-columns:auto 1fr auto!important;
+  gap:10px!important;
+  align-items:center!important;
+  padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px!important;
+  border-bottom:1px solid #d1d5db!important;
+  background:#fff!important;
+}
+.dot-doc-viewer-head button{
+  min-height:42px!important;
+  border:0!important;
+  border-radius:13px!important;
+  padding:0 12px!important;
+  font-size:14px!important;
+  font-weight:1000!important;
+}
+.dot-doc-viewer-head button:first-child{
+  min-width:64px!important;
+  background:#111827!important;
+  color:#fff!important;
+  font-size:24px!important;
+  line-height:1!important;
+}
+.dot-doc-viewer-head button:last-child{
+  background:#eef3ff!important;
+  color:#3157d8!important;
+  border:1px solid #cfd8ff!important;
+}
+.dot-doc-viewer-head div{
+  display:grid!important;
+  gap:2px!important;
+  min-width:0!important;
+}
+.dot-doc-viewer-head span{
+  color:#667085!important;
+  font-size:10px!important;
+  font-weight:1000!important;
+  letter-spacing:.14em!important;
+}
+.dot-doc-viewer-head b{
+  color:#111827!important;
+  font-size:15px!important;
+  font-weight:1000!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+.dot-doc-viewer-meta{
+  display:grid!important;
+  gap:2px!important;
+  padding:8px 12px!important;
+  border-bottom:1px solid #eef1f5!important;
+  background:#f9fafb!important;
+}
+.dot-doc-viewer-meta b{
+  color:#111827!important;
+  font-size:13px!important;
+  font-weight:1000!important;
+  overflow:hidden!important;
+  white-space:nowrap!important;
+  text-overflow:ellipsis!important;
+}
+.dot-doc-viewer-meta span{
+  color:#667085!important;
+  font-size:12px!important;
+  font-weight:850!important;
+}
+.dot-doc-viewer-body{
+  flex:1!important;
+  min-height:0!important;
+  background:#0b1220!important;
+  overflow:auto!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:12px!important;
+}
+.dot-doc-viewer-body img{
+  max-width:100%!important;
+  max-height:100%!important;
+  object-fit:contain!important;
+  background:#fff!important;
+  border-radius:10px!important;
+  box-shadow:0 14px 48px rgba(0,0,0,.38)!important;
+}
+.dot-doc-viewer-body iframe{
+  width:100%!important;
+  height:100%!important;
+  border:0!important;
+  border-radius:10px!important;
+  background:#fff!important;
+}
+.dot-doc-viewer-fallback{
+  display:grid!important;
+  gap:8px!important;
+  max-width:420px!important;
+  border-radius:16px!important;
+  background:#fff!important;
+  padding:20px!important;
+  text-align:center!important;
+}
+.dot-doc-viewer-fallback b{font-size:16px!important;color:#111827!important;}
+.dot-doc-viewer-fallback span{font-size:13px!important;color:#667085!important;font-weight:850!important;}
+.dot-doc-viewer-actions{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:8px!important;
+  padding:10px 12px calc(env(safe-area-inset-bottom,0px) + 10px)!important;
+  border-top:1px solid #d1d5db!important;
+  background:#fff!important;
+}
+.dot-doc-viewer-actions button{
+  min-height:44px!important;
+  border:1px solid #d1d5db!important;
+  border-radius:13px!important;
+  background:#f9fafb!important;
+  color:#111827!important;
+  font-size:13px!important;
+  font-weight:1000!important;
+}
+@media(max-width:390px){
+  .dot-doc-viewer-actions{grid-template-columns:1fr!important;}
+  .dot-doc-viewer-head{grid-template-columns:auto 1fr!important;}
+  .dot-doc-viewer-head button:last-child{grid-column:1 / -1!important;}
+}

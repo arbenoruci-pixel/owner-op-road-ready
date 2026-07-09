@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.84.0",
+  "version": "95.85.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -33,7 +33,10 @@
     "verify-now-min-uses-home-terminal-v9584": "node scripts/verify-now-min-uses-home-terminal-v9584.mjs",
     "verify-hos-no-device-timezone-v9584": "node scripts/verify-hos-no-device-timezone-v9584.mjs",
     "verify-log-day-does-not-shift-in-kosovo-device-time-v9584": "node scripts/verify-log-day-does-not-shift-in-kosovo-device-time-v9584.mjs",
-    "verify-existing-events-not-converted-v9584": "node scripts/verify-existing-events-not-converted-v9584.mjs"
+    "verify-existing-events-not-converted-v9584": "node scripts/verify-existing-events-not-converted-v9584.mjs",
+    "verify-dot-package-document-fullscreen-viewer-v9585": "node scripts/verify-dot-package-document-fullscreen-viewer-v9585.mjs",
+    "verify-dot-package-doc-links-use-document-data-url-v9585": "node scripts/verify-dot-package-doc-links-use-document-data-url-v9585.mjs",
+    "verify-dot-document-viewer-no-log-data-change-v9585": "node scripts/verify-dot-document-viewer-no-log-data-change-v9585.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

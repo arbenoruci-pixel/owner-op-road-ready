@@ -1,3 +1,11 @@
+
+## v95.85 — DOT package document full-screen viewer
+- Roadside Documents inside exported DOT HTML packages now open in a full-screen in-page viewer instead of relying on raw `data:` links.
+- Added a large Back control for officer-friendly return to the log package.
+- Supports image preview, PDF iframe preview, and fallback Open action for other file types.
+- Added full-screen styling for the in-app DOT saved document viewer.
+- UI/document presentation only: no duty times, driving times, HOS, route/load, miles, signing, backup/import, or GPS logic changed.
+
 # v95.84 Home terminal time zone settings
 
 - Defaults DOT log-day time to Eastern Time (`America/New_York`) for MC871792 / Narta Express.
