@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.88.0",
+  "version": "95.89.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -46,7 +46,22 @@
     "verify-dot-officer-pdf-self-contained-v9588": "node scripts/verify-dot-officer-pdf-self-contained-v9588.mjs",
     "verify-dot-html-mobile-no-horizontal-overflow-v9588": "node scripts/verify-dot-html-mobile-no-horizontal-overflow-v9588.mjs",
     "verify-dot-html-share-secondary-v9588": "node scripts/verify-dot-html-share-secondary-v9588.mjs",
-    "verify-dot-package-no-log-data-change-v9588": "node scripts/verify-dot-package-no-log-data-change-v9588.mjs"
+    "verify-dot-package-no-log-data-change-v9588": "node scripts/verify-dot-package-no-log-data-change-v9588.mjs",
+    "verify-shift-selected-block-later-v9589": "node scripts/verify-shift-selected-block-later-v9589.mjs",
+    "verify-shift-selected-block-earlier-v9589": "node scripts/verify-shift-selected-block-earlier-v9589.mjs",
+    "verify-shift-preserves-24h-coverage-v9589": "node scripts/verify-shift-preserves-24h-coverage-v9589.mjs",
+    "verify-shift-does-not-delete-unselected-events-v9589": "node scripts/verify-shift-does-not-delete-unselected-events-v9589.mjs",
+    "verify-shift-uses-raw-events-only-v9589": "node scripts/verify-shift-uses-raw-events-only-v9589.mjs",
+    "verify-shift-signed-day-needs-recertification-v9589": "node scripts/verify-shift-signed-day-needs-recertification-v9589.mjs",
+    "verify-shift-all-day-duty-change-mode-v9589": "node scripts/verify-shift-all-day-duty-change-mode-v9589.mjs",
+    "verify-hos-violation-red-line-start-v9589": "node scripts/verify-hos-violation-red-line-start-v9589.mjs",
+    "verify-hos-cross-midnight-violation-red-line-v9589": "node scripts/verify-hos-cross-midnight-violation-red-line-v9589.mjs",
+    "verify-driving-events-shift-only-when-selected-v9589": "node scripts/verify-driving-events-shift-only-when-selected-v9589.mjs",
+    "verify-no-gps-auto-driving-v9589": "node scripts/verify-no-gps-auto-driving-v9589.mjs",
+    "verify-hos-violation-click-opens-exact-event-v9589": "node scripts/verify-hos-violation-click-opens-exact-event-v9589.mjs",
+    "verify-day-shift-events-v9564": "node scripts/verify-day-shift-events-v9564.mjs",
+    "verify-edit-event-graph-crash-v9565": "node scripts/verify-edit-event-graph-crash-v9565.mjs",
+    "verify-edit-time-save-v9566": "node scripts/verify-edit-time-save-v9566.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

@@ -1,14 +1,14 @@
 {
-  "version": "95.88.0",
-  "build": "v95.84-home-terminal-timezone-settings",
-  "releasedAt": "2026-07-08T00:00:00.000Z",
+  "version": "95.89.0",
+  "build": "v95.89-event-shift-and-hos-violation-graph",
+  "releasedAt": "2026-07-09T00:00:00.000Z",
   "notes": [
-    "Defaults DOT log-day time to Eastern Time / America/New_York for MC871792 / Narta Express.",
-    "Adds a Log Time Zone setting with common U.S. time zones and custom IANA time-zone entry.",
-    "Uses the configured home-terminal time zone for Today, log-day keys, current minute, open driving rollover, HOS clocks, and Drive Mode advisory clocks.",
-    "Does not convert or rewrite existing duty-event start/end minutes; source-of-truth event times are preserved.",
-    "Shows the active log time zone on the home log list and Log Day screen."
+    "Adds easy select mode for shifting real stored log events earlier or later.",
+    "Adds safe block shifting that adjusts adjacent rows to preserve coverage and avoid deleting unselected events.",
+    "Marks signed/certified days as Needs Recertification after a shift.",
+    "Turns the duty-status graph line red from the exact HOS violation minute.",
+    "Keeps GPS auto-driving disabled and does not save synthetic timeline rows."
   ],
-  "label": "v95.84 Home terminal time zone settings",
-  "updatedAt": "2026-07-08T00:00:00.000Z"
+  "label": "v95.89 Event shift and HOS violation graph",
+  "updatedAt": "2026-07-09T00:00:00.000Z"
 }

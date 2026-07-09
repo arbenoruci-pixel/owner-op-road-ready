@@ -82,6 +82,24 @@ function rangeColor(r) {
   return '#DC2626';
 }
 
+function violationLabel(r = {}) {
+  if (r.type === 'window14') return '14h';
+  if (r.type === 'drive11') return '11h';
+  if (r.type === 'break8') return 'Break';
+  if (r.type === 'cycle70') return '70h';
+  if (r.type === 'overlap') return 'Overlap';
+  return '';
+}
+
+function violationShortLabel(r = {}) {
+  if (r.type === 'window14') return '14h';
+  if (r.type === 'drive11') return '11h';
+  if (r.type === 'break8') return 'Break';
+  if (r.type === 'cycle70') return '70h';
+  if (r.type === 'overlap') return 'Overlap';
+  return '';
+}
+
 function continuousPath(events = []) {
   const sorted = [...events].sort((a,b)=>a.startMin-b.startMin).filter(e => Number(e.endMin || 0) > Number(e.startMin || 0));
   if (!sorted.length) return '';
@@ -264,6 +282,58 @@ export default function LogGraph({ events, selectedId, onSelect, onEmptyTap, edi
           pointerEvents="none"
         />
       ) : null}
+
+      {/* v95.89: exact HOS/overlap violation trace. If the driver crosses
+          into an HOS limit, the actual duty line turns red/orange starting
+          at the exact minute returned by violationRangesForDay. Review-only
+          rest watches remain background-only and do not paint the line. */}
+      {violationRanges
+        .filter(r => r && r.severity === 'high' && r.startMin != null && r.endMin != null)
+        .map((r, i) => {
+          const y = CENTER(r.status);
+          const x1 = xFromMin(r.startMin);
+          const x2 = xFromMin(r.endMin);
+          const c = rangeColor(r);
+          return (
+            <g key={`${r.id || i}_${r.type || 'violation'}_${r.startMin}_${r.endMin}_trace`} className="graph-violation-trace" pointerEvents="none">
+              <line
+                x1={x1}
+                x2={x2}
+                y1={y}
+                y2={y}
+                stroke="#fff"
+                strokeWidth={LINE_HALO_W + 1.5}
+                strokeLinecap="butt"
+              />
+              <line
+                x1={x1}
+                x2={x2}
+                y1={y}
+                y2={y}
+                stroke={c}
+                strokeWidth={LINE_W + 1.25}
+                strokeLinecap="butt"
+              />
+              <line
+                x1={x1}
+                x2={x1}
+                y1={y - 12}
+                y2={y + 12}
+                stroke={c}
+                strokeWidth="3.25"
+                strokeLinecap="round"
+              />
+              {violationShortLabel(r) ? (
+                <text
+                  x={Math.min(W - RIGHT - 18, Math.max(LEFT + 18, x1 + 6))}
+                  y={Math.max(24, y - 15)}
+                  className="graph-violation-label"
+                  fill={c}
+                >{violationShortLabel(r)}</text>
+              ) : null}
+            </g>
+          );
+        })}
 
       {sorted.map((event) => {
         const y = CENTER(event.status);

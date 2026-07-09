@@ -3,7 +3,7 @@ import { durLabel, timeLabel } from '../../shared/utils/time.js';
 import { color, label } from '../../shared/utils/status.js';
 import { sanitizeLogText } from '../../shared/utils/logText.js';
 
-export default function EventList({ events, selectedId, selectMode, selectedIds, onSelect, onToggleSelected, onOpenEdit }) {
+export default function EventList({ events, selectedId, selectMode, selectedIds = [], onSelect, onToggleSelected, onOpenEdit }) {
   const refs = useRef({});
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
           <div
             key={event.id}
             ref={(el) => { refs.current[event.id] = el; }}
-            className={`event-row clean-event-row ${selected ? 'selected' : ''}`}
+            className={`event-row clean-event-row ${selected ? 'selected' : ''} ${selectMode && checked ? 'bulk-selected checked' : ''} ${selectMode ? 'selectable' : ''}`}
             onClick={() => selectMode ? onToggleSelected(event.id) : onOpenEdit(event.id)}
           >
             {selectMode ? (
@@ -56,7 +56,13 @@ export default function EventList({ events, selectedId, selectMode, selectedIds,
               {displayNote && <div className="event-note">{displayNote}</div>}
             </div>
 
-            <button className="blue-edit" onClick={(e)=>{ e.stopPropagation(); onOpenEdit(event.id); }}>Edit</button>
+            {selectMode ? (
+              <button className="blue-edit select-tick-v9589" onClick={(e)=>{ e.stopPropagation(); onToggleSelected(event.id); }}>
+                {checked ? 'Selected' : 'Select'}
+              </button>
+            ) : (
+              <button className="blue-edit" onClick={(e)=>{ e.stopPropagation(); onOpenEdit(event.id); }}>Edit</button>
+            )}
           </div>
         );
       })}

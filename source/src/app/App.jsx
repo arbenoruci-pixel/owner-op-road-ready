@@ -23,7 +23,7 @@ import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
 import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
 import { rawStoredEventsForDay, stripSyntheticEventFields, isSyntheticEvent } from '../core/compliance/rawRodsChecks.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
-import { insertManyOverride, applyEditOverride, applyPatchWithNeighbors, closePreviousAndStart, normalizeLogEvents, protectLiveTailFromInsert } from '../core/timeline/timelineEngine.js';
+import { insertManyOverride, applyEditOverride, applyPatchWithNeighbors, closePreviousAndStart, normalizeLogEvents, protectLiveTailFromInsert, shiftSelectedEventsForDay } from '../core/timeline/timelineEngine.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
 import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot, savePreUpdateSnapshot } from '../../../lib/local-db/appState.js';
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
@@ -1132,26 +1132,20 @@ export default function App() {
 
   function applyShift(delta) {
     setState(s => {
-      const selected = new Set(s.selectedIds || []);
       const baseEvents = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay);
-      const selectedEvents = baseEvents.filter(e => selected.has(e.id));
-      if (!selectedEvents.length || !delta) return { ...s, sheet:null, selectMode:false };
+      const selectedIds = (s.selectedIds || []).filter(Boolean);
+      const result = shiftSelectedEventsForDay(baseEvents, selectedIds, delta, { preserveCoverage:true, allowDrivingOnlyIfSelected:true });
 
-      const minStart = Math.min(...selectedEvents.map(e => Number(e.startMin || 0)));
-      const maxEnd = Math.max(...selectedEvents.map(e => Number(e.endMin || 0)));
-      const boundedDelta = Math.max(-minStart, Math.min(1440 - maxEnd, delta));
-      if (!boundedDelta) return { ...s, sheet:null, selectMode:false };
+      if (result.blockedReason || !result.appliedDeltaMin) {
+        if (typeof window !== 'undefined') {
+          window.setTimeout(() => window.alert?.(result.blockedReason || 'Shift was not applied.'), 0);
+        }
+        return { ...s, sheet:null, selectMode:true };
+      }
 
-      const shifted = selectedEvents.map(e => ({
-        ...e,
-        startMin:e.startMin + boundedDelta,
-        endMin:e.endMin + boundedDelta,
-        shiftedAt:Date.now(),
-        shiftedByMin:boundedDelta,
-      }));
-      const remaining = baseEvents.filter(e => !selected.has(e.id));
-      const evs = commitTimelineForDay(insertManyOverride(remaining, shifted), s.activeDay, s);
+      const evs = commitTimelineForDay(result.events, s.activeDay, s);
       const eventsByDay = { ...s.eventsByDay, [s.activeDay]: sorted(evs) };
+      const recertNeeded = s.certifyStatus?.[s.activeDay] === 'Certified';
       let next = {
         ...s,
         eventsByDay,
@@ -1159,7 +1153,17 @@ export default function App() {
         sheet:null,
         selectMode:false,
         selectedIds:[],
-        selectedEventId:null,
+        selectedEventId:(result.changedEventIds || [])[0] || null,
+        lastShiftResult:{
+          day:s.activeDay,
+          appliedDeltaMin:result.appliedDeltaMin,
+          changedEventIds:result.changedEventIds || [],
+          adjustedNeighborIds:result.adjustedNeighborIds || [],
+          warnings:result.warnings || [],
+          mode:result.mode || 'selected_block',
+          recertNeeded,
+          at:Date.now(),
+        },
       };
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
@@ -2626,6 +2630,7 @@ export default function App() {
         onSelectAll={()=>setState(s=>({ ...s, selectMode:true, selectedIds:rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id) }))}
         onClearSelection={()=>setState(s=>({ ...s, selectedIds:[] }))}
         onOpenShift={()=>setState(s=>{ const ids = (s.selectedIds || []).length ? s.selectedIds : rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })}
+        onQuickShift={applyShift}
         onMoveSelected={moveSelectedEventInline}
         onCertify={certify}
         onTools={()=>setState(s=>({ ...s, sheet:{ type:'tools' } }))}

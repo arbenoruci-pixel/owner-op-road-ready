@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { analyzeLinkedHos } from '../../core/hos/hosEngine.js';
+import { timeLabel } from '../../shared/utils/time.js';
 
 function warningTypeFromText(text = '') {
   const t = String(text || '').toLowerCase();
-  if (t.includes('14-hour')) return 'window14';
-  if (t.includes('11-hour')) return 'drive11';
-  if (t.includes('30-minute') || t.includes('8h without')) return 'break8';
+  if (t.includes('14-hour') || t.includes('shift clock')) return 'window14';
+  if (t.includes('11-hour') || t.includes('drive clock')) return 'drive11';
+  if (t.includes('30-minute') || t.includes('8h without') || t.includes('break required')) return 'break8';
   if (t.includes('70-hour') || t.includes('cycle')) return 'cycle70';
   if (t.includes('overlap')) return 'overlap';
   if (t.includes('rest')) return 'restWatch';
@@ -77,6 +78,7 @@ export default function HosCheck({ events, state, onIssueAction }) {
               {result.warnings.map((w, i) => {
                 const target = targetForWarning(w, result.violationRanges || []);
                 const canOpen = !!target || /certified|city\/state|location/i.test(String(w.text || ''));
+                const exact = target?.startMin != null ? `Starts ${timeLabel(target.startMin, true)}` : '';
                 return (
                   <button
                     key={i}
@@ -84,8 +86,8 @@ export default function HosCheck({ events, state, onIssueAction }) {
                     className={`hos-warning ${w.severity} ${canOpen ? 'tap-fix' : ''}`}
                     onClick={() => issueClick(w)}
                   >
-                    <span>⚠ {w.text}</span>
-                    <b>{actionLabelForWarning(w, target)}</b>
+                    <span>⚠ {w.text}{exact ? ` · ${exact}` : ''}</span>
+                    <b>{target ? 'Show' : actionLabelForWarning(w, target)}</b>
                   </button>
                 );
               })}

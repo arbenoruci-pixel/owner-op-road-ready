@@ -375,21 +375,100 @@ function windowLimitAbs(dutyStartAbs, currentEndAbs, split) {
   return null;
 }
 
+
+function historicalHosViolationRanges(timeline = [], activeDay = '') {
+  const ranges = [];
+  const pushRange = (range) => {
+    if (!range) return;
+    if (range.endMin <= range.startMin) return;
+    ranges.push(range);
+  };
+
+  const evs = sortByStart(timeline);
+  let shiftStartAbs = null;
+  let driveUsedSinceReset = 0;
+  let driveSinceBreak = 0;
+  let restBlockStart = null;
+  let nonDrivingBlockStart = null;
+  let pendingFullResetAbs = null;
+
+  const resetAt = () => {
+    shiftStartAbs = null;
+    driveUsedSinceReset = 0;
+    driveSinceBreak = 0;
+    nonDrivingBlockStart = null;
+    pendingFullResetAbs = null;
+  };
+
+  for (const e of evs) {
+    const dur = eventDuration(e);
+    if (dur <= 0) continue;
+
+    if (pendingFullResetAbs != null && e.startAbs >= pendingFullResetAbs && isOnDuty(e.status)) {
+      resetAt();
+    }
+
+    if (isRestStatus(e.status)) {
+      if (restBlockStart == null || e.startAbs > (pendingFullResetAbs ?? e.startAbs) + 6000) {
+        restBlockStart = e.startAbs;
+      }
+      const restDur = e.endAbs - restBlockStart;
+      if (restDur >= 10 * HOUR) pendingFullResetAbs = restBlockStart + 10 * HOUR;
+    } else {
+      if (pendingFullResetAbs != null && e.startAbs >= pendingFullResetAbs) resetAt();
+      restBlockStart = null;
+    }
+
+    if (e.status !== 'D') {
+      if (nonDrivingBlockStart == null) nonDrivingBlockStart = e.startAbs;
+      if (e.endAbs - nonDrivingBlockStart >= 30) driveSinceBreak = 0;
+    }
+
+    if (!isOnDuty(e.status)) continue;
+    if (shiftStartAbs == null) shiftStartAbs = e.startAbs;
+
+    if (e.status === 'D') {
+      nonDrivingBlockStart = null;
+
+      if (driveUsedSinceReset >= 11 * HOUR) {
+        pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, 'drive11', `Drive clock expired at ${shortTime(e.startAbs)}.`));
+      } else if (driveUsedSinceReset + dur > 11 * HOUR) {
+        const s = e.startAbs + ((11 * HOUR) - driveUsedSinceReset);
+        pushRange(eventPartOnDay(e, activeDay, s, e.endAbs, 'drive11', `Drive clock expired at ${shortTime(s)}.`));
+      }
+
+      if (shiftStartAbs != null) {
+        const limit14 = shiftStartAbs + 14 * HOUR;
+        if (e.endAbs > limit14) {
+          pushRange(eventPartOnDay(e, activeDay, Math.max(e.startAbs, limit14), e.endAbs, 'window14', `Shift clock expired at ${shortTime(limit14)}.`));
+        }
+      }
+
+      if (driveSinceBreak >= 8 * HOUR) {
+        pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, 'break8', `Break required at ${shortTime(e.startAbs)}.`));
+      } else if (driveSinceBreak + dur > 8 * HOUR) {
+        const s = e.startAbs + ((8 * HOUR) - driveSinceBreak);
+        pushRange(eventPartOnDay(e, activeDay, s, e.endAbs, 'break8', `Break required at ${shortTime(s)}.`));
+      }
+
+      driveUsedSinceReset += dur;
+      driveSinceBreak += dur;
+    }
+  }
+
+  return ranges;
+}
+
 export function violationRangesForDay(eventsByDay = {}, activeDay) {
-  const timeline = buildContinuousTimeline(eventsByDay, activeDay);
-  if (!timeline.length || !activeDay) return [];
-
-  const currentEndAbs = Math.max(...timeline.map(e => e.endAbs));
-  const restBlocks = findRestBlocks(timeline);
-  const fullReset = latestFullReset(restBlocks, currentEndAbs);
-  const latestSplit = findSplitPairs(restBlocks, currentEndAbs)[0] || null;
-
-  const resetAbs = Math.max(
-    fullReset ? fullReset.endAbs : -Infinity,
-    latestSplit ? latestSplit.recalculationPoint : -Infinity
-  );
-  const validResetAbs = Number.isFinite(resetAbs) ? resetAbs : -Infinity;
-  const afterReset = timeline.filter(e => e.endAbs > validResetAbs && e.startAbs <= currentEndAbs);
+  if (!activeDay) return [];
+  const timeZone = getHomeTerminalTimeZone();
+  const today = todayKey(timeZone);
+  const activeDayEndAbs = dayStartAbs(activeDay) + (activeDay === today ? nowMin(timeZone) : 1440);
+  const activeDayStartAbs = dayStartAbs(activeDay);
+  const timeline = buildContinuousTimeline(eventsByDay, activeDay)
+    .filter(event => event.startAbs < activeDayEndAbs && event.endAbs > activeDayEndAbs - 21 * 1440)
+    .sort((a, b) => a.startAbs - b.startAbs || a.endAbs - b.endAbs);
+  if (!timeline.length) return [];
 
   const ranges = [];
   const pushRange = (range) => {
@@ -398,24 +477,12 @@ export function violationRangesForDay(eventsByDay = {}, activeDay) {
     ranges.push(range);
   };
 
-  // Status/reason mismatch: example D + Pre-trip inspection should be ON.
+  // Status/reason mismatch and overlaps are exact event-level issues.
   for (const e of timeline) {
     const mismatch = statusReasonMismatch(e);
-    if (mismatch) {
-      pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, mismatch.type, mismatch.text, mismatch.severity));
-    }
+    if (mismatch) pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, mismatch.type, mismatch.text, mismatch.severity));
   }
 
-  // Current rest watch: not a violation yet, but show orange progress when user is short of a 10h reset.
-  for (const b of restBlocks) {
-    if (b.duration > 0 && b.duration < 10 * HOUR) {
-      for (const e of b.events) {
-        pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, 'restWatch', `Current rest ${durLabel(b.duration)} / 10h.`, 'medium'));
-      }
-    }
-  }
-
-  // Overlap: mark exact overlapping portion on both touched event lines.
   const evs = sortByStart(timeline);
   for (let i = 0; i < evs.length - 1; i++) {
     const a = evs[i];
@@ -428,77 +495,99 @@ export function violationRangesForDay(eventsByDay = {}, activeDay) {
     }
   }
 
-  // 11h drive: mark DRIVING only after the exact minute limit is crossed.
+  // v95.89: HOS graph ranges are calculated as a chronological stream so a
+  // later 10-hour reset does not erase the red segment where the driver first
+  // entered a violation earlier in the day.
   let driveUsed = 0;
-  for (const e of afterReset) {
-    if (e.status !== 'D') continue;
-    const dur = eventDuration(e);
-    if (driveUsed >= 11 * HOUR) {
-      pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, 'drive11', 'Driving after 11-hour limit.'));
-    } else if (driveUsed + dur > 11 * HOUR) {
-      const s = e.startAbs + ((11 * HOUR) - driveUsed);
-      pushRange(eventPartOnDay(e, activeDay, s, e.endAbs, 'drive11', 'Driving after 11-hour limit.'));
-    }
-    driveUsed += dur;
-  }
-
-  // 30-minute break: mark DRIVING only after 8h cumulative driving without 30m interruption.
   let driveSinceBreak = 0;
-  for (const e of afterReset) {
-    const dur = eventDuration(e);
-    if (e.status === 'D') {
-      if (driveSinceBreak >= 8 * HOUR) {
-        pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, 'break8', 'Driving after 8h without 30-min break.'));
-      } else if (driveSinceBreak + dur > 8 * HOUR) {
-        const s = e.startAbs + ((8 * HOUR) - driveSinceBreak);
-        pushRange(eventPartOnDay(e, activeDay, s, e.endAbs, 'break8', 'Driving after 8h without 30-min break.'));
-      }
-      driveSinceBreak += dur;
-    } else if (dur >= 30) {
-      driveSinceBreak = 0;
-    }
-  }
-
-  // 14h window: mark DRIVING after exact window limit point.
-  const dutyStartEvent = afterReset.find(e => isOnDuty(e.status));
-  if (dutyStartEvent) {
-    const limit = windowLimitAbs(dutyStartEvent.startAbs, currentEndAbs, latestSplit);
-    if (limit != null) {
-      afterReset
-        .filter(e => e.status === 'D' && e.endAbs > limit)
-        .forEach(e => pushRange(eventPartOnDay(e, activeDay, Math.max(e.startAbs, limit), e.endAbs, 'window14', 'Driving after 14-hour window.')));
-    }
-  }
-
-  // 70h / 8d cycle: mark ON/D after the minute the cycle crosses 70h.
-  const cycleHours = 70;
-  const cycleDays = 8;
-  const restart = latest34Restart(restBlocks, currentEndAbs);
-  const cycleStart = Math.max(currentEndAbs - cycleDays * 1440, restart ? restart.endAbs : -Infinity);
+  let dutyStartAbs = null;
+  let restStartAbs = null;
+  let nonDrivingStartAbs = null;
   let cycleUsed = 0;
-  for (const e of timeline.filter(e => e.endAbs > cycleStart && e.startAbs <= currentEndAbs && isOnDuty(e.status))) {
-    const dur = eventDuration(e);
-    if (cycleUsed >= cycleHours * HOUR) {
-      pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, 'cycle70', 'On-duty after 70-hour cycle limit.'));
-    } else if (cycleUsed + dur > cycleHours * HOUR) {
-      const s = e.startAbs + ((cycleHours * HOUR) - cycleUsed);
-      pushRange(eventPartOnDay(e, activeDay, s, e.endAbs, 'cycle70', 'On-duty after 70-hour cycle limit.'));
+  const cycleLimit = 70 * HOUR;
+
+  for (const raw of evs) {
+    const e = { ...raw, endAbs:Math.min(raw.endAbs, activeDayEndAbs) };
+    if (e.endAbs <= e.startAbs) continue;
+    const s = e.startAbs;
+    const en = e.endAbs;
+    const dur = Math.max(0, en - s);
+
+    if (isRestStatus(e.status)) {
+      if (restStartAbs == null) restStartAbs = s;
+      if (nonDrivingStartAbs == null) nonDrivingStartAbs = s;
+      if (en - restStartAbs >= 10 * HOUR) {
+        driveUsed = 0;
+        driveSinceBreak = 0;
+        dutyStartAbs = null;
+      }
+      if (en - restStartAbs >= 34 * HOUR) cycleUsed = 0;
+      if (en - nonDrivingStartAbs >= 30) driveSinceBreak = 0;
+      continue;
     }
+
+    // ON duty is not a 10-hour reset, but it can be a 30-minute non-driving interruption.
+    if (e.status === 'ON') {
+      restStartAbs = null;
+      if (nonDrivingStartAbs == null) nonDrivingStartAbs = s;
+      if (dutyStartAbs == null) dutyStartAbs = s;
+      if (en - nonDrivingStartAbs >= 30) driveSinceBreak = 0;
+      if (cycleUsed >= cycleLimit) {
+        pushRange(eventPartOnDay(e, activeDay, s, en, 'cycle70', `Cycle clock expired at ${shortTime(s)}.`));
+      } else if (cycleUsed + dur > cycleLimit) {
+        const cs = s + (cycleLimit - cycleUsed);
+        pushRange(eventPartOnDay(e, activeDay, cs, en, 'cycle70', `Cycle clock expired at ${shortTime(cs)}.`));
+      }
+      cycleUsed += dur;
+      continue;
+    }
+
+    if (e.status !== 'D') continue;
+    restStartAbs = null;
+    nonDrivingStartAbs = null;
+    if (dutyStartAbs == null) dutyStartAbs = s;
+
+    if (driveUsed >= 11 * HOUR) {
+      pushRange(eventPartOnDay(e, activeDay, s, en, 'drive11', `Drive clock expired at ${shortTime(s)}.`));
+    } else if (driveUsed + dur > 11 * HOUR) {
+      const ds = s + ((11 * HOUR) - driveUsed);
+      pushRange(eventPartOnDay(e, activeDay, ds, en, 'drive11', `Drive clock expired at ${shortTime(ds)}.`));
+    }
+
+    if (driveSinceBreak >= 8 * HOUR) {
+      pushRange(eventPartOnDay(e, activeDay, s, en, 'break8', `Break required at ${shortTime(s)}.`));
+    } else if (driveSinceBreak + dur > 8 * HOUR) {
+      const bs = s + ((8 * HOUR) - driveSinceBreak);
+      pushRange(eventPartOnDay(e, activeDay, bs, en, 'break8', `Break required at ${shortTime(bs)}.`));
+    }
+
+    const shiftLimit = dutyStartAbs + 14 * HOUR;
+    if (en > shiftLimit) {
+      pushRange(eventPartOnDay(e, activeDay, Math.max(s, shiftLimit), en, 'window14', `Shift clock expired at ${shortTime(shiftLimit)}.`));
+    }
+
+    if (cycleUsed >= cycleLimit) {
+      pushRange(eventPartOnDay(e, activeDay, s, en, 'cycle70', `Cycle clock expired at ${shortTime(s)}.`));
+    } else if (cycleUsed + dur > cycleLimit) {
+      const cs = s + (cycleLimit - cycleUsed);
+      pushRange(eventPartOnDay(e, activeDay, cs, en, 'cycle70', `Cycle clock expired at ${shortTime(cs)}.`));
+    }
+
+    driveUsed += dur;
+    driveSinceBreak += dur;
     cycleUsed += dur;
   }
 
-  // Rest watch: if active day sleeper block is being used but is under 7h, show red/orange line on that sleeper block.
+  // Medium rest/split watches stay background-only and never paint the red line.
+  const restBlocks = findRestBlocks(timeline.filter(event => event.startAbs < activeDayEndAbs));
   for (const b of restBlocks) {
     if (b.allSleeper && b.duration >= 2 * HOUR && b.duration < 7 * HOUR) {
       for (const e of b.events) {
-        if (e.status === 'SB') {
-          pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, 'split7watch', `Sleeper under 7h. Need ${durLabel(7*HOUR-b.duration)} more.`, 'medium'));
-        }
+        if (e.status === 'SB') pushRange(eventPartOnDay(e, activeDay, e.startAbs, e.endAbs, 'split7watch', `Sleeper under 7h. Need ${durLabel(7*HOUR-b.duration)} more.`, 'medium'));
       }
     }
   }
 
-  // Deduplicate identical ranges.
   const seen = new Set();
   return ranges.filter(r => {
     const key = `${r.eventId}|${r.status}|${r.startMin}|${r.endMin}|${r.type}`;
@@ -509,8 +598,13 @@ export function violationRangesForDay(eventsByDay = {}, activeDay) {
 }
 
 export function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}) {
-  const timeline = buildContinuousTimeline(eventsByDay, activeDay);
-  const currentEndAbs = timeline.length ? Math.max(...timeline.map(e => e.endAbs)) : absMin(activeDay || todayKey(), nowMin());
+  const timeZone = getHomeTerminalTimeZone();
+  const today = todayKey(timeZone);
+  const targetDay = activeDay || today;
+  const activeDayEndAbs = dayStartAbs(targetDay) + (targetDay === today ? nowMin(timeZone) : 1440);
+  const timeline = buildContinuousTimeline(eventsByDay, targetDay)
+    .filter(event => event.startAbs < activeDayEndAbs && event.endAbs > activeDayEndAbs - 21 * 1440);
+  const currentEndAbs = activeDayEndAbs;
   const restBlocks = findRestBlocks(timeline);
   const gaps = findGapsAndOverlaps(timeline);
 
@@ -545,10 +639,10 @@ export function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}
   const warnings = [...gaps, ...statusReasonWarnings(timeline)];
 
   if (!fullReset && !latestSplit) warnings.push({ severity:'medium', text:'No valid 10h reset or split pair found in recent logs.' });
-  if (driveMins > 11 * HOUR) warnings.push({ severity:'high', text:'11-hour driving limit appears exceeded.' });
-  if (limit14 != null && currentEndAbs > limit14) warnings.push({ severity:'high', text:'14-hour window appears exceeded.' });
-  if (breakInfo.needed) warnings.push({ severity:'high', text:'30-minute break required before more driving.' });
-  if (cycle.exceeded) warnings.push({ severity:'high', text:'70-hour / 8-day cycle appears exceeded.' });
+  if (driveMins > 11 * HOUR) warnings.push({ severity:'high', text:'Drive clock expired.' });
+  if (limit14 != null && currentEndAbs > limit14) warnings.push({ severity:'high', text:`Shift clock expired at ${shortTime(limit14)}.` });
+  if (breakInfo.needed) warnings.push({ severity:'high', text:'Break required before more driving.' });
+  if (cycle.exceeded) warnings.push({ severity:'high', text:'Cycle clock expired.' });
   if (missingLocation > 0) warnings.push({ severity:'medium', text:`${missingLocation} event(s) missing city/state.` });
 
   if (restProgress && restProgress.duration < 10 * HOUR) {

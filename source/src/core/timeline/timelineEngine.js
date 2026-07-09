@@ -298,6 +298,218 @@ export function closePreviousAndStart(events, newEvent) {
   return normalizeLogEvents(insertEventOverride(evs, insert));
 }
 
+
+function clampShiftDelta(delta, minDelta, maxDelta) {
+  const requested = Math.round(Number(delta || 0));
+  if (!Number.isFinite(requested)) return 0;
+  return Math.max(minDelta, Math.min(maxDelta, requested));
+}
+
+function cleanShiftEvent(event = {}) {
+  return cleanEvent({ ...event });
+}
+
+function selectedIndexList(events = [], selectedSet = new Set()) {
+  return events
+    .map((event, index) => selectedSet.has(event.id) ? index : -1)
+    .filter(index => index >= 0);
+}
+
+function hasOnlyContiguousIndexes(indexes = []) {
+  if (indexes.length <= 1) return true;
+  for (let i = 1; i < indexes.length; i += 1) {
+    if (indexes[i] !== indexes[i - 1] + 1) return false;
+  }
+  return true;
+}
+
+function makeShiftWarning(code, text) {
+  return { code, text };
+}
+
+function validateShiftedTimeline(events = []) {
+  const warnings = [];
+  const ordered = sortEvents(events);
+  for (const event of ordered) {
+    if (Number(event.startMin || 0) < 0 || Number(event.endMin || 0) > 1440) {
+      warnings.push(makeShiftWarning('outside_day', 'Would pass midnight'));
+    }
+    if (Number(event.endMin || 0) <= Number(event.startMin || 0)) {
+      warnings.push(makeShiftWarning('zero_event', 'Would remove an event'));
+    }
+  }
+  for (let i = 0; i < ordered.length - 1; i += 1) {
+    const a = ordered[i];
+    const b = ordered[i + 1];
+    const gap = Number(b.startMin || 0) - Number(a.endMin || 0);
+    if (gap < 0) warnings.push(makeShiftWarning('overlap', 'Would overlap another event'));
+    if (gap > 0) warnings.push(makeShiftWarning('gap', 'Would create a gap'));
+  }
+  return warnings;
+}
+
+function shiftAllDayDutyChanges(events = [], selectedSet = new Set(), deltaMin = 0) {
+  const ordered = sortEvents(events).map(cleanShiftEvent);
+  const warnings = [];
+  if (ordered.length < 2) {
+    return { events: ordered, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'No duty changes to shift' };
+  }
+
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  const startsAtMidnight = Number(first.startMin || 0) === 0;
+  const endsAtMidnight = Number(last.endMin || 0) === 1440;
+  if (!startsAtMidnight || !endsAtMidnight) {
+    return { events: ordered, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'All selected events do not cover the full day' };
+  }
+
+  const boundaries = ordered.slice(0, -1).map(event => Number(event.endMin || 0));
+  const minDelta = 1 - Math.min(...boundaries);
+  const maxDelta = 1439 - Math.max(...boundaries);
+  const appliedDeltaMin = clampShiftDelta(deltaMin, minDelta, maxDelta);
+  if (!appliedDeltaMin) {
+    return { events: ordered, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'Shift would move a duty change outside this log day' };
+  }
+  if (appliedDeltaMin !== Math.round(Number(deltaMin || 0))) {
+    warnings.push(makeShiftWarning('clamped', 'Shift limited to keep this log day valid'));
+  }
+
+  const shiftedBoundaries = boundaries.map(boundary => boundary + appliedDeltaMin);
+  const next = ordered.map((event, index) => {
+    const startMin = index === 0 ? 0 : shiftedBoundaries[index - 1];
+    const endMin = index === ordered.length - 1 ? 1440 : shiftedBoundaries[index];
+    return {
+      ...event,
+      startMin,
+      endMin,
+      shiftedAt:Date.now(),
+      shiftedByMin:appliedDeltaMin,
+      shiftedSource:'manual_duty_change_shift',
+    };
+  });
+
+  warnings.push(makeShiftWarning('duty_changes', 'Shift duty changes kept 12:00 AM and 12:00 AM fixed'));
+  return {
+    events: next,
+    appliedDeltaMin,
+    changedEventIds: ordered.map(event => event.id).filter(id => selectedSet.has(id)),
+    adjustedNeighborIds: [],
+    warnings: [...warnings, ...validateShiftedTimeline(next).filter(w => w.code === 'overlap' || w.code === 'zero_event')],
+    blockedReason: '',
+    mode: 'duty_changes',
+  };
+}
+
+export function shiftSelectedEventsForDay(rawEvents = [], selectedIds = [], deltaMin = 0, options = {}) {
+  const preserveCoverage = options.preserveCoverage !== false;
+  const requestedDelta = Math.round(Number(deltaMin || 0));
+  const selectedSet = new Set((selectedIds || []).filter(Boolean));
+  const events = sortEvents(rawEvents || [])
+    .filter(Boolean)
+    .filter(event => !event.voided)
+    .map(cleanShiftEvent);
+  const warnings = [];
+
+  if (!events.length) {
+    return { events, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'No events on this day' };
+  }
+  if (!selectedSet.size) {
+    return { events, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'Select events first' };
+  }
+  if (!requestedDelta) {
+    return { events, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'Choose a shift amount' };
+  }
+
+  const indexes = selectedIndexList(events, selectedSet);
+  if (!indexes.length) {
+    return { events, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'Selected events were not found' };
+  }
+
+  const allSelected = indexes.length === events.length;
+  if (allSelected) {
+    return shiftAllDayDutyChanges(events, selectedSet, requestedDelta);
+  }
+
+  if (!hasOnlyContiguousIndexes(indexes)) {
+    return { events, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'Select one continuous block' };
+  }
+
+  const firstIdx = indexes[0];
+  const lastIdx = indexes[indexes.length - 1];
+  const previous = events[firstIdx - 1] || null;
+  const nextNeighbor = events[lastIdx + 1] || null;
+  const blockStart = Number(events[firstIdx].startMin || 0);
+  const blockEnd = Number(events[lastIdx].endMin || 0);
+
+  let minDelta = -blockStart;
+  let maxDelta = 1440 - blockEnd;
+
+  if (previous) {
+    minDelta = Math.max(minDelta, Number(previous.startMin || 0) + 1 - blockStart);
+  } else if (preserveCoverage && blockStart === 0 && requestedDelta > 0) {
+    maxDelta = Math.min(maxDelta, 0);
+  }
+
+  if (nextNeighbor) {
+    maxDelta = Math.min(maxDelta, Number(nextNeighbor.endMin || 0) - 1 - blockEnd);
+  } else if (preserveCoverage && blockEnd === 1440 && requestedDelta < 0) {
+    minDelta = Math.max(minDelta, 0);
+  }
+
+  const appliedDeltaMin = clampShiftDelta(requestedDelta, minDelta, maxDelta);
+  if (!appliedDeltaMin) {
+    const blockedReason = requestedDelta < 0 ? 'Cannot shift earlier without breaking this log day' : 'Cannot shift later without breaking this log day';
+    return { events, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason };
+  }
+  if (appliedDeltaMin !== requestedDelta) {
+    warnings.push(makeShiftWarning('clamped', 'Shift limited to keep this log day valid'));
+  }
+
+  const shiftedBlockStart = blockStart + appliedDeltaMin;
+  const shiftedBlockEnd = blockEnd + appliedDeltaMin;
+  const changedEventIds = [];
+  const adjustedNeighborIds = [];
+
+  const nextEvents = events.map((event, index) => {
+    if (index >= firstIdx && index <= lastIdx && selectedSet.has(event.id)) {
+      changedEventIds.push(event.id);
+      return {
+        ...event,
+        startMin: Number(event.startMin || 0) + appliedDeltaMin,
+        endMin: Number(event.endMin || 0) + appliedDeltaMin,
+        shiftedAt:Date.now(),
+        shiftedByMin:appliedDeltaMin,
+        shiftedSource:'manual_day_shift',
+      };
+    }
+    if (previous && index === firstIdx - 1) {
+      adjustedNeighborIds.push(event.id);
+      return { ...event, endMin: shiftedBlockStart, adjustedForShift:true };
+    }
+    if (nextNeighbor && index === lastIdx + 1) {
+      adjustedNeighborIds.push(event.id);
+      return { ...event, startMin: shiftedBlockEnd, adjustedForShift:true };
+    }
+    return { ...event };
+  });
+
+  const validationWarnings = validateShiftedTimeline(nextEvents);
+  const hard = validationWarnings.find(w => w.code === 'overlap' || w.code === 'zero_event' || w.code === 'outside_day');
+  if (hard) {
+    return { events, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings: validationWarnings, blockedReason: hard.text };
+  }
+
+  return {
+    events: sortEvents(nextEvents),
+    appliedDeltaMin,
+    changedEventIds,
+    adjustedNeighborIds,
+    warnings: [...warnings, ...validationWarnings.filter(w => w.code === 'gap')],
+    blockedReason: '',
+    mode: 'selected_block',
+  };
+}
+
 export function previewInsertOverride(events, newEventOrEvents) {
   const incoming = Array.isArray(newEventOrEvents) ? newEventOrEvents : [newEventOrEvents];
   return insertManyOverride(events, incoming);

@@ -1,4 +1,14 @@
 
+## v95.89.0 - Event Shift + HOS Violation Graph
+- Added easier Select mode for event shifting on Log Day.
+- Added safe raw-event shift helper that adjusts edge neighbors without insert/override deletion.
+- Added 1 hr / 15 min earlier/later quick shift actions and preview sheet.
+- Signed shifted days now mark Needs Recertification.
+- HOS violation graph now turns red from the exact violation minute.
+- Added small 11h / 14h / Break / 70h violation labels on the graph.
+- Preserved GPS smart-paper mode, DOT PDF package, route/load, miles, timezone, and backup/import behavior.
+
+
 ## v95.86 — HOS Effective Drive Mode Clock
 - Preserved raw 11-hour `hos.drive` calculation.
 - Added `hos.effectiveDrive` for legal drive time available right now.

@@ -9,7 +9,7 @@ import { estimatedRoadMiles, pointFromLogLocation, recalcMilesByTimeWindow } fro
 import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay, displayEventsForDayFromState } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
-import { durLabel } from '../../shared/utils/time.js';
+import { durLabel, timeLabel } from '../../shared/utils/time.js';
 import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
 import { routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
 import { homeTerminalConfigFromState } from '../../core/time/homeTerminalTime.js';
@@ -1881,7 +1881,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix, onDotIssueAction }
 
 export default function DayDetail({
   state, liveCurrent, events, selectedEvent, onBack, onSelect, onOpenAdd, onOpenEdit, onDelete,
-  onToggleSelectMode, onToggleSelectedId, onSelectAll, onClearSelection, onOpenShift, onMoveSelected,
+  onToggleSelectMode, onToggleSelectedId, onSelectAll, onClearSelection, onOpenShift, onQuickShift, onMoveSelected,
   onCertify, onTools, onOpenStatus, onOpenTrailer, onDriverFlow, onSaveLoad, onToggleGps,
   onSaveInspection, onSaveSignature, onRoadGuardFix, onSaveManualMiles, onSaveDayDistance, onSaveCoverageBlock, onCreateMissingDay
 }) {
@@ -1940,6 +1940,7 @@ export default function DayDetail({
     [isMoving, state.eventsByDay, state.activeDay, previewRawEvents, baseViolationRanges]
   );
 
+  const selectedCount = (state.selectedIds || []).length;
   const selectedPreviewEvent = previewGraphEvents.find(event => event.id === state.selectedEventId) || displaySelectedEvent;
   const violationsChanged = isMoving && violationSignature(baseViolationRanges) !== violationSignature(previewViolationRanges);
   const moveHasWarning = violationsChanged && previewViolationRanges.length > 0;
@@ -2127,8 +2128,12 @@ export default function DayDetail({
 
     if (targetEventId) {
       onSelect?.(targetEventId);
-      // Open the exact event when this is a fixable row. HOS rows remain driver-reviewed
-      // but still open the event so the driver can inspect the logged time/status.
+      const isHosRange = ['window14','drive11','break8','cycle70','overlap'].includes(type);
+      if (isHosRange) {
+        const when = target.startMin != null ? ` at ${timeLabel(target.startMin, true)}` : '';
+        window.alert?.(`${warningText}${when ? ` · starts${when}` : ''}`);
+        return;
+      }
       setTimeout(() => onOpenEdit?.(targetEventId), 0);
     }
   }
@@ -2136,6 +2141,10 @@ export default function DayDetail({
   function handleGraphEventTap(eventId) {
     if (!eventId) {
       onSelect?.(null);
+      return;
+    }
+    if (state.selectMode) {
+      onToggleSelectedId?.(eventId);
       return;
     }
     onSelect?.(eventId);
@@ -2171,14 +2180,20 @@ export default function DayDetail({
           <button onClick={() => onOpenAdd({ mode:'choice' })}>Insert</button>
           <button onClick={onOpenStatus}>Status</button>
           <button onClick={onToggleGps}>Drive</button>
+          <button className={state.selectMode ? 'active-shift' : ''} onClick={onToggleSelectMode}>{state.selectMode ? 'Selecting' : 'Select'}</button>
         </div>
       )}
 
       {activeTab === 'log' && state.selectMode && (
-        <div className="bulk-strip day-shift-strip">
+        <div className="bulk-strip day-shift-strip bulk-shift-easy shift-select-bar-v9589">
+          <b>{selectedCount} selected</b>
           <button className="primary" onClick={onSelectAll}>All day</button>
+          <button disabled={!selectedCount} onClick={() => onQuickShift?.(-60)}>1 hr earlier</button>
+          <button disabled={!selectedCount} onClick={() => onQuickShift?.(-15)}>15 min earlier</button>
+          <button disabled={!selectedCount} onClick={() => onQuickShift?.(15)}>15 min later</button>
+          <button disabled={!selectedCount} onClick={() => onQuickShift?.(60)}>1 hr later</button>
+          <button disabled={!selectedCount} onClick={onOpenShift}>Shift</button>
           <button onClick={onClearSelection}>Clear</button>
-          <button disabled={!state.selectedIds?.length} onClick={onOpenShift}>Shift</button>
           <button onClick={onToggleSelectMode}>Done</button>
         </div>
       )}

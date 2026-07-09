@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const app = fs.readFileSync('source/src/app/App.jsx','utf8');
+assert.match(app, /shiftSelectedEventsForDay\(baseEvents/);
+assert.match(app, /rawStoredEventsForDay\(s\.eventsByDay \|\| \{}, s\.activeDay\)/);
+assert.doesNotMatch(app, /displayEventsForDayFromState\([^\n]+applyShift/);
+const engine = fs.readFileSync('source/src/core/timeline/timelineEngine.js','utf8');
+assert.match(engine, /export function shiftSelectedEventsForDay/);
+assert.doesNotMatch(engine, /syntheticCoverage:\s*true/);
+console.log('verify-shift-uses-raw-events-only-v9589: passed');
