@@ -536,12 +536,12 @@ function roadsideDocumentViewerScriptHtml() {
     bodyEl.innerHTML = '';
     if (!src) {
       bodyEl.innerHTML = '<div class="roadside-doc-fallback"><b>No saved file is embedded for this document.</b><span>Return to the package and use the details line.</span></div>';
-    } else if (mime.indexOf('image/') === 0 || /^data:image\//i.test(src)) {
+    } else if (mime.indexOf('image/') === 0 || new RegExp('^data:image/', 'i').test(src)) {
       var img = document.createElement('img');
       img.alt = title;
       img.src = src;
       bodyEl.appendChild(img);
-    } else if (mime.indexOf('pdf') >= 0 || /^data:application\/pdf/i.test(src)) {
+    } else if (mime.indexOf('pdf') >= 0 || new RegExp('^data:application/pdf', 'i').test(src)) {
       var iframe = document.createElement('iframe');
       iframe.title = title;
       iframe.src = src;

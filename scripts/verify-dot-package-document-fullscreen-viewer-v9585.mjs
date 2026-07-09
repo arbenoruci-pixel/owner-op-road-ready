@@ -8,10 +8,10 @@ const sw = fs.readFileSync('public/sw.js', 'utf8');
 const appUpdate = fs.readFileSync('source/src/core/update/appUpdate.js', 'utf8');
 
 const checks = [
-  ['version package', pkg.version === '95.86.0'],
-  ['version app-version', appVersion.version === '95.86.0'],
-  ['version sw', sw.includes("95.86.0")],
-  ['version app update', appUpdate.includes("95.86.0")],
+  ['version package', pkg.version === '95.87.0'],
+  ['version app-version', appVersion.version === '95.87.0'],
+  ['version sw', sw.includes("95.87.0")],
+  ['version app update', appUpdate.includes("95.87.0")],
   ['exported html has wallet file link helper', dot.includes('function walletReportFileLinkHtml')],
   ['uses documentDataUrl for package docs', dot.includes('const dataUrl = documentDataUrl(doc);')],
   ['roadside doc data attribute exists', dot.includes('data-roadside-doc="1"')],
@@ -20,7 +20,7 @@ const checks = [
   ['script injected in exported html', dot.includes('${roadsideDocumentViewerScriptHtml()}')],
   ['script builds modal', dot.includes('roadside-doc-modal') && dot.includes('roadside-doc-viewer')],
   ['image preview supported', dot.includes('data:image') && dot.includes('document.createElement(\'img\')')],
-  ['pdf preview supported', dot.includes('application\\/pdf') && dot.includes('document.createElement(\'iframe\')')],
+  ['pdf preview supported', (dot.includes("new RegExp('^data:application/pdf', 'i')") || dot.includes('application\\/pdf')) && dot.includes('document.createElement(\'iframe\')')],
   ['back control exists', dot.includes('‹ Back') && dot.includes('Back to DOT package')],
   ['package css exists', dot.includes('.roadside-doc-modal{position:fixed')],
   ['in-app viewer css exists', css.includes('v95.85 DOT saved document full-screen viewer') && css.includes('.dot-doc-viewer-backdrop')],
