@@ -1,4 +1,4 @@
-const OWNER_OP_SW_VERSION = '95.85.0';
+const OWNER_OP_SW_VERSION = '95.86.0';
 
 async function clearAllCaches() {
   if (typeof caches === 'undefined') return;

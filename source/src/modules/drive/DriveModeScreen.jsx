@@ -19,6 +19,10 @@ function progressValue(clock = {}) {
 function ClockCircle({ clock }) {
   const tone = statusToneClass(clock);
   const progress = progressValue(clock);
+  const rawDriveText = clock.kind === 'effectiveDrive'
+    && Number(clock.rawRemainingMinutes || 0) > Number(clock.remainingMinutes || 0)
+      ? `11h clock ${formatHosClockMinutes(clock.rawRemainingMinutes)} left`
+      : '';
   return (
     <div
       className={`drive-mode-clock ${tone}`}
@@ -28,6 +32,7 @@ function ClockCircle({ clock }) {
       <div className="drive-mode-clock-inner">
         <b>{formatHosClockMinutes(clock.remainingMinutes)}</b>
         <span>{clock.label}</span>
+        {rawDriveText ? <small>{rawDriveText}</small> : null}
       </div>
     </div>
   );
@@ -54,7 +59,8 @@ export default function DriveModeScreen({ state, onOpenStatus, onOpenLog, onBack
   }, []);
 
   const hos = React.useMemo(() => calculateHosClocks(state, new Date()), [state, tick]);
-  const byLabel = new Map((hos.clocks || []).map(clock => [clock.label, clock]));
+  const displayClocks = hos.displayClocks || hos.clocks || [];
+  const byLabel = new Map(displayClocks.map(clock => [clock.label, clock]));
   const clocks = CLOCK_ORDER.map(label => byLabel.get(label)).filter(Boolean);
   const status = hos.currentStatus || state.currentStatus || 'D';
 

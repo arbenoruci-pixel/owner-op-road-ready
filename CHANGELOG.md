@@ -1,4 +1,13 @@
 
+## v95.86 — HOS Effective Drive Mode Clock
+- Preserved raw 11-hour `hos.drive` calculation.
+- Added `hos.effectiveDrive` for legal drive time available right now.
+- Drive Mode `DRIVE` display now respects expired SHIFT, BREAK, and CYCLE clocks.
+- If SHIFT is 00:00, displayed DRIVE is 00:00 instead of showing raw 11-hour time as green.
+- Added blocker metadata and Drive Mode helper text.
+- Added v95.86 HOS effective-drive verifiers.
+
+
 ## v95.85 — DOT package document full-screen viewer
 - Roadside Documents inside exported DOT HTML packages now open in a full-screen in-page viewer instead of relying on raw `data:` links.
 - Added a large Back control for officer-friendly return to the log package.

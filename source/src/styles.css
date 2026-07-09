@@ -9584,3 +9584,16 @@ body,
   .dot-doc-viewer-head{grid-template-columns:auto 1fr!important;}
   .dot-doc-viewer-head button:last-child{grid-column:1 / -1!important;}
 }
+
+/* v95.86 HOS guarded Drive Mode: DRIVE shows legal available drive time.
+   Raw 11-hour remaining can appear as a small helper line under DRIVE. */
+.drive-mode-clock-inner small{
+  margin-top:7px;
+  color:#9aa0a6;
+  font-size:clamp(10px,2.6vw,12px);
+  line-height:1.1;
+  font-weight:800;
+  letter-spacing:.01em;
+  max-width:80%;
+}
+.drive-mode-clock.red .drive-mode-clock-inner small{color:#b42318;}

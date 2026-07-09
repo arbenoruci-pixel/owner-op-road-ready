@@ -8,10 +8,10 @@ const sw = fs.readFileSync('public/sw.js', 'utf8');
 const appUpdate = fs.readFileSync('source/src/core/update/appUpdate.js', 'utf8');
 
 const checks = [
-  ['version package', pkg.version === '95.85.0'],
-  ['version app-version', appVersion.version === '95.85.0'],
-  ['version sw', sw.includes("95.85.0")],
-  ['version app update', appUpdate.includes("95.85.0")],
+  ['version package', pkg.version === '95.86.0'],
+  ['version app-version', appVersion.version === '95.86.0'],
+  ['version sw', sw.includes("95.86.0")],
+  ['version app update', appUpdate.includes("95.86.0")],
   ['exported html has wallet file link helper', dot.includes('function walletReportFileLinkHtml')],
   ['uses documentDataUrl for package docs', dot.includes('const dataUrl = documentDataUrl(doc);')],
   ['roadside doc data attribute exists', dot.includes('data-roadside-doc="1"')],

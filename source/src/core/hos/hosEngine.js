@@ -834,16 +834,61 @@ function clockTone(remainingMinutes = 0, expired = false, warningWindow = HOUR) 
   return 'green';
 }
 
-function buildClockWarnings({ drive, shift, breakClock, cycle }) {
+function buildEffectiveDriveClock({ drive, shift, breakClock, cycle }) {
+  // The raw 11-hour clock can still have time left even when the driver is not
+  // legally allowed to keep driving because the 14-hour window, 30-minute
+  // break, or cycle clock has reached zero. Drive Mode should answer the
+  // practical driver question: "how much legal driving can I do right now?"
+  // Preserve the raw 11-hour values on `drive`; expose the guarded/effective
+  // value for UI clocks.
+  const limits = [
+    { key:'drive', label:'11-hour drive clock', remaining: drive.remainingMinutes, expired: drive.expired },
+    { key:'shift', label:'14-hour shift window', remaining: shift.remainingMinutes, expired: shift.expired },
+    { key:'break', label:'30-minute break clock', remaining: breakClock.remainingMinutes, expired: breakClock.expired || breakClock.requiresBreakBeforeDriving },
+    { key:'cycle', label:'cycle clock', remaining: cycle.remainingMinutes, expired: cycle.expired },
+  ];
+
+  const limiting = limits
+    .slice()
+    .sort((a, b) => a.remaining - b.remaining)[0] || limits[0];
+  const blockers = limits.filter(item => item.expired || item.remaining <= 0);
+  const remaining = clampDuration(Math.max(0, Math.min(...limits.map(item => item.remaining))));
+  const expired = blockers.length > 0 || remaining <= 0;
+
+  return {
+    ...drive,
+    label:'DRIVE',
+    kind:'effectiveDrive',
+    rawRemainingMinutes: drive.remainingMinutes,
+    rawUsedMinutes: drive.usedMinutes,
+    remainingMinutes: remaining,
+    effectiveRemainingMinutes: remaining,
+    expired,
+    warning: expired || remaining <= HOUR,
+    limitedBy: limiting?.key || 'drive',
+    limitedByLabel: limiting?.label || '11-hour drive clock',
+    blockers: blockers.map(item => item.key),
+    blockerLabels: blockers.map(item => item.label),
+    tone: clockTone(remaining, expired),
+  };
+}
+
+function buildClockWarnings({ drive, effectiveDrive, shift, breakClock, cycle }) {
   const warnings = [];
-  if (drive.expired) warnings.push({ type:'drive', severity:'high', text:'Drive clock expired.' });
-  else if (drive.remainingMinutes <= HOUR) warnings.push({ type:'drive', severity:'medium', text:'Drive clock under 1 hour.' });
+
+  if (effectiveDrive && effectiveDrive.remainingMinutes <= 0 && !drive.expired && effectiveDrive.blockerLabels?.length) {
+    const primary = effectiveDrive.blockerLabels[0];
+    warnings.push({ type:'legalDrive', severity:'high', text:`No legal driving time: ${primary} is blocking driving.` });
+  }
+
+  if (drive.expired) warnings.push({ type:'drive', severity:'high', text:'11-hour drive clock expired.' });
+  else if (drive.remainingMinutes <= HOUR) warnings.push({ type:'drive', severity:'medium', text:'11-hour drive clock under 1 hour.' });
 
   if (shift.expired) warnings.push({ type:'shift', severity:'high', text:'Shift clock expired.' });
   else if (shift.remainingMinutes <= HOUR) warnings.push({ type:'shift', severity:'medium', text:'Shift clock under 1 hour.' });
 
-  if (breakClock.expired) warnings.push({ type:'break', severity:'high', text:'30-minute break required now.' });
-  else if (breakClock.remainingMinutes <= HOUR || breakClock.requiresBreakBeforeDriving) warnings.push({ type:'break', severity:'medium', text:'Break required soon.' });
+  if (breakClock.expired || breakClock.requiresBreakBeforeDriving) warnings.push({ type:'break', severity:'high', text:'30-minute break required before more driving.' });
+  else if (breakClock.remainingMinutes <= HOUR) warnings.push({ type:'break', severity:'medium', text:'Break required soon.' });
 
   if (cycle.expired) warnings.push({ type:'cycle', severity:'high', text:'Cycle clock expired.' });
   else if (cycle.remainingMinutes <= 4 * HOUR) warnings.push({ type:'cycle', severity:'medium', text:'Cycle low.' });
@@ -914,9 +959,10 @@ export function calculateHosClocks(stateLike = {}, nowInput = new Date(), option
     tone: breakClock.expired ? 'red' : (breakClock.remainingMinutes <= HOUR || breakClock.requiresBreakBeforeDriving ? 'yellow' : 'green'),
   };
 
+  const effectiveDrive = buildEffectiveDriveClock({ drive, shift, breakClock: breakOut, cycle });
   const restProgress = currentRestBlock(restBlocks, nowAbs);
-  const clocks = [breakOut, drive, shift, cycle];
-  const warnings = buildClockWarnings({ drive, shift, breakClock: breakOut, cycle });
+  const clocks = [breakOut, effectiveDrive, shift, cycle];
+  const warnings = buildClockWarnings({ drive, effectiveDrive, shift, breakClock: breakOut, cycle });
 
   return {
     advisory:true,
@@ -928,10 +974,12 @@ export function calculateHosClocks(stateLike = {}, nowInput = new Date(), option
     generatedAt: nowDateFromInput(nowInput).toISOString(),
     timeline,
     drive,
+    effectiveDrive,
     shift,
     break: breakOut,
     cycle,
     clocks,
+    displayClocks: clocks,
     warnings,
     reset: {
       last10HourResetAbs: fullReset?.resetAbs ?? null,

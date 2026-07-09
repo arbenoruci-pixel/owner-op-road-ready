@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.85.0",
+  "version": "95.86.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -36,7 +36,9 @@
     "verify-existing-events-not-converted-v9584": "node scripts/verify-existing-events-not-converted-v9584.mjs",
     "verify-dot-package-document-fullscreen-viewer-v9585": "node scripts/verify-dot-package-document-fullscreen-viewer-v9585.mjs",
     "verify-dot-package-doc-links-use-document-data-url-v9585": "node scripts/verify-dot-package-doc-links-use-document-data-url-v9585.mjs",
-    "verify-dot-document-viewer-no-log-data-change-v9585": "node scripts/verify-dot-document-viewer-no-log-data-change-v9585.mjs"
+    "verify-dot-document-viewer-no-log-data-change-v9585": "node scripts/verify-dot-document-viewer-no-log-data-change-v9585.mjs",
+    "verify-hos-drive-mode-effective-drive-blocked-by-shift-v9586": "node scripts/verify-hos-drive-mode-effective-drive-blocked-by-shift-v9586.mjs",
+    "verify-hos-drive-mode-effective-drive-blocked-by-break-v9586": "node scripts/verify-hos-drive-mode-effective-drive-blocked-by-break-v9586.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
