@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.87.0",
+  "version": "95.88.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -39,7 +39,14 @@
     "verify-dot-document-viewer-no-log-data-change-v9585": "node scripts/verify-dot-document-viewer-no-log-data-change-v9585.mjs",
     "verify-hos-drive-mode-effective-drive-blocked-by-shift-v9586": "node scripts/verify-hos-drive-mode-effective-drive-blocked-by-shift-v9586.mjs",
     "verify-hos-drive-mode-effective-drive-blocked-by-break-v9586": "node scripts/verify-hos-drive-mode-effective-drive-blocked-by-break-v9586.mjs",
-    "verify-dot-package-shared-doc-script-syntax-v9587": "node scripts/verify-dot-package-shared-doc-script-syntax-v9587.mjs"
+    "verify-dot-package-shared-doc-script-syntax-v9587": "node scripts/verify-dot-package-shared-doc-script-syntax-v9587.mjs",
+    "verify-dot-officer-pdf-generated-v9588": "node scripts/verify-dot-officer-pdf-generated-v9588.mjs",
+    "verify-dot-officer-pdf-includes-roadside-docs-v9588": "node scripts/verify-dot-officer-pdf-includes-roadside-docs-v9588.mjs",
+    "verify-dot-officer-pdf-no-javascript-v9588": "node scripts/verify-dot-officer-pdf-no-javascript-v9588.mjs",
+    "verify-dot-officer-pdf-self-contained-v9588": "node scripts/verify-dot-officer-pdf-self-contained-v9588.mjs",
+    "verify-dot-html-mobile-no-horizontal-overflow-v9588": "node scripts/verify-dot-html-mobile-no-horizontal-overflow-v9588.mjs",
+    "verify-dot-html-share-secondary-v9588": "node scripts/verify-dot-html-share-secondary-v9588.mjs",
+    "verify-dot-package-no-log-data-change-v9588": "node scripts/verify-dot-package-no-log-data-change-v9588.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

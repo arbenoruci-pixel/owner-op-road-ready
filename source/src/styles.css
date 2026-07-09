@@ -9597,3 +9597,19 @@ body,
   max-width:80%;
 }
 .drive-mode-clock.red .drive-mode-clock-inner small{color:#b42318;}
+
+/* v95.88 DOT Officer PDF Package buttons */
+.dot-button-grid .primary,
+.dot-report-actions .primary{
+  background:#111827!important;
+  color:#fff!important;
+  border-color:#111827!important;
+}
+.dot-officer-share-grid{
+  grid-template-columns:1fr 1fr!important;
+}
+@media(max-width:430px){
+  .dot-officer-share-grid{
+    grid-template-columns:1fr!important;
+  }
+}
