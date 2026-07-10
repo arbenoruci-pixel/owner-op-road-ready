@@ -1,3 +1,11 @@
+## v95.90.0 - Easy Multi-Event Move
+
+- Replaced the crowded shift preset strip with a compact +/- movement control.
+- Added selectable 1, 5, 15, and 30 minute movement steps.
+- Added live graph and event-card preview before applying the move.
+- Added Apply move, Cancel move, Clear, All day, and Done controls.
+- Preserved selected-block shift validation, 24-hour coverage, driving protections, and recertification behavior.
+
 
 ## v95.89.0 - Event Shift + HOS Violation Graph
 - Added easier Select mode for event shifting on Log Day.

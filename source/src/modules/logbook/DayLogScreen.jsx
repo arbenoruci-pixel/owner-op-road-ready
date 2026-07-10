@@ -6,7 +6,7 @@ import LogCheckPanel from './LogCheckPanel.jsx';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { buildDotOfficerCheck } from '../../core/dot/dotOfficerCheckEngine.js';
 import { estimatedRoadMiles, pointFromLogLocation, recalcMilesByTimeWindow } from '../../core/gps/locationService.js';
-import { normalizeLogEvents } from '../../core/timeline/timelineEngine.js';
+import { normalizeLogEvents, shiftSelectedEventsForDay } from '../../core/timeline/timelineEngine.js';
 import { displayEventsForDay, displayEventsForDayFromState } from '../../core/timeline/displayTimeline.js';
 import { isToday, localDayKey } from '../../shared/utils/date.js';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
@@ -1887,6 +1887,8 @@ export default function DayDetail({
 }) {
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveDelta, setMoveDelta] = useState(0);
+  const [bulkMoveDelta, setBulkMoveDelta] = useState(0);
+  const [bulkMoveStep, setBulkMoveStep] = useState(1);
   const [activeTab, setActiveTab] = useState('log');
   const [coverageWizardIssue, setCoverageWizardIssue] = useState(null);
   const [missingDayIssue, setMissingDayIssue] = useState(null);
@@ -1918,6 +1920,10 @@ export default function DayDetail({
     setMoveDelta(0);
   }, [state.selectedEventId, state.activeDay]);
 
+  useEffect(() => {
+    setBulkMoveDelta(0);
+  }, [state.activeDay, state.selectMode, (state.selectedIds || []).join(',')]);
+
   const baseViolationRanges = useMemo(
     () => violationRangesForDay(state.eventsByDay || {}, state.activeDay),
     [state.eventsByDay, state.activeDay]
@@ -1941,7 +1947,18 @@ export default function DayDetail({
   );
 
   const selectedCount = (state.selectedIds || []).length;
-  const selectedPreviewEvent = previewGraphEvents.find(event => event.id === state.selectedEventId) || displaySelectedEvent;
+  const bulkShiftResult = useMemo(
+    () => shiftSelectedEventsForDay(rawDayEvents, state.selectedIds || [], bulkMoveDelta, { preserveCoverage:true, allowDrivingOnlyIfSelected:true }),
+    [rawDayEvents, (state.selectedIds || []).join(','), bulkMoveDelta]
+  );
+  const bulkPreviewEvents = useMemo(
+    () => (state.selectMode && selectedCount && bulkMoveDelta
+      ? displayEventsForDay(bulkShiftResult.events, isToday(state.activeDay))
+      : previewGraphEvents),
+    [state.selectMode, selectedCount, bulkMoveDelta, bulkShiftResult.events, state.activeDay, previewGraphEvents]
+  );
+  const bulkAppliedDelta = Number(bulkShiftResult.appliedDeltaMin || 0);
+  const selectedPreviewEvent = bulkPreviewEvents.find(event => event.id === state.selectedEventId) || displaySelectedEvent;
   const violationsChanged = isMoving && violationSignature(baseViolationRanges) !== violationSignature(previewViolationRanges);
   const moveHasWarning = violationsChanged && previewViolationRanges.length > 0;
 
@@ -2162,7 +2179,7 @@ export default function DayDetail({
       {activeTab === 'log' && (
         <div className="graph-panel graph-first-panel">
           <LogGraph
-            events={previewGraphEvents}
+            events={bulkPreviewEvents}
             selectedId={state.selectedEventId}
             violationRanges={previewViolationRanges}
             onSelect={handleGraphEventTap}
@@ -2185,22 +2202,56 @@ export default function DayDetail({
       )}
 
       {activeTab === 'log' && state.selectMode && (
-        <div className="bulk-strip day-shift-strip bulk-shift-easy shift-select-bar-v9589">
-          <b>{selectedCount} selected</b>
-          <button className="primary" onClick={onSelectAll}>All day</button>
-          <button disabled={!selectedCount} onClick={() => onQuickShift?.(-60)}>1 hr earlier</button>
-          <button disabled={!selectedCount} onClick={() => onQuickShift?.(-15)}>15 min earlier</button>
-          <button disabled={!selectedCount} onClick={() => onQuickShift?.(15)}>15 min later</button>
-          <button disabled={!selectedCount} onClick={() => onQuickShift?.(60)}>1 hr later</button>
-          <button disabled={!selectedCount} onClick={onOpenShift}>Shift</button>
-          <button onClick={onClearSelection}>Clear</button>
-          <button onClick={onToggleSelectMode}>Done</button>
+        <div className="bulk-move-panel-v9660">
+          <div className="bulk-move-head-v9660">
+            <b>{selectedCount} selected</b>
+            <button type="button" onClick={onSelectAll}>All day</button>
+            <button type="button" onClick={() => { setBulkMoveDelta(0); onClearSelection?.(); }}>Clear</button>
+          </div>
+
+          <div className="bulk-move-controls-v9660">
+            <button
+              type="button"
+              className="bulk-nudge-v9660"
+              disabled={!selectedCount}
+              aria-label={`Move ${bulkMoveStep} minute${bulkMoveStep === 1 ? '' : 's'} earlier`}
+              onClick={() => setBulkMoveDelta(value => value - bulkMoveStep)}
+            >−</button>
+
+            <div className="bulk-offset-v9660">
+              <span>Move events</span>
+              <strong>{bulkAppliedDelta > 0 ? '+' : ''}{bulkAppliedDelta} min</strong>
+            </div>
+
+            <button
+              type="button"
+              className="bulk-nudge-v9660"
+              disabled={!selectedCount}
+              aria-label={`Move ${bulkMoveStep} minute${bulkMoveStep === 1 ? '' : 's'} later`}
+              onClick={() => setBulkMoveDelta(value => value + bulkMoveStep)}
+            >+</button>
+          </div>
+
+          <div className="bulk-step-row-v9660" role="group" aria-label="Move amount per tap">
+            {[1, 5, 15, 30].map(step => (
+              <button type="button" key={step} className={bulkMoveStep === step ? 'active' : ''} onClick={() => setBulkMoveStep(step)}>{step}m</button>
+            ))}
+          </div>
+
+          {bulkShiftResult.blockedReason ? <div className="bulk-move-warning-v9660">{bulkShiftResult.blockedReason}</div> : null}
+          {!bulkShiftResult.blockedReason && bulkMoveDelta !== bulkAppliedDelta ? <div className="bulk-move-warning-v9660">Stopped at the valid limit for this log day.</div> : null}
+
+          <div className="bulk-move-actions-v9660">
+            <button type="button" onClick={() => setBulkMoveDelta(0)} disabled={!bulkMoveDelta}>Cancel move</button>
+            <button type="button" className="primary" disabled={!selectedCount || !bulkAppliedDelta || !!bulkShiftResult.blockedReason} onClick={() => onQuickShift?.(bulkAppliedDelta)}>Apply move</button>
+            <button type="button" onClick={() => { setBulkMoveDelta(0); onToggleSelectMode?.(); }}>Done</button>
+          </div>
         </div>
       )}
 
       {activeTab === 'log' && (
         <>
-          <EventList events={displayEvents} selectedId={state.selectedEventId} selectMode={state.selectMode} selectedIds={state.selectedIds} onSelect={onSelect} onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />
+          <EventList events={state.selectMode && bulkMoveDelta ? bulkPreviewEvents : displayEvents} selectedId={state.selectedEventId} selectMode={state.selectMode} selectedIds={state.selectedIds} onSelect={onSelect} onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />
 
           <LogCheckPanel events={displayEvents} state={state} onIssueAction={handleLogCheckIssue} />
 
