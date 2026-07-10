@@ -33,6 +33,7 @@ import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRe
 import { sanitizeLogText } from '../shared/utils/logText.js';
 import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
 import { appendRecoveredLiveTail, applyLiveStatusTransition, chooseRecoveryCandidate, isSuspiciousMidnightDrivingOverwrite, recoverEventsFromLocalRevisions, safeInsertRolloverDriving } from '../core/timeline/liveDrivingSafety.js';
+import { applyUserConfirmedJul10TimelineRepair, USER_CONFIRMED_REPAIR_DAY } from '../core/timeline/userConfirmedTimelineRepair.js';
 import {
   DEFAULT_HOME_TERMINAL_ADDRESS,
   DEFAULT_HOME_TERMINAL_TIMEZONE,
@@ -672,7 +673,26 @@ async function loadInitial() {
     const saved = await loadAppSnapshot(APP_STATE_KEY);
     if (saved) {
       const recovered = await recoverSuspiciousTodayState(saved);
-      return normalizeState(recovered);
+      const zone = getHomeTerminalTimeZone(recovered);
+      const now = new Date();
+      const currentDay = localDayKey(now, zone);
+      const repairMinute = currentDay === USER_CONFIRMED_REPAIR_DAY
+        ? homeTerminalMinute(now, zone)
+        : 1440;
+      // Always inspect the user-confirmed Jul 10 day, even when the PWA opens
+      // after midnight or the device timezone differs from the home terminal.
+      const repaired = applyUserConfirmedJul10TimelineRepair(recovered, {
+        day:USER_CONFIRMED_REPAIR_DAY,
+        nowMinute:repairMinute,
+        force:true,
+      });
+      const normalized = normalizeState(repaired);
+      // Persist the repaired rows before the first render. This prevents an
+      // older snapshot or background lifecycle write from winning the race.
+      if (repaired !== recovered) {
+        try { await saveAppSnapshot(APP_STATE_KEY, normalized); } catch {}
+      }
+      return normalized;
     }
   } catch {}
   return defaultInitialState();
@@ -828,6 +848,39 @@ export default function App() {
     });
     return () => { cancelled = true; };
   }, []);
+
+  React.useEffect(() => {
+    if (!offlineHydrated) return undefined;
+
+    // Run immediately and again after delayed PWA/sync lifecycle work. v95.98
+    // repaired only during the first hydration pass; a delayed stale state
+    // write could leave the driver looking at the collapsed midnight Driving
+    // row. These bounded retries make the explicit Jul 10 repair stick without
+    // permanently locking the day against future manual edits.
+    const forceJul10Repair = () => {
+      setState(current => {
+        const zone = getHomeTerminalTimeZone(current);
+        const now = new Date();
+        const currentDay = localDayKey(now, zone);
+        const repairMinute = currentDay === USER_CONFIRMED_REPAIR_DAY
+          ? homeTerminalMinute(now, zone)
+          : 1440;
+        const repaired = applyUserConfirmedJul10TimelineRepair(current, {
+          day:USER_CONFIRMED_REPAIR_DAY,
+          nowMinute:repairMinute,
+          force:true,
+        });
+        if (repaired === current) return current;
+        const normalized = normalizeState(repaired);
+        saveAppSnapshot(APP_STATE_KEY, normalized).catch(() => {});
+        return normalized;
+      });
+    };
+
+    forceJul10Repair();
+    const timers = [2000, 5000, 10000].map(delay => window.setTimeout(forceJul10Repair, delay));
+    return () => timers.forEach(timer => window.clearTimeout(timer));
+  }, [offlineHydrated]);
 
 
   async function checkForAppUpdate(reason = 'manual') {
