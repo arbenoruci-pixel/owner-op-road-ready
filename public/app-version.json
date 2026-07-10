@@ -1,6 +1,6 @@
 {
-  "version": "95.90.0",
-  "build": "v95.90-easy-multi-event-move",
+  "version": "95.91.0",
+  "build": "v95.91-instant-multi-event-nudge",
   "releasedAt": "2026-07-09T00:00:00.000Z",
   "notes": [
     "Adds easy select mode for shifting real stored log events earlier or later.",
@@ -9,6 +9,6 @@
     "Turns the duty-status graph line red from the exact HOS violation minute.",
     "Keeps GPS auto-driving disabled and does not save synthetic timeline rows."
   ],
-  "label": "v95.90 Easy multi-event move",
+  "label": "v95.91 Instant multi-event nudge",
   "updatedAt": "2026-07-09T00:00:00.000Z"
 }

@@ -1130,7 +1130,7 @@ export default function App() {
     });
   }
 
-  function applyShift(delta) {
+  function applyShift(delta, options = {}) {
     setState(s => {
       const baseEvents = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay);
       const selectedIds = (s.selectedIds || []).filter(Boolean);
@@ -1146,13 +1146,14 @@ export default function App() {
       const evs = commitTimelineForDay(result.events, s.activeDay, s);
       const eventsByDay = { ...s.eventsByDay, [s.activeDay]: sorted(evs) };
       const recertNeeded = s.certifyStatus?.[s.activeDay] === 'Certified';
+      const keepSelection = options?.keepSelection === true;
       let next = {
         ...s,
         eventsByDay,
         routeLegsByDay:syncRouteLegTimes(s.routeLegsByDay || {}, eventsByDay),
         sheet:null,
-        selectMode:false,
-        selectedIds:[],
+        selectMode:keepSelection ? true : false,
+        selectedIds:keepSelection ? selectedIds : [],
         selectedEventId:(result.changedEventIds || [])[0] || null,
         lastShiftResult:{
           day:s.activeDay,

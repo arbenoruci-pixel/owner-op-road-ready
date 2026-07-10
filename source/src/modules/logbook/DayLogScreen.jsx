@@ -1888,6 +1888,7 @@ export default function DayDetail({
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveDelta, setMoveDelta] = useState(0);
   const [bulkMoveDelta, setBulkMoveDelta] = useState(0);
+  const [bulkCommittedDelta, setBulkCommittedDelta] = useState(0);
   const [bulkMoveStep, setBulkMoveStep] = useState(1);
   const [activeTab, setActiveTab] = useState('log');
   const [coverageWizardIssue, setCoverageWizardIssue] = useState(null);
@@ -1922,6 +1923,7 @@ export default function DayDetail({
 
   useEffect(() => {
     setBulkMoveDelta(0);
+    setBulkCommittedDelta(0);
   }, [state.activeDay, state.selectMode, (state.selectedIds || []).join(',')]);
 
   const baseViolationRanges = useMemo(
@@ -1961,6 +1963,14 @@ export default function DayDetail({
   const selectedPreviewEvent = bulkPreviewEvents.find(event => event.id === state.selectedEventId) || displaySelectedEvent;
   const violationsChanged = isMoving && violationSignature(baseViolationRanges) !== violationSignature(previewViolationRanges);
   const moveHasWarning = violationsChanged && previewViolationRanges.length > 0;
+
+
+  function nudgeSelectedEvents(delta) {
+    if (!selectedCount || !delta) return;
+    onQuickShift?.(delta, { keepSelection:true });
+    setBulkCommittedDelta(value => value + delta);
+    setBulkMoveDelta(0);
+  }
 
   function adjustMove(delta) {
     if (!selectedRawEvent) return;
@@ -2215,12 +2225,12 @@ export default function DayDetail({
               className="bulk-nudge-v9660"
               disabled={!selectedCount}
               aria-label={`Move ${bulkMoveStep} minute${bulkMoveStep === 1 ? '' : 's'} earlier`}
-              onClick={() => setBulkMoveDelta(value => value - bulkMoveStep)}
+              onClick={() => nudgeSelectedEvents(-bulkMoveStep)}
             >−</button>
 
             <div className="bulk-offset-v9660">
               <span>Move events</span>
-              <strong>{bulkAppliedDelta > 0 ? '+' : ''}{bulkAppliedDelta} min</strong>
+              <strong>{bulkCommittedDelta > 0 ? '+' : ''}{bulkCommittedDelta} min</strong>
             </div>
 
             <button
@@ -2228,23 +2238,21 @@ export default function DayDetail({
               className="bulk-nudge-v9660"
               disabled={!selectedCount}
               aria-label={`Move ${bulkMoveStep} minute${bulkMoveStep === 1 ? '' : 's'} later`}
-              onClick={() => setBulkMoveDelta(value => value + bulkMoveStep)}
+              onClick={() => nudgeSelectedEvents(bulkMoveStep)}
             >+</button>
           </div>
 
           <div className="bulk-step-row-v9660" role="group" aria-label="Move amount per tap">
-            {[1, 5, 15, 30].map(step => (
+            {[1, 5, 15, 30, 60].map(step => (
               <button type="button" key={step} className={bulkMoveStep === step ? 'active' : ''} onClick={() => setBulkMoveStep(step)}>{step}m</button>
             ))}
           </div>
 
-          {bulkShiftResult.blockedReason ? <div className="bulk-move-warning-v9660">{bulkShiftResult.blockedReason}</div> : null}
-          {!bulkShiftResult.blockedReason && bulkMoveDelta !== bulkAppliedDelta ? <div className="bulk-move-warning-v9660">Stopped at the valid limit for this log day.</div> : null}
+          <div className="bulk-move-help-v9661">Each − / + tap moves the selected events immediately.</div>
 
           <div className="bulk-move-actions-v9660">
-            <button type="button" onClick={() => setBulkMoveDelta(0)} disabled={!bulkMoveDelta}>Cancel move</button>
-            <button type="button" className="primary" disabled={!selectedCount || !bulkAppliedDelta || !!bulkShiftResult.blockedReason} onClick={() => onQuickShift?.(bulkAppliedDelta)}>Apply move</button>
-            <button type="button" onClick={() => { setBulkMoveDelta(0); onToggleSelectMode?.(); }}>Done</button>
+            <button type="button" onClick={() => setBulkCommittedDelta(0)} disabled={!bulkCommittedDelta}>Reset counter</button>
+            <button type="button" className="primary" onClick={() => { setBulkMoveDelta(0); setBulkCommittedDelta(0); onToggleSelectMode?.(); }}>Done</button>
           </div>
         </div>
       )}
