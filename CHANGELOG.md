@@ -1,3 +1,12 @@
+## v95.94.0 - PWA Update Reliability
+
+- Fixed the installed-PWA update loop caused by v95.93 release metadata while the client bundle and service worker still identified as v95.91.
+- Synchronized package, client, remote manifest, and service-worker versions at build time.
+- Added a versioned, network-only service-worker activation handshake before the update reload.
+- Forced the root PWA document, update manifest, web manifest, and worker script to revalidate from the network.
+- Preserved IndexedDB/localStorage logs, pre-update backups, DOT Mode repairs, and instant multi-event movement.
+
+
 ## v95.90.0 - Easy Multi-Event Move
 
 - Replaced the crowded shift preset strip with a compact +/- movement control.

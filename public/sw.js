@@ -1,4 +1,4 @@
-const OWNER_OP_SW_VERSION = '95.91.0';
+const OWNER_OP_SW_VERSION = '95.94.0';
 
 async function clearAllCaches() {
   if (typeof caches === 'undefined') return;
@@ -6,15 +6,25 @@ async function clearAllCaches() {
   await Promise.all(keys.map(key => caches.delete(key)));
 }
 
+async function notifyClients(type) {
+  const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+  for (const client of clients) {
+    client.postMessage({ type, version: OWNER_OP_SW_VERSION });
+  }
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil((async () => {
+    await clearAllCaches();
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
+    await clearAllCaches();
     await self.clients.claim();
-    const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
-    for (const client of clients) client.postMessage({ type: 'OWNER_OP_SW_READY', version: OWNER_OP_SW_VERSION });
+    await notifyClients('OWNER_OP_SW_READY');
   })());
 });
 
@@ -24,6 +34,10 @@ self.addEventListener('message', (event) => {
     event.waitUntil((async () => {
       await clearAllCaches();
       await self.skipWaiting();
+      event.source?.postMessage?.({
+        type: 'OWNER_OP_SW_UPDATE_ACK',
+        version: OWNER_OP_SW_VERSION,
+      });
     })());
     return;
   }
@@ -35,10 +49,5 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('sync', (event) => {
   if (event.tag !== 'owner-op-sync') return;
-  event.waitUntil((async () => {
-    const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
-    for (const client of clients) {
-      client.postMessage({ type: 'OWNER_OP_BACKGROUND_SYNC' });
-    }
-  })());
+  event.waitUntil(notifyClients('OWNER_OP_BACKGROUND_SYNC'));
 });

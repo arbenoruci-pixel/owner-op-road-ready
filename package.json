@@ -1,10 +1,13 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.93.0",
+  "version": "95.94.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
+    "sync:version": "node scripts/sync-release-version.mjs",
+    "check:version": "node scripts/sync-release-version.mjs --check",
+    "prebuild": "npm run sync:version",
     "build": "next build",
     "start": "next start",
     "test:offline": "node scripts/offline-sync-smoke-test.mjs",
@@ -61,7 +64,8 @@
     "verify-hos-violation-click-opens-exact-event-v9589": "node scripts/verify-hos-violation-click-opens-exact-event-v9589.mjs",
     "verify-day-shift-events-v9564": "node scripts/verify-day-shift-events-v9564.mjs",
     "verify-edit-event-graph-crash-v9565": "node scripts/verify-edit-event-graph-crash-v9565.mjs",
-    "verify-edit-time-save-v9566": "node scripts/verify-edit-time-save-v9566.mjs"
+    "verify-edit-time-save-v9566": "node scripts/verify-edit-time-save-v9566.mjs",
+    "verify-pwa-update-v9594": "node scripts/verify-pwa-update-v9594.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

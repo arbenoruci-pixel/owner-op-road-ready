@@ -1,14 +1,14 @@
 {
-  "version": "95.93.0",
-  "build": "v95.93-instant-multi-event-nudge",
-  "releasedAt": "2026-07-09T00:00:00.000Z",
+  "version": "95.94.0",
+  "build": "v95.94-pwa-update-version-sync",
+  "releasedAt": "2026-07-10T00:00:00.000Z",
   "notes": [
-    "Adds easy select mode for shifting real stored log events earlier or later.",
-    "Adds safe block shifting that adjusts adjacent rows to preserve coverage and avoid deleting unselected events.",
-    "Marks signed/certified days as Needs Recertification after a shift.",
-    "Turns the duty-status graph line red from the exact HOS violation minute.",
-    "Keeps GPS auto-driving disabled and does not save synthetic timeline rows."
+    "Fixes the PWA update loop caused by mismatched app, service-worker, and release versions.",
+    "Registers a versioned service worker with network-only update checks and waits for activation before reloading.",
+    "Clears stale Cache Storage during service-worker install and activation while preserving IndexedDB log data.",
+    "Adds build-time version synchronization so future package releases keep all PWA version markers aligned.",
+    "Keeps the v95.93 DOT Mode runtime repair and the instant multi-event move controls."
   ],
-  "label": "v95.93 Instant multi-event nudge",
-  "updatedAt": "2026-07-09T00:00:00.000Z"
+  "label": "v95.94 PWA update reliability",
+  "updatedAt": "2026-07-10T00:00:00.000Z"
 }

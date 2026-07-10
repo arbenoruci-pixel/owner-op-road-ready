@@ -29,7 +29,7 @@ import { APP_STATE_KEY, clearAppSnapshot, loadAppSnapshot, saveAppSnapshot, save
 import { queueDutyEventDiffs, queueInspectionDiffs, startSyncEngine } from '../../../lib/sync/clientSync.js';
 import { installOwnerOpAuthBridge } from '../../../lib/supabase/authBridge.js';
 import { normalizeWallet } from '../core/wallet/dotWallet.js';
-import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, updateReloadUrl } from '../core/update/appUpdate.js';
+import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, requestServiceWorkerUpdate, updateReloadUrl } from '../core/update/appUpdate.js';
 import { sanitizeLogText } from '../shared/utils/logText.js';
 import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
 import {
@@ -823,19 +823,24 @@ export default function App() {
       const meta = buildUpdateMeta(remote, 'safe_update');
       await savePreUpdateSnapshot(state, meta);
 
-      if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
-        try {
-          const registration = await navigator.serviceWorker.getRegistration();
-          await registration?.update?.();
-          registration?.waiting?.postMessage?.({ type:'OWNER_OP_APPLY_UPDATE', meta });
-          registration?.active?.postMessage?.({ type:'OWNER_OP_APPLY_UPDATE', meta });
-        } catch {}
+      let workerResult = { supported:false, activated:false };
+      try {
+        workerResult = await requestServiceWorkerUpdate(remote, meta);
+      } catch {
+        // A cache-busted navigation remains the fallback on browsers with limited PWA support.
       }
 
-      setUpdateState(prev => ({ ...prev, saveState:'saved', lastPreUpdateBackupAt: meta.createdAt }));
+      setUpdateState(prev => ({
+        ...prev,
+        saveState:'saved',
+        lastPreUpdateBackupAt: meta.createdAt,
+        workerActivated: workerResult.activated === true,
+      }));
       setTimeout(() => {
-        if (typeof window !== 'undefined') window.location.assign(updateReloadUrl(remote) || window.location.href);
-      }, 250);
+        if (typeof window === 'undefined') return;
+        const target = updateReloadUrl(remote) || window.location.href;
+        window.location.replace(target);
+      }, workerResult.activated ? 80 : 350);
     } catch (error) {
       setUpdateState(prev => ({
         ...prev,

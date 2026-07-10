@@ -27,11 +27,12 @@ ok(/^95\.(6[1-9]|[7-9]\d)\.0$/.test(versionJson.version), 'public app-version ma
 ok(Array.isArray(versionJson.notes), 'public app-version has notes');
 
 const app = read('source/src/app/App.jsx');
+const appUpdateSource = read('source/src/core/update/appUpdate.js');
 ok(app.includes('fetchRemoteAppVersion'), 'App imports update fetcher');
 ok(app.includes('UPDATE_CHECK_INTERVAL_MS'), 'App schedules update checks');
 ok(app.includes('savePreUpdateSnapshot'), 'App saves pre-update snapshot');
 ok(app.includes('saveAppSnapshot(APP_STATE_KEY, state)'), 'App saves current state before update');
-ok(app.includes('OWNER_OP_APPLY_UPDATE'), 'App notifies service worker to apply update');
+ok(app.includes('requestServiceWorkerUpdate') && appUpdateSource.includes('OWNER_OP_APPLY_UPDATE'), 'App notifies service worker to apply update through the update helper');
 ok(app.includes('UpdateBanner'), 'App renders update banner');
 ok(app.includes('visibilitychange'), 'App checks update when visible again');
 ok(app.includes("window.addEventListener('online'"), 'App checks update when online');
