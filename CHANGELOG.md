@@ -1,3 +1,12 @@
+## v95.97.0 - Driving Event History Guard + Recovery
+
+- Fixed stale legacy GPS rollover state that could replace today's OFF/SB/D/ON events with DRIVING from midnight.
+- Live manual status changes now preserve every historical event before the change time.
+- GPS rollover can only fill an empty start-of-day gap and can never overwrite existing duty events.
+- Live status time now always uses the configured home-terminal day and minute.
+- Added guarded recovery from pre-update data, per-day safety copies, and local duty-event revision history for the exact midnight-driving corruption pattern.
+- Preserved v95.96 compact DOT HTML, event movement, HOS clocks, signing, route/load, miles, and backup/import behavior.
+
 ## v95.95.0 - DOT HTML Primary Officer Package
 
 - Made self-contained HTML the primary DOT officer sharing format.

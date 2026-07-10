@@ -1,12 +1,12 @@
 {
-  "version": "95.95.0",
-  "build": "v95.95-dot-html-primary-pro-package",
-  "releasedAt": "2026-07-10T00:00:00.000Z",
+  "version": "95.97.0",
+  "build": "v95.97-driving-event-history-guard",
+  "releasedAt": "2026-07-10T19:05:00.000Z",
   "notes": [
-    "DOT officer sharing now uses one self-contained HTML package as the primary flow.",
-    "Saved roadside documents open from inside the shared HTML package.",
-    "Today plus the previous 7 log days use a professional mobile and desktop layout."
+    "Prevents stale GPS rollover state from replacing today's duty events with driving from midnight.",
+    "Manual status changes preserve all events before the selected change time and use home-terminal time.",
+    "Detects and repairs the exact midnight-driving overwrite pattern from local duty-event revision history when available."
   ],
-  "label": "v95.95 DOT HTML primary package",
-  "updatedAt": "2026-07-10T00:00:00.000Z"
+  "label": "v95.97 Driving Event History Guard",
+  "updatedAt": "2026-07-10T19:05:00.000Z"
 }
