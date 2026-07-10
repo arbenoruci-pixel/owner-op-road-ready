@@ -1882,7 +1882,7 @@ function SignaturePanel({ state, onSaveSignature, onQuickFix, onDotIssueAction }
 export default function DayDetail({
   state, liveCurrent, events, selectedEvent, onBack, onSelect, onOpenAdd, onOpenEdit, onDelete,
   onToggleSelectMode, onToggleSelectedId, onSelectAll, onClearSelection, onOpenShift, onQuickShift, onMoveSelected,
-  onCertify, onTools, onOpenStatus, onOpenTrailer, onDriverFlow, onSaveLoad, onToggleGps,
+  onCertify, onTools, onDayTransfer, onOpenStatus, onOpenTrailer, onDriverFlow, onSaveLoad, onToggleGps,
   onSaveInspection, onSaveSignature, onRoadGuardFix, onSaveManualMiles, onSaveDayDistance, onSaveCoverageBlock, onCreateMissingDay
 }) {
   const [moveOpen, setMoveOpen] = useState(false);
@@ -2266,6 +2266,11 @@ export default function DayDetail({
           <div className="cert-line cert-line-status-only">
             <span>Certification</span>
             <b>{state.certifyStatus[state.activeDay]}</b>
+          </div>
+
+          <div className="day-transfer-inline">
+            <button type="button" onClick={onDayTransfer}>Export / Import this day</button>
+            <span>Save or restore only {state.activeDay}</span>
           </div>
         </>
       )}

@@ -2,7 +2,7 @@ import React from 'react';
 import { CURRENT_APP_VERSION } from '../../core/update/appUpdate.js';
 import { getHomeTerminalTimeZone, timeZoneSettingSummary } from '../../core/time/homeTerminalTime.js';
 
-export default function ToolsSheet({ state, onClose, onDot, onWallet, onMove, onBackup, onTimeZone, updateState, onCheckUpdate, onApplyUpdate, onClearTestDates }) {
+export default function ToolsSheet({ state, onClose, onDot, onWallet, onMove, onBackup, onDayTransfer, onTimeZone, updateState, onCheckUpdate, onApplyUpdate, onClearTestDates }) {
   const available = !!updateState?.available;
   const latest = updateState?.remote?.version || updateState?.latestVersion || CURRENT_APP_VERSION;
   const checking = !!updateState?.checking;
@@ -16,6 +16,7 @@ export default function ToolsSheet({ state, onClose, onDot, onWallet, onMove, on
       <div className="choice-body">
         <button className="choice-card" onClick={onDot}><b>DOT Inspection</b><span>Email officer report or open inspection-safe DOT Mode on this device.</span></button>
         <button className="choice-card" onClick={onWallet}><b>DOT Digital Wallet</b><span>CDL, medical, registration, insurance, annual inspection, BOL, and expiration reminders.</span></button>
+        <button className="choice-card" onClick={onDayTransfer}><b>Export / import this day</b><span>{state.activeDay}. Save one log day or restore a day file into this exact date.</span></button>
         <button className="choice-card" onClick={onBackup}><b>Backup Logs</b><span>Export or import logs, signatures, inspections, routes, wallet docs, and attachments.</span></button>
         <button className="choice-card" onClick={onTimeZone}><b>Log Time Zone</b><span>{logTimeZoneSummary}. Used for DOT log days, rollover, Today, and current open driving time.</span></button>
         <button className="choice-card" onClick={onMove}><b>Shift day events</b><span>Select all real events for this day and move them forward or backward together.</span></button>

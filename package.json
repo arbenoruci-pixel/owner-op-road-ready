@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.99.0",
+  "version": "96.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -72,7 +72,8 @@
     "verify-midnight-driving-recovery-v9597": "node scripts/verify-midnight-driving-recovery-v9597.mjs",
     "verify-live-status-home-terminal-time-v9597": "node scripts/verify-live-status-home-terminal-time-v9597.mjs",
     "verify-user-confirmed-jul10-restore-v9598": "node scripts/verify-user-confirmed-jul10-restore-v9598.mjs",
-    "verify-user-confirmed-jul10-restore-v9599": "node scripts/verify-user-confirmed-jul10-restore-v9599.mjs"
+    "verify-user-confirmed-jul10-restore-v9599": "node scripts/verify-user-confirmed-jul10-restore-v9599.mjs",
+    "verify-day-export-import-v9600": "node scripts/verify-day-export-import-v9600.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

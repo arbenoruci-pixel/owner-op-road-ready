@@ -9698,3 +9698,141 @@ body,
 @media(max-width:620px){
   .dot-html-report-actions{grid-template-columns:1fr!important;}
 }
+
+/* v96.0 single-day export / import */
+.day-transfer-inline {
+  margin: 0 20px 22px;
+  padding: 13px;
+  border: 1px solid #dfe5df;
+  border-radius: 17px;
+  background: #fff;
+  display: grid;
+  gap: 5px;
+}
+.day-transfer-inline button {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #b9c9f7;
+  border-radius: 14px;
+  background: #f7f9ff;
+  color: #2457d6;
+  font-size: 16px;
+  font-weight: 1000;
+}
+.day-transfer-inline span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+.day-transfer-sheet {
+  z-index: 80;
+}
+.day-transfer-body {
+  padding: 14px 14px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 12px;
+  overflow-y: auto;
+}
+.day-transfer-summary,
+.day-transfer-actions,
+.day-transfer-note {
+  border: 1px solid #dfe5df;
+  border-radius: 19px;
+  background: #fff;
+  padding: 16px;
+}
+.day-transfer-summary {
+  display: grid;
+  gap: 5px;
+}
+.day-transfer-summary > span {
+  color: #7b8494;
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.day-transfer-summary > b {
+  color: #111827;
+  font-size: 22px;
+  font-weight: 1000;
+}
+.day-transfer-summary > em {
+  color: #667085;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 850;
+}
+.day-transfer-summary > div {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, auto 1fr);
+  align-items: baseline;
+  gap: 4px 7px;
+}
+.day-transfer-summary strong {
+  color: #111827;
+  font-size: 18px;
+  font-weight: 1000;
+}
+.day-transfer-summary small {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 850;
+}
+.day-transfer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.day-transfer-actions button {
+  min-height: 54px;
+  border: 1px solid #bdc9dc;
+  border-radius: 15px;
+  background: #fff;
+  color: #1758ca;
+  font-size: 15px;
+  font-weight: 1000;
+}
+.day-transfer-actions button.primary {
+  border-color: #245edb;
+  background: #245edb;
+  color: #fff;
+}
+.day-transfer-actions button:disabled {
+  opacity: .55;
+}
+.day-transfer-note {
+  display: grid;
+  gap: 5px;
+  background: #f7f9f7;
+}
+.day-transfer-note b {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 1000;
+}
+.day-transfer-note p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+.day-transfer-status {
+  border: 1px solid #cbd8f8;
+  border-radius: 14px;
+  background: #f3f7ff;
+  color: #244a9b;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+@media (max-width: 390px) {
+  .day-transfer-actions { grid-template-columns: 1fr; }
+  .day-transfer-summary > div { grid-template-columns: repeat(3, 1fr); }
+  .day-transfer-summary strong,
+  .day-transfer-summary small { text-align: center; }
+}

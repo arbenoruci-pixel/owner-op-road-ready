@@ -11,6 +11,7 @@ import ToolsSheet from '../shared/ui/ToolsSheet.jsx';
 import TimeZoneSheet from '../shared/ui/TimeZoneSheet.jsx';
 import DigitalWalletScreen from '../modules/wallet/DigitalWalletScreen.jsx';
 import BackupLogsScreen from '../modules/backup/BackupLogsScreen.jsx';
+import DayTransferSheet from '../modules/backup/DayTransferSheet.jsx';
 import UpdateBanner from '../modules/update/UpdateBanner.jsx';
 import DotMode from '../modules/dot/DotMode.jsx';
 import DriveTrackerSheet from '../modules/gps/DriveTrackerSheet.jsx';
@@ -33,7 +34,7 @@ import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRe
 import { sanitizeLogText } from '../shared/utils/logText.js';
 import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
 import { appendRecoveredLiveTail, applyLiveStatusTransition, chooseRecoveryCandidate, isSuspiciousMidnightDrivingOverwrite, recoverEventsFromLocalRevisions, safeInsertRolloverDriving } from '../core/timeline/liveDrivingSafety.js';
-import { applyUserConfirmedJul10TimelineRepair, USER_CONFIRMED_REPAIR_DAY } from '../core/timeline/userConfirmedTimelineRepair.js';
+import { applyDayBackupToState } from '../core/backup/dayTransfer.js';
 import {
   DEFAULT_HOME_TERMINAL_ADDRESS,
   DEFAULT_HOME_TERMINAL_TIMEZONE,
@@ -673,26 +674,7 @@ async function loadInitial() {
     const saved = await loadAppSnapshot(APP_STATE_KEY);
     if (saved) {
       const recovered = await recoverSuspiciousTodayState(saved);
-      const zone = getHomeTerminalTimeZone(recovered);
-      const now = new Date();
-      const currentDay = localDayKey(now, zone);
-      const repairMinute = currentDay === USER_CONFIRMED_REPAIR_DAY
-        ? homeTerminalMinute(now, zone)
-        : 1440;
-      // Always inspect the user-confirmed Jul 10 day, even when the PWA opens
-      // after midnight or the device timezone differs from the home terminal.
-      const repaired = applyUserConfirmedJul10TimelineRepair(recovered, {
-        day:USER_CONFIRMED_REPAIR_DAY,
-        nowMinute:repairMinute,
-        force:true,
-      });
-      const normalized = normalizeState(repaired);
-      // Persist the repaired rows before the first render. This prevents an
-      // older snapshot or background lifecycle write from winning the race.
-      if (repaired !== recovered) {
-        try { await saveAppSnapshot(APP_STATE_KEY, normalized); } catch {}
-      }
-      return normalized;
+      return normalizeState(recovered);
     }
   } catch {}
   return defaultInitialState();
@@ -848,40 +830,6 @@ export default function App() {
     });
     return () => { cancelled = true; };
   }, []);
-
-  React.useEffect(() => {
-    if (!offlineHydrated) return undefined;
-
-    // Run immediately and again after delayed PWA/sync lifecycle work. v95.98
-    // repaired only during the first hydration pass; a delayed stale state
-    // write could leave the driver looking at the collapsed midnight Driving
-    // row. These bounded retries make the explicit Jul 10 repair stick without
-    // permanently locking the day against future manual edits.
-    const forceJul10Repair = () => {
-      setState(current => {
-        const zone = getHomeTerminalTimeZone(current);
-        const now = new Date();
-        const currentDay = localDayKey(now, zone);
-        const repairMinute = currentDay === USER_CONFIRMED_REPAIR_DAY
-          ? homeTerminalMinute(now, zone)
-          : 1440;
-        const repaired = applyUserConfirmedJul10TimelineRepair(current, {
-          day:USER_CONFIRMED_REPAIR_DAY,
-          nowMinute:repairMinute,
-          force:true,
-        });
-        if (repaired === current) return current;
-        const normalized = normalizeState(repaired);
-        saveAppSnapshot(APP_STATE_KEY, normalized).catch(() => {});
-        return normalized;
-      });
-    };
-
-    forceJul10Repair();
-    const timers = [2000, 5000, 10000].map(delay => window.setTimeout(forceJul10Repair, delay));
-    return () => timers.forEach(timer => window.clearTimeout(timer));
-  }, [offlineHydrated]);
-
 
   async function checkForAppUpdate(reason = 'manual') {
     if (updateCheckInFlightRef.current) return;
@@ -2717,6 +2665,14 @@ export default function App() {
     lastInspectionByDayRef.current = restored.inspectionByDay || {};
     setState(restored);
   }
+  async function importSingleDayBackup(payload = {}, meta = {}) {
+    const targetDay = meta?.targetDay || state.activeDay;
+    const imported = normalizeState(applyDayBackupToState(state, payload, targetDay, meta));
+    await saveAppSnapshot(APP_STATE_KEY, imported);
+    setState(imported);
+    return imported.lastDayImportMeta || { targetDay };
+  }
+
   const updateBanner = (
     <UpdateBanner
       updateState={updateState}
@@ -2829,6 +2785,7 @@ export default function App() {
         onMoveSelected={moveSelectedEventInline}
         onCertify={certify}
         onTools={()=>setState(s=>({ ...s, sheet:{ type:'tools' } }))}
+        onDayTransfer={()=>setState(s=>({ ...s, sheet:{ type:'dayTransfer', day:s.activeDay } }))}
         onOpenStatus={()=>setState(s=>({ ...s, sheet:{ type:'status' } }))}
         onOpenTrailer={()=>setState(s=>({ ...s, sheet:{ type:'equipment' } }))}
         onDriverFlow={addDriverWorkflowEvents}
@@ -2849,7 +2806,8 @@ export default function App() {
       {state.sheet?.type === 'trailer' && <TrailerSheet currentTrailer={state.currentTrailer} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveTrailerAction} />}
       {state.sheet?.type === 'status' && <StatusWorkflowSheet state={{...state, currentStatus: liveCurrent.status, currentReason: liveCurrent.reason, currentLocation: liveCurrent.location}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApplyStatus={closeLastAndAddStatus} onStartDriving={startDrivingFromStatus} />}
       {state.sheet?.type === 'locationFix' && <LocationContinuityFixSheet state={state} payload={state.sheet.payload || {}} onClose={()=>setState(s=>({ ...s, sheet:null }))} onApply={(mode, custom)=>applyLocationContinuityFix(state.sheet.payload || {}, mode, custom)} />}
-      {state.sheet?.type === 'tools' && <ToolsSheet state={state} onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>{ const ids = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} onBackup={()=>setState(s=>({ ...s, sheet:null, view:'backup' }))} onTimeZone={()=>setState(s=>({ ...s, sheet:{ type:'timezone' } }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
+      {state.sheet?.type === 'tools' && <ToolsSheet state={state} onClose={()=>setState(s=>({ ...s, sheet:null }))} onMove={()=>setState(s=>{ const ids = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay).map(e=>e.id); return { ...s, sheet:{ type:'shift' }, selectMode:true, selectedIds:ids }; })} onDot={()=>setState(s=>({ ...s, sheet:null, view:'dot' }))} onWallet={()=>setState(s=>({ ...s, sheet:null, view:'wallet' }))} onBackup={()=>setState(s=>({ ...s, sheet:null, view:'backup' }))} onDayTransfer={()=>setState(s=>({ ...s, sheet:{ type:'dayTransfer', day:s.activeDay } }))} onTimeZone={()=>setState(s=>({ ...s, sheet:{ type:'timezone' } }))} updateState={updateState} onCheckUpdate={()=>checkForAppUpdate('tools')} onApplyUpdate={applySafeAppUpdate} onClearTestDates={clearTestDates} />}
+      {state.sheet?.type === 'dayTransfer' && <DayTransferSheet state={state} day={state.sheet.day || state.activeDay} onClose={()=>setState(s=>({ ...s, sheet:null }))} onImportDay={importSingleDayBackup} />}
       {state.sheet?.type === 'timezone' && <TimeZoneSheet state={state} onClose={()=>setState(s=>({ ...s, sheet:null }))} onSave={saveHomeTerminalTimeZone} />}
     </>
   );

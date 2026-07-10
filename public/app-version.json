@@ -1,12 +1,12 @@
 {
-  "version": "95.99.0",
-  "build": "v95.97-driving-event-history-guard",
-  "releasedAt": "2026-07-10T19:05:00.000Z",
+  "version": "96.0.0",
+  "build": "v96.0-single-day-export-import",
+  "releasedAt": "2026-07-10T20:15:00.000Z",
   "notes": [
-    "Prevents stale GPS rollover state from replacing today's duty events with driving from midnight.",
-    "Manual status changes preserve all events before the selected change time and use home-terminal time.",
-    "Detects and repairs the exact midnight-driving overwrite pattern from local duty-event revision history when available."
+    "Adds Export this day and Import into this day for every open log date.",
+    "Imports only the selected target day and keeps all other app data unchanged.",
+    "Removes the hard-coded Jul 10 forced restore so imported or manually edited days are not overwritten."
   ],
-  "label": "v95.97 Driving Event History Guard",
-  "updatedAt": "2026-07-10T19:05:00.000Z"
+  "label": "v96.0 Single-Day Export / Import",
+  "updatedAt": "2026-07-10T20:15:00.000Z"
 }
