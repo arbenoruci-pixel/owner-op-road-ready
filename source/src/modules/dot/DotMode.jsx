@@ -469,8 +469,11 @@ function walletReportFileLinkHtml(row, index = 0) {
   const doc = row?.doc || {};
   const dataUrl = documentDataUrl(doc);
   if (!dataUrl) return '<span class="roadside-doc-details-only">Details saved</span>';
+  const mime = guessDocMime(doc);
+  const fileName = safeFileName(doc.attachmentName || row?.requirement?.title || 'roadside-document', mime);
+  const title = row?.requirement?.title || 'Roadside document';
   const targetId = roadsideDocumentId(row, index);
-  return `<a class="roadside-doc-link" href="#${htmlEscape(targetId)}">Open document</a>`;
+  return `<a class="roadside-doc-link" href="#${htmlEscape(targetId)}" data-roadside-doc="1" data-doc-target="${htmlEscape(targetId)}" data-doc-title="${htmlEscape(title)}" data-doc-file="${htmlEscape(fileName)}" data-doc-mime="${htmlEscape(mime)}">Open document</a>`;
 }
 
 function walletReportDocumentPreviewHtml(row, index = 0) {
@@ -485,14 +488,13 @@ function walletReportDocumentPreviewHtml(row, index = 0) {
   if (mime.startsWith('image/') || /^data:image\//i.test(dataUrl)) {
     preview = `<img class="roadside-static-image" src="${htmlEscape(dataUrl)}" alt="${htmlEscape(title)}" />`;
   } else if (mime.includes('pdf') || /^data:application\/pdf/i.test(dataUrl)) {
-    preview = `<object class="roadside-static-pdf" data="${htmlEscape(dataUrl)}" type="application/pdf">
-      <iframe class="roadside-static-pdf" title="${htmlEscape(title)}" src="${htmlEscape(dataUrl)}"></iframe>
-      <p class="roadside-static-fallback">This viewer cannot display the PDF inline. Use the original-file button below.</p>
+    preview = `<object class="roadside-static-pdf" data="${htmlEscape(dataUrl)}" type="application/pdf" aria-label="${htmlEscape(title)}">
+      <div class="roadside-static-fallback"><b>Tap the button below if the PDF preview is not shown.</b><a class="roadside-original-link" href="${htmlEscape(dataUrl)}" target="_blank" rel="noopener noreferrer">Open PDF file</a></div>
     </object>`;
   } else {
-    preview = `<div class="roadside-static-fallback"><b>Preview is unavailable for this file type.</b><span>Use the original-file button below.</span></div>`;
+    preview = `<div class="roadside-static-fallback"><b>Preview is unavailable for this file type.</b><a class="roadside-original-link" href="${htmlEscape(dataUrl)}" target="_blank" rel="noopener noreferrer">Open saved file</a></div>`;
   }
-  return `<section class="roadside-static-document" id="${htmlEscape(targetId)}">
+  return `<section class="roadside-static-document" id="${htmlEscape(targetId)}" data-doc-title="${htmlEscape(title)}" data-doc-file="${htmlEscape(fileName)}" data-doc-mime="${htmlEscape(mime)}">
     <header class="roadside-static-head">
       <div><span>ROADSIDE DOCUMENT</span><h3>${htmlEscape(title)}</h3><p>${htmlEscape(documentMetaLine(row))}</p><em>${htmlEscape(fileName)}</em></div>
       <a class="roadside-back-link" href="#roadside-documents-index">Back to documents</a>
@@ -506,25 +508,140 @@ function walletReportDocumentPreviewHtml(row, index = 0) {
 
 function walletReportSectionHtml(state) {
   const rows = officerPresentationWalletRows(state);
-  if (!rows.length) return '<section class="wallet-report" id="roadside-documents-index"><h2>Roadside Documents</h2><p>No documents selected for display.</p></section>';
-  const body = rows.map((row, index) => `<tr class="roadside-doc-row">
-      <td>${htmlEscape(walletSectionTitle(row.requirement.section))}</td>
-      <td>${htmlEscape(row.requirement.title)}</td>
-      <td>${htmlEscape(documentMetaLine(row))}</td>
-      <td>${walletReportFileLinkHtml(row, index)}</td>
-    </tr>`).join('');
+  if (!rows.length) return '<section class="wallet-report pro-section" id="roadside-documents-index"><div class="section-heading"><span>DOCUMENTS</span><h2>Roadside Documents</h2><p>No saved roadside documents are included in this package.</p></div></section>';
+  const cards = rows.map((row, index) => `<article class="roadside-doc-card">
+      <div class="roadside-doc-card-main">
+        <span class="roadside-doc-type">${htmlEscape(walletSectionTitle(row.requirement.section))}</span>
+        <h3>${htmlEscape(row.requirement.title)}</h3>
+        <p>${htmlEscape(documentMetaLine(row))}</p>
+        ${row.doc?.attachmentName ? `<em>${htmlEscape(row.doc.attachmentName)}</em>` : ''}
+      </div>
+      <div class="roadside-doc-card-action">${walletReportFileLinkHtml(row, index)}</div>
+    </article>`).join('');
   const previews = rows.map((row, index) => walletReportDocumentPreviewHtml(row, index)).join('');
-  return `<section class="wallet-report" id="roadside-documents-index">
-    <h2>Roadside Documents</h2>
-    <p class="roadside-doc-help">Tap Open document. The saved file opens inside this HTML package without requiring JavaScript or a popup.</p>
-    <table class="wallet-report-table">
-      <thead><tr><th>Section</th><th>Document</th><th>Details</th><th>File</th></tr></thead>
-      <tbody>${body}</tbody>
-    </table>
+  return `<section class="wallet-report pro-section" id="roadside-documents-index">
+    <div class="section-heading"><span>DOCUMENTS</span><h2>Roadside Documents</h2><p>Tap Open document. The file opens full screen when supported, with an inline copy kept inside this HTML package.</p></div>
+    <div class="roadside-doc-grid">${cards}</div>
   </section>
   <div class="roadside-static-documents">${previews}</div>`;
 }
 
+function roadsideDocumentViewerScriptHtml() {
+  return `<script>
+(function(){
+  var modal;
+  var titleEl;
+  var fileEl;
+  var bodyEl;
+  var directLink;
+  var activeObjectUrl = '';
+  function createModal(){
+    if (modal) return;
+    modal = document.createElement('div');
+    modal.className = 'roadside-doc-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Roadside document preview');
+    modal.innerHTML = '<div class="roadside-doc-viewer"><header class="roadside-doc-viewer-head"><button type="button" class="roadside-doc-back" aria-label="Back to DOT package">‹ Back</button><div><span>ROADSIDE DOCUMENT</span><b></b><em></em></div><a class="roadside-doc-direct" target="_blank" rel="noopener noreferrer">Open file</a></header><main class="roadside-doc-viewer-body"></main></div>';
+    document.body.appendChild(modal);
+    titleEl = modal.querySelector('b');
+    fileEl = modal.querySelector('em');
+    bodyEl = modal.querySelector('.roadside-doc-viewer-body');
+    directLink = modal.querySelector('.roadside-doc-direct');
+    modal.querySelector('.roadside-doc-back').addEventListener('click', closeDoc);
+    modal.addEventListener('click', function(e){ if (e.target === modal) closeDoc(); });
+  }
+  function revokeActiveUrl(){
+    if (!activeObjectUrl) return;
+    try { URL.revokeObjectURL(activeObjectUrl); } catch (error) {}
+    activeObjectUrl = '';
+  }
+  function closeDoc(){
+    if (!modal) return;
+    modal.classList.remove('open');
+    document.body.classList.remove('roadside-doc-open');
+    if (bodyEl) bodyEl.innerHTML = '';
+    revokeActiveUrl();
+  }
+  function sourceFromSection(section){
+    if (!section) return '';
+    var image = section.querySelector('img.roadside-static-image');
+    if (image) return image.getAttribute('src') || '';
+    var object = section.querySelector('object.roadside-static-pdf');
+    if (object) return object.getAttribute('data') || '';
+    var original = section.querySelector('a.roadside-original-link');
+    return original ? (original.getAttribute('href') || '') : '';
+  }
+  function objectUrlFromDataUrl(src, explicitMime){
+    if (String(src || '').indexOf('data:') !== 0) return src;
+    try {
+      var comma = src.indexOf(',');
+      if (comma < 0) return src;
+      var meta = src.slice(5, comma);
+      var payload = src.slice(comma + 1);
+      var mime = (meta.split(';')[0] || explicitMime || 'application/octet-stream');
+      var blob;
+      if (/;base64/i.test(meta)) {
+        var binary = atob(payload.replace(/\s+/g, ''));
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        blob = new Blob([bytes], { type: mime });
+      } else {
+        blob = new Blob([decodeURIComponent(payload)], { type: mime });
+      }
+      activeObjectUrl = URL.createObjectURL(blob);
+      return activeObjectUrl;
+    } catch (error) {
+      return src;
+    }
+  }
+  function openDoc(link){
+    createModal();
+    revokeActiveUrl();
+    var targetId = link.getAttribute('data-doc-target') || '';
+    var section = targetId ? document.getElementById(targetId) : null;
+    var source = sourceFromSection(section);
+    if (!source) return false;
+    var title = link.getAttribute('data-doc-title') || (section && section.getAttribute('data-doc-title')) || 'Roadside document';
+    var file = link.getAttribute('data-doc-file') || (section && section.getAttribute('data-doc-file')) || 'Saved file';
+    var mime = link.getAttribute('data-doc-mime') || (section && section.getAttribute('data-doc-mime')) || '';
+    var viewUrl = objectUrlFromDataUrl(source, mime);
+    titleEl.textContent = title;
+    fileEl.textContent = file;
+    directLink.href = viewUrl;
+    directLink.setAttribute('download', file);
+    bodyEl.innerHTML = '';
+    if (mime.indexOf('image/') === 0 || new RegExp('^data:image/', 'i').test(source)) {
+      var img = document.createElement('img');
+      img.alt = title;
+      img.src = viewUrl;
+      bodyEl.appendChild(img);
+    } else if (mime.indexOf('pdf') >= 0 || new RegExp('^data:application/pdf', 'i').test(source)) {
+      var iframe = document.createElement('iframe');
+      iframe.title = title;
+      iframe.src = viewUrl;
+      bodyEl.appendChild(iframe);
+    } else {
+      var fallback = document.createElement('div');
+      fallback.className = 'roadside-doc-fallback';
+      fallback.innerHTML = '<b>Preview is unavailable for this file type.</b><span>Use Open file to view or save the document.</span>';
+      bodyEl.appendChild(fallback);
+    }
+    modal.classList.add('open');
+    document.body.classList.add('roadside-doc-open');
+    return true;
+  }
+  document.addEventListener('click', function(e){
+    var target = e.target;
+    if (!target || !target.closest) return;
+    var link = target.closest('a[data-roadside-doc="1"]');
+    if (!link) return;
+    if (openDoc(link)) e.preventDefault();
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeDoc(); });
+})();
+</script>`;
+}
 
 function recapDays(days = [], state) {
   return days.slice(1).map(day => {
@@ -609,93 +726,125 @@ function dayReportHtml(state, day, days) {
   const recaps = recapDays(days, state);
   const eventRows = events.length ? events.map((event, index) => `
     <tr>
-      <td>${index + 1}</td>
-      <td>${htmlEscape(dotLineLabel(event))}</td>
-      <td>${htmlEscape(timeLabel(event.startMin, true))}</td>
-      <td>${htmlEscape(durLabel(Number(event.endMin || 0) - Number(event.startMin || 0)))}</td>
-      <td>${htmlEscape(joinLocation(event))}</td>
-      <td>${htmlEscape(unitName(state))}</td>
-      <td>${htmlEscape(sanitizeLogText(event.note || event.description || label(event.status)))}</td>
+      <td data-label="No.">${index + 1}</td>
+      <td data-label="Status"><span class="status-pill status-${htmlEscape(String(event.status || 'OFF').toLowerCase())}">${htmlEscape(dotLineLabel(event))}</span></td>
+      <td data-label="Start">${htmlEscape(timeLabel(event.startMin, true))}</td>
+      <td data-label="Duration">${htmlEscape(durLabel(Number(event.endMin || 0) - Number(event.startMin || 0)))}</td>
+      <td data-label="Location">${htmlEscape(joinLocation(event))}</td>
+      <td data-label="CMV">${htmlEscape(unitName(state))}</td>
+      <td data-label="Notes">${htmlEscape(sanitizeLogText(event.note || event.description || label(event.status)))}</td>
     </tr>`).join('') : '<tr><td colspan="7">No rows to display</td></tr>';
-  const recapRows = recaps.map(({ day: d, total }) => `<td><b>${htmlEscape(shortDate(d))}</b><br/>${(total / 60).toFixed(2)}</td>`).join('');
   const signatureDataUrl = sig.signatureDataUrl || (sig.signatureRef === 'driverSignature' ? state.driverSignature?.dataUrl : '') || '';
   const signatureHtml = signatureDataUrl ? `<img src="${htmlEscape(signatureDataUrl)}" alt="Driver signature" />` : '';
+  const certified = Boolean(sig.signed);
   return `
-  <section class="daily-log-page">
+  <section class="daily-log-page" id="log-day-${htmlEscape(day)}">
     <header class="daily-log-head">
-      <div class="brand">Road Ready</div>
-      <div><h1>Driver's Daily Log</h1><p>Manual RODS / ELD-exempt driver record</p></div>
-      <div class="log-date"><b>Log Date:</b> ${htmlEscape(day)}<br/><b>Print Date:</b> ${htmlEscape(printDate())}</div>
+      <div class="brand-lockup"><div class="brand">ROAD READY</div><span>DOT roadside package</span></div>
+      <div class="daily-log-title"><span>RECORD OF DUTY STATUS</span><h1>Driver's Daily Log</h1><p>Manual RODS / ELD-exempt driver record</p></div>
+      <div class="log-date"><b>${htmlEscape(dayTitle(day, true))}</b><span>${htmlEscape(day)}</span><em class="cert-badge ${certified ? 'certified' : 'pending'}">${certified ? 'CERTIFIED' : 'REVIEW'}</em></div>
     </header>
-    <table class="header-table">
-      <tbody>
-        <tr><th>Driver</th><td>${htmlEscape(driverName(state))}<br/><small>${htmlEscape(driverEmail(state))}</small></td><th>Truck/Unit</th><td>${htmlEscape(unitName(state))}</td></tr>
-        <tr><th>Driver License</th><td>${htmlEscape(state.driver?.license || 'Not set')}</td><th>Trailer/Equipment</th><td>${htmlEscape(trailerName(state))}</td></tr>
-        <tr><th>Carrier and DOT#</th><td>${htmlEscape(carrierName(state))} (${htmlEscape(dotNumber(state))})</td><th>Shipping Docs</th><td>${htmlEscape(shippingDocs(state))}</td></tr>
-        <tr><th>Main Office</th><td colspan="3">${htmlEscape(mainOffice(state))}</td></tr>
-        <tr><th>24-Period Starting</th><td>Midnight</td><th>Inspection</th><td>${htmlEscape(officerInspectionLabel(inspection))}</td></tr>
-        <tr><th>Data Diagnostic Indicators</th><td>No</td><th>Malfunction Indicators</th><td>No</td></tr>
-      </tbody>
-    </table>
+
+    <div class="log-meta-grid">
+      <div><span>Driver</span><b>${htmlEscape(driverName(state))}</b><small>${htmlEscape(driverEmail(state))}</small></div>
+      <div><span>Carrier / USDOT</span><b>${htmlEscape(carrierName(state))}</b><small>USDOT ${htmlEscape(dotNumber(state))}</small></div>
+      <div><span>Truck / Unit</span><b>${htmlEscape(unitName(state))}</b><small>${htmlEscape(trailerName(state))}</small></div>
+      <div><span>Shipping documents</span><b>${htmlEscape(shippingDocs(state))}</b><small>24-hour period starts at midnight</small></div>
+      <div><span>Main office</span><b>${htmlEscape(mainOffice(state))}</b><small>Manual RODS record</small></div>
+      <div><span>Inspection</span><b>${htmlEscape(officerInspectionLabel(inspection))}</b><small>No diagnostic or malfunction indicators</small></div>
+    </div>
+
+    <div class="log-section-heading"><span>24-HOUR GRAPH</span><h2>Duty Status</h2></div>
     <div class="graph-wrap">${svgGraphMarkup(events)}</div>
-    <table class="event-table">
-      <thead><tr><th>No.</th><th>Status</th><th>Start</th><th>Duration</th><th>Location</th><th>CMV</th><th>Notes</th></tr></thead>
-      <tbody>${eventRows}</tbody>
-    </table>
-    <table class="recap-table">
-      <tbody>
-        <tr><th>Recap</th>${recapRows}</tr>
-        <tr><th>Totals</th><td>OFF ${htmlEscape(durLabel(totals.OFF))}</td><td>SB ${htmlEscape(durLabel(totals.SB))}</td><td>D ${htmlEscape(durLabel(totals.D))}</td><td>ON ${htmlEscape(durLabel(totals.ON))}</td><td colspan="3">Total ${htmlEscape(durLabel(totalHours(events)))}</td></tr>
-      </tbody>
-    </table>
+
+    <div class="totals-strip">
+      <div><span>OFF</span><b>${htmlEscape(durLabel(totals.OFF))}</b></div>
+      <div><span>SB</span><b>${htmlEscape(durLabel(totals.SB))}</b></div>
+      <div><span>D</span><b>${htmlEscape(durLabel(totals.D))}</b></div>
+      <div><span>ON</span><b>${htmlEscape(durLabel(totals.ON))}</b></div>
+      <div><span>TOTAL</span><b>${htmlEscape(durLabel(totalHours(events)))}</b></div>
+    </div>
+
+    <div class="log-section-heading"><span>EVENT DETAIL</span><h2>Duty Status Events</h2></div>
+    <div class="event-table-wrap">
+      <table class="event-table">
+        <thead><tr><th>No.</th><th>Status</th><th>Start</th><th>Duration</th><th>Location</th><th>CMV</th><th>Notes</th></tr></thead>
+        <tbody>${eventRows}</tbody>
+      </table>
+    </div>
+
+    <div class="recap-panel">
+      <div class="recap-heading"><span>8-DAY RECAP</span><b>Daily hours recorded</b></div>
+      <div class="recap-grid">${recaps.map(({ day: d, total }) => `<div><span>${htmlEscape(shortDate(d))}</span><b>${(total / 60).toFixed(2)}</b></div>`).join('')}</div>
+    </div>
+
     <div class="cert-block">
-      <b>Certification:</b> ${htmlEscape(officerSignatureLabel(state, day))}
-      <p>I hereby certify that my data entries and my record of duty status for this day are true and correct.</p>
+      <div class="cert-copy"><span>CERTIFICATION</span><b>${htmlEscape(officerSignatureLabel(state, day))}</b><p>I hereby certify that my data entries and my record of duty status for this day are true and correct.</p></div>
       <div class="signature-line">${signatureHtml}<span>Driver Signature</span></div>
     </div>
+    <a class="back-to-package" href="#package-top">Back to package summary</a>
   </section>`;
 }
 
 function reportHtml(state, days, routingCode = '') {
   const period = `${days.at(-1)} through ${days[0]}`;
+  const documentCount = officerPresentationWalletRows(state).length;
+  const signedCount = days.filter(day => signatureForDay(state, day).signed).length;
+  const logLinks = days.map(day => {
+    const events = reportEventsForDay(state, day);
+    const totals = dutyTotals(events);
+    return `<a class="log-index-card" href="#log-day-${htmlEscape(day)}"><span>${htmlEscape(dayTitle(day))}</span><b>${htmlEscape(day)}</b><small>D ${htmlEscape(durLabel(totals.D))} · ON ${htmlEscape(durLabel(totals.ON))}</small></a>`;
+  }).join('');
   return `<!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>DOT Inspection Log Package</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light" />
+<title>DOT Roadside HTML Package</title>
 <style>
-  body{margin:0;background:#e5e7eb;color:#111827;font-family:Arial,Helvetica,sans-serif;}
-  .package-cover,.daily-log-page{max-width:980px;margin:18px auto;background:#fff;border:1px solid #cfd4dc;padding:22px;box-sizing:border-box;}
-  .package-cover h1{margin:0 0 8px;font-size:26px;}.package-cover p{margin:6px 0;font-size:14px;}.cover-grid{display:grid;grid-template-columns:180px 1fr;gap:0;border:1px solid #9ca3af;margin-top:16px}.cover-grid b,.cover-grid span{padding:8px 10px;border-bottom:1px solid #d1d5db}.cover-grid b{background:#f3f4f6;border-right:1px solid #d1d5db}.cover-grid b:nth-last-child(2),.cover-grid span:last-child{border-bottom:0}.wallet-report{margin-top:18px}.wallet-report h2{font-size:18px;margin:0 0 8px}.wallet-report-table{width:100%;border-collapse:collapse;font-size:12px}.wallet-report-table th,.wallet-report-table td{border:1px solid #9ca3af;padding:6px;text-align:left;vertical-align:top}.wallet-report-table th{background:#f3f4f6;font-weight:800}.roadside-doc-help{margin:4px 0 10px;color:#4b5563;font-size:12px;font-weight:700}.roadside-doc-row{cursor:pointer}.roadside-doc-row:hover{background:#f8fafc}.roadside-doc-link{display:inline-grid;place-items:center;min-height:32px;padding:0 10px;border-radius:999px;background:#eef3ff;border:1px solid #cfd8ff;color:#3157d8;font-weight:900;text-decoration:none;white-space:nowrap}.roadside-doc-details-only{color:#6b7280;font-weight:800}.roadside-static-documents{display:grid;gap:24px;margin-top:24px}.roadside-static-document{scroll-margin-top:12px;border:1px solid #9ca3af;border-radius:16px;overflow:hidden;background:#fff;page-break-before:always}.roadside-static-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid #d1d5db;background:#f8fafc}.roadside-static-head div{min-width:0}.roadside-static-head span{font-size:10px;letter-spacing:.12em;color:#6b7280;font-weight:900}.roadside-static-head h3{margin:4px 0 2px;font-size:18px}.roadside-static-head p,.roadside-static-head em{display:block;margin:2px 0;color:#4b5563;font-size:12px;font-style:normal;overflow-wrap:anywhere}.roadside-back-link,.roadside-original-link{display:inline-grid;place-items:center;min-height:42px;padding:0 14px;border-radius:12px;text-decoration:none;font-weight:900;box-sizing:border-box}.roadside-back-link{background:#111827;color:#fff;white-space:nowrap}.roadside-static-body{min-height:420px;padding:12px;background:#0b1220;display:flex;align-items:center;justify-content:center}.roadside-static-image{display:block;max-width:100%;max-height:900px;object-fit:contain;background:#fff}.roadside-static-pdf{display:block;width:100%;height:78vh;min-height:620px;border:0;background:#fff}.roadside-static-fallback{display:grid;gap:8px;max-width:480px;padding:24px;border-radius:14px;background:#fff;color:#111827;text-align:center}.roadside-static-actions{display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid #d1d5db;background:#fff}.roadside-original-link{background:#eef3ff;border:1px solid #cfd8ff;color:#3157d8}.roadside-doc-open{overflow:hidden}.roadside-doc-modal{position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.72);display:none}.roadside-doc-modal.open{display:block}.roadside-doc-viewer{height:100dvh;background:#fff;display:flex;flex-direction:column}.roadside-doc-viewer-head{min-height:58px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;border-bottom:1px solid #d1d5db;background:#fff}.roadside-doc-back{border:0;border-radius:12px;background:#111827;color:#fff;padding:10px 12px;font-weight:900;font-size:15px}.roadside-doc-viewer-head div{display:grid;gap:2px;min-width:0}.roadside-doc-viewer-head span{font-size:10px;letter-spacing:.12em;color:#6b7280;font-weight:900}.roadside-doc-viewer-head b{font-size:15px;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.roadside-doc-viewer-head em{font-style:normal;font-size:11px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.roadside-doc-direct{border:1px solid #d1d5db;border-radius:12px;background:#f9fafb;color:#111827;padding:10px 12px;text-decoration:none;font-weight:900;font-size:13px}.roadside-doc-viewer-body{flex:1;min-height:0;background:#0b1220;display:flex;align-items:center;justify-content:center;overflow:auto;padding:12px}.roadside-doc-viewer-body img{max-width:100%;max-height:100%;object-fit:contain;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}.roadside-doc-viewer-body iframe{width:100%;height:100%;border:0;background:#fff}.roadside-doc-fallback{display:grid;gap:8px;max-width:420px;border-radius:16px;background:#fff;padding:20px;color:#111827;text-align:center}.roadside-doc-open{overflow:hidden}
-  .daily-log-head{display:grid;grid-template-columns:190px 1fr 210px;align-items:start;gap:12px;border-bottom:2px solid #111827;padding-bottom:10px}.brand{font-size:34px;font-weight:900;font-style:italic}.daily-log-head h1{margin:0;text-align:center;font-size:22px;text-transform:uppercase}.daily-log-head p{text-align:center;margin:3px 0 0}.log-date{text-align:right;font-size:13px;line-height:1.5}.header-table,.event-table,.recap-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}.header-table th,.header-table td,.event-table th,.event-table td,.recap-table th,.recap-table td{border:1px solid #9ca3af;padding:6px;text-align:left;vertical-align:top}.header-table th,.event-table th,.recap-table th{background:#f3f4f6;font-weight:800}.graph-wrap{border:1px solid #d1d5db;margin:12px 0;padding:8px}.report-svg{width:100%;height:auto}.grid-line,.hour-line{stroke:#d1d5db;stroke-width:1}.hour-line.major{stroke:#9ca3af;stroke-width:1.2}.hour-label,.row-label{font-size:12px;fill:#374151;font-weight:700}.cert-block{margin-top:14px;text-align:center}.cert-block> b{display:block;text-align:left}.cert-block p{font-weight:700}.signature-line{height:54px;display:flex;align-items:end;justify-content:center;gap:10px}.signature-line img{max-height:42px;max-width:180px}.signature-line span{border-top:1px solid #111827;min-width:260px;padding-top:6px;font-size:12px;font-weight:700}.review-list{text-align:left;background:#fff7ed;border:1px solid #fed7aa;padding:8px;margin-top:8px}.page-break{break-after:page;}
-  @media(max-width:700px){
-    body{background:#fff;overflow-x:hidden}.package-cover,.daily-log-page{width:100%;max-width:none;margin:0;background:#fff;border:0;border-bottom:8px solid #e5e7eb;padding:12px;overflow:hidden}.package-cover h1{font-size:22px}.cover-grid{display:block;border:1px solid #d1d5db}.cover-grid b,.cover-grid span{display:block;border-right:0;word-break:break-word;overflow-wrap:anywhere}.cover-grid b{border-top:1px solid #d1d5db}.wallet-report-table,.wallet-report-table thead,.wallet-report-table tbody,.wallet-report-table tr,.wallet-report-table th,.wallet-report-table td{display:block;width:100%;box-sizing:border-box}.wallet-report-table thead{display:none}.wallet-report-table tr{border:1px solid #d1d5db;border-radius:14px;margin:10px 0;padding:10px;background:#fff}.wallet-report-table td{border:0!important;padding:4px 0;word-break:break-word;overflow-wrap:anywhere}.roadside-doc-link{display:flex;width:100%;min-height:44px;box-sizing:border-box}.roadside-static-head{display:grid}.roadside-back-link,.roadside-original-link{width:100%}.roadside-static-body{min-height:260px;padding:6px}.roadside-static-pdf{height:72vh;min-height:520px}.roadside-static-actions{display:block}.daily-log-head{display:block;text-align:left}.daily-log-head h1,.daily-log-head p,.log-date{text-align:left}.brand{font-size:26px}.header-table,.header-table tbody,.header-table tr,.header-table th,.header-table td,.event-table,.event-table tbody,.event-table tr,.event-table th,.event-table td,.recap-table,.recap-table tbody,.recap-table tr,.recap-table th,.recap-table td{display:block;width:100%;box-sizing:border-box}.header-table tr,.event-table tr,.recap-table tr{border:1px solid #d1d5db;margin:8px 0;padding:8px}.header-table th,.header-table td,.event-table th,.event-table td,.recap-table th,.recap-table td{border:0!important;padding:4px 0;word-break:break-word;overflow-wrap:anywhere}.event-table thead{display:none}.graph-wrap{padding:4px;overflow:hidden}.report-svg{min-width:0}.signature-line{display:block;height:auto}.signature-line span{display:block;min-width:0;margin-top:12px}.roadside-doc-viewer-head{grid-template-columns:auto 1fr}.roadside-doc-direct{grid-column:1/-1;text-align:center}.roadside-doc-viewer-body{padding:6px}.roadside-doc-viewer-body iframe{min-height:70vh}
-  }
-  @media print{body{background:#fff}.package-cover,.daily-log-page{margin:0 auto 12px;border:0;page-break-after:always}.daily-log-page{min-height:10in}.no-print{display:none!important}}
+  :root{--ink:#102238;--blue:#1f66e5;--muted:#657287;--line:#d8e0ea;--soft:#f4f7fb;--paper:#fff;--green:#167a52;--amber:#9a5b08;--shadow:0 12px 34px rgba(16,34,56,.08)}
+  *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#edf2f7;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,Helvetica,sans-serif;line-height:1.35}.package-nav{position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px max(14px,env(safe-area-inset-left)) 12px max(14px,env(safe-area-inset-right));background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}.package-nav-brand{display:grid;gap:1px}.package-nav-brand b{font-size:14px;letter-spacing:.04em}.package-nav-brand span{font-size:10px;color:var(--muted);font-weight:800;letter-spacing:.08em}.package-nav nav{display:flex;gap:7px}.package-nav a{display:inline-grid;place-items:center;min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);text-decoration:none;font-size:12px;font-weight:900}.package-shell{max-width:1040px;margin:18px auto 36px;padding:0 14px}.package-cover,.pro-section,.daily-log-page,.section-divider{background:var(--paper);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}.package-cover{padding:26px}.cover-eyebrow,.section-heading>span,.log-section-heading>span,.daily-log-title>span,.recap-heading>span,.cert-copy>span{display:block;color:var(--blue);font-size:10px;font-weight:950;letter-spacing:.14em}.cover-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}.cover-title-row h1{margin:5px 0 7px;font-size:31px;line-height:1.08}.cover-title-row p{margin:0;color:var(--muted);font-weight:700}.package-chip{display:grid;gap:2px;min-width:170px;padding:12px 14px;border-radius:16px;background:var(--ink);color:#fff;text-align:right}.package-chip span{font-size:10px;font-weight:900;letter-spacing:.08em}.package-chip b{font-size:14px}.cover-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}.cover-stats div{padding:14px;border:1px solid var(--line);border-radius:15px;background:var(--soft)}.cover-stats span{display:block;color:var(--muted);font-size:11px;font-weight:850;text-transform:uppercase;letter-spacing:.05em}.cover-stats b{display:block;margin-top:5px;font-size:18px}.cover-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.cover-grid div{padding:13px 14px;border:1px solid var(--line);border-radius:14px}.cover-grid span{display:block;color:var(--muted);font-size:11px;font-weight:850;text-transform:uppercase}.cover-grid b{display:block;margin-top:4px;font-size:14px;overflow-wrap:anywhere}.log-index{margin-top:20px}.log-index h2{margin:0 0 10px;font-size:18px}.log-index-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.log-index-card{display:grid;gap:3px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--ink);text-decoration:none}.log-index-card:hover{border-color:#a9bee8;background:#f7faff}.log-index-card span{font-size:11px;color:var(--blue);font-weight:900}.log-index-card b{font-size:13px}.log-index-card small{font-size:10px;color:var(--muted);font-weight:750}.pro-section{margin-top:18px;padding:22px;scroll-margin-top:78px}.section-heading h2{margin:4px 0 5px;font-size:24px}.section-heading p{margin:0;color:var(--muted);font-weight:700}.roadside-doc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:16px}.roadside-doc-card{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:15px;border:1px solid var(--line);border-radius:16px;background:#fff}.roadside-doc-card-main{min-width:0}.roadside-doc-type{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#2457b8;font-size:10px;font-weight:900;letter-spacing:.04em}.roadside-doc-card h3{margin:7px 0 4px;font-size:16px}.roadside-doc-card p,.roadside-doc-card em{display:block;margin:2px 0;color:var(--muted);font-size:12px;font-style:normal;overflow-wrap:anywhere}.roadside-doc-link,.roadside-back-link,.roadside-original-link,.back-to-package{display:inline-grid;place-items:center;min-height:42px;padding:0 14px;border-radius:12px;text-decoration:none;font-weight:900;box-sizing:border-box}.roadside-doc-link{background:var(--blue);color:#fff;white-space:nowrap}.roadside-doc-details-only{color:var(--muted);font-weight:800}.roadside-static-documents{display:grid;gap:18px;margin-top:18px}.roadside-static-document{scroll-margin-top:78px;border:1px solid var(--line);border-radius:20px;overflow:hidden;background:#fff;box-shadow:var(--shadow)}.roadside-static-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:16px 18px;border-bottom:1px solid var(--line);background:var(--soft)}.roadside-static-head span{font-size:10px;letter-spacing:.12em;color:var(--blue);font-weight:950}.roadside-static-head h3{margin:4px 0 2px;font-size:20px}.roadside-static-head p,.roadside-static-head em{display:block;margin:2px 0;color:var(--muted);font-size:12px;font-style:normal;overflow-wrap:anywhere}.roadside-back-link{background:var(--ink);color:#fff}.roadside-static-body{min-height:420px;padding:12px;background:#0b1220;display:flex;align-items:center;justify-content:center}.roadside-static-image{display:block;max-width:100%;max-height:900px;object-fit:contain;background:#fff}.roadside-static-pdf{display:block;width:100%;height:78vh;min-height:620px;border:0;background:#fff}.roadside-static-fallback{display:grid;gap:12px;max-width:480px;padding:24px;border-radius:14px;background:#fff;color:var(--ink);text-align:center}.roadside-static-actions{display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line)}.roadside-original-link{background:#eef4ff;border:1px solid #bfd0f6;color:#1f55b8}.section-divider{margin-top:20px;padding:20px;scroll-margin-top:78px}.section-divider h2{margin:0 0 4px}.section-divider p{margin:0;color:var(--muted);font-weight:700}.daily-log-page{margin-top:18px;padding:22px;scroll-margin-top:78px;overflow:hidden}.daily-log-head{display:grid;grid-template-columns:180px 1fr 190px;align-items:start;gap:16px;padding-bottom:14px;border-bottom:2px solid var(--ink)}.brand-lockup{display:grid;gap:2px}.brand{font-size:27px;font-weight:950;font-style:italic;letter-spacing:-.03em}.brand-lockup span{color:var(--muted);font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.08em}.daily-log-title{text-align:center}.daily-log-title h1{margin:4px 0 2px;font-size:23px;text-transform:uppercase}.daily-log-title p{margin:0;color:var(--muted);font-size:12px;font-weight:750}.log-date{display:grid;justify-items:end;gap:3px;text-align:right}.log-date b{font-size:15px}.log-date span{font-size:12px;color:var(--muted)}.cert-badge{display:inline-grid;place-items:center;min-height:25px;padding:0 9px;border-radius:999px;font-style:normal;font-size:10px;font-weight:950;letter-spacing:.05em}.cert-badge.certified{background:#e7f6ef;color:var(--green)}.cert-badge.pending{background:#fff4df;color:var(--amber)}.log-meta-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:14px}.log-meta-grid div{padding:11px 12px;border:1px solid var(--line);border-radius:13px;background:var(--soft);min-width:0}.log-meta-grid span,.log-meta-grid small{display:block;color:var(--muted);font-size:10px;font-weight:800}.log-meta-grid b{display:block;margin:4px 0 2px;font-size:13px;overflow-wrap:anywhere}.log-section-heading{margin-top:18px}.log-section-heading h2{margin:3px 0 8px;font-size:18px}.graph-wrap{border:1px solid var(--line);border-radius:14px;padding:8px;overflow:hidden;background:#fff}.report-svg{display:block;width:100%;height:auto}.grid-line,.hour-line{stroke:#dbe3ed;stroke-width:.8}.hour-line.major{stroke:#aab8c9;stroke-width:1.2}.hour-label,.row-label{font-size:12px;fill:#415066;font-weight:800}.totals-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px}.totals-strip div{padding:10px;border:1px solid var(--line);border-radius:12px;text-align:center}.totals-strip span{display:block;color:var(--muted);font-size:10px;font-weight:900}.totals-strip b{display:block;margin-top:3px;font-size:13px}.event-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px}.event-table{width:100%;border-collapse:collapse;font-size:12px}.event-table th,.event-table td{padding:9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.event-table th{background:var(--soft);font-size:10px;text-transform:uppercase;letter-spacing:.05em}.event-table tr:last-child td{border-bottom:0}.status-pill{display:inline-block;padding:4px 7px;border-radius:999px;background:#edf2f7;font-weight:900;white-space:nowrap}.status-d{background:#e7f7f3;color:#0e796d}.status-on{background:#eaf1ff;color:#235cc9}.status-sb{background:#eef0f4;color:#596579}.status-off{background:#f2f3f5;color:#4f5a69}.recap-panel{display:grid;grid-template-columns:160px 1fr;gap:12px;align-items:center;margin-top:14px;padding:13px;border:1px solid var(--line);border-radius:14px;background:var(--soft)}.recap-heading b{display:block;margin-top:4px;font-size:13px}.recap-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.recap-grid div{padding:8px 5px;border-radius:10px;background:#fff;text-align:center}.recap-grid span{display:block;color:var(--muted);font-size:9px;font-weight:800}.recap-grid b{display:block;margin-top:2px;font-size:11px}.cert-block{display:grid;grid-template-columns:1fr 330px;gap:20px;align-items:end;margin-top:14px;padding:15px;border:1px solid var(--line);border-radius:14px}.cert-copy b{display:block;margin-top:4px}.cert-copy p{margin:5px 0 0;color:var(--muted);font-size:11px;font-weight:700}.signature-line{min-height:55px;display:flex;align-items:end;justify-content:center;gap:10px}.signature-line img{max-height:42px;max-width:170px}.signature-line span{border-top:1px solid var(--ink);min-width:190px;padding-top:5px;text-align:center;font-size:10px;font-weight:800}.back-to-package{margin-top:14px;background:var(--soft);border:1px solid var(--line);color:var(--ink)}.roadside-doc-open{overflow:hidden}.roadside-doc-modal{position:fixed;inset:0;z-index:9999;background:rgba(8,17,31,.76);display:none}.roadside-doc-modal.open{display:block}.roadside-doc-viewer{height:100dvh;background:#fff;display:flex;flex-direction:column}.roadside-doc-viewer-head{min-height:62px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;border-bottom:1px solid var(--line)}.roadside-doc-back{border:0;border-radius:12px;background:var(--ink);color:#fff;padding:10px 12px;font-weight:900;font-size:15px}.roadside-doc-viewer-head div{display:grid;gap:2px;min-width:0}.roadside-doc-viewer-head span{font-size:9px;letter-spacing:.12em;color:var(--blue);font-weight:950}.roadside-doc-viewer-head b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.roadside-doc-viewer-head em{font-style:normal;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.roadside-doc-direct{border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);padding:10px 12px;text-decoration:none;font-weight:900;font-size:12px}.roadside-doc-viewer-body{flex:1;min-height:0;background:#0b1220;display:flex;align-items:center;justify-content:center;overflow:auto;padding:10px}.roadside-doc-viewer-body img{max-width:100%;max-height:100%;object-fit:contain;background:#fff}.roadside-doc-viewer-body iframe{width:100%;height:100%;border:0;background:#fff}.roadside-doc-fallback{display:grid;gap:8px;max-width:420px;border-radius:16px;background:#fff;padding:20px;text-align:center}
+  @media(max-width:760px){.package-nav{align-items:flex-start}.package-nav nav{overflow-x:auto;max-width:62vw}.package-nav a{min-height:34px;padding:0 10px}.package-shell{margin:0;padding:0}.package-cover,.pro-section,.daily-log-page,.section-divider{border-radius:0;border-left:0;border-right:0;box-shadow:none;margin-top:8px}.package-cover{padding:17px 14px}.cover-title-row{display:grid}.package-chip{text-align:left;min-width:0}.cover-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.cover-grid{grid-template-columns:1fr}.log-index-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pro-section{padding:17px 14px}.roadside-doc-grid{grid-template-columns:1fr}.roadside-doc-card{grid-template-columns:1fr}.roadside-doc-link{width:100%}.roadside-static-head{display:grid}.roadside-back-link,.roadside-original-link{width:100%}.roadside-static-body{min-height:260px;padding:6px}.roadside-static-pdf{height:72vh;min-height:500px}.roadside-static-actions{display:block}.daily-log-page{padding:14px}.daily-log-head{grid-template-columns:1fr;text-align:left}.daily-log-title{text-align:left}.log-date{justify-items:start;text-align:left}.log-meta-grid{grid-template-columns:1fr 1fr}.totals-strip{grid-template-columns:repeat(5,minmax(70px,1fr));overflow-x:auto}.event-table-wrap{border:0;overflow:visible}.event-table,.event-table tbody,.event-table tr,.event-table td{display:block;width:100%}.event-table thead{display:none}.event-table tr{margin:9px 0;border:1px solid var(--line);border-radius:14px;padding:9px;background:#fff}.event-table td{display:grid;grid-template-columns:92px 1fr;gap:8px;border:0;padding:5px 2px;overflow-wrap:anywhere}.event-table td:before{content:attr(data-label);color:var(--muted);font-size:10px;font-weight:900;text-transform:uppercase}.recap-panel{grid-template-columns:1fr}.recap-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.cert-block{grid-template-columns:1fr}.signature-line{justify-content:flex-start}.signature-line span{min-width:160px}.roadside-doc-viewer-head{grid-template-columns:auto 1fr}.roadside-doc-direct{grid-column:1/-1;text-align:center}.roadside-doc-viewer-body iframe{min-height:70vh}}
+  @media print{body{background:#fff}.package-nav{display:none}.package-shell{max-width:none;margin:0;padding:0}.package-cover,.pro-section,.daily-log-page,.section-divider,.roadside-static-document{margin:0 auto 12px;border:0;border-radius:0;box-shadow:none;page-break-after:always}.daily-log-page{min-height:10in}.back-to-package{display:none}.roadside-static-document{page-break-before:always}}
 </style>
 </head>
 <body>
-  <section class="package-cover">
-    <h1>DOT Inspection Log Package</h1>
-    <p>Manual RODS / ELD-exempt driver records</p>
-    <p>Period: ${htmlEscape(period)}</p>
-    ${routingCode ? `<p>Routing / Reference Code: ${htmlEscape(routingCode)}</p>` : ''}
-    <div class="cover-grid">
-      <b>Driver</b><span>${htmlEscape(driverName(state))}</span>
-      <b>Carrier</b><span>${htmlEscape(carrierName(state))}</span>
-      <b>Truck/Unit</b><span>${htmlEscape(unitName(state))}</span>
-      <b>Trailer/Equipment</b><span>${htmlEscape(trailerName(state))}</span>
-      <b>Main Office</b><span>${htmlEscape(mainOffice(state))}</span>
-      <b>Generated</b><span>${htmlEscape(printDate())}</span>
-    </div>
+  <header class="package-nav">
+    <div class="package-nav-brand"><b>ROAD READY</b><span>DOT HTML PACKAGE</span></div>
+    <nav><a href="#package-top">Summary</a><a href="#roadside-documents-index">Documents</a><a href="#logs-index">Logs</a></nav>
+  </header>
+  <main class="package-shell">
+    <section class="package-cover" id="package-top">
+      <div class="cover-title-row">
+        <div><span class="cover-eyebrow">SELF-CONTAINED OFFICER FILE</span><h1>DOT Roadside Package</h1><p>Today plus the previous 7 days, with saved roadside documents in one HTML file.</p></div>
+        <div class="package-chip"><span>RECORD TYPE</span><b>Manual RODS / ELD-exempt</b></div>
+      </div>
+      <div class="cover-stats">
+        <div><span>Log period</span><b>${htmlEscape(period)}</b></div>
+        <div><span>Log days</span><b>${days.length}</b></div>
+        <div><span>Certified</span><b>${signedCount} / ${days.length}</b></div>
+        <div><span>Documents</span><b>${documentCount}</b></div>
+      </div>
+      <div class="cover-grid">
+        <div><span>Driver</span><b>${htmlEscape(driverName(state))}</b></div>
+        <div><span>Carrier</span><b>${htmlEscape(carrierName(state))}</b></div>
+        <div><span>Truck / Unit</span><b>${htmlEscape(unitName(state))}</b></div>
+        <div><span>Trailer / Equipment</span><b>${htmlEscape(trailerName(state))}</b></div>
+        <div><span>Main office</span><b>${htmlEscape(mainOffice(state))}</b></div>
+        <div><span>Generated</span><b>${htmlEscape(printDate())}</b></div>
+        ${routingCode ? `<div><span>Routing / Reference</span><b>${htmlEscape(routingCode)}</b></div>` : ''}
+      </div>
+      <div class="log-index"><h2>Open a log day</h2><div class="log-index-grid">${logLinks}</div></div>
+    </section>
     ${walletReportSectionHtml(state)}
-  </section>
-  ${days.map(day => dayReportHtml(state, day, days)).join('\n')}
+    <section class="section-divider" id="logs-index"><h2>Driver Logs / RODS</h2><p>Tap a day from the summary or scroll through all eight professional daily log sheets below.</p></section>
+    ${days.map(day => dayReportHtml(state, day, days)).join('\n')}
+  </main>
+  ${roadsideDocumentViewerScriptHtml()}
 </body>
 </html>`;
 }
-
 
 // v95.88: self-contained DOT Officer PDF generator.
 // This intentionally avoids HTML JavaScript/data-link viewers so shared packages open in
@@ -1116,12 +1265,12 @@ export default function DotMode({ state, onBack }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `dot-log-package-${days[0]}.html`;
+    link.download = `dot-officer-package-${days[0]}.html`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-    setStatus('DOT log package file created.');
+    setStatus('DOT HTML package created with logs and saved documents.');
   }
 
   async function makeOfficerPdfFile() {
@@ -1150,7 +1299,7 @@ export default function DotMode({ state, onBack }) {
         text: 'DOT officer package PDF with logs and roadside documents.',
         files: [file],
       };
-      if (navigator.canShare?.({ files:[file] }) && navigator.share) {
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files:[file] }))) {
         await navigator.share(shareData);
         setStatus('DOT Officer PDF shared.');
       } else {
@@ -1171,22 +1320,22 @@ export default function DotMode({ state, onBack }) {
   }
 
   async function shareReportFile() {
-    const file = new File([htmlPackage], `dot-log-package-${days[0]}.html`, { type:'text/html' });
+    const file = new File([htmlPackage], `dot-officer-package-${days[0]}.html`, { type:'text/html;charset=utf-8' });
     const shareData = {
-      title: 'DOT Inspection HTML Package',
+      title: 'DOT Roadside HTML Package',
       text: plainSummary(state, days, routingCode.trim()),
       files: [file],
     };
     try {
-      if (navigator.canShare?.({ files:[file] }) && navigator.share) {
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files:[file] }))) {
         await navigator.share(shareData);
-        setStatus('DOT HTML package shared.');
+        setStatus('DOT HTML package shared. The officer can open logs and saved documents inside the file.');
       } else {
         downloadReport();
-        setStatus('Sharing HTML is not available on this device. The HTML report file was created instead.');
+        setStatus('Direct sharing is not available on this device. The DOT HTML package was downloaded instead.');
       }
     } catch (error) {
-      if (error?.name !== 'AbortError') setStatus('HTML share was not completed. For officer sharing, use the PDF button first.');
+      if (error?.name !== 'AbortError') setStatus('HTML share was not completed. Try Download HTML Package and share the saved file.');
     }
   }
 
@@ -1209,7 +1358,7 @@ export default function DotMode({ state, onBack }) {
     }
   }
 
-  const title = stage === 'home' ? 'DOT Inspection Mode' : (stage === 'report' ? 'DOT Log Package' : 'Officer View');
+  const title = stage === 'home' ? 'DOT Inspection Mode' : (stage === 'report' ? 'DOT HTML Package' : 'Officer View');
 
   return (
     <section className={`screen active dot-mode dot-v92 ${stage === 'device' ? 'officer-locked' : ''}`}>
@@ -1241,15 +1390,15 @@ export default function DotMode({ state, onBack }) {
           </section>
 
           <div className="dot-mode-card">
-            <h2>Send DOT officer package</h2>
-            <p>Use PDF first for roadside sharing. It works in phone/computer PDF viewers and does not require clicking document links. HTML remains a backup option.</p>
+            <h2>Send DOT HTML package</h2>
+            <p>Share one self-contained HTML file. The officer can open saved documents and review today plus the previous 7 log days inside the same package.</p>
             <input value={officerEmail} onChange={e => setOfficerEmail(e.target.value)} placeholder="Officer email (optional)" />
             <input value={routingCode} onChange={e => setRoutingCode(e.target.value)} placeholder="Routing / reference code (if provided)" />
-            <div className="dot-button-grid dot-officer-share-grid">
-              <button className="primary" onClick={shareOfficerPdfFile}>Share DOT Officer PDF</button>
-              <button onClick={downloadOfficerPdfFile}>Download Officer PDF</button>
-              <button onClick={() => setStage('report')}>View Package</button>
-              <button onClick={shareReportFile}>Share HTML Backup</button>
+            <div className="dot-button-grid dot-officer-share-grid dot-html-primary-grid">
+              <button className="primary dot-html-share-primary" onClick={shareReportFile}>Share DOT HTML Package</button>
+              <button onClick={downloadReport}>Download HTML Package</button>
+              <button onClick={openReportWindow}>Open HTML Preview</button>
+              <button onClick={() => setStage('report')}>Preview Package in App</button>
               <button onClick={emailOfficer}>Email Short Summary</button>
               <button onClick={copyShortSummary}>Copy Email Text</button>
             </div>
@@ -1371,16 +1520,14 @@ export default function DotMode({ state, onBack }) {
 
       {stage === 'report' && (
         <main className="dot-report-package">
-          <div className="dot-report-actions">
-            <button className="primary" onClick={shareOfficerPdfFile}>Share DOT Officer PDF</button>
-            <button onClick={downloadOfficerPdfFile}>Download PDF</button>
-            <button onClick={shareReportFile}>Share HTML Backup</button>
-            <button onClick={downloadReport}>Download HTML</button>
-            <button onClick={openReportWindow}>Open Printable HTML</button>
+          <div className="dot-report-actions dot-html-report-actions">
+            <button className="primary" onClick={shareReportFile}>Share DOT HTML Package</button>
+            <button onClick={downloadReport}>Download HTML Package</button>
+            <button onClick={openReportWindow}>Open HTML Preview</button>
           </div>
           <section className="dot-report-cover">
-            <h1>DOT Inspection Log Package</h1>
-            <p>Manual RODS / ELD-exempt driver records</p>
+            <h1>DOT Roadside HTML Package</h1>
+            <p>Professional manual RODS logs and saved roadside documents in one self-contained HTML file.</p>
             <div><b>Driver:</b> {driverName(state)}</div>
             <div><b>Carrier:</b> {carrierName(state)}</div>
             <div><b>Truck/Unit:</b> {unitName(state)}</div>

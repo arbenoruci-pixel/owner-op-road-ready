@@ -9672,3 +9672,29 @@ body,
   line-height: 1.35;
   color: #5f6368;
 }
+
+
+/* v95.95 DOT HTML package is the primary officer share flow */
+.dot-html-primary-grid .dot-html-share-primary{
+  grid-column:1 / -1!important;
+  min-height:60px!important;
+  background:#102238!important;
+  color:#fff!important;
+  border-color:#102238!important;
+  font-size:16px!important;
+  box-shadow:0 8px 22px rgba(16,34,56,.14)!important;
+}
+.dot-html-primary-grid button{
+  min-height:52px!important;
+}
+.dot-html-report-actions{
+  grid-template-columns:2fr 1fr 1fr!important;
+}
+.dot-html-report-actions .primary{
+  background:#102238!important;
+  color:#fff!important;
+  border-color:#102238!important;
+}
+@media(max-width:620px){
+  .dot-html-report-actions{grid-template-columns:1fr!important;}
+}

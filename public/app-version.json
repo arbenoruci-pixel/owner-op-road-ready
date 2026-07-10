@@ -1,14 +1,12 @@
 {
-  "version": "95.94.0",
-  "build": "v95.94-pwa-update-version-sync",
+  "version": "95.95.0",
+  "build": "v95.95-dot-html-primary-pro-package",
   "releasedAt": "2026-07-10T00:00:00.000Z",
   "notes": [
-    "Fixes the PWA update loop caused by mismatched app, service-worker, and release versions.",
-    "Registers a versioned service worker with network-only update checks and waits for activation before reloading.",
-    "Clears stale Cache Storage during service-worker install and activation while preserving IndexedDB log data.",
-    "Adds build-time version synchronization so future package releases keep all PWA version markers aligned.",
-    "Keeps the v95.93 DOT Mode runtime repair and the instant multi-event move controls."
+    "DOT officer sharing now uses one self-contained HTML package as the primary flow.",
+    "Saved roadside documents open from inside the shared HTML package.",
+    "Today plus the previous 7 log days use a professional mobile and desktop layout."
   ],
-  "label": "v95.94 PWA update reliability",
+  "label": "v95.95 DOT HTML primary package",
   "updatedAt": "2026-07-10T00:00:00.000Z"
 }

@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "95.94.0",
+  "version": "95.95.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -65,7 +65,8 @@
     "verify-day-shift-events-v9564": "node scripts/verify-day-shift-events-v9564.mjs",
     "verify-edit-event-graph-crash-v9565": "node scripts/verify-edit-event-graph-crash-v9565.mjs",
     "verify-edit-time-save-v9566": "node scripts/verify-edit-time-save-v9566.mjs",
-    "verify-pwa-update-v9594": "node scripts/verify-pwa-update-v9594.mjs"
+    "verify-pwa-update-v9594": "node scripts/verify-pwa-update-v9594.mjs",
+    "verify-dot-html-primary-v9595": "node scripts/verify-dot-html-primary-v9595.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

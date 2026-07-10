@@ -1,3 +1,10 @@
+## v95.95.0 - DOT HTML Primary Officer Package
+
+- Made self-contained HTML the primary DOT officer sharing format.
+- Added professional 8-day RODS navigation and mobile/desktop log layouts.
+- Added reliable document open controls with full-screen viewer and inline fallback.
+- Removed PDF-first buttons from DOT Mode.
+
 ## v95.94.0 - PWA Update Reliability
 
 - Fixed the installed-PWA update loop caused by v95.93 release metadata while the client bundle and service worker still identified as v95.91.
