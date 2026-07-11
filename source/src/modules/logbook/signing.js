@@ -15,6 +15,31 @@ function sortedEvents(events = []) {
   return [...(events || [])].filter(Boolean).sort((a, b) => Number(a.startMin || 0) - Number(b.startMin || 0));
 }
 
+// Manual RODS are stored at whole-minute precision. A live status transition
+// can leave the previous raw row one minute long at the same boundary while
+// the display timeline correctly shows the new status starting at that minute.
+// Treat only that exact one-minute boundary artifact as adjacent for signing.
+// Larger overlaps remain fatal and must be reviewed by the driver.
+function canonicalSigningMinuteBoundaries(events = []) {
+  const ordered = sortedEvents(events).map(event => ({ ...event }));
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    const current = ordered[index];
+    const next = ordered[index + 1];
+    const currentEnd = Number(current.endMin || 0);
+    const nextStart = Number(next.startMin || 0);
+    const overlapMin = currentEnd - nextStart;
+    if (
+      overlapMin > 0 &&
+      overlapMin <= 1 &&
+      nextStart > Number(current.startMin || 0) &&
+      Number(next.endMin || 0) > nextStart
+    ) {
+      current.endMin = nextStart;
+    }
+  }
+  return ordered.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+}
+
 function isPreTripEvent(event = {}) {
   return event.status === 'ON' && /pre[- ]?trip|inspection/i.test(`${event.note || ''} ${event.description || ''}`);
 }
@@ -356,7 +381,7 @@ export function validateLogForSigning(state, day) {
   const issues = [];
   const today = localDayKey();
   const rawEvents = rawStoredEventsForDay(state.eventsByDay || {}, day);
-  const events = sortedEvents(rawEvents);
+  const events = canonicalSigningMinuteBoundaries(rawEvents);
   const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, { currentLocation: state.currentLocation || {} });
   const coverageGroup = buildCoverageFixGroup(rawCoverageResult, day);
   const inspection = state.inspectionByDay?.[day] || {};

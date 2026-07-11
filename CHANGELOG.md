@@ -1,3 +1,9 @@
+# v96.3.0
+
+- Fixed false certification blocking from a one-minute raw status-boundary artifact at midnight.
+- Real overlaps larger than one minute remain blocking review items.
+- Preserved event-level BOL validation, historical locations, GPS, pickup details, HOS, and PWA behavior.
+
 ## v96.2.0 - Deep Scan: Location, Pickup, BOL & GPS
 
 - Prevents later-day city/state changes and route destinations from rewriting historical OFF/SB/ON event locations.
