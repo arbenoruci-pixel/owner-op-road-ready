@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "96.3.0",
+  "version": "96.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -79,7 +79,9 @@
     "verify-shipping-doc-sign-loop-v962": "node scripts/verify-shipping-doc-sign-loop-v962.mjs",
     "verify-gps-best-fix-v962": "node scripts/verify-gps-best-fix-v962.mjs",
     "verify-pickup-edit-details-v962": "node scripts/verify-pickup-edit-details-v962.mjs",
-    "verify-sign-minute-boundary-v963": "node scripts/verify-sign-minute-boundary-v963.mjs"
+    "verify-sign-minute-boundary-v963": "node scripts/verify-sign-minute-boundary-v963.mjs",
+    "verify-midnight-pretrip-continuity-v964": "node scripts/verify-midnight-pretrip-continuity-v964.mjs",
+    "verify-route-bol-event-link-v964": "node scripts/verify-route-bol-event-link-v964.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

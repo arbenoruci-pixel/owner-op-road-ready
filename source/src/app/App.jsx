@@ -23,6 +23,7 @@ import { initialCertifyStatus, initialEventsByDay } from '../state/mockData.js';
 import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
 import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
 import { rawStoredEventsForDay, stripSyntheticEventFields, isSyntheticEvent } from '../core/compliance/rawRodsChecks.js';
+import { isDrivingContinuationFromPreviousDay } from '../core/compliance/preTripContinuity.js';
 import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
 import { insertManyOverride, applyEditOverride, applyPatchWithNeighbors, normalizeLogEvents, protectLiveTailFromInsert, shiftSelectedEventsForDay } from '../core/timeline/timelineEngine.js';
 import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
@@ -33,7 +34,7 @@ import { normalizeWallet } from '../core/wallet/dotWallet.js';
 import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, requestServiceWorkerUpdate, updateReloadUrl } from '../core/update/appUpdate.js';
 import { sanitizeLogText } from '../shared/utils/logText.js';
 import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
-import { applyShippingDocumentReference, enrichLoadEventFromLinkedRoute, findShippingDocsTargetEvent } from '../core/routes/shippingDocsRepair.js';
+import { applyRouteLegDetailsToLinkedEvents, applyShippingDocumentReference, enrichLoadEventFromLinkedRoute, findShippingDocsTargetEvent } from '../core/routes/shippingDocsRepair.js';
 import { appendRecoveredLiveTail, applyLiveStatusTransition, chooseRecoveryCandidate, isSuspiciousMidnightDrivingOverwrite, recoverEventsFromLocalRevisions, safeInsertRolloverDriving } from '../core/timeline/liveDrivingSafety.js';
 import { applyManualDrivingMidnightContinuity } from '../core/timeline/manualDrivingContinuity.js';
 import { applyUserConfirmedHubbardSleeperStopRepair } from '../core/timeline/userConfirmedStopRepair.js';
@@ -1530,8 +1531,62 @@ export default function App() {
         let out = { ...leg };
         const pickup = leg.pickupEventId ? eventIndex.get(leg.pickupEventId) : null;
         const delivery = leg.deliveryEventId ? eventIndex.get(leg.deliveryEventId) : null;
-        if (pickup) out = { ...out, pickupDay:pickup.day, pickupMin:pickup.event.startMin, fromCity:pickup.event.city || out.fromCity, fromState:pickup.event.state || out.fromState };
-        if (delivery) out = { ...out, deliveryDay:delivery.day, deliveryMin:delivery.event.startMin, status:'delivered' };
+        if (pickup) {
+          const pickupEvent = pickup.event || {};
+          out = {
+            ...out,
+            pickupDay:pickup.day,
+            pickupMin:pickupEvent.startMin,
+            fromCity:pickupEvent.city || out.fromCity,
+            fromState:pickupEvent.state || out.fromState,
+          };
+
+          // The linked pickup event is the source of truth for BOL and Going
+          // to. This keeps Event Edit, Form route rows, signing, and DOT export
+          // on the same exact values without touching event location/time.
+          const eventDocs = String(pickupEvent.shippingDocs || pickupEvent.loadNo || pickupEvent.bol || pickupEvent.po || '').trim();
+          const ownsDocs = !!eventDocs
+            || !!pickupEvent.loadDetailsExplicit
+            || !!pickupEvent.shippingDocsUpdatedAt
+            || !!pickupEvent.routeDetailsUpdatedAt;
+          if (ownsDocs) {
+            const docs = eventDocs;
+            out.shippingDocs = docs;
+            out.loadNo = docs;
+            out.bol = docs;
+            out.po = docs;
+          }
+          const eventDestinationText = String(pickupEvent.destination || pickupEvent.destinationCity || '').trim();
+          const ownsDestination = !!eventDestinationText
+            || !!pickupEvent.loadDetailsExplicit
+            || !!pickupEvent.routeDetailsUpdatedAt;
+          if (ownsDestination) {
+            const destination = parseCityStateInput(
+              pickupEvent.destination || pickupEvent.destinationCity || '',
+              pickupEvent.destinationState || ''
+            );
+            out.toCity = destination.city;
+            out.toState = destination.state;
+          }
+        }
+        if (delivery) {
+          const deliveryEvent = delivery.event || {};
+          out = { ...out, deliveryDay:delivery.day, deliveryMin:deliveryEvent.startMin, status:'delivered' };
+          const deliveryDocs = String(deliveryEvent.shippingDocs || deliveryEvent.loadNo || deliveryEvent.bol || deliveryEvent.po || '').trim();
+          const ownsDocs = !!deliveryDocs
+            || !!deliveryEvent.loadDetailsExplicit
+            || !!deliveryEvent.shippingDocsUpdatedAt
+            || !!deliveryEvent.routeDetailsUpdatedAt;
+          if (ownsDocs) {
+            const docs = deliveryDocs;
+            if (docs) {
+              out.shippingDocs = docs;
+              out.loadNo = docs;
+              out.bol = docs;
+              out.po = docs;
+            }
+          }
+        }
         return out;
       });
       if (synced.length) next[day] = synced;
@@ -1990,6 +2045,7 @@ export default function App() {
       const docsValue = docsKey ? String(payload?.[docsKey] || '').trim() : '';
       const {
         routeLegsByDay: payloadRouteLegsByDay,
+        syncLinkedRouteDetails = false,
         shippingDocs: _shippingDocs,
         loadNo: _loadNo,
         bol: _bol,
@@ -2001,6 +2057,12 @@ export default function App() {
         loadInfo: { ...(s.loadInfo || {}), ...loadInfoPayload },
         ...(payloadRouteLegsByDay ? { routeLegsByDay: payloadRouteLegsByDay } : {}),
       };
+      if (payloadRouteLegsByDay && syncLinkedRouteDetails) {
+        next = {
+          ...next,
+          eventsByDay:applyRouteLegDetailsToLinkedEvents(s.eventsByDay || {}, payloadRouteLegsByDay),
+        };
+      }
       if (docsKey) {
         next = applyShippingDocumentReference(next, {
           day:s.activeDay,
@@ -2029,7 +2091,10 @@ export default function App() {
           locationSource: s.currentLocation?.locationSource || 'manual',
         };
       }
-      return next;
+      const changesCertifiedRouteOrDocs = !!docsKey || !!payloadRouteLegsByDay || [
+        'pickupCity','pickupState','deliveryCity','deliveryState'
+      ].some(key => Object.prototype.hasOwnProperty.call(payload || {}, key));
+      return changesCertifiedRouteOrDocs ? markDayRecert(next, s.activeDay) : next;
     });
   }
 
@@ -2313,6 +2378,11 @@ export default function App() {
 
   function addPreTripBeforeDriving(payload = {}) {
     const targetDay = payload.day || payload.issue?.day || state.activeDay;
+    const previewEvents = rawStoredEventsForDay(state.eventsByDay || {}, targetDay);
+    if (isDrivingContinuationFromPreviousDay(state.eventsByDay || {}, targetDay, previewEvents)) {
+      window.alert?.('Driving continues through midnight from the previous log day. No new pre-trip event is added at 12:00 AM.');
+      return;
+    }
     if (typeof window !== 'undefined' && window.confirm) {
       const ok = window.confirm('Add 15 minutes ON DUTY Pre-trip before first driving?');
       if (!ok) return;
@@ -2321,6 +2391,14 @@ export default function App() {
     setState(s => {
       const day = targetDay || s.activeDay;
       const baseEvents = continuousBaseForDay(s, day);
+      if (isDrivingContinuationFromPreviousDay(s.eventsByDay || {}, day, baseEvents)) {
+        return {
+          ...s,
+          activeDay:day,
+          view:'day',
+          roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'continuous-driving-midnight' },
+        };
+      }
       const firstDrive = baseEvents.find(event => event.status === 'D');
       if (!firstDrive) return {
         ...s,
@@ -2623,8 +2701,11 @@ export default function App() {
         note,
         shippingDocs:effectiveShippingDocs,
         loadNo:effectiveShippingDocs,
+        bol:effectiveShippingDocs,
         destination,
         destinationState,
+        loadDetailsExplicit:isPickupReason(reason) || isDeliveryReason(reason),
+        shippingDocsUpdatedAt:(isPickupReason(reason) || isDeliveryReason(reason)) ? Date.now() : null,
         loadLinkId:eventId,
         lat:effectiveLat,
         lng:effectiveLng,

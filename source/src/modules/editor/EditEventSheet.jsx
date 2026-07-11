@@ -250,6 +250,8 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
       bol:kind ? shippingDocs.trim() : '',
       destination:kind ? cityStateText(goingTo.city, goingTo.state) : '',
       destinationState:kind ? goingTo.state : '',
+      loadDetailsExplicit:!!kind,
+      shippingDocsUpdatedAt:kind ? Date.now() : (event.shippingDocsUpdatedAt || null),
     });
     onClose();
   }

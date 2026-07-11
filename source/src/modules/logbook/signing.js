@@ -2,6 +2,7 @@ import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { violationRangesForDay } from '../../core/hos/hosEngine.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
+import { isDrivingContinuationFromPreviousDay } from '../../core/compliance/preTripContinuity.js';
 import { haversineMiles, pointFromLogLocation } from '../../core/gps/locationService.js';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
 import { docsTokensForTransition, routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
@@ -390,6 +391,7 @@ export function validateLogForSigning(state, day) {
   const firstDriving = events.find(event => event.status === 'D');
   const preTrip = relevantPreTripContext(events, firstDriving);
   const preTripIsActualPreTrip = !!preTrip && isPreTripEvent(preTrip);
+  const continuousDrivingFromPreviousDay = isDrivingContinuationFromPreviousDay(state.eventsByDay || {}, day, events);
   const completedEvents = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
   const driverName = stateText(state, 'driverProfile.name', 'driver.name');
   const carrier = stateText(state, 'carrierName', 'driver.carrier');
@@ -525,7 +527,7 @@ export function validateLogForSigning(state, day) {
     }
   });
 
-  if (firstDriving && !preTrip) {
+  if (firstDriving && !preTrip && !continuousDrivingFromPreviousDay) {
     issues.push({
       code: `missing_pretrip_event_${firstDriving.id || firstDriving.startMin}`,
       title: 'Pre-trip ON DUTY event is missing',

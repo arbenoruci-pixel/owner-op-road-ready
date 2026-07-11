@@ -1,13 +1,13 @@
 {
-  "version": "96.3.0",
-  "build": "v96.2-deep-scan-location-pickup-signing",
-  "releasedAt": "2026-07-11T06:57:05.000Z",
+  "version": "96.4.0",
+  "build": "v96.4-midnight-pretrip-route-bol",
+  "releasedAt": "2026-07-11T15:45:00.000Z",
   "notes": [
-    "Locks each historical duty event to its own saved city/state and reverses the older route-destination overwrite when recovery metadata exists.",
-    "Adds exact-event Pickup details with BOL/shipping document and Going to fields that reopen and remain editable on the same event.",
-    "Fixes the signing BOL loop by synchronizing the exact event, route leg, and day-scoped load record, including short and legacy BOL values.",
-    "Improves GPS with multiple high-accuracy samples, server-side city/state reverse geocoding, manual-entry protection, and rejection of coarse fixes over 250 meters."
+    "Recognizes continuous DRIVING across the midnight log-day boundary and removes the false request for a new 12:00 AM pre-trip event.",
+    "Guards the Pre-trip quick-fix so it cannot insert artificial ON DUTY time into a true midnight driving continuation.",
+    "Keeps BOL and Going to linked to the exact Pickup / Loading event, route leg, signing check, and DOT package.",
+    "Shows BOL and Going to directly on linked pickup event cards and synchronizes explicit Form route edits back to that exact event without changing its historical time or location."
   ],
-  "label": "v96.2 Deep Scan: Location, Pickup, BOL & GPS",
-  "updatedAt": "2026-07-11T06:57:05.000Z"
+  "label": "v96.4 Midnight Driving + Route/BOL Link",
+  "updatedAt": "2026-07-11T15:45:00.000Z"
 }

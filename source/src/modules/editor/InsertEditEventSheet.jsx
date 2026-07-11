@@ -397,6 +397,7 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
 
   function save() {
     const s = fromInput(form.start);
+    const loadActivity = form.status === 'ON' && /pickup|pick up|loading|delivery|unloading/i.test(`${form.note || ''} ${form.description || ''}`);
     const payload = {
       status: form.status,
       startMin: s,
@@ -407,8 +408,11 @@ export default function AddStatusSheet({ defaults = {}, events, onClose, onSave,
       note: (textLooksLikeStatusArtifact(form.note, form.status) || /^new event$/i.test(String(form.note || '').trim())) ? defaultNoteForStatus(form.status) : (form.note || defaultNoteForStatus(form.status)),
       shippingDocs: String(form.shippingDocs || form.loadNo || '').trim(),
       loadNo: String(form.loadNo || form.shippingDocs || '').trim(),
+      bol: String(form.shippingDocs || form.loadNo || '').trim(),
       destination: String(form.destination || '').trim(),
       destinationState: String(form.destinationState || '').trim(),
+      loadDetailsExplicit:loadActivity,
+      shippingDocsUpdatedAt:loadActivity ? Date.now() : null,
       lat: form.lat,
       lng: form.lng,
       gpsAccuracy: form.gpsAccuracy,

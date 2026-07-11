@@ -34,6 +34,16 @@ export default function EventList({ events, selectedId, selectMode, selectedIds 
         const displayNote = transitionSummary && !cleanNote.includes(transitionSummary)
           ? [cleanNote, transitionSummary].filter(Boolean).join(' · ')
           : cleanNote;
+        const loadActivity = event.status === 'ON' && /pickup|pick up|loading|delivery|unloading/i.test(`${event.note || ''} ${event.description || ''}`);
+        const shippingDocs = String(event.shippingDocs || event.loadNo || event.bol || event.po || '').trim();
+        const destination = String(
+          event.destination
+          || [event.destinationCity, event.destinationState].filter(Boolean).join(', ')
+          || ''
+        ).trim();
+        const routeMeta = loadActivity
+          ? [shippingDocs ? `BOL ${shippingDocs}` : '', destination ? `Going to ${destination}` : ''].filter(Boolean).join(' · ')
+          : '';
         return (
           <div
             key={event.id}
@@ -54,6 +64,7 @@ export default function EventList({ events, selectedId, selectMode, selectedIds 
               </div>
               <div className="event-loc">{loc}</div>
               {displayNote && <div className="event-note">{displayNote}</div>}
+              {routeMeta && <div className="event-route-meta">{routeMeta}</div>}
             </div>
 
             {selectMode ? (

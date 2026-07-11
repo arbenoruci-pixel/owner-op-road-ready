@@ -1,6 +1,7 @@
 import { addDays, localDayKey } from '../../shared/utils/date.js';
 import { durLabel, nowMin, timeLabel } from '../../shared/utils/time.js';
 import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
+import { isDrivingContinuationFromPreviousDay } from '../compliance/preTripContinuity.js';
 import { analyzeLinkedHos, violationRangesForDay } from '../hos/hosEngine.js';
 import { haversineMiles, pointFromLogLocation } from '../gps/locationService.js';
 import { docsTokensForTransition, routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../routes/routeNormalization.js';
@@ -379,10 +380,11 @@ function buildInspectionIssues(state, day, events) {
   const firstDriving = events.find(event => event.status === 'D');
   const preTrip = relevantPreTripContext(events, firstDriving);
   const preTripIsActualPreTrip = !!preTrip && hasPreTripText(preTrip);
+  const continuousDrivingFromPreviousDay = isDrivingContinuationFromPreviousDay(state.eventsByDay || {}, day, events);
   const eventIds = new Set(events.map(event => event.id));
   const hasWork = hasVehicleWork(events);
 
-  if (firstDriving && !preTrip) {
+  if (firstDriving && !preTrip && !continuousDrivingFromPreviousDay) {
     issues.push(makeIssue('inspection', {
       id:`missing_pretrip_event_${firstDriving.id || firstDriving.startMin}`,
       severity:'fix',

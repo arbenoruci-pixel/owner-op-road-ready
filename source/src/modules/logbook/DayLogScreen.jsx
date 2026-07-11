@@ -13,6 +13,7 @@ import { durLabel, timeLabel } from '../../shared/utils/time.js';
 import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';
 import { routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
 import { homeTerminalConfigFromState } from '../../core/time/homeTerminalTime.js';
+import { enrichLoadEventFromLinkedRoute } from '../../core/routes/shippingDocsRepair.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_CARRIER_NAME = 'Narta express llc';
@@ -594,7 +595,7 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer, onSaveDayDist
     };
     const routeLegsByDay = { ...(state.routeLegsByDay || {}) };
     routeLegsByDay[day] = [...(routeLegsByDay[day] || []), leg];
-    onSaveLoad?.({ routeLegsByDay });
+    onSaveLoad?.({ routeLegsByDay, syncLinkedRouteDetails:true });
   }
 
   function editRouteLeg(leg) {
@@ -619,7 +620,7 @@ function MiniFormPanel({ state, events, onSaveLoad, onOpenTrailer, onSaveDayDist
     };
     const routeLegsByDay = { ...(state.routeLegsByDay || {}) };
     routeLegsByDay[targetDay] = (routeLegsByDay[targetDay] || []).map(item => item.id === leg.id ? updated : item);
-    onSaveLoad?.({ routeLegsByDay });
+    onSaveLoad?.({ routeLegsByDay, syncLinkedRouteDetails:true });
   }
 
   function deleteRouteLeg(leg) {
@@ -1964,6 +1965,10 @@ export default function DayDetail({
       : previewGraphEvents),
     [state.selectMode, selectedCount, bulkMoveDelta, bulkShiftResult.events, state.activeDay, previewGraphEvents]
   );
+  const eventListEvents = useMemo(
+    () => (bulkPreviewEvents || []).map(event => enrichLoadEventFromLinkedRoute(state, state.activeDay, event)),
+    [bulkPreviewEvents, state.routeLegsByDay, state.activeDay]
+  );
   const bulkAppliedDelta = Number(bulkShiftResult.appliedDeltaMin || 0);
   const selectedPreviewEvent = bulkPreviewEvents.find(event => event.id === state.selectedEventId) || displaySelectedEvent;
   const violationsChanged = isMoving && violationSignature(baseViolationRanges) !== violationSignature(previewViolationRanges);
@@ -2268,7 +2273,7 @@ export default function DayDetail({
 
       {activeTab === 'log' && (
         <>
-          <EventList events={state.selectMode && bulkMoveDelta ? bulkPreviewEvents : displayEvents} selectedId={state.selectedEventId} selectMode={state.selectMode} selectedIds={state.selectedIds} onSelect={onSelect} onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />
+          <EventList events={eventListEvents} selectedId={state.selectedEventId} selectMode={state.selectMode} selectedIds={state.selectedIds} onSelect={onSelect} onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />
 
           <LogCheckPanel events={displayEvents} state={state} onIssueAction={handleLogCheckIssue} />
 

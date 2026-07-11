@@ -254,3 +254,70 @@ export function enrichLoadEventFromLinkedRoute(state = {}, day = '', event = nul
     routeLegDay:entry.homeDay || day,
   };
 }
+
+/**
+ * Applies an explicitly edited route leg's BOL and destination back to the
+ * exact linked pickup/delivery event. This is intentionally opt-in from the
+ * Form tab so normal state normalization can never rewrite historical event
+ * locations or unrelated days.
+ */
+export function applyRouteLegDetailsToLinkedEvents(eventsByDay = {}, routeLegsByDay = {}) {
+  const next = { ...(eventsByDay || {}) };
+  const eventIndex = new Map();
+
+  Object.entries(next).forEach(([day, events]) => {
+    (Array.isArray(events) ? events : []).forEach((event, index) => {
+      if (event?.id) eventIndex.set(event.id, { day, index, event });
+    });
+  });
+
+  const changedDays = new Set();
+  const updateLinkedEvent = (eventId, leg, role) => {
+    const entry = eventIndex.get(eventId || '');
+    if (!entry) return;
+
+    const docs = text(leg.shippingDocs || leg.loadNo || leg.bol || leg.po);
+    const noLoad = !!leg.noLoadDeclared || /empty|reposition|bobtail|deadhead|no_load/i.test(`${leg.kind || ''} ${leg.currentMoveKind || ''} ${leg.source || ''}`);
+    const destination = [text(leg.toCity), upperState(leg.toState)].filter(Boolean).join(', ');
+    const current = entry.event || {};
+    const patch = {
+      ...current,
+      shippingDocs:noLoad ? '' : docs,
+      loadNo:noLoad ? '' : docs,
+      bol:noLoad ? '' : docs,
+      po:noLoad ? '' : docs,
+      noLoadDeclared:noLoad,
+      noLoadNote:noLoad ? (text(leg.noLoadNote) || 'Empty / reposition') : '',
+      loadLinkId:leg.id || current.loadLinkId || '',
+      routeLegDay:leg.day || entry.day,
+      routeDetailsUpdatedAt:Date.now(),
+    };
+
+    if (role === 'pickup') {
+      patch.destination = destination;
+      patch.destinationCity = text(leg.toCity);
+      patch.destinationState = upperState(leg.toState);
+    } else if (role === 'delivery' && destination) {
+      patch.destination = destination;
+      patch.destinationCity = text(leg.toCity);
+      patch.destinationState = upperState(leg.toState);
+    }
+
+    if (!changedDays.has(entry.day)) {
+      next[entry.day] = [...(next[entry.day] || [])];
+      changedDays.add(entry.day);
+    }
+    next[entry.day][entry.index] = patch;
+    eventIndex.set(eventId, { ...entry, event:patch });
+  };
+
+  Object.entries(routeLegsByDay || {}).forEach(([homeDay, legs]) => {
+    (Array.isArray(legs) ? legs : []).forEach(leg => {
+      const normalizedLeg = { ...leg, day:leg.day || homeDay };
+      if (normalizedLeg.pickupEventId) updateLinkedEvent(normalizedLeg.pickupEventId, normalizedLeg, 'pickup');
+      if (normalizedLeg.deliveryEventId) updateLinkedEvent(normalizedLeg.deliveryEventId, normalizedLeg, 'delivery');
+    });
+  });
+
+  return next;
+}

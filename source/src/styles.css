@@ -9869,3 +9869,13 @@ body,
   opacity:.7;
   cursor:wait;
 }
+
+/* v96.4 linked pickup route details stay visible on the exact event */
+.event-route-meta{
+  margin-top:4px;
+  font-size:13px;
+  line-height:1.35;
+  font-weight:800;
+  color:#2459c7;
+  overflow-wrap:anywhere;
+}
