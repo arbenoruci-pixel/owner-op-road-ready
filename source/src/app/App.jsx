@@ -34,6 +34,8 @@ import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRe
 import { sanitizeLogText } from '../shared/utils/logText.js';
 import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
 import { appendRecoveredLiveTail, applyLiveStatusTransition, chooseRecoveryCandidate, isSuspiciousMidnightDrivingOverwrite, recoverEventsFromLocalRevisions, safeInsertRolloverDriving } from '../core/timeline/liveDrivingSafety.js';
+import { applyManualDrivingMidnightContinuity } from '../core/timeline/manualDrivingContinuity.js';
+import { applyUserConfirmedHubbardSleeperStopRepair } from '../core/timeline/userConfirmedStopRepair.js';
 import { applyDayBackupToState } from '../core/backup/dayTransfer.js';
 import {
   DEFAULT_HOME_TERMINAL_ADDRESS,
@@ -504,6 +506,18 @@ function normalizeState(s) {
   const safePersistedStatus = (!currentFromRaw && s.currentStatus === 'D') ? 'OFF' : (s.currentStatus || '');
   const safePersistedReason = (!currentFromRaw && s.currentStatus === 'D') ? 'Off Duty' : (s.currentReason || '');
   const safePersistedLocation = (!currentFromRaw && s.currentStatus === 'D') ? null : (s.currentLocation || null);
+  const currentStatusForSession = currentFromRaw?.status || safePersistedStatus || currentFromCarry?.status || 'OFF';
+  const persistedManualSession = s.manualDrivingSession || null;
+  const normalizedManualDrivingSession = persistedManualSession && currentStatusForSession !== 'D' && persistedManualSession.active === true
+    ? {
+      ...persistedManualSession,
+      active:false,
+      endedByStatus:currentStatusForSession,
+      endedDay:today,
+      endedAt:persistedManualSession.endedAt || new Date().toISOString(),
+      normalizedClosed:true,
+    }
+    : persistedManualSession;
 
   const existingSignatureFromDays = Object.values(s.signatureByDay || {}).find(sig => sig?.signatureDataUrl)?.signatureDataUrl || '';
   const driverSignature = s.driverSignature || (existingSignatureFromDays
@@ -551,6 +565,7 @@ function normalizeState(s) {
     driverSignature,
     equipment: s.equipment || { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: s.gpsTrip || null,
+    manualDrivingSession:normalizedManualDrivingSession,
     loadInfo: s.loadInfo || { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
     routeLegsByDay: s.routeLegsByDay || {},
     dotWallet: normalizeWallet(s.dotWallet || {}),
@@ -578,6 +593,7 @@ function defaultInitialState() {
     currentTrailer: 'No trailer',
     equipment: { type:'intermodal', chassis:'', container:'', seal:'', rail:'', note:'' },
     gpsTrip: null,
+    manualDrivingSession: null,
     loadInfo: { loadNo:'', broker:'', pickupCity:'Chicago', pickupState:'IL', deliveryCity:'', deliveryState:'', appointment:'' },
     routeLegsByDay: {},
     currentStatus: 'OFF',
@@ -669,12 +685,33 @@ async function recoverSuspiciousTodayState(saved) {
   return recoveredCurrentStateForDay(saved, day, recovered, currentEvents);
 }
 
+function reconcileCurrentManualDrivingContinuity(saved = {}, now = new Date(), options = {}) {
+  const zone = getHomeTerminalTimeZone(saved);
+  const currentDay = localDayKey(now, zone);
+  const previousDay = addDays(currentDay, -1);
+  const nowMinute = homeTerminalMinute(now, zone);
+  return applyManualDrivingMidnightContinuity(saved, {
+    currentDay,
+    previousDay,
+    nowMinute,
+    allowClosedGapRepair:options.allowClosedGapRepair !== false,
+    forceActiveDriving:options.forceActiveDriving === true,
+    reason:options.reason || 'current_day_manual_driving_continuity',
+  });
+}
+
 async function loadInitial() {
   try {
     const saved = await loadAppSnapshot(APP_STATE_KEY);
     if (saved) {
       const recovered = await recoverSuspiciousTodayState(saved);
-      return normalizeState(recovered);
+      const continuous = reconcileCurrentManualDrivingContinuity(recovered, new Date(), {
+        allowClosedGapRepair:false,
+        forceActiveDriving:recovered.currentStatus === 'D',
+        reason:'startup_manual_driving_continuity',
+      });
+      const corrected = applyUserConfirmedHubbardSleeperStopRepair(continuous);
+      return normalizeState(corrected);
     }
   } catch {}
   return defaultInitialState();
@@ -993,48 +1030,57 @@ export default function App() {
   }
 
   function rolloverActiveDrivingIfNeeded(s, now = new Date()) {
-    const trip = s.gpsTrip || null;
-    if (!trip || trip.status !== 'active' || !trip.eventId) return s;
+    // Manual Driving is a driver-entered duty status. If it crosses midnight,
+    // split the same active status at 00:00 before any new status is saved.
+    // This fills only an uncovered start-of-day gap and never replaces rows.
+    const base = reconcileCurrentManualDrivingContinuity(s, now, {
+      allowClosedGapRepair:false,
+      forceActiveDriving:s.currentStatus === 'D',
+      reason:'live_manual_driving_midnight_rollover',
+    });
 
-    const tz = getHomeTerminalTimeZone(s);
+    const trip = base.gpsTrip || null;
+    if (!trip || trip.status !== 'active' || !trip.eventId) return base;
+
+    const tz = getHomeTerminalTimeZone(base);
     const today = localDayKey(now, tz);
-    const nowMinute = minuteFromDate(now, s);
+    const nowMinute = minuteFromDate(now, base);
     const gpsId = trip.eventId;
-    const sourceDay = findEventDayById(s.eventsByDay || {}, gpsId);
+    const sourceDay = findEventDayById(base.eventsByDay || {}, gpsId);
 
-    // Manual paper-log driving must never inherit a stale GPS trip from an old
-    // day. The old path preferred gpsTrip.eventId over the active day and could
-    // insert DRIVING from midnight across every event already logged today.
-    if (!sourceDay || sourceDay > today || sourceDay !== s.activeDay) {
+    // A stale GPS session may never become a broad midnight DRIVING row. The
+    // manual continuity pass above is independent of GPS and only follows an
+    // explicitly active driver-entered D status.
+    if (!sourceDay || sourceDay > today || sourceDay !== base.activeDay) {
       return {
-        ...s,
+        ...base,
         gpsTrip:{ ...trip, status:'stale', staleReason:'gps_event_day_mismatch', staleAt:Date.now() },
       };
     }
-    if (sourceDay === today) return s;
+    if (sourceDay === today) return base;
 
-    const previousBase = continuousBaseForDay(s, sourceDay);
+    const previousBase = continuousBaseForDay(base, sourceDay);
     const sourceEvent = previousBase.find(event => event.id === gpsId) || null;
     const sourceLooksGps = sourceEvent
       && sourceEvent.status === 'D'
       && /^(gps_drive|gps_assisted)/i.test(String(sourceEvent.source || ''));
     if (!sourceLooksGps) {
       return {
-        ...s,
+        ...base,
         gpsTrip:{ ...trip, status:'stale', staleReason:'gps_source_not_active_driving', staleAt:Date.now() },
       };
     }
 
     const rolloverId = `gps_drive_${today}_${Date.now()}`;
-    const todayExisting = rawStoredEventsForDay(s.eventsByDay || {}, today);
+    const todayExisting = rawStoredEventsForDay(base.eventsByDay || {}, today);
     const todayDrive = {
       ...sourceEvent,
-      id: rolloverId,
+      id:rolloverId,
       status:'D',
       startMin:0,
       endMin:Math.max(1, nowMinute),
-      city:s.currentLocation?.city || sourceEvent.city || 'GPS',
-      state:s.currentLocation?.state || sourceEvent.state || 'UNK',
+      city:base.currentLocation?.city || sourceEvent.city || 'GPS',
+      state:base.currentLocation?.state || sourceEvent.state || 'UNK',
       note:'Driving',
       description:sourceEvent.description || '',
       source:'gps_drive_rollover',
@@ -1043,11 +1089,9 @@ export default function App() {
     const safeToday = safeInsertRolloverDriving(todayExisting, todayDrive);
     const inserted = safeToday.some(event => event.id === rolloverId);
 
-    // Existing new-day duty events always win. A GPS rollover is allowed only
-    // to fill a truly empty start-of-day gap and can never replace them.
     if (!inserted) {
       return {
-        ...s,
+        ...base,
         gpsTrip:{ ...trip, status:'stale', staleReason:'new_day_events_already_exist', staleAt:Date.now() },
       };
     }
@@ -1055,21 +1099,21 @@ export default function App() {
     const previousUpdated = normalizeLogEvents(previousBase.map(event => (
       event.id === sourceEvent.id ? { ...event, endMin:1440 } : event
     )));
-    const todayUpdated = commitTimelineForDay(safeToday, today, s);
+    const todayUpdated = commitTimelineForDay(safeToday, today, base);
 
     return {
-      ...s,
+      ...base,
       activeDay:today,
       selectedEventId:rolloverId,
       currentStatus:'D',
-      currentReason:s.currentReason || 'Driving',
+      currentReason:base.currentReason || 'Driving',
       currentLocation:{
-        ...(s.currentLocation || {}),
-        city:s.currentLocation?.city || todayDrive.city,
-        state:s.currentLocation?.state || todayDrive.state,
+        ...(base.currentLocation || {}),
+        city:base.currentLocation?.city || todayDrive.city,
+        state:base.currentLocation?.state || todayDrive.state,
       },
-      certifyStatus:{ ...(s.certifyStatus || {}), [today]:s.certifyStatus?.[today] || 'Active day / Not certified yet' },
-      eventsByDay:{ ...(s.eventsByDay || {}), [sourceDay]:previousUpdated, [today]:todayUpdated },
+      certifyStatus:{ ...(base.certifyStatus || {}), [today]:base.certifyStatus?.[today] || 'Active day / Not certified yet' },
+      eventsByDay:{ ...(base.eventsByDay || {}), [sourceDay]:previousUpdated, [today]:todayUpdated },
       gpsTrip:{ ...trip, eventId:rolloverId, status:'active', rolloverFromEventId:gpsId, rolloverFromDay:sourceDay },
     };
   }
@@ -1848,12 +1892,34 @@ export default function App() {
         }
       }
       routeLegsByDay = syncRouteLegTimes(routeLegsByDay, eventsByDay);
+      const workflowDrivingEvent = [...toAdd].reverse().find(event => event.status === 'D') || null;
+      const manualDrivingSession = currentStatus === 'D'
+        ? {
+          active:true,
+          status:'D',
+          eventId:workflowDrivingEvent?.id || s.manualDrivingSession?.eventId || '',
+          startDay:day,
+          startedAt:new Date().toISOString(),
+          location:{ city:currentLocation?.city || '', state:currentLocation?.state || '' },
+          source:'driver_workflow',
+        }
+        : (s.manualDrivingSession?.active
+          ? {
+            ...s.manualDrivingSession,
+            active:false,
+            endedDay:day,
+            endedMin:now,
+            endedByStatus:currentStatus,
+            endedAt:new Date().toISOString(),
+          }
+          : (s.manualDrivingSession || null));
 
       let next = {
         ...s,
         currentStatus,
         currentReason,
         currentLocation,
+        manualDrivingSession,
         view: currentStatus === 'D' ? 'driveMode' : s.view,
         routeLegsByDay,
         selectedEventId:null,
@@ -2395,6 +2461,7 @@ export default function App() {
           routeLegsByDay:{},
           loadInfo:{ loadNo:'', broker:'', pickupCity:'', pickupState:'', deliveryCity:'', deliveryState:'', appointment:'', shippingDocs:'', bol:'', po:'' },
           gpsTrip:null,
+          manualDrivingSession:null,
           gpsPanelOpen:false,
           currentStatus:'OFF',
           currentReason:'Off Duty',
@@ -2414,13 +2481,14 @@ export default function App() {
     const acceptedLiveInspection = maybeAcceptInspectionForEvent(state, liveDayForPrompt, { status, note:reason, description, city, state:st });
     setState(s => {
       const now = new Date();
-      const day = localDayKey(now, getHomeTerminalTimeZone(s));
-      const nowLiveMin = minuteFromDate(now, s);
+      const base = rolloverActiveDrivingIfNeeded(s, now);
+      const day = localDayKey(now, getHomeTerminalTimeZone(base));
+      const nowLiveMin = minuteFromDate(now, base);
       const backdate = Math.max(0, Math.min(240, Number(backdateMinutes || 0)));
       const changeAt = Math.max(0, nowLiveMin - backdate);
-      const existing = continuousBaseForDay(s, day);
+      const existing = continuousBaseForDay(base, day);
       let note = reason;
-      let trailer = s.currentTrailer;
+      let trailer = base.currentTrailer;
       const isDropHook = isDropHookReason(reason, dropHook);
       const isDropOff = isDropOffReason(reason, dropHook);
       const isIntermodalDrop = isIntermodalDropReason(reason, dropHook);
@@ -2429,7 +2497,7 @@ export default function App() {
         trailer = 'No trailer';
       }
       if (isIntermodalDrop) {
-        note = buildDropHookNote({ reason, city, state:st, dropHook }, s.equipment || {});
+        note = buildDropHookNote({ reason, city, state:st, dropHook }, base.equipment || {});
         const hookedLabel = [dropHook?.hookedContainer, dropHook?.hookedChassis].filter(Boolean).join(' / ');
         trailer = isDropOff ? 'No equipment' : (hookedLabel || hookedTrailer || 'Equipment hooked');
       }
@@ -2439,7 +2507,7 @@ export default function App() {
         ? String(dropHook?.hookedLoadNo || '').trim()
         : String(shippingDocs || loadNo || '').trim();
       const loadDescription = isIntermodalDrop
-        ? buildDropHookNote({ reason, city, state:st, dropHook }, s.equipment || {})
+        ? buildDropHookNote({ reason, city, state:st, dropHook }, base.equipment || {})
         : loadDescriptionForStatusPayload({ status, reason, city, state:st, shippingDocs, loadNo, destination, destinationState });
       const previousAtChange = [...existing]
         .filter(event => Number(event.endMin || 0) <= changeAt)
@@ -2457,70 +2525,88 @@ export default function App() {
       const effectiveGpsAccuracy = shouldInheritPreviousOnDutyLocation ? (previousAtChange.gpsAccuracy ?? null) : gpsAccuracy;
       const effectiveLocationSource = shouldInheritPreviousOnDutyLocation ? (previousAtChange.locationSource || 'manual') : locationSource;
       const ev = {
-        id: eventId,
+        id:eventId,
         status,
-        specialMode: /yard move/i.test(reason) ? 'yard_move' : (/personal conveyance/i.test(reason) ? 'personal_conveyance' : 'none'),
-        startMin: changeAt,
-        // Live status changes are current until now. If the driver says the
-        // pickup/pre-trip started 15 minutes ago, the new status overrides the
-        // old status for that whole backdated window instead of creating an
-        // ON block followed by stale OFF time.
-        endMin: Math.max(changeAt + 1, Math.min(1439, nowLiveMin || changeAt + 1)),
-        city: effectiveCity,
-        state: effectiveState,
-        description: description || loadDescription,
+        specialMode:/yard move/i.test(reason) ? 'yard_move' : (/personal conveyance/i.test(reason) ? 'personal_conveyance' : 'none'),
+        startMin:changeAt,
+        endMin:Math.max(changeAt + 1, Math.min(1440, nowLiveMin || changeAt + 1)),
+        city:effectiveCity,
+        state:effectiveState,
+        description:description || loadDescription,
         note,
-        shippingDocs: effectiveShippingDocs,
-        loadNo: effectiveShippingDocs,
+        shippingDocs:effectiveShippingDocs,
+        loadNo:effectiveShippingDocs,
         destination,
         destinationState,
-        loadLinkId: eventId,
-        lat: effectiveLat,
-        lng: effectiveLng,
-        gpsAccuracy: effectiveGpsAccuracy,
-        locationSource: effectiveLocationSource,
-        source: 'live_status',
+        loadLinkId:eventId,
+        lat:effectiveLat,
+        lng:effectiveLng,
+        gpsAccuracy:effectiveGpsAccuracy,
+        locationSource:effectiveLocationSource,
+        source:'live_status',
       };
       const loadPayload = { status, reason, city:effectiveCity, state:effectiveState, shippingDocs:effectiveShippingDocs, loadNo:effectiveShippingDocs, destination, destinationState, dropHook };
       const dropHookLoadPatch = isIntermodalDrop ? buildDropHookLoadPatch(loadPayload, eventId) : null;
-      const dropHookEquipment = isIntermodalDrop ? buildEquipmentFromDropHook(s.equipment || {}, loadPayload) : null;
+      const dropHookEquipment = isIntermodalDrop ? buildEquipmentFromDropHook(base.equipment || {}, loadPayload) : null;
       const loadInfoPatch = buildLoadPatchForStatusPayload(loadPayload, eventId);
       traceDutyWrite('liveStatus:before', day, existing);
       const continuous = applyLiveStatusTransition(existing, ev);
       traceDutyWrite('liveStatus:after', day, continuous);
-      const eventsByDay = { ...s.eventsByDay, [day]: continuous };
+      const eventsByDay = { ...(base.eventsByDay || {}), [day]:continuous };
       const routeBase = isIntermodalDrop
-        ? updateRouteLegsForDropHook(s.routeLegsByDay || {}, day, loadPayload, eventId, changeAt, s)
-        : updateRouteLegsForStatus(s.routeLegsByDay || {}, day, loadPayload, eventId, changeAt);
+        ? updateRouteLegsForDropHook(base.routeLegsByDay || {}, day, loadPayload, eventId, changeAt, base)
+        : updateRouteLegsForStatus(base.routeLegsByDay || {}, day, loadPayload, eventId, changeAt);
       const routeLegsByDay = syncRouteLegTimes(routeBase, eventsByDay);
       const dutySafetyBackupByDay = {
-        ...(s.dutySafetyBackupByDay || {}),
-        [day]: {
-          events: existing.map(event => ({ ...event })),
-          savedAt: Date.now(),
-          reason: `before_live_status_${status}`,
+        ...(base.dutySafetyBackupByDay || {}),
+        [day]:{
+          events:existing.map(event => ({ ...event })),
+          savedAt:Date.now(),
+          reason:`before_live_status_${status}`,
         },
       };
-      const gpsTrip = s.gpsTrip?.status === 'active'
-        ? { ...s.gpsTrip, status:'stale', staleReason:'manual_status_change', staleAt:Date.now() }
-        : s.gpsTrip;
+      const gpsTrip = base.gpsTrip?.status === 'active'
+        ? { ...base.gpsTrip, status:'stale', staleReason:'manual_status_change', staleAt:Date.now() }
+        : base.gpsTrip;
+      const priorManualSession = base.manualDrivingSession || null;
+      const manualDrivingSession = status === 'D'
+        ? {
+          active:true,
+          status:'D',
+          eventId,
+          startDay:day,
+          startedAt:now.toISOString(),
+          location:{ city:effectiveCity, state:effectiveState },
+          source:'manual_status',
+        }
+        : (priorManualSession
+          ? {
+            ...priorManualSession,
+            active:false,
+            endedAt:now.toISOString(),
+            endedDay:day,
+            endedMin:changeAt,
+            endedByStatus:status,
+          }
+          : null);
       let next = {
-        ...s,
-        activeDay: day,
-        currentStatus: status,
-        currentReason: reason,
-        currentLocation: { city:effectiveCity, state:effectiveState, lat:effectiveLat, lng:effectiveLng, gpsAccuracy:effectiveGpsAccuracy, locationSource:effectiveLocationSource },
-        currentTrailer: trailer,
+        ...base,
+        activeDay:day,
+        currentStatus:status,
+        currentReason:reason,
+        currentLocation:{ city:effectiveCity, state:effectiveState, lat:effectiveLat, lng:effectiveLng, gpsAccuracy:effectiveGpsAccuracy, locationSource:effectiveLocationSource },
+        currentTrailer:trailer,
         selectedEventId:null,
-        sheet: null,
-        view: status === 'D' ? 'driveMode' : (s.view === 'driveMode' ? 'day' : s.view),
+        sheet:null,
+        view:status === 'D' ? 'driveMode' : (base.view === 'driveMode' ? 'day' : base.view),
         eventsByDay,
         routeLegsByDay,
         dutySafetyBackupByDay,
         gpsTrip,
-        certifyStatus:{ ...(s.certifyStatus || {}), [day]:s.certifyStatus?.[day] || 'Active day / Not certified yet' },
+        manualDrivingSession,
+        certifyStatus:{ ...(base.certifyStatus || {}), [day]:base.certifyStatus?.[day] || 'Active day / Not certified yet' },
         ...(dropHookEquipment ? { equipment:dropHookEquipment } : {}),
-        ...((dropHookLoadPatch || loadInfoPatch) ? { loadInfo:{ ...(s.loadInfo || {}), ...(loadInfoPatch || {}), ...(dropHookLoadPatch || {}) } } : {}),
+        ...((dropHookLoadPatch || loadInfoPatch) ? { loadInfo:{ ...(base.loadInfo || {}), ...(loadInfoPatch || {}), ...(dropHookLoadPatch || {}) } } : {}),
       };
       next = withAcceptedPreTripInspection(next, day, ev, acceptedLiveInspection);
       next = normalizeLoadInfoFromRouteLegs(reconcilePreTripInspections(next, [day]));
@@ -2579,6 +2665,14 @@ export default function App() {
         selectedEventId:null,
         view:'day',
         gpsTrip: base.gpsTrip ? { ...base.gpsTrip, status:'stopped', stoppedAt:Date.now(), staleReason:'manual_stop' } : base.gpsTrip,
+        manualDrivingSession:base.manualDrivingSession ? {
+          ...base.manualDrivingSession,
+          active:false,
+          endedAt:now.toISOString(),
+          endedDay:day,
+          endedMin:changeAt,
+          endedByStatus:'ON',
+        } : null,
         eventsByDay:{ ...base.eventsByDay, [day]: updated },
         dutySafetyBackupByDay,
         certifyStatus:{ ...(base.certifyStatus || {}), [day]:base.certifyStatus?.[day] || 'Active day / Not certified yet' },

@@ -33,8 +33,8 @@ const syncScript = read('scripts/sync-release-version.mjs');
 const nextConfig = read('next.config.mjs');
 const page = read('app/page.jsx');
 
-// This exact equality is the regression guard for the v95.93 update loop.
-equal(pkg.version, '95.94.0', 'package is v95.94.0');
+// Exact equality across every release surface is the regression guard for the v95.93 update loop.
+ok(/^\d+\.\d+\.\d+$/.test(pkg.version), 'package uses numeric semver');
 equal(lock.version, pkg.version, 'package-lock root version matches package');
 equal(lock.packages[''].version, pkg.version, 'package-lock app entry matches package');
 equal(remote.version, pkg.version, 'app-version.json matches package exactly');
@@ -42,11 +42,11 @@ equal(CURRENT_APP_VERSION, pkg.version, 'compiled app version matches package ex
 ok(appUpdate.includes(`const FALLBACK_APP_VERSION = '${pkg.version}'`), 'runtime fallback version is synchronized');
 ok(sw.includes(`const OWNER_OP_SW_VERSION = '${pkg.version}'`), 'service-worker version is synchronized');
 
-ok(compareVersions('95.94.0', '95.93.0') > 0, 'version compare detects the new release');
-ok(isNewerVersion('95.95.0', '95.94.0'), 'newer remote release is detected');
-ok(!isNewerVersion('95.94.0', '95.94.0'), 'same release does not loop');
-equal(normalizeRemoteVersionPayload({ appVersion:'95.94.0', buildId:'build-x' }).build, 'build-x', 'remote build metadata normalizes');
-ok(versionedServiceWorkerUrl('95.94.0').includes('owner_op_v=95.94.0'), 'worker URL is release-versioned');
+ok(compareVersions('96.1.0', '96.0.0') > 0, 'version compare detects the new release');
+ok(isNewerVersion('96.2.0', pkg.version), 'newer remote release is detected');
+ok(!isNewerVersion(pkg.version, pkg.version), 'same release does not loop');
+equal(normalizeRemoteVersionPayload({ appVersion:pkg.version, buildId:'build-x' }).build, 'build-x', 'remote build metadata normalizes');
+ok(versionedServiceWorkerUrl(pkg.version).includes(`owner_op_v=${pkg.version}`), 'worker URL is release-versioned');
 
 const deleted = [];
 const previousCaches = globalThis.caches;

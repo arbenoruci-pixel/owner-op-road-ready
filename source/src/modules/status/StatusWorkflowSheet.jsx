@@ -94,6 +94,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   const [showNotes, setShowNotes] = useState(false);
   const [gpsFix, setGpsFix] = useState(null);
   const [gpsStatus, setGpsStatus] = useState('');
+  const [gpsPending, setGpsPending] = useState(false);
   const [shippingDocs, setShippingDocs] = useState(state.loadInfo?.shippingDocs || state.loadInfo?.loadNo || '');
   const [destination, setDestination] = useState([state.loadInfo?.deliveryCity, state.loadInfo?.deliveryState].filter(Boolean).join(', '));
   const [dropContainer, setDropContainer] = useState(state.equipment?.container || '');
@@ -104,6 +105,8 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   const [hookLoadNo, setHookLoadNo] = useState('');
   const [hookDestination, setHookDestination] = useState('');
   const askedOffGps = useRef(false);
+  const askedDrivingExitGps = useRef(false);
+  const gpsRequestId = useRef(0);
   // Set when the driver types or picks a location manually. A late-resolving
   // automatic GPS fix (e.g. the OFF-duty auto lookup) must never overwrite a
   // manual city/state; only the explicit "Use GPS" button may replace it.
@@ -121,6 +124,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
     setCity(nextCity);
     setSt(nextState);
     setLocationText(locationString(nextCity, nextState));
+    manualLocationDirty.current = false;
     setGpsFix({
       lat,
       lng,
@@ -130,30 +134,50 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
       state: nextState,
       source: 'gps',
     });
+    setGpsPending(false);
     setGpsStatus(`GPS locked · ${nextCity}, ${nextState}`);
   }
 
-  function useGps(auto = false) {
-    if (!navigator.geolocation) {
+  function useGps(auto = false, context = 'status') {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsPending(false);
       setGpsStatus('GPS not available. Type location manually.');
       return;
     }
 
+    const requestId = gpsRequestId.current + 1;
+    gpsRequestId.current = requestId;
+    const requireFreshStop = context === 'driving-exit';
     if (!auto) manualLocationDirty.current = false;
-    setGpsStatus(auto ? 'Getting GPS for OFF duty…' : 'Getting GPS…');
+    setGpsPending(true);
+    setGpsStatus(
+      context === 'driving-exit'
+        ? 'Getting current stop location…'
+        : (auto ? 'Getting current location…' : 'Getting GPS…')
+    );
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (gpsRequestId.current !== requestId) return;
         // A slow automatic fix must not replace a location the driver has
         // typed/picked in the meantime.
-        if (auto && manualLocationDirty.current) return;
+        if (auto && manualLocationDirty.current) {
+          setGpsPending(false);
+          return;
+        }
         applyFix(position);
       },
       () => {
+        if (gpsRequestId.current !== requestId) return;
+        setGpsPending(false);
         if (auto && manualLocationDirty.current) return;
         setGpsStatus('GPS blocked/unavailable. Type location manually.');
       },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+      {
+        enableHighAccuracy:true,
+        timeout:requireFreshStop ? 15000 : 12000,
+        maximumAge:requireFreshStop ? 0 : 30000,
+      }
     );
   }
 
@@ -165,11 +189,36 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   }, [status]);
 
   function choose(next) {
+    const leavingDriving = state.currentStatus === 'D' && next !== 'D';
     setStatus(next);
     setSelectedReasons([reasonList(next)[0]]);
+
+    if (next === 'D') {
+      askedDrivingExitGps.current = false;
+      gpsRequestId.current += 1;
+      setGpsPending(false);
+      setGpsStatus('');
+      return;
+    }
+
+    // The location on a non-driving row is the place where Driving ended.
+    // Never silently reuse the Driving start city. Clear it, request a fresh
+    // position, and keep the field editable if GPS is unavailable.
+    if (leavingDriving && !askedDrivingExitGps.current) {
+      askedDrivingExitGps.current = true;
+      askedOffGps.current = next === 'OFF';
+      manualLocationDirty.current = false;
+      setCity('');
+      setSt('');
+      setLocationText('');
+      setGpsFix(null);
+      useGps(true, 'driving-exit');
+      return;
+    }
+
     if (next === 'OFF') {
       askedOffGps.current = false;
-      setTimeout(() => useGps(true), 0);
+      setTimeout(() => useGps(true, 'off-duty'), 0);
     }
   }
 
@@ -182,7 +231,7 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   }
 
   function payload() {
-    const parsedLoc = parseLocationText(locationText, st || 'IL');
+    const parsedLoc = parseLocationText(locationText, st || '');
     const parsedDest = parseDestinationState(destination);
     const reason = reasonText(selectedReasons) || reasonList(status)[0];
     const hookEmpty = reasonNeedsHookEmpty(status, selectedReasons);
@@ -240,6 +289,15 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
       return;
     }
     const p = payload();
+    const leavingDriving = state.currentStatus === 'D' && status !== 'D';
+    if (gpsPending && leavingDriving && !manualLocationDirty.current && !gpsFix) {
+      setGpsStatus('Getting the stop location. Wait a moment or type City, ST.');
+      return;
+    }
+    if (!p.city || !p.state || p.city === 'GPS' || p.state === 'UNK') {
+      setGpsStatus('Add the current City, ST or tap Use GPS before saving.');
+      return;
+    }
     if (status === 'D') {
       onStartDriving({ city:p.city, state:p.state, lat:p.lat, lng:p.lng, gpsAccuracy:p.gpsAccuracy, locationSource:p.locationSource });
       return;
@@ -258,7 +316,9 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
 
   function applyLocationText(value = locationText) {
     manualLocationDirty.current = true;
-    const parsed = parseLocationText(value, st || 'IL');
+    gpsRequestId.current += 1;
+    setGpsPending(false);
+    const parsed = parseLocationText(value, st || '');
     setCity(parsed.city);
     setSt(parsed.state);
     setLocationText(locationString(parsed.city, parsed.state));
@@ -272,11 +332,13 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
     setGpsStatus(`Manual location · ${locationString(parsed.city, parsed.state)}`);
   }
 
+  const leavingDriving = state.currentStatus === 'D' && status !== 'D';
   const locationSuggestions = uniqueSuggestions([
     locationString(city, st),
-    locationString(state.currentLocation?.city, state.currentLocation?.state),
+    leavingDriving ? '' : locationString(state.currentLocation?.city, state.currentLocation?.state),
     locationString(state.loadInfo?.pickupCity, state.loadInfo?.pickupState),
     locationString(state.loadInfo?.deliveryCity, state.loadInfo?.deliveryState),
+    'Hubbard, OH',
     'Romeoville, IL',
     'Joliet, IL',
     'Bolingbrook, IL',
@@ -441,22 +503,26 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
 
         <section className="picker-section">
           <div className="picker-label-row">
-            <label>Location</label>
-            <button type="button" className="tiny-link" onClick={() => useGps(false)}>Use GPS</button>
+            <label>{leavingDriving ? 'Stop location' : 'Location'}</label>
+            <button type="button" className="tiny-link" onClick={() => useGps(false, leavingDriving ? 'driving-exit' : 'status')}>
+              {leavingDriving ? 'Use current GPS' : 'Use GPS'}
+            </button>
           </div>
           <div className="location-row gps-location-row location-editable-v91 driver-location-row">
-            <button type="button" className="gps-locate-btn" onClick={() => useGps(false)} aria-label="Use GPS location">⌖</button>
+            <button type="button" className="gps-locate-btn" onClick={() => useGps(false, leavingDriving ? 'driving-exit' : 'status')} aria-label="Use GPS location">⌖</button>
             <input
               value={locationText}
               onFocus={(e) => e.currentTarget.select()}
               onBlur={() => applyLocationText()}
               onChange={(e) => {
                 manualLocationDirty.current = true;
+                gpsRequestId.current += 1;
+                setGpsPending(false);
                 setLocationText(e.target.value);
                 setGpsFix(null);
                 setGpsStatus('Manual location');
               }}
-              placeholder="City, ST"
+              placeholder={leavingDriving ? 'Stop City, ST' : 'City, ST'}
               autoComplete="off"
             />
             <button
@@ -464,6 +530,8 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
               className="location-clear-btn"
               onClick={() => {
                 manualLocationDirty.current = true;
+                gpsRequestId.current += 1;
+                setGpsPending(false);
                 setCity('');
                 setSt('');
                 setLocationText('');
@@ -497,7 +565,13 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
           )}
         </section>
 
-        <button className="status-save driver-status-save" onClick={save}>Save {status}</button>
+        <button
+          className="status-save driver-status-save"
+          onClick={save}
+          disabled={gpsPending && leavingDriving && !manualLocationDirty.current && !locationText}
+        >
+          {gpsPending && leavingDriving && !manualLocationDirty.current && !locationText ? 'Getting stop location…' : `Save ${status}`}
+        </button>
       </div>
     </div>
   );

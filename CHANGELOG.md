@@ -1,3 +1,11 @@
+## v96.1.0 - Manual Driving Midnight + Hubbard Sleeper Fix
+
+- Preserves driver-entered Driving across midnight by closing the prior day at 24:00 and creating a real Driving continuation at 00:00.
+- Changing from Driving to Sleeper, Off Duty, or On Duty now requests a fresh stop location and prevents reuse of the Driving-start city.
+- Repairs the confirmed July 11 12:51 AM Sleeper row from Youngstown, OH to Hubbard, OH and restores Driving from 12:00 AM to 12:51 AM.
+- Keeps all other stored duty events, HOS data, route/load data, wallet documents, day export/import, and multi-event movement unchanged.
+- Adds an idempotent migration backup and regression verifier for the exact midnight status-change failure.
+
 ## v95.97.0 - Driving Event History Guard + Recovery
 
 - Fixed stale legacy GPS rollover state that could replace today's OFF/SB/D/ON events with DRIVING from midnight.

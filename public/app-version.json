@@ -1,12 +1,12 @@
 {
-  "version": "96.0.0",
-  "build": "v96.0-single-day-export-import",
-  "releasedAt": "2026-07-10T20:15:00.000Z",
+  "version": "96.1.0",
+  "build": "v96.1-manual-driving-midnight-sleeper",
+  "releasedAt": "2026-07-11T05:30:00.000Z",
   "notes": [
-    "Adds Export this day and Import into this day for every open log date.",
-    "Imports only the selected target day and keeps all other app data unchanged.",
-    "Removes the hard-coded Jul 10 forced restore so imported or manually edited days are not overwritten."
+    "Preserves a manual Driving status across midnight as a real 00:00 continuation row before the next status change.",
+    "Requests a fresh current-stop location whenever the driver changes from Driving to Sleeper, Off Duty, or On Duty.",
+    "Repairs the confirmed 12:51 AM Hubbard sleeper stop while keeping every other July 10 and July 11 event unchanged."
   ],
-  "label": "v96.0 Single-Day Export / Import",
-  "updatedAt": "2026-07-10T20:15:00.000Z"
+  "label": "v96.1 Manual Driving Midnight + Stop Location Fix",
+  "updatedAt": "2026-07-11T05:30:00.000Z"
 }

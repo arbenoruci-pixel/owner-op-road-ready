@@ -14,8 +14,8 @@ function ok(condition, message) {
   console.log('OK:', message);
 }
 
-ok(pkg.version === '95.95.0', 'package version is 95.95.0');
-ok(appVersion.version === '95.95.0', 'remote app version is 95.95.0');
+ok(/^\d+\.\d+\.\d+$/.test(pkg.version), 'package version is valid semver');
+ok(appVersion.version === pkg.version, 'remote app version matches package');
 ok(dot.includes('<h2>Send DOT HTML package</h2>'), 'DOT home card is HTML-first');
 ok(dot.includes('Share DOT HTML Package'), 'primary HTML share action exists');
 ok(dot.includes('Download HTML Package'), 'HTML download action exists');

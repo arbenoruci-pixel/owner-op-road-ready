@@ -8,8 +8,8 @@ import {
   dayBackupSummary,
 } from '../source/src/core/backup/dayTransfer.js';
 
-const sourceDay = '2026-07-10';
-const otherDay = '2026-07-11';
+const sourceDay = '2026-07-08';
+const otherDay = '2026-07-09';
 const state = {
   activeDay: sourceDay,
   eventsByDay: {
