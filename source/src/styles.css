@@ -9836,3 +9836,36 @@ body,
   .day-transfer-summary strong,
   .day-transfer-summary small { text-align: center; }
 }
+
+/* v96.2 exact-event pickup details + accurate GPS editor */
+.editor-pickup-details{
+  border-color:#bfd3ff!important;
+  background:linear-gradient(180deg,#ffffff 0%,#f7faff 100%)!important;
+}
+.editor-pickup-details .form-label-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:7px;
+}
+.editor-pickup-details .form-label-row .form-label{
+  margin:0!important;
+}
+.editor-pickup-details .form-label-row>span{
+  color:#687386;
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.03em;
+}
+.editor-pickup-details .driver-load-grid{
+  grid-template-columns:1fr!important;
+}
+.editor-pickup-details .driver-load-grid input{
+  min-height:46px!important;
+  font-size:15px!important;
+}
+.editor-clean-v85 .save-main:disabled{
+  opacity:.7;
+  cursor:wait;
+}

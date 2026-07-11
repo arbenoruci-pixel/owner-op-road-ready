@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { color, label, soft } from '../../shared/utils/status.js';
-import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
+import { getAccurateGpsLocation } from '../../core/gps/locationService.js';
 
 const onReasons = ['Pre-trip inspection', 'Fuel', 'Pickup / Loading', 'Delivery / Unloading', 'Waiting', 'Drop Trailer', 'Drop Off', 'Drop & Hook', 'Hook Empty / Reposition'];
 const offReasons = ['Off Duty', 'Break', 'Parking', 'Personal Conveyance'];
@@ -46,6 +46,13 @@ function reasonHas(reasons = [], pattern) {
 
 function reasonNeedsLoadLink(status, reasons) {
   return status === 'ON' && reasonHas(reasons, /pickup|loading|delivery|unloading/i);
+}
+
+function loadReasonKind(status, reasons) {
+  if (status !== 'ON') return '';
+  if (reasonHas(reasons, /delivery|unloading/i)) return 'delivery';
+  if (reasonHas(reasons, /pickup|loading/i)) return 'pickup';
+  return '';
 }
 
 function reasonNeedsDropOff(status, reasons) {
@@ -95,8 +102,13 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   const [gpsFix, setGpsFix] = useState(null);
   const [gpsStatus, setGpsStatus] = useState('');
   const [gpsPending, setGpsPending] = useState(false);
-  const [shippingDocs, setShippingDocs] = useState(state.loadInfo?.shippingDocs || state.loadInfo?.loadNo || '');
-  const [destination, setDestination] = useState([state.loadInfo?.deliveryCity, state.loadInfo?.deliveryState].filter(Boolean).join(', '));
+  const activeLoadDocs = String(state.loadInfo?.shippingDocs || state.loadInfo?.loadNo || state.loadInfo?.bol || '').trim();
+  const activeLoadDestination = [state.loadInfo?.deliveryCity, state.loadInfo?.deliveryState].filter(Boolean).join(', ');
+  // Pickup starts a new exact event/load, so it must never inherit yesterday's
+  // BOL or destination. Delivery may use the currently active load as a helpful
+  // default and still saves the values on the exact delivery event.
+  const [shippingDocs, setShippingDocs] = useState('');
+  const [destination, setDestination] = useState('');
   const [dropContainer, setDropContainer] = useState(state.equipment?.container || '');
   const [dropChassis, setDropChassis] = useState(state.equipment?.chassis || '');
   const [hookContainer, setHookContainer] = useState('');
@@ -107,38 +119,35 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
   const askedOffGps = useRef(false);
   const askedDrivingExitGps = useRef(false);
   const gpsRequestId = useRef(0);
+  const previousLoadKind = useRef('');
   // Set when the driver types or picks a location manually. A late-resolving
   // automatic GPS fix (e.g. the OFF-duty auto lookup) must never overwrite a
   // manual city/state; only the explicit "Use GPS" button may replace it.
   const manualLocationDirty = useRef(false);
 
-  function applyFix(position) {
-    const coords = position.coords || {};
-    const lat = coords.latitude;
-    const lng = coords.longitude;
-    const detectedState = detectState(lat, lng);
-    const guessed = guessGpsCity(lat, lng);
-    const nextCity = guessed.city || 'GPS';
-    const nextState = guessed.state || detectedState || 'UNK';
+  function applyFix(fix = {}) {
+    const nextCity = String(fix.city || 'GPS').trim() || 'GPS';
+    const nextState = String(fix.state || 'UNK').trim().toUpperCase().slice(0, 2) || 'UNK';
+    const accuracy = Number.isFinite(Number(fix.accuracy)) ? Number(fix.accuracy) : null;
 
     setCity(nextCity);
     setSt(nextState);
     setLocationText(locationString(nextCity, nextState));
     manualLocationDirty.current = false;
     setGpsFix({
-      lat,
-      lng,
-      accuracy: coords.accuracy || null,
-      timestamp: position.timestamp || Date.now(),
-      city: nextCity,
-      state: nextState,
-      source: 'gps',
+      lat:fix.lat ?? null,
+      lng:fix.lng ?? null,
+      accuracy,
+      timestamp:fix.timestamp || Date.now(),
+      city:nextCity,
+      state:nextState,
+      source:fix.source || 'gps',
     });
     setGpsPending(false);
-    setGpsStatus(`GPS locked · ${nextCity}, ${nextState}`);
+    setGpsStatus(`GPS locked · ${nextCity}, ${nextState}${accuracy != null ? ` · ±${Math.round(accuracy)} m` : ''}`);
   }
 
-  function useGps(auto = false, context = 'status') {
+  async function useGps(auto = false, context = 'status') {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setGpsPending(false);
       setGpsStatus('GPS not available. Type location manually.');
@@ -152,34 +161,55 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
     setGpsPending(true);
     setGpsStatus(
       context === 'driving-exit'
-        ? 'Getting current stop location…'
-        : (auto ? 'Getting current location…' : 'Getting GPS…')
+        ? 'Getting current stop location… improving GPS accuracy'
+        : (auto ? 'Locking accurate current location…' : 'Improving GPS accuracy…')
     );
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (gpsRequestId.current !== requestId) return;
-        // A slow automatic fix must not replace a location the driver has
-        // typed/picked in the meantime.
-        if (auto && manualLocationDirty.current) {
-          setGpsPending(false);
-          return;
-        }
-        applyFix(position);
-      },
-      () => {
-        if (gpsRequestId.current !== requestId) return;
+    try {
+      const fix = await getAccurateGpsLocation({
+        durationMs:requireFreshStop ? 15000 : 12000,
+        targetAccuracy:requireFreshStop ? 35 : 45,
+        maximumAge:0,
+        minimumSamples:2,
+        rejectCoarseFix:true,
+        maximumAcceptedAccuracy:250,
+      });
+      if (gpsRequestId.current !== requestId) return;
+      // A slow automatic fix must not replace a location the driver has
+      // typed/picked in the meantime.
+      if (auto && manualLocationDirty.current) {
         setGpsPending(false);
-        if (auto && manualLocationDirty.current) return;
-        setGpsStatus('GPS blocked/unavailable. Type location manually.');
-      },
-      {
-        enableHighAccuracy:true,
-        timeout:requireFreshStop ? 15000 : 12000,
-        maximumAge:requireFreshStop ? 0 : 30000,
+        return;
       }
-    );
+      applyFix(fix);
+    } catch (error) {
+      if (gpsRequestId.current !== requestId) return;
+      setGpsPending(false);
+      if (auto && manualLocationDirty.current) return;
+      if (error?.code === 'GPS_ACCURACY') {
+        setGpsStatus(`GPS signal too weak${Number.isFinite(error.accuracy) ? ` (±${Math.round(error.accuracy)} m)` : ''}. Tap GPS again or type City, ST.`);
+      } else {
+        setGpsStatus('GPS blocked/unavailable. Type location manually.');
+      }
+    }
   }
+
+  useEffect(() => {
+    const nextKind = loadReasonKind(status, selectedReasons);
+    if (nextKind === previousLoadKind.current) return;
+
+    if (nextKind === 'pickup') {
+      // A pickup is a new load. Never copy a prior event/day's BOL or route.
+      setShippingDocs('');
+      setDestination('');
+    } else if (nextKind === 'delivery') {
+      // Delivery can start from the currently active load, then persists on
+      // this exact event when the driver saves.
+      setShippingDocs(activeLoadDocs);
+      setDestination(activeLoadDestination);
+    }
+    previousLoadKind.current = nextKind;
+  }, [status, selectedReasons, activeLoadDocs, activeLoadDestination]);
 
   useEffect(() => {
     if (status === 'OFF' && !askedOffGps.current) {

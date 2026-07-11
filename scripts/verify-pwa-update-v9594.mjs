@@ -43,7 +43,9 @@ ok(appUpdate.includes(`const FALLBACK_APP_VERSION = '${pkg.version}'`), 'runtime
 ok(sw.includes(`const OWNER_OP_SW_VERSION = '${pkg.version}'`), 'service-worker version is synchronized');
 
 ok(compareVersions('96.1.0', '96.0.0') > 0, 'version compare detects the new release');
-ok(isNewerVersion('96.2.0', pkg.version), 'newer remote release is detected');
+const [releaseMajor, releaseMinor, releasePatch] = pkg.version.split('.').map(Number);
+const nextPatchVersion = `${releaseMajor}.${releaseMinor}.${releasePatch + 1}`;
+ok(isNewerVersion(nextPatchVersion, pkg.version), 'newer remote release is detected');
 ok(!isNewerVersion(pkg.version, pkg.version), 'same release does not loop');
 equal(normalizeRemoteVersionPayload({ appVersion:pkg.version, buildId:'build-x' }).build, 'build-x', 'remote build metadata normalizes');
 ok(versionedServiceWorkerUrl(pkg.version).includes(`owner_op_v=${pkg.version}`), 'worker URL is release-versioned');

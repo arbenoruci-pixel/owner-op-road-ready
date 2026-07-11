@@ -5,6 +5,7 @@ import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverag
 import { haversineMiles, pointFromLogLocation } from '../../core/gps/locationService.js';
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
 import { docsTokensForTransition, routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
+import { eventHasNoLoadDeclaration, findShippingDocsTargetEvent, isDeliveryLoadEvent, isExplicitNoLoadReference, isPickupLoadEvent } from '../../core/routes/shippingDocsRepair.js';
 
 function hasRealEvents(events = []) {
   return (events || []).some(event => !event.carriedFromPreviousDay && Number(event.endMin || 0) > Number(event.startMin || 0));
@@ -158,45 +159,60 @@ function uniqueText(values = []) {
     });
 }
 
+function structuredShippingDocs(values = []) {
+  return uniqueText(values).filter(value => (
+    !isExplicitNoLoadReference(value)
+    && !/^(?:none|n\/?a|unknown|bol|load|shipping\s*docs?|document)$/i.test(value)
+  ));
+}
+
 function hasShippingDocsRequirementForDay(state, day = state.activeDay, eventsOverride = null) {
   const routeLegs = routeLegsForDayCanonical(state, day);
   const dayEvents = Array.isArray(eventsOverride) ? eventsOverride : (state.eventsByDay?.[day] || []);
-  const hasDriving = dayEvents.some(event =>
-    event.status === 'D' && Number(event.endMin || 0) > Number(event.startMin || 0)
-  );
   const hasLoadedRoute = routeLegs.some(leg => {
     const kind = String(leg.kind || '').toLowerCase();
     const status = String(leg.status || '').toLowerCase();
-    const hasDocs = docsTokensForTransition([leg.shippingDocs, leg.loadNo, ...(Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : [])].join(' ')).length > 0;
-    const emptyLike = /empty|reposition|return|bobtail|deadhead/.test(`${kind} ${status} ${leg.source || ''}`);
-    return hasDocs && !emptyLike;
+    const emptyLike = /empty|reposition|return|bobtail|deadhead|no_load/.test(`${kind} ${status} ${leg.source || ''}`)
+      || leg.noLoadDeclared;
+    const hasRouteActivity = !!(leg.pickupEventId || leg.deliveryEventId || leg.pickupDay || leg.deliveryDay);
+    return hasRouteActivity && !emptyLike && status !== 'cancelled';
   });
-  const hasLoadWorkText = dayEvents.some(event =>
-    /pickup|loading|delivery|unloading|drop\s*&\s*hook|drop and hook|hooked|picked up|delivered|shipper|receiver/i.test(`${event.note || ''} ${event.description || ''}`)
-  );
-  const hasOnDutyWork = dayEvents.some(event =>
-    event.status === 'ON' &&
-    Number(event.endMin || 0) > Number(event.startMin || 0) &&
-    /pickup|loading|delivery|unloading|drop\s*&\s*hook|drop and hook|hooked|picked up|delivered|shipper|receiver/i.test(`${event.note || ''} ${event.description || ''}`)
-  );
-  return hasDriving || hasLoadedRoute || hasOnDutyWork || hasLoadWorkText;
+  const hasExactLoadWork = dayEvents.some(event => (
+    Number(event.endMin || 0) > Number(event.startMin || 0)
+    && (isPickupLoadEvent(event) || isDeliveryLoadEvent(event))
+  ));
+  // Driving by itself, or free-form OFF/SB notes that happen to mention a
+  // loading zone, do not create a BOL requirement. The requirement belongs to
+  // an exact ON DUTY Pickup/Delivery event or a canonical loaded route leg.
+  return hasLoadedRoute || hasExactLoadWork;
 }
 
 function shippingDocsText(state, day = state.activeDay) {
   const load = state.loadInfo || {};
-  const equipment = state.equipment || {};
   const routeLegs = routeLegsForDayCanonical(state, day);
   const dayEvents = state.eventsByDay?.[day] || [];
-  const docs = uniqueText([
-    ...routeLegs.flatMap(leg => [leg.shippingDocs, leg.loadNo, ...(Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : [])]),
-    ...dayEvents.flatMap(event => [event.shippingDocs, event.loadNo, ...(Array.isArray(event.transitionLoadNos) ? event.transitionLoadNos : [])]),
-    ...(routeLegs.length ? [] : [load.loadNo, load.po, load.bol, load.shippingDocs]),
-    equipment.container,
-    equipment.chassis,
-  ].flatMap(value => docsTokensForTransition(value))).join(' ');
+  const eventIds = new Set(dayEvents.map(event => event?.id).filter(Boolean));
+  const loadBelongsToDay = load.sourceEventDay === day
+    || (!!load.sourceEventId && eventIds.has(load.sourceEventId))
+    || (!load.sourceEventDay && !load.sourceEventId && !routeLegs.length && !dayEvents.some(event => event.shippingDocs || event.loadNo));
+  // Structured BOL fields are authoritative and may legitimately contain a
+  // short or alphabetic reference. The token parser is only for extracting
+  // references from transition-note text; using it on a direct field caused a
+  // valid value such as "123" to be saved and then rejected again at Sign.
+  const directDocs = structuredShippingDocs([
+    ...routeLegs.flatMap(leg => [leg.shippingDocs, leg.loadNo, leg.bol, leg.po]),
+    ...dayEvents.flatMap(event => [event.shippingDocs, event.loadNo, event.bol, event.po]),
+    ...(loadBelongsToDay ? [load.loadNo, load.po, load.bol, load.shippingDocs] : []),
+  ]);
+  const transitionDocs = uniqueText([
+    ...routeLegs.flatMap(leg => Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : []),
+    ...dayEvents.flatMap(event => Array.isArray(event.transitionLoadNos) ? event.transitionLoadNos : []),
+  ].flatMap(value => docsTokensForTransition(value)));
+  const docs = uniqueText([...directDocs, ...transitionDocs]).join(' ');
   if (docs) return docs;
-  const mentionsEmpty = routeLegs.some(leg => /empty|reposition|return/i.test(`${leg.kind || ''} ${leg.source || ''}`))
-    || dayEvents.some(e => /empty|bobtail|no trailer|deadhead|reposition/i.test(`${e.note || ''} ${e.description || ''}`));
+  const mentionsEmpty = routeLegs.some(leg => leg.noLoadDeclared || /empty|reposition|return|bobtail|deadhead|no_load/i.test(`${leg.kind || ''} ${leg.source || ''} ${leg.noLoadNote || ''}`))
+    || dayEvents.some(eventHasNoLoadDeclaration)
+    || (loadBelongsToDay && (load.noLoadDeclared || /empty|bobtail|no trailer|deadhead|reposition/i.test(`${load.noLoadNote || ''} ${load.currentMoveKind || ''}`)));
   return mentionsEmpty ? 'Empty / reposition move noted in log' : '';
 }
 
@@ -394,7 +410,15 @@ export function validateLogForSigning(state, day) {
     issues.push({ code:'missing_main_office', title:'Main office address is missing', detail:'Add the carrier main office address before signing this log.', where:'Form tab → Carrier' });
   }
   if (!shipping && hasShippingDocsRequirementForDay(state, day, events)) {
-    issues.push({ code:'missing_shipping_docs', title:'Shipping document information is missing', detail:'Add the shipping document number, load reference, shipper/commodity, or note that the truck is empty/bobtail if that is accurate.', where:'Form tab → Shipping Docs' });
+    const shippingTarget = findShippingDocsTargetEvent(state, day);
+    issues.push({
+      code:'missing_shipping_docs',
+      title:'Shipping document information is missing',
+      detail:'Add the shipping document number, load reference, shipper/commodity, or note that the truck is empty/bobtail if that is accurate.',
+      where:'Form tab → Shipping Docs',
+      day,
+      eventId:shippingTarget?.id || '',
+    });
   }
 
   if (day === today) {

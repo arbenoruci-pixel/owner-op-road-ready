@@ -1,12 +1,13 @@
 {
-  "version": "96.1.0",
-  "build": "v96.1-manual-driving-midnight-sleeper",
-  "releasedAt": "2026-07-11T05:30:00.000Z",
+  "version": "96.2.0",
+  "build": "v96.2-deep-scan-location-pickup-signing",
+  "releasedAt": "2026-07-11T06:57:05.000Z",
   "notes": [
-    "Preserves a manual Driving status across midnight as a real 00:00 continuation row before the next status change.",
-    "Requests a fresh current-stop location whenever the driver changes from Driving to Sleeper, Off Duty, or On Duty.",
-    "Repairs the confirmed 12:51 AM Hubbard sleeper stop while keeping every other July 10 and July 11 event unchanged."
+    "Locks each historical duty event to its own saved city/state and reverses the older route-destination overwrite when recovery metadata exists.",
+    "Adds exact-event Pickup details with BOL/shipping document and Going to fields that reopen and remain editable on the same event.",
+    "Fixes the signing BOL loop by synchronizing the exact event, route leg, and day-scoped load record, including short and legacy BOL values.",
+    "Improves GPS with multiple high-accuracy samples, server-side city/state reverse geocoding, manual-entry protection, and rejection of coarse fixes over 250 meters."
   ],
-  "label": "v96.1 Manual Driving Midnight + Stop Location Fix",
-  "updatedAt": "2026-07-11T05:30:00.000Z"
+  "label": "v96.2 Deep Scan: Location, Pickup, BOL & GPS",
+  "updatedAt": "2026-07-11T06:57:05.000Z"
 }

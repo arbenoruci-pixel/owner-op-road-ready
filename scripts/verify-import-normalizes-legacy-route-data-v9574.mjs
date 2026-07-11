@@ -6,7 +6,8 @@ const normalized = normalizeRoadReadyState({
   eventsByDay:{
     '2026-07-05':[
       { id:'d1', status:'D', startMin:885, endMin:1109, city:'Chicago', state:'IL', shippingDocs:'111Y7Z983', loadNo:'111Y7Z983' },
-      { id:'on-stale', status:'OFF', startMin:1305, endMin:1440, city:'Maumee', state:'OH', loadNo:'114RMB689', shippingDocs:'114RMB689' },
+      { id:'on-stale', status:'OFF', startMin:1305, endMin:1380, city:'Maumee', state:'OH', loadNo:'114RMB689', shippingDocs:'114RMB689' },
+      { id:'on-linked-blank', status:'ON', startMin:1380, endMin:1440, city:'GPS', state:'UNK', note:'Delivery / Unloading' },
     ],
     '2026-07-07':[
       { id:'empty-d', status:'D', startMin:26, endMin:215, city:'Greenfield', state:'IN', loadNo:'113NRH53Z', shippingDocs:'113NRH53Z' },
@@ -19,7 +20,7 @@ const normalized = normalizeRoadReadyState({
     loadNo:'113NRH53Z', shippingDocs:'113NRH53Z', deliveryCity:'Greenfield', deliveryState:'IN',
     routeLegsByDay:{
       '2026-07-05':[
-        { id:'legacy-114RMB689', day:'2026-07-05', pickupDay:'2026-07-05', deliveryEventId:'on-stale', fromCity:'Perrysburg', fromState:'OH', toCity:'North Baltimore', toState:'OH', shippingDocs:'114RMB689', loadNo:'114RMB689', miles:33, status:'delivered' },
+        { id:'legacy-114RMB689', day:'2026-07-05', pickupDay:'2026-07-05', deliveryEventId:'on-linked-blank', fromCity:'Perrysburg', fromState:'OH', toCity:'North Baltimore', toState:'OH', shippingDocs:'114RMB689', loadNo:'114RMB689', miles:33, status:'delivered' },
       ],
     },
   },
@@ -27,8 +28,10 @@ const normalized = normalizeRoadReadyState({
 
 assert.ok(normalized.routeLegsByDay['2026-07-05'].some(leg => leg.loadNo === '114RMB689'), 'legacy loadInfo route leg merged to canonical top-level routeLegsByDay');
 assert.ok(!normalized.loadInfo.routeLegsByDay, 'legacy loadInfo.routeLegsByDay removed');
-const repaired = normalized.eventsByDay['2026-07-05'].find(event => event.id === 'on-stale');
-assert.equal(`${repaired.city}, ${repaired.state}`, 'North Baltimore, OH', 'stale non-driving Maumee label repaired from linked route destination');
+const preserved = normalized.eventsByDay['2026-07-05'].find(event => event.id === 'on-stale');
+assert.equal(`${preserved.city}, ${preserved.state}`, 'Maumee, OH', 'valid historical event location remains authoritative');
+const filled = normalized.eventsByDay['2026-07-05'].find(event => event.id === 'on-linked-blank');
+assert.equal(`${filled.city}, ${filled.state}`, 'North Baltimore, OH', 'blank placeholder may be filled only from a directly linked route event');
 const emptyLeg = normalized.routeLegsByDay['2026-07-07'][0];
 assert.equal(emptyLeg.loadNo, '', 'empty/reposition route leg does not keep old loaded BOL by default');
 assert.equal(normalized.loadInfo.loadNo, '', 'loadInfo does not carry prior Amazon load onto empty/reposition move');

@@ -512,29 +512,49 @@ function shouldClearEventLoadCarryover(event = {}, linkedLegs = []) {
     || (deliveryLeg && docsMatch(docs, firstRealText(deliveryLeg.shippingDocs, deliveryLeg.loadNo)));
 }
 
+function isUsableEventLocation(city = '', state = '') {
+  const c = safeText(city);
+  const s = safeUpper(state).slice(0, 2);
+  return !!c && !!s && !/^gps$/i.test(c) && !/^unk$/i.test(s);
+}
+
 function repairEventLocationFromRoute(event = {}, day = '', routeLegs = []) {
   if (!event || event.status === 'D') return event;
-  const match = routeLegs.find(leg => {
-    if (!safeText(leg.toCity) && !safeText(leg.toState)) return false;
-    if (leg.deliveryEventId && leg.deliveryEventId === event.id) return true;
-    if (leg.deliveryDay && leg.deliveryDay !== day) return false;
-    const deliveryMin = Number(leg.deliveryMin);
-    if (!Number.isFinite(deliveryMin)) return false;
-    return Math.abs(Number(event.startMin || 0) - deliveryMin) <= 45 || Math.abs(Number(event.endMin || 0) - deliveryMin) <= 45;
-  });
+
+  // v96.2 migration: older route normalization could replace a valid
+  // historical event location with a route destination found merely within a
+  // 45-minute time window. Restore the exact location that was saved before
+  // that repair and remove the dangerous marker so it cannot happen again.
+  if (event.locationRepairSource === 'route_leg_destination' && isUsableEventLocation(event.staleLocationLabel?.city, event.staleLocationLabel?.state)) {
+    const { staleLocationLabel, locationRepairSource, ...rest } = event;
+    return {
+      ...rest,
+      city:safeText(staleLocationLabel.city),
+      state:safeUpper(staleLocationLabel.state).slice(0, 2),
+      locationRepairReverted:true,
+    };
+  }
+
+  // A stored city/state is authoritative for that exact duty-status change.
+  // Route data may fill a genuinely blank/placeholder location only when the
+  // route leg is directly linked to the same event id.
+  if (isUsableEventLocation(event.city, event.state)) return event;
+
+  const deliveryMatch = routeLegs.find(leg => leg.deliveryEventId && leg.deliveryEventId === event.id) || null;
+  const pickupMatch = routeLegs.find(leg => leg.pickupEventId && leg.pickupEventId === event.id) || null;
+  const match = deliveryMatch || pickupMatch;
   if (!match) return event;
-  const nextCity = safeText(match.toCity);
-  const nextState = safeUpper(match.toState).slice(0, 2);
-  if (!nextCity && !nextState) return event;
-  const sameCity = keyText(event.city) === keyText(nextCity);
-  const sameState = safeUpper(event.state).slice(0, 2) === nextState;
-  if (sameCity && sameState) return event;
+
+  const nextCity = safeText(deliveryMatch ? match.toCity : match.fromCity);
+  const nextState = safeUpper(deliveryMatch ? match.toState : match.fromState).slice(0, 2);
+  if (!isUsableEventLocation(nextCity, nextState)) return event;
+
   return {
     ...event,
-    city: nextCity || event.city,
-    state: nextState || event.state,
-    staleLocationLabel: { city:event.city || '', state:event.state || '' },
-    locationRepairSource:'route_leg_destination',
+    city:nextCity,
+    state:nextState,
+    locationFilledFromRoute:true,
+    locationRepairSource:deliveryMatch ? 'linked_route_delivery' : 'linked_route_pickup',
   };
 }
 

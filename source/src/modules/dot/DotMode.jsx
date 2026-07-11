@@ -8,6 +8,8 @@ import { validateLogForSigning } from '../logbook/signing.js';
 import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
 import { DOC_SECTIONS, evaluateDotWallet, normalizeWallet } from '../../core/wallet/dotWallet.js';
 import { sanitizeLogText } from '../../shared/utils/logText.js';
+import { routeLegsForDayCanonical } from '../../core/routes/routeNormalization.js';
+import { eventHasNoLoadDeclaration } from '../../core/routes/shippingDocsRepair.js';
 
 const DEFAULT_DRIVER_NAME = 'Arben Oruci';
 const DEFAULT_DRIVER_EMAIL = 'arbenoruci@gmail.com';
@@ -133,10 +135,24 @@ function dotNumber(state) {
   return state.dotNumber || state.usdot || state.carrierDot || DEFAULT_DOT_NUMBER;
 }
 
-function shippingDocs(state) {
+function shippingDocs(state, day = state.activeDay) {
   const load = state.loadInfo || {};
-  const equipment = state.equipment || {};
-  return [load.loadNo, equipment.container, equipment.chassis].filter(Boolean).join(' ') || 'None';
+  const events = state.eventsByDay?.[day] || [];
+  const routeLegs = routeLegsForDayCanonical(state, day);
+  const eventIds = new Set(events.map(event => event?.id).filter(Boolean));
+  const loadBelongsToDay = load.sourceEventDay === day
+    || (!!load.sourceEventId && eventIds.has(load.sourceEventId))
+    || (!load.sourceEventDay && !load.sourceEventId && !routeLegs.length && !events.some(event => event.shippingDocs || event.loadNo));
+  const values = [
+    ...routeLegs.flatMap(leg => [leg.shippingDocs, leg.loadNo]),
+    ...events.flatMap(event => [event.shippingDocs, event.loadNo, event.bol, event.po]),
+    ...(loadBelongsToDay ? [load.shippingDocs, load.loadNo, load.bol, load.po] : []),
+  ].map(value => String(value || '').trim()).filter(Boolean);
+  const unique = [...new Map(values.map(value => [value.toLowerCase(), value])).values()];
+  if (unique.length) return unique.join(' · ');
+  const emptyMove = routeLegs.some(leg => leg.noLoadDeclared || /empty|bobtail|deadhead|reposition|no[_ ]load/i.test(`${leg.kind || ''} ${leg.source || ''} ${leg.noLoadNote || ''}`))
+    || events.some(eventHasNoLoadDeclaration);
+  return emptyMove ? 'Empty / reposition' : 'None';
 }
 
 function dutySummary(events = []) {

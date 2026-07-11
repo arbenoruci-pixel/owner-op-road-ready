@@ -1,3 +1,14 @@
+## v96.2.0 - Deep Scan: Location, Pickup, BOL & GPS
+
+- Prevents later-day city/state changes and route destinations from rewriting historical OFF/SB/ON event locations.
+- Restores older route-overwritten locations when the saved recovery metadata is available.
+- Adds exact-event BOL / Shipping document and Going to fields to existing Pickup / Loading event editing.
+- Keeps Pickup BOL and destination synchronized across the exact event, linked route leg, and day-scoped load record, including intentional clears.
+- Fixes the repeated missing-BOL sign blocker and accepts short, alphabetic, and legacy structured references.
+- Stops container/chassis IDs and unrelated OFF/SB note wording from satisfying or creating a BOL requirement.
+- Upgrades GPS to multi-sample high-accuracy locking, U.S. Census city/state reverse geocoding, manual-edit protection, and coarse-fix rejection over 250 m.
+- Preserves midnight Driving/Sleeper recovery, HOS, signing, DOT HTML sharing, event movement, and per-day export/import.
+
 ## v96.1.0 - Manual Driving Midnight + Hubbard Sleeper Fix
 
 - Preserves driver-entered Driving across midnight by closing the prior day at 24:00 and creating a real Driving continuation at 00:00.

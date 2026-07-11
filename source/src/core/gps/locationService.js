@@ -11,17 +11,34 @@ export function haversineMiles(a, b) {
 }
 
 export function detectState(lat, lng) {
-  // Field-test Midwest state detection. Production still needs real polygons/geocoder.
+  // Offline fallback only. The UI first asks the app's server-side reverse
+  // geocoder; these compact bounds keep city/state usable without data service.
   if (lat == null || lng == null) return 'UNK';
-  if (lat >= 37.6 && lat <= 41.8 && lng >= -88.2 && lng <= -84.7) return 'IN';
-  if (lat >= 36.9 && lat <= 42.6 && lng >= -91.7 && lng <= -87.0) return 'IL';
-  if (lat >= 38.3 && lat <= 42.4 && lng >= -84.9 && lng <= -80.4) return 'OH';
-  if (lat >= 36.4 && lat <= 39.2 && lng >= -89.6 && lng <= -81.9) return 'KY';
-  if (lat >= 42.45 && lat <= 47.35 && lng >= -92.9 && lng <= -86.75) return 'WI';
-  if (lat >= 40.35 && lat <= 43.55 && lng >= -96.65 && lng <= -90.1) return 'IA';
-  if (lat >= 41.65 && lat <= 48.35 && lng >= -90.45 && lng <= -82.1) return 'MI';
-  if (lat >= 35.95 && lat <= 40.65 && lng >= -95.8 && lng <= -89.0) return 'MO';
-  if (lat >= 43.45 && lat <= 49.4 && lng >= -97.25 && lng <= -89.45) return 'MN';
+  const y = Number(lat);
+  const x = Number(lng);
+  if (!Number.isFinite(y) || !Number.isFinite(x)) return 'UNK';
+
+  // Northeast (small states first so broad neighboring boxes do not win).
+  if (y >= 40.95 && y <= 42.10 && x >= -73.75 && x <= -71.75) return 'CT';
+  if (y >= 41.10 && y <= 42.05 && x >= -71.95 && x <= -71.10) return 'RI';
+  if (y >= 41.20 && y <= 42.95 && x >= -73.60 && x <= -69.80) return 'MA';
+  if (y >= 38.85 && y <= 41.40 && x >= -75.60 && x <= -73.85) return 'NJ';
+  if (y >= 38.40 && y <= 39.90 && x >= -75.80 && x <= -75.00) return 'DE';
+  if (y >= 37.85 && y <= 39.80 && x >= -79.55 && x <= -75.00) return 'MD';
+  if (y >= 39.70 && y <= 42.60 && x >= -80.60 && x <= -74.50) return 'PA';
+  if (y >= 40.45 && y <= 45.10 && x >= -79.80 && x <= -71.80) return 'NY';
+  if (y >= 37.00 && y <= 40.70 && x >= -82.70 && x <= -77.70) return 'WV';
+
+  // Midwest / Great Lakes.
+  if (y >= 37.6 && y <= 41.8 && x >= -88.2 && x <= -84.7) return 'IN';
+  if (y >= 36.9 && y <= 42.6 && x >= -91.7 && x <= -87.0) return 'IL';
+  if (y >= 38.3 && y <= 42.4 && x >= -84.9 && x <= -80.4) return 'OH';
+  if (y >= 36.4 && y <= 39.2 && x >= -89.6 && x <= -81.9) return 'KY';
+  if (y >= 42.45 && y <= 47.35 && x >= -92.9 && x <= -86.75) return 'WI';
+  if (y >= 40.35 && y <= 43.55 && x >= -96.65 && x <= -90.1) return 'IA';
+  if (y >= 41.65 && y <= 48.35 && x >= -90.45 && x <= -82.1) return 'MI';
+  if (y >= 35.95 && y <= 40.65 && x >= -95.8 && x <= -89.0) return 'MO';
+  if (y >= 43.45 && y <= 49.4 && x >= -97.25 && x <= -89.45) return 'MN';
   return 'UNK';
 }
 
@@ -122,6 +139,38 @@ const GPS_CITY_POINTS = [
   { city:'Davenport', state:'IA', lat:41.5236, lng:-90.5776 },
   { city:'Des Moines', state:'IA', lat:41.5868, lng:-93.6250 },
   { city:'Detroit', state:'MI', lat:42.3314, lng:-83.0458 },
+
+  // Connecticut / Northeast freight lanes
+  { city:'Cheshire', state:'CT', lat:41.4989, lng:-72.9007 },
+  { city:'East Hartford', state:'CT', lat:41.7637, lng:-72.6851 },
+  { city:'Hartford', state:'CT', lat:41.7658, lng:-72.6734 },
+  { city:'New Haven', state:'CT', lat:41.3083, lng:-72.9279 },
+  { city:'Waterbury', state:'CT', lat:41.5582, lng:-73.0515 },
+  { city:'Meriden', state:'CT', lat:41.5382, lng:-72.8070 },
+  { city:'New Britain', state:'CT', lat:41.6612, lng:-72.7795 },
+  { city:'Southington', state:'CT', lat:41.5965, lng:-72.8776 },
+  { city:'Stamford', state:'CT', lat:41.0534, lng:-73.5387 },
+  { city:'Bridgeport', state:'CT', lat:41.1792, lng:-73.1894 },
+  { city:'Danbury', state:'CT', lat:41.3948, lng:-73.4540 },
+  { city:'Springfield', state:'MA', lat:42.1015, lng:-72.5898 },
+  { city:'Worcester', state:'MA', lat:42.2626, lng:-71.8023 },
+  { city:'Boston', state:'MA', lat:42.3601, lng:-71.0589 },
+  { city:'Providence', state:'RI', lat:41.8240, lng:-71.4128 },
+  { city:'Newark', state:'NJ', lat:40.7357, lng:-74.1724 },
+  { city:'Elizabeth', state:'NJ', lat:40.6639, lng:-74.2107 },
+  { city:'Kearny', state:'NJ', lat:40.7684, lng:-74.1454 },
+  { city:'Secaucus', state:'NJ', lat:40.7895, lng:-74.0565 },
+  { city:'Allentown', state:'PA', lat:40.6023, lng:-75.4714 },
+  { city:'Scranton', state:'PA', lat:41.4090, lng:-75.6624 },
+  { city:'Harrisburg', state:'PA', lat:40.2732, lng:-76.8867 },
+  { city:'Pittsburgh', state:'PA', lat:40.4406, lng:-79.9959 },
+  { city:'Sharon', state:'PA', lat:41.2331, lng:-80.4934 },
+  { city:'Hermitage', state:'PA', lat:41.2334, lng:-80.4487 },
+  { city:'Erie', state:'PA', lat:42.1292, lng:-80.0851 },
+  { city:'Buffalo', state:'NY', lat:42.8864, lng:-78.8784 },
+  { city:'Rochester', state:'NY', lat:43.1566, lng:-77.6088 },
+  { city:'Syracuse', state:'NY', lat:43.0481, lng:-76.1474 },
+  { city:'Albany', state:'NY', lat:42.6526, lng:-73.7562 },
 ];
 
 
@@ -307,4 +356,148 @@ export function guessGpsCity(lat, lng) {
   if (best && best.miles <= 30) return { city:best.city, state:best.state };
   if (best && best.miles <= 45 && best.state === state) return { city:best.city, state:best.state };
   return { city:'GPS', state };
+}
+
+
+function gpsAccuracyValue(position = {}) {
+  const accuracy = Number(position?.coords?.accuracy);
+  return Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Collects several high-accuracy fixes and returns the best one. A single
+ * getCurrentPosition call on iOS can return a cached/cell-tower fix; watching
+ * briefly lets the GPS radio refine the stop location before the event saves.
+ */
+export function getBestGpsPosition(options = {}) {
+  const geolocation = options.geolocation || (typeof navigator !== 'undefined' ? navigator.geolocation : null);
+  const durationMs = Math.max(2500, Number(options.durationMs || 12000));
+  const targetAccuracy = Math.max(10, Number(options.targetAccuracy || 40));
+  const maximumAge = Math.max(0, Number(options.maximumAge ?? 0));
+  const minimumSamples = Math.max(1, Number(options.minimumSamples || 2));
+
+  return new Promise((resolve, reject) => {
+    if (!geolocation) {
+      reject(new Error('Geolocation unavailable'));
+      return;
+    }
+
+    let best = null;
+    let samples = 0;
+    let settled = false;
+    let watchId = null;
+    let timer = null;
+
+    const finish = (error = null) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (watchId != null && typeof geolocation.clearWatch === 'function') {
+        try { geolocation.clearWatch(watchId); } catch (_) {}
+      }
+      if (best) resolve(best);
+      else reject(error || new Error('Could not get GPS position'));
+    };
+
+    const accept = (position) => {
+      if (settled || !position?.coords) return;
+      samples += 1;
+      if (!best || gpsAccuracyValue(position) < gpsAccuracyValue(best)) best = position;
+      const bestAccuracy = gpsAccuracyValue(best);
+      // A truly precise satellite fix does not need a second sample. Otherwise
+      // keep watching until the requested sample count and target are met.
+      if (bestAccuracy <= Math.min(15, targetAccuracy / 2)) finish();
+      else if (samples >= minimumSamples && bestAccuracy <= targetAccuracy) finish();
+    };
+
+    const fail = (error) => {
+      if (best) finish();
+      else if (error?.code === 1) finish(error);
+    };
+
+    timer = setTimeout(() => finish(new Error('GPS timed out')), durationMs);
+
+    const gpsOptions = { enableHighAccuracy:true, timeout:durationMs, maximumAge };
+    if (typeof geolocation.watchPosition === 'function') {
+      try {
+        watchId = geolocation.watchPosition(accept, fail, gpsOptions);
+      } catch (error) {
+        finish(error);
+      }
+      return;
+    }
+
+    if (typeof geolocation.getCurrentPosition === 'function') {
+      try { geolocation.getCurrentPosition(accept, fail, gpsOptions); } catch (error) { finish(error); }
+      return;
+    }
+
+    finish(new Error('Geolocation unavailable'));
+  });
+}
+
+function gpsFallbackPlace(lat, lng) {
+  const guessed = guessGpsCity(lat, lng);
+  return {
+    city:guessed.city || 'GPS',
+    state:guessed.state || detectState(lat, lng) || 'UNK',
+    source:'offline-nearest-city',
+  };
+}
+
+/** Resolve a GPS fix to City, ST through the same-origin server route, with a
+ * deterministic offline fallback. */
+export async function resolveGpsPosition(position = {}, options = {}) {
+  const lat = Number(position?.coords?.latitude ?? position?.lat);
+  const lng = Number(position?.coords?.longitude ?? position?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('Invalid GPS coordinates');
+
+  const fallback = gpsFallbackPlace(lat, lng);
+  const fetchImpl = options.fetchImpl || (typeof fetch === 'function' ? fetch.bind(globalThis) : null);
+  const timeoutMs = Math.max(1000, Number(options.timeoutMs || 5000));
+  let resolved = fallback;
+
+  if (fetchImpl) {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const response = await fetchImpl(`/api/location/reverse?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`, {
+        cache:'no-store',
+        signal:controller?.signal,
+      });
+      if (response?.ok) {
+        const data = await response.json();
+        const city = String(data?.city || '').trim();
+        const state = String(data?.state || '').trim().toUpperCase().slice(0, 2);
+        if (city && state) resolved = { city, state, source:data.source || 'reverse-geocoder' };
+      }
+    } catch (_) {
+      // Offline/timeout: the nearest known city fallback remains available.
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  return {
+    ...resolved,
+    lat,
+    lng,
+    accuracy:Number.isFinite(Number(position?.coords?.accuracy)) ? Number(position.coords.accuracy) : null,
+    timestamp:Number(position?.timestamp || Date.now()),
+  };
+}
+
+export async function getAccurateGpsLocation(options = {}) {
+  const position = await getBestGpsPosition(options);
+  const accuracy = gpsAccuracyValue(position);
+  const maximumAcceptedAccuracy = Math.max(25, Number(options.maximumAcceptedAccuracy || 250));
+
+  if (options.rejectCoarseFix === true && accuracy > maximumAcceptedAccuracy) {
+    const error = new Error(`GPS accuracy is too coarse: ${Math.round(accuracy)} m`);
+    error.code = 'GPS_ACCURACY';
+    error.accuracy = accuracy;
+    throw error;
+  }
+
+  return resolveGpsPosition(position, options);
 }

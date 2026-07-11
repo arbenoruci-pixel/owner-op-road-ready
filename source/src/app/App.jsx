@@ -33,6 +33,7 @@ import { normalizeWallet } from '../core/wallet/dotWallet.js';
 import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, requestServiceWorkerUpdate, updateReloadUrl } from '../core/update/appUpdate.js';
 import { sanitizeLogText } from '../shared/utils/logText.js';
 import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
+import { applyShippingDocumentReference, enrichLoadEventFromLinkedRoute, findShippingDocsTargetEvent } from '../core/routes/shippingDocsRepair.js';
 import { appendRecoveredLiveTail, applyLiveStatusTransition, chooseRecoveryCandidate, isSuspiciousMidnightDrivingOverwrite, recoverEventsFromLocalRevisions, safeInsertRolloverDriving } from '../core/timeline/liveDrivingSafety.js';
 import { applyManualDrivingMidnightContinuity } from '../core/timeline/manualDrivingContinuity.js';
 import { applyUserConfirmedHubbardSleeperStopRepair } from '../core/timeline/userConfirmedStopRepair.js';
@@ -1006,7 +1007,12 @@ export default function App() {
   const rawEvents = useMemo(() => rawStoredEventsForDay(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);
   const events = useMemo(() => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);
   const liveCurrent = useMemo(() => currentFromEvents(events, state.currentStatus || 'OFF', state.currentLocation || { city:'GPS', state:'UNK' }, state.currentReason || 'Off Duty'), [events, state.currentStatus, state.currentLocation, state.currentReason]);
-  const selectedEvent = events.find(e => e.id === state.selectedEventId) || null;
+  const selectedEvent = useMemo(() => {
+    const raw = rawEvents.find(event => event.id === state.selectedEventId)
+      || events.find(event => event.id === state.selectedEventId)
+      || null;
+    return raw ? enrichLoadEventFromLinkedRoute(state, state.activeDay, raw) : null;
+  }, [rawEvents, events, state.selectedEventId, state.routeLegsByDay, state.activeDay]);
 
   function updateDay(day, eventsNext) {
     return { ...state, eventsByDay: { ...state.eventsByDay, [day]: normalizeLogEvents(eventsNext) } };
@@ -1181,9 +1187,10 @@ export default function App() {
       traceDutyWrite('addEvent:after', s.activeDay, merged);
       const eventsByDay = { ...s.eventsByDay, [s.activeDay]: merged };
       let routeLegsByDay = s.routeLegsByDay || {};
+      let loadInfo = s.loadInfo || {};
       for (const event of toAdd) {
         if (isPickupReason(event.note) || isDeliveryReason(event.note)) {
-          routeLegsByDay = updateRouteLegsForStatus(routeLegsByDay, s.activeDay, {
+          const loadPayload = {
             status:event.status,
             reason:event.note,
             city:event.city,
@@ -1192,11 +1199,14 @@ export default function App() {
             loadNo:event.loadNo || event.shippingDocs || '',
             destination:event.destination || '',
             destinationState:event.destinationState || '',
-          }, event.id, event.startMin);
+          };
+          routeLegsByDay = updateRouteLegsForStatus(routeLegsByDay, s.activeDay, loadPayload, event.id, event.startMin);
+          const loadPatch = buildLoadPatchForStatusPayload(loadPayload, event.id);
+          if (loadPatch) loadInfo = { ...loadInfo, ...loadPatch, sourceEventDay:s.activeDay };
         }
       }
       routeLegsByDay = syncRouteLegTimes(routeLegsByDay, eventsByDay);
-      let next = { ...s, eventsByDay, routeLegsByDay, selectedEventId:null, sheet:null };
+      let next = normalizeLoadInfoFromRouteLegs({ ...s, eventsByDay, routeLegsByDay, loadInfo, selectedEventId:null, sheet:null });
       const preTripAdded = toAdd.find(e => isPreTripStatus(e.status, `${e.note || ''} ${e.description || ''}`));
       next = withAcceptedPreTripInspection(next, s.activeDay, preTripAdded, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
@@ -1248,9 +1258,13 @@ export default function App() {
 
       const eventsByDay = { ...s.eventsByDay, [s.activeDay]: evs };
       const editedEvent = evs.find(e => e.id === id);
+      const wasLoadEvent = isPickupReason(beforeEdit.note) || isDeliveryReason(beforeEdit.note);
+      const isLoadEvent = !!editedEvent && (isPickupReason(editedEvent.note) || isDeliveryReason(editedEvent.note));
       let routeLegsByDay = syncRouteLegTimes(s.routeLegsByDay || {}, eventsByDay);
-      if (editedEvent && (isPickupReason(editedEvent.note) || isDeliveryReason(editedEvent.note))) {
-        routeLegsByDay = updateRouteLegsForStatus(routeLegsByDay, s.activeDay, {
+      let loadInfo = s.loadInfo || {};
+
+      if (editedEvent && isLoadEvent) {
+        const loadPayload = {
           status:editedEvent.status,
           reason:editedEvent.note,
           city:editedEvent.city,
@@ -1259,10 +1273,31 @@ export default function App() {
           loadNo:editedEvent.loadNo || editedEvent.shippingDocs || '',
           destination:editedEvent.destination || '',
           destinationState:editedEvent.destinationState || '',
-        }, editedEvent.id, editedEvent.startMin);
+        };
+        routeLegsByDay = updateRouteLegsForStatus(routeLegsByDay, s.activeDay, loadPayload, editedEvent.id, editedEvent.startMin);
         routeLegsByDay = syncRouteLegTimes(routeLegsByDay, eventsByDay);
+        const loadPatch = buildLoadPatchForStatusPayload(loadPayload, editedEvent.id);
+        if (loadPatch) loadInfo = { ...loadInfo, ...loadPatch, sourceEventDay:s.activeDay };
+      } else if (wasLoadEvent) {
+        routeLegsByDay = syncRouteLegTimes(removeOrUnlinkRouteLegForEvent(routeLegsByDay, id), eventsByDay);
+        if (loadInfo.sourceEventId === id) {
+          loadInfo = {
+            ...loadInfo,
+            shippingDocs:'',
+            loadNo:'',
+            bol:'',
+            po:'',
+            pickupCity:'',
+            pickupState:'',
+            deliveryCity:'',
+            deliveryState:'',
+            sourceEventId:'',
+            sourceEventDay:'',
+            sourceEventReason:'',
+          };
+        }
       }
-      let next = { ...s, gpsTrip, routeLegsByDay, eventsByDay, selectedEventId:null, sheet:null };
+      let next = normalizeLoadInfoFromRouteLegs({ ...s, gpsTrip, loadInfo, routeLegsByDay, eventsByDay, selectedEventId:null, sheet:null });
       next = withAcceptedPreTripInspection(next, s.activeDay, editedEvent, acceptedInspection);
       next = reconcilePreTripInspections(next, [s.activeDay]);
       return markRecert(next);
@@ -1511,22 +1546,32 @@ export default function App() {
     const destination = parseCityStateInput(payload.destination || '', payload.destinationState || '');
 
     if (isPickupReason(reason)) {
+      const existing = routeLegArray(routeLegsByDay).find(leg => leg.pickupEventId === eventId || leg.id === `leg_${eventId}`) || null;
       const leg = normalizeRouteLeg({
-        id:`leg_${eventId}`,
-        day,
+        ...(existing || {}),
+        id:existing?.id || `leg_${eventId}`,
+        day:existing?.day || day,
         pickupDay:day,
         pickupEventId:eventId,
         pickupMin:startMin,
         fromCity:origin.city,
         fromState:origin.state,
+        // The exact event owns its Going to value. An intentional clear in
+        // Edit must clear the route too instead of resurrecting yesterday's or
+        // the prior edit's destination on the next reload.
         toCity:destination.city,
         toState:destination.state,
         shippingDocs,
         loadNo:shippingDocs,
-        status:'open',
+        // Editing pickup details must retain a later delivery link, if one
+        // already exists on the same route leg.
+        deliveryDay:existing?.deliveryDay || '',
+        deliveryEventId:existing?.deliveryEventId || '',
+        deliveryMin:existing?.deliveryMin ?? null,
+        status:existing?.deliveryEventId ? 'delivered' : 'open',
         source:'pickup_event',
       });
-      return upsertRouteLeg(routeLegsByDay, day, leg);
+      return upsertRouteLeg(routeLegsByDay, existing?.day || day, leg);
     }
 
     if (isDeliveryReason(reason)) {
@@ -1579,18 +1624,24 @@ export default function App() {
     const patch = {
       sourceEventId:eventId,
       sourceEventReason:reason,
+      // Keep the global current-load cache aligned with the exact event. Empty
+      // is meaningful here: clearing/replacing a BOL must not leave an older
+      // day/event's reference behind and accidentally satisfy signing.
+      shippingDocs,
+      loadNo:shippingDocs,
+      bol:shippingDocs,
+      po:shippingDocs,
+      noLoadDeclared:false,
+      noLoadNote:'',
       updatedAt:Date.now(),
     };
-
-    if (shippingDocs) {
-      patch.shippingDocs = shippingDocs;
-      patch.loadNo = shippingDocs;
-    }
     if (pickupLike) {
       patch.pickupCity = origin.city || payload.pickupCity || '';
       patch.pickupState = origin.state || payload.pickupState || '';
-      if (destination.city) patch.deliveryCity = destination.city;
-      if (destination.state) patch.deliveryState = destination.state;
+      // Blank is meaningful for a new/edited pickup. Clear stale global
+      // destination data so a previous load cannot reappear in this event.
+      patch.deliveryCity = destination.city || '';
+      patch.deliveryState = destination.state || '';
     }
     if (deliveryLike) {
       if (destination.city || destination.state) {
@@ -1934,12 +1985,29 @@ export default function App() {
 
   function saveLoadInfo(payload = {}) {
     setState(s => {
-      const { routeLegsByDay: payloadRouteLegsByDay, ...loadInfoPayload } = payload || {};
+      const hasOwn = (key) => Object.prototype.hasOwnProperty.call(payload || {}, key);
+      const docsKey = ['shippingDocs', 'loadNo', 'bol', 'po'].find(hasOwn) || '';
+      const docsValue = docsKey ? String(payload?.[docsKey] || '').trim() : '';
+      const {
+        routeLegsByDay: payloadRouteLegsByDay,
+        shippingDocs: _shippingDocs,
+        loadNo: _loadNo,
+        bol: _bol,
+        po: _po,
+        ...loadInfoPayload
+      } = payload || {};
       let next = {
         ...s,
         loadInfo: { ...(s.loadInfo || {}), ...loadInfoPayload },
         ...(payloadRouteLegsByDay ? { routeLegsByDay: payloadRouteLegsByDay } : {}),
       };
+      if (docsKey) {
+        next = applyShippingDocumentReference(next, {
+          day:s.activeDay,
+          value:docsValue,
+          allowEmpty:true,
+        });
+      }
       next = normalizeLoadInfoFromRouteLegs(next);
       if (payload.driverName !== undefined) {
         next.driverProfile = { ...(s.driverProfile || {}), name:String(payload.driverName || '').trim() };
@@ -2326,14 +2394,23 @@ export default function App() {
     }
 
     if (action === 'OPEN_SHIPPING_DOCS') {
-      const existing = state.loadInfo?.shippingDocs || state.loadInfo?.bol || state.loadInfo?.loadNo || '';
+      const day = payload.day || state.activeDay;
+      const target = findShippingDocsTargetEvent(state, day, payload.eventId || payload.issue?.eventId || '');
+      const existing = target?.shippingDocs || target?.loadNo || target?.bol
+        || (state.loadInfo?.sourceEventDay === day ? (state.loadInfo?.shippingDocs || state.loadInfo?.bol || state.loadInfo?.loadNo || '') : '');
       const value = window.prompt('Enter BOL / load reference, or type Empty / bobtail / no load only if accurate:', existing || '');
-      if (value == null) return;
-      setState(s => ({
-        ...s,
-        loadInfo: { ...(s.loadInfo || {}), shippingDocs: String(value || '').trim() },
-        ...(!payload.silent ? { roadGuardTabRequest: { tab:'form', at:Date.now() } } : {}),
-      }));
+      if (value == null || !String(value).trim()) return;
+      setState(s => {
+        let next = applyShippingDocumentReference(s, {
+          day,
+          eventId:payload.eventId || payload.issue?.eventId || '',
+          issue:payload.issue || null,
+          value:String(value).trim(),
+        });
+        next = markDayRecert(next, day);
+        if (!payload.silent) next = { ...next, roadGuardTabRequest:{ tab:'form', at:Date.now() } };
+        return next;
+      });
       return;
     }
 
@@ -2363,7 +2440,17 @@ export default function App() {
         return;
       }
       if (/SET_SHIPPING_DOCS/.test(appAction) && value) {
-        setState(s => ({ ...s, loadInfo:{ ...(s.loadInfo || {}), shippingDocs:value }, roadGuardTabRequest:{ tab:'form', at:Date.now() } }));
+        const day = payload.day || state.activeDay;
+        setState(s => {
+          let next = applyShippingDocumentReference(s, {
+            day,
+            eventId:payload.eventId || payload.issue?.eventId || '',
+            issue:payload.issue || null,
+            value,
+          });
+          next = markDayRecert(next, day);
+          return { ...next, roadGuardTabRequest:{ tab:'form', at:Date.now() } };
+        });
         return;
       }
       if (/SET_TRAILER_STATUS/.test(appAction) && value) {
@@ -2606,7 +2693,7 @@ export default function App() {
         manualDrivingSession,
         certifyStatus:{ ...(base.certifyStatus || {}), [day]:base.certifyStatus?.[day] || 'Active day / Not certified yet' },
         ...(dropHookEquipment ? { equipment:dropHookEquipment } : {}),
-        ...((dropHookLoadPatch || loadInfoPatch) ? { loadInfo:{ ...(base.loadInfo || {}), ...(loadInfoPatch || {}), ...(dropHookLoadPatch || {}) } } : {}),
+        ...((dropHookLoadPatch || loadInfoPatch) ? { loadInfo:{ ...(base.loadInfo || {}), ...(loadInfoPatch || {}), ...(dropHookLoadPatch || {}), sourceEventDay:day } } : {}),
       };
       next = withAcceptedPreTripInspection(next, day, ev, acceptedLiveInspection);
       next = normalizeLoadInfoFromRouteLegs(reconcilePreTripInspections(next, [day]));

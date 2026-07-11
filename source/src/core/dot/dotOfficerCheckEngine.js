@@ -4,6 +4,7 @@ import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverag
 import { analyzeLinkedHos, violationRangesForDay } from '../hos/hosEngine.js';
 import { haversineMiles, pointFromLogLocation } from '../gps/locationService.js';
 import { docsTokensForTransition, routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../routes/routeNormalization.js';
+import { eventHasNoLoadDeclaration, isPickupLoadEvent } from '../routes/shippingDocsRepair.js';
 
 const STATUS_LABEL = { OFF:'OFF DUTY', SB:'SLEEPER', D:'DRIVING', ON:'ON DUTY' };
 
@@ -95,14 +96,15 @@ function totalMinutes(events = []) {
 }
 
 function hasPickupText(event = {}) {
-  return /pickup|pick up|loading/i.test(`${event.note || ''} ${event.description || ''}`);
+  return isPickupLoadEvent(event);
 }
 
 function hasDeliveryText(event = {}) {
+  if (event.status !== 'ON') return false;
   const text = `${event.note || ''} ${event.description || ''}`;
   // “Drop & Hook” by itself is equipment/load transition wording, not a delivered-route proof.
-  // Treat delivery as explicit delivery/unloading/drop-off/delivered wording only.
-  return /delivered|delivery|unloading|drop\s*off|dropped/i.test(text);
+  // Treat delivery as explicit ON DUTY delivery/unloading/drop-off/delivered wording only.
+  return /delivered\b|delivery\b|unloading\b|drop\s*off\b|dropped\b/i.test(text);
 }
 
 function hasPreTripText(event = {}) {
@@ -156,14 +158,15 @@ function uniqueDocValues(values = []) {
 
 function shippingDocsForDay(state, day, events = []) {
   const load = state.loadInfo || {};
-  const equipment = state.equipment || {};
   const routeLegs = routeLegsForDay(state, day);
+  const eventIds = new Set(events.map(event => event?.id).filter(Boolean));
+  const loadBelongsToDay = load.sourceEventDay === day
+    || (!!load.sourceEventId && eventIds.has(load.sourceEventId))
+    || (!load.sourceEventDay && !load.sourceEventId && !routeLegs.length && !events.some(event => event.shippingDocs || event.loadNo));
   return uniqueDocValues([
-    ...routeLegs.flatMap(leg => [leg.shippingDocs, leg.loadNo, ...(Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : [])]),
-    ...events.flatMap(event => [event.shippingDocs, event.loadNo, ...(Array.isArray(event.transitionLoadNos) ? event.transitionLoadNos : [])]),
-    ...(routeLegs.length ? [] : [load.loadNo, load.po, load.bol, load.shippingDocs]),
-    equipment.container,
-    equipment.chassis,
+    ...routeLegs.flatMap(leg => [leg.shippingDocs, leg.loadNo, leg.bol, leg.po, ...(Array.isArray(leg.transitionLoadNos) ? leg.transitionLoadNos : [])]),
+    ...events.flatMap(event => [event.shippingDocs, event.loadNo, event.bol, event.po, ...(Array.isArray(event.transitionLoadNos) ? event.transitionLoadNos : [])]),
+    ...(loadBelongsToDay ? [load.loadNo, load.po, load.bol, load.shippingDocs] : []),
   ]);
 }
 
@@ -226,8 +229,15 @@ function buildFormIssues(state, day, events) {
   const truck = safeText(state.driver?.truck);
   const trailer = safeText(state.currentTrailer || state.driver?.trailer);
   const docs = shippingDocsForDay(state, day, events);
-  const hasLoadWork = events.some(event => hasPickupText(event) || hasDeliveryText(event) || event.status === 'D');
-  const hasNoLoadNote = events.some(event => isNoLoadText(`${event.note || ''} ${event.description || ''}`));
+  const routeLegs = routeLegsForDay(state, day);
+  const hasLoadedRoute = routeLegs.some(leg => {
+    const descriptor = `${leg.kind || ''} ${leg.status || ''} ${leg.source || ''}`;
+    const emptyLike = leg.noLoadDeclared || /empty|reposition|return|bobtail|deadhead|no_load/i.test(descriptor);
+    return !emptyLike && leg.status !== 'cancelled' && !!(leg.pickupEventId || leg.deliveryEventId || leg.pickupDay || leg.deliveryDay);
+  });
+  const hasLoadWork = hasLoadedRoute || events.some(event => hasPickupText(event) || hasDeliveryText(event));
+  const hasNoLoadNote = events.some(eventHasNoLoadDeclaration)
+    || routeLegs.some(leg => leg.noLoadDeclared || isNoLoadText(`${leg.kind || ''} ${leg.source || ''} ${leg.noLoadNote || ''}`));
 
   if (!driverName) issues.push(makeIssue('form', { id:'missing_driver', title:'Driver name missing', detail:'Form → Driver', fixAction:'OPEN_FORM_FIELD', target:'driverName' }));
   if (!carrier) issues.push(makeIssue('form', { id:'missing_carrier', title:'Carrier name missing', detail:'Form → Carrier', fixAction:'OPEN_FORM_FIELD', target:'carrierName' }));
@@ -237,7 +247,19 @@ function buildFormIssues(state, day, events) {
     issues.push(makeIssue('form', { id:'trailer_review', severity:'review', title:'Trailer/equipment review', detail:'Form → Trailer/equipment', fixAction:'OPEN_FORM_FIELD', target:'trailer', actionLabel:'Open' }));
   }
   if (hasLoadWork && !docs.length && !hasNoLoadNote) {
-    issues.push(makeIssue('form', { id:'missing_shipping_docs', title:'Shipping docs missing', detail:'Form → Shipping docs / BOL', fixAction:'OPEN_FORM_FIELD', target:'shippingDocs', actionLabel:'Add BOL' }));
+    const targetEvent = events.find(event => (hasPickupText(event) || hasDeliveryText(event)) && !safeText(event.shippingDocs || event.loadNo || event.bol || event.po) && !eventHasNoLoadDeclaration(event))
+      || events.find(event => hasPickupText(event) || hasDeliveryText(event))
+      || null;
+    issues.push(makeIssue('form', {
+      id:'missing_shipping_docs',
+      title:'Shipping docs missing',
+      detail:'Form → Shipping docs / BOL',
+      fixAction:'OPEN_FORM_FIELD',
+      target:'shippingDocs',
+      eventId:targetEvent?.id || '',
+      day,
+      actionLabel:'Add BOL',
+    }));
   }
 
   const drivingEvents = events.filter(event =>

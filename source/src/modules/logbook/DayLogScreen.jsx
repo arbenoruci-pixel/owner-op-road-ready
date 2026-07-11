@@ -447,9 +447,14 @@ function formSummary(state, events) {
   const equipment = state.equipment || {};
   const routeLegs = routeLegsForDay(state, state.activeDay);
   const legDocs = uniqueClean(routeLegs.map(leg => leg.shippingDocs || leg.loadNo));
-  const loadDocs = uniqueClean([load.shippingDocs, load.loadNo, load.bol, load.po]);
-  const equipmentDocs = uniqueClean([equipment.container, equipment.chassis]);
-  const shippingDocs = (routeLegs.length ? legDocs : uniqueClean([...loadDocs, ...equipmentDocs])).join(' · ');
+  const eventIds = new Set((events || []).map(event => event?.id).filter(Boolean));
+  const eventDocs = uniqueClean((events || []).flatMap(event => [event.shippingDocs, event.loadNo, event.bol, event.po]));
+  const loadBelongsToDay = load.sourceEventDay === state.activeDay
+    || (!!load.sourceEventId && eventIds.has(load.sourceEventId))
+    || (!load.sourceEventDay && !load.sourceEventId && !routeLegs.length && !eventDocs.length);
+  const loadDocs = loadBelongsToDay ? uniqueClean([load.shippingDocs, load.loadNo, load.bol, load.po]) : [];
+  // Container/chassis are equipment identifiers, not shipping documents.
+  const shippingDocs = (routeLegs.length ? legDocs : uniqueClean([...eventDocs, ...loadDocs])).join(' · ');
   const equipmentSummary = equipmentFormSummary(state, state.activeDay, events, routeLegs);
   const trailers = equipmentSummary.value;
   const notes = safeValue(load.notes || load.note || state.formNotes || '', 'None');
@@ -2092,7 +2097,11 @@ export default function DayDetail({
     if (action === 'OPEN_FORM_FIELD' || action === 'OPEN_ROUTE_LEG') {
       setActiveTab('form');
       if (issue.target === 'shippingDocs') {
-        window.setTimeout(() => onRoadGuardFix?.('OPEN_SHIPPING_DOCS', { day:issue.day || state.activeDay }), 0);
+        window.setTimeout(() => onRoadGuardFix?.('OPEN_SHIPPING_DOCS', {
+          day:issue.day || state.activeDay,
+          eventId:issue.eventId || '',
+          issue,
+        }), 0);
       }
       return;
     }

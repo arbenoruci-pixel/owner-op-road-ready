@@ -35,6 +35,7 @@ export default function EditorLocationFields({
   onGps = null,
   gpsStatus = '',
   onClear = null,
+  onLocationDraftChange = null,
   suggestions = [],
   collapsedDescription = false,
 }) {
@@ -67,7 +68,7 @@ export default function EditorLocationFields({
           value={draft}
           onFocus={e => e.target.select()}
           onClick={e => e.currentTarget.select()}
-          onChange={e => setDraft(e.target.value)}
+          onChange={e => { setDraft(e.target.value); onLocationDraftChange?.(e.target.value); }}
           onBlur={() => commitLocation()}
           placeholder="City, ST"
           autoComplete="off"

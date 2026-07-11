@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import EditorDutyStatusControls, { DUTY_SHORT_LABELS } from './components/EditorDutyStatusControls.jsx';
 import EditorGraphPanel from './components/EditorGraphPanel.jsx';
 import EditorTimeControls from './components/EditorTimeControls.jsx';
@@ -7,7 +7,7 @@ import EditorNotesField from './components/EditorNotesField.jsx';
 import { durLabel, fromInput, toInput, timeLabel } from '../../shared/utils/time.js';
 import { label as statusLabel } from '../../shared/utils/status.js';
 import { applyPatchWithNeighbors } from '../../core/timeline/timelineEngine.js';
-import { detectState, guessGpsCity } from '../../core/gps/locationService.js';
+import { getAccurateGpsLocation } from '../../core/gps/locationService.js';
 
 function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
   const value = String(text || '').toLowerCase();
@@ -18,6 +18,31 @@ function textLooksLikeStatusArtifact(text = '', status = 'OFF') {
   if (status !== 'OFF' && /off duty|parked|parking/i.test(value)) return true;
   if (/\s\/\s/.test(value) && /(pre[- ]?trip|inspection|on duty|driving|new event)/i.test(value)) return true;
   return false;
+}
+
+function parseCityState(value = '', fallbackState = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return { city:'', state:'' };
+  const parts = raw.split(',');
+  if (parts.length >= 2) {
+    const state = parts.pop().trim().toUpperCase().slice(0, 2);
+    return { city:parts.join(',').trim(), state };
+  }
+  const trailing = raw.match(/^(.+?)\s+([A-Za-z]{2})$/);
+  if (trailing) return { city:trailing[1].trim(), state:trailing[2].toUpperCase() };
+  return { city:raw, state:String(fallbackState || '').trim().toUpperCase().slice(0, 2) };
+}
+
+function cityStateText(city = '', state = '') {
+  return [String(city || '').trim(), String(state || '').trim().toUpperCase().slice(0, 2)].filter(Boolean).join(', ');
+}
+
+function loadActivityKind(status = '', note = '', description = '') {
+  if (status !== 'ON') return '';
+  const text = `${note || ''} ${description || ''}`;
+  if (/pickup|pick up|loading/i.test(text)) return 'pickup';
+  if (/delivery|unloading/i.test(text)) return 'delivery';
+  return '';
 }
 
 function formStateFromEvent(event = {}) {
@@ -33,6 +58,9 @@ function formStateFromEvent(event = {}) {
     lng:event.lng ?? null,
     gpsAccuracy:event.gpsAccuracy ?? null,
     locationSource:event.locationSource || 'manual',
+    shippingDocs:event.shippingDocs || event.loadNo || event.bol || '',
+    destination:event.destination || cityStateText(event.destinationCity || '', event.destinationState || ''),
+    destinationState:event.destinationState || '',
   };
 }
 
@@ -54,6 +82,11 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
   const [gpsAccuracy, setGpsAccuracy] = useState(initialForm.gpsAccuracy);
   const [locationSource, setLocationSource] = useState(initialForm.locationSource);
   const [gpsStatus, setGpsStatus] = useState('');
+  const [gpsPending, setGpsPending] = useState(false);
+  const [shippingDocs, setShippingDocs] = useState(initialForm.shippingDocs);
+  const [destination, setDestination] = useState(initialForm.destination);
+  const gpsRequestId = useRef(0);
+  const manualLocationDirty = useRef(false);
 
   useEffect(() => {
     const next = formStateFromEvent(event);
@@ -68,10 +101,34 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
     setLng(next.lng);
     setGpsAccuracy(next.gpsAccuracy);
     setLocationSource(next.locationSource);
+    setShippingDocs(next.shippingDocs);
+    setDestination(next.destination);
+    gpsRequestId.current += 1;
+    manualLocationDirty.current = false;
+    setGpsPending(false);
     setGpsStatus('');
   }, [event.id]);
 
-  const preview = { ...event, status, startMin: fromInput(start), endMin: Math.max(fromInput(start) + 5, fromInput(end)), city, state, description, note, lat, lng, gpsAccuracy, locationSource };
+  const activityKind = loadActivityKind(status, note, description);
+  const destinationParts = parseCityState(destination, initialForm.destinationState || '');
+  const preview = {
+    ...event,
+    status,
+    startMin:fromInput(start),
+    endMin:Math.max(fromInput(start) + 5, fromInput(end)),
+    city,
+    state,
+    description,
+    note,
+    lat,
+    lng,
+    gpsAccuracy,
+    locationSource,
+    shippingDocs:activityKind ? shippingDocs.trim() : '',
+    loadNo:activityKind ? shippingDocs.trim() : '',
+    destination:activityKind ? cityStateText(destinationParts.city, destinationParts.state) : '',
+    destinationState:activityKind ? destinationParts.state : '',
+  };
   const previewEvents = applyPatchWithNeighbors(events, event.id, preview);
   const durationMinutes = Math.max(0, preview.endMin - preview.startMin);
   const header = `${DUTY_SHORT_LABELS[status]} · ${timeLabel(fromInput(start))} - ${timeLabel(preview.endMin)}`;
@@ -85,7 +142,9 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
     !sameValue(lat, initialForm.lat) ||
     !sameValue(lng, initialForm.lng) ||
     !sameValue(gpsAccuracy, initialForm.gpsAccuracy) ||
-    locationSource !== initialForm.locationSource;
+    locationSource !== initialForm.locationSource ||
+    shippingDocs !== initialForm.shippingDocs ||
+    destination !== initialForm.destination;
 
   function handleGraphSelect(nextId) {
     if (!nextId || nextId === event.id) return;
@@ -96,34 +155,59 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
     onSwitch?.(nextId);
   }
 
-  function applyGps() {
-    if (!navigator.geolocation) {
+  async function applyGps() {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setGpsStatus('GPS unavailable. Type location manually.');
       return;
     }
 
-    setGpsStatus('Getting GPS location…');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const nextLat = pos.coords.latitude;
-        const nextLng = pos.coords.longitude;
-        const guessed = guessGpsCity(nextLat, nextLng);
-        const nextCity = guessed.city || 'GPS';
-        const nextState = guessed.state || detectState(nextLat, nextLng);
-        setCity(nextCity);
-        setState(nextState);
-        setLat(nextLat);
-        setLng(nextLng);
-        setGpsAccuracy(pos.coords.accuracy || null);
-        setLocationSource('gps');
-        setGpsStatus(`GPS locked · ${nextCity}, ${nextState}`);
-      },
-      () => setGpsStatus('GPS blocked/unavailable. Type location manually.'),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
-    );
+    const requestId = gpsRequestId.current + 1;
+    gpsRequestId.current = requestId;
+    manualLocationDirty.current = false;
+    setGpsPending(true);
+    setGpsStatus('Improving GPS accuracy…');
+
+    try {
+      const fix = await getAccurateGpsLocation({
+        durationMs:12000,
+        targetAccuracy:40,
+        maximumAge:0,
+        minimumSamples:2,
+        rejectCoarseFix:true,
+        maximumAcceptedAccuracy:250,
+      });
+      if (gpsRequestId.current !== requestId || manualLocationDirty.current) return;
+      const nextCity = fix.city || 'GPS';
+      const nextState = fix.state || 'UNK';
+      setCity(nextCity);
+      setState(nextState);
+      setLat(fix.lat ?? null);
+      setLng(fix.lng ?? null);
+      setGpsAccuracy(fix.accuracy ?? null);
+      setLocationSource('gps');
+      setGpsPending(false);
+      setGpsStatus(`GPS locked · ${nextCity}, ${nextState}${fix.accuracy != null ? ` · ±${Math.round(fix.accuracy)} m` : ''}`);
+    } catch (error) {
+      if (gpsRequestId.current !== requestId) return;
+      setGpsPending(false);
+      if (manualLocationDirty.current) return;
+      if (error?.code === 'GPS_ACCURACY') {
+        setGpsStatus(`GPS signal too weak${Number.isFinite(error.accuracy) ? ` (±${Math.round(error.accuracy)} m)` : ''}. Tap GPS again or type City, ST.`);
+      } else {
+        setGpsStatus('GPS blocked/unavailable. Type location manually.');
+      }
+    }
+  }
+
+  function markManualLocationDraft() {
+    manualLocationDirty.current = true;
+    gpsRequestId.current += 1;
+    setGpsPending(false);
+    setGpsStatus('Manual location');
   }
 
   function manualLocation(c, s) {
+    markManualLocationDraft();
     setCity(c);
     setState(s);
     setLat(null);
@@ -147,7 +231,26 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
   function save() {
     const cleanNote = textLooksLikeStatusArtifact(note, status) || /^new event$/i.test(String(note || '').trim()) ? statusLabel(status) : note;
     const cleanDescription = textLooksLikeStatusArtifact(description, status) || /^new event$/i.test(String(description || '').trim()) ? '' : description;
-    onSave({ status, startMin: preview.startMin, endMin: preview.endMin, city, state, description: cleanDescription, note: cleanNote, lat, lng, gpsAccuracy, locationSource });
+    const kind = loadActivityKind(status, cleanNote, cleanDescription);
+    const goingTo = parseCityState(destination, initialForm.destinationState || '');
+    onSave({
+      status,
+      startMin:preview.startMin,
+      endMin:preview.endMin,
+      city,
+      state,
+      description:cleanDescription,
+      note:cleanNote,
+      lat,
+      lng,
+      gpsAccuracy,
+      locationSource,
+      shippingDocs:kind ? shippingDocs.trim() : '',
+      loadNo:kind ? shippingDocs.trim() : '',
+      bol:kind ? shippingDocs.trim() : '',
+      destination:kind ? cityStateText(goingTo.city, goingTo.state) : '',
+      destinationState:kind ? goingTo.state : '',
+    });
     onClose();
   }
 
@@ -180,6 +283,7 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
           city={city}
           state={state}
           onLocationChange={manualLocation}
+          onLocationDraftChange={markManualLocationDraft}
           description={description}
           onDescriptionChange={setDescription}
           onGps={applyGps}
@@ -188,7 +292,36 @@ export default function EditEventSheet({ event, events, onClose, onSave, onDelet
           collapsedDescription
         />
 
-        <div className="edit-sticky-save"><button className="save-main" onClick={save}>Save</button></div>
+        {activityKind && (
+          <section className="form-section editor-pickup-details">
+            <div className="form-label-row">
+              <div className="form-label">{activityKind === 'pickup' ? 'Pickup details' : 'Delivery details'}</div>
+              <span>saved on this event</span>
+            </div>
+            <div className="driver-load-grid">
+              <label>
+                <span>BOL / Shipping document #</span>
+                <input
+                  value={shippingDocs}
+                  onChange={(e) => setShippingDocs(e.target.value)}
+                  placeholder="BOL or load reference"
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                <span>{activityKind === 'pickup' ? 'Going to' : 'Delivery location'}</span>
+                <input
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                  placeholder="City, ST"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+          </section>
+        )}
+
+        <div className="edit-sticky-save"><button className="save-main" onClick={save} disabled={gpsPending}>{gpsPending ? 'Locking GPS…' : 'Save'}</button></div>
 
         <EditorNotesField note={note} onNoteChange={setNote} />
 

@@ -20,11 +20,43 @@ function hasText(v) {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
+function hasEventSpecificRouteData(event = {}) {
+  return !!(
+    event.shippingDocs || event.loadNo || event.bol || event.po ||
+    event.destination || event.destinationState || event.loadLinkId ||
+    event.deliveredLoadNo || event.pickedUpLoadNo ||
+    (Array.isArray(event.transitionLoadNos) && event.transitionLoadNos.length)
+  );
+}
+
+function onDutyActivityKey(event = {}) {
+  const text = normalizeTextPart(`${event.note || ''} ${event.description || ''}`).toLowerCase();
+  if (/pickup|pick up|loading/.test(text)) return 'pickup';
+  if (/delivery|unloading|drop\s*off|delivered/.test(text)) return 'delivery';
+  if (/drop\s*&\s*hook|drop and hook|hook empty|reposition/.test(text)) return 'equipment';
+  if (/pre[- ]?trip|inspection/.test(text)) return 'inspection';
+  if (/fuel/.test(text)) return 'fuel';
+  if (/waiting/.test(text)) return 'waiting';
+  return text.replace(/\s+/g, ' ').trim() || 'on-duty';
+}
+
 function mergeableSameStatus(last, current) {
   if (!last || !current || last.status !== current.status) return false;
   const touches = Number(current.startMin || 0) === Number(last.endMin || 0);
   const overlaps = Number(current.startMin || 0) < Number(last.endMin || 0);
-  return touches || overlaps;
+  if (!touches && !overlaps) return false;
+
+  // Overlap cleanup still collapses duplicate/invalid rows. For clean touching
+  // ON DUTY rows, preserve separate activities (Pre-trip, Pickup, Fuel, etc.)
+  // and preserve event-specific load/route metadata on the exact event.
+  if (last.status === 'ON' && touches && !overlaps) {
+    if (hasEventSpecificRouteData(last) || hasEventSpecificRouteData(current)) {
+      return last.id === current.id;
+    }
+    return onDutyActivityKey(last) === onDutyActivityKey(current);
+  }
+
+  return true;
 }
 
 function normalizeTextPart(value) {
@@ -75,22 +107,30 @@ export function normalizeLogEvents(events = []) {
     // This removes exact duplicates too.
     if (mergeableSameStatus(last, ev)) {
       const manualMiles = Math.max(0, Number(last.manualMiles || 0)) + Math.max(0, Number(ev.manualMiles || 0));
-      const preserveStartLocation = last.status === 'D';
       merged[merged.length - 1] = {
         ...last,
         endMin: Math.max(last.endMin, ev.endMin),
-        // Location on a RODS event is the location of the duty-status change.
-        // For continuous driving, keep the first/start location; only fill from
-        // the later row if the first row was blank.
-        city: preserveStartLocation ? (last.city || ev.city) : (ev.city || last.city),
-        state: preserveStartLocation ? (last.state || ev.state) : (ev.state || last.state),
-        lat: preserveStartLocation ? (last.lat ?? ev.lat ?? null) : (ev.lat ?? last.lat ?? null),
-        lng: preserveStartLocation ? (last.lng ?? ev.lng ?? null) : (ev.lng ?? last.lng ?? null),
-        gpsAccuracy: preserveStartLocation ? (last.gpsAccuracy ?? ev.gpsAccuracy ?? null) : (ev.gpsAccuracy ?? last.gpsAccuracy ?? null),
-        locationSource: preserveStartLocation ? (last.locationSource || ev.locationSource || 'manual') : (ev.locationSource || last.locationSource || 'manual'),
+        // A RODS location belongs to the duty-status change at the START of
+        // the continuous block. A later same-status row must never rewrite a
+        // historical OFF/SB/ON location on this or another day.
+        city: last.city || ev.city,
+        state: last.state || ev.state,
+        lat: last.lat ?? ev.lat ?? null,
+        lng: last.lng ?? ev.lng ?? null,
+        gpsAccuracy: last.gpsAccuracy ?? ev.gpsAccuracy ?? null,
+        locationSource: last.locationSource || ev.locationSource || 'manual',
         note: combineText(last.note, ev.note),
         description: combineText(last.description, ev.description),
         source: last.source === ev.source ? last.source : (last.source || ev.source),
+        shippingDocs: last.shippingDocs || ev.shippingDocs || '',
+        loadNo: last.loadNo || ev.loadNo || '',
+        bol: last.bol || ev.bol || '',
+        po: last.po || ev.po || '',
+        destination: last.destination || ev.destination || '',
+        destinationState: last.destinationState || ev.destinationState || '',
+        loadLinkId: last.loadLinkId || ev.loadLinkId || '',
+        noLoadDeclared: !!(last.noLoadDeclared || ev.noLoadDeclared),
+        noLoadNote: last.noLoadNote || ev.noLoadNote || '',
         ...(manualMiles > 0 ? {
           manualMiles: Number(manualMiles.toFixed(2)),
           manualMilesState: last.manualMilesState || ev.manualMilesState,
