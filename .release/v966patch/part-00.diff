@@ -1,0 +1,234 @@
+diff --git a/mnt/data/orr964/source/src/core/hos/hosEngine.js b/mnt/data/orr967/source/src/core/hos/hosEngine.js
+index 2866fb0..931c9f8 100644
+--- a/mnt/data/orr964/source/src/core/hos/hosEngine.js
++++ b/mnt/data/orr967/source/src/core/hos/hosEngine.js
+@@ -3,6 +3,7 @@ import { localDayKey } from '../../shared/utils/date.js';
+ import { getHomeTerminalTimeZone, homeTerminalMinute } from '../time/homeTerminalTime.js';
+ import { makeContinuousLogEvents } from '../timeline/timelineEngine.js';
+ import { rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
++import { evaluateSplitSleeper, SPLIT_DRIVE_LIMIT_MINUTES, SPLIT_SHIFT_LIMIT_MINUTES } from './splitSleeper.js';
+ 
+ const HOUR = 60;
+ 
+@@ -459,6 +460,103 @@ function historicalHosViolationRanges(timeline = [], activeDay = '') {
+   return ranges;
+ }
+ 
++
++function splitDriveLimitAbs(timeline = [], startAbs = -Infinity, endAbs = Infinity, allowedDriveMinutes = 0) {
++  let remaining = Math.max(0, Number(allowedDriveMinutes || 0));
++  for (const event of sortByStart(timeline)) {
++    if (event.status !== 'D') continue;
++    const start = Math.max(Number(event.startAbs || 0), Number(startAbs));
++    const end = Math.min(Number(event.endAbs || 0), Number(endAbs));
++    if (end <= start) continue;
++    const duration = end - start;
++    if (duration > remaining) return start + remaining;
++    remaining -= duration;
++  }
++  return null;
++}
++
++function splitShiftLimitAbs(split = {}, currentEndAbs = Infinity) {
++  const startAbs = Number(split.first?.endAbs ?? split.recalculationAbs ?? 0);
++  const allowance = split.pending
++    ? Math.max(0, SPLIT_SHIFT_LIMIT_MINUTES - Number(split.shiftBeforeFirst || 0))
++    : SPLIT_SHIFT_LIMIT_MINUTES;
++  const exclusions = [...(split.excludedPeriods || [])]
++    .filter(Boolean)
++    .map(period => ({ startAbs:Number(period.startAbs || 0), endAbs:Number(period.endAbs || 0) }))
++    .filter(period => period.endAbs > period.startAbs)
++    .sort((a, b) => a.startAbs - b.startAbs);
++
++  let cursor = startAbs;
++  let remaining = allowance;
++  for (const excluded of exclusions) {
++    if (excluded.endAbs <= cursor) continue;
++    const openEnd = Math.min(excluded.startAbs, currentEndAbs);
++    if (openEnd > cursor) {
++      const openDuration = openEnd - cursor;
++      if (openDuration > remaining) return cursor + remaining;
++      remaining -= openDuration;
++    }
++    cursor = Math.max(cursor, excluded.endAbs);
++    if (cursor >= currentEndAbs) return null;
++  }
++  if (currentEndAbs - cursor > remaining) return cursor + remaining;
++  return null;
++}
++
++function splitAdjustedViolationRanges(ranges = [], timeline = [], activeDay = '', activeDayEndAbs = 0, allowPending = false) {
++  const split = evaluateSplitSleeper(timeline, activeDayEndAbs, { allowPending });
++  if (!split.available || (!split.complete && !allowPending)) return ranges;
++
++  const boundary = Number(split.first?.endAbs ?? split.recalculationAbs ?? Infinity);
++  const dayStart = dayStartAbs(activeDay);
++  const adjusted = ranges.filter(range => {
++    if (range.type !== 'drive11' && range.type !== 'window14') return true;
++    const rangeEndAbs = dayStart + Number(range.endMin || 0);
++    return rangeEndAbs <= boundary;
++  });
++
++  if (split.driveExpired) {
++    const allowedAfterFirst = split.pending
++      ? Math.max(0, SPLIT_DRIVE_LIMIT_MINUTES - Number(split.driveBeforeFirst || 0))
++      : SPLIT_DRIVE_LIMIT_MINUTES;
++    const limitAbs = splitDriveLimitAbs(timeline, boundary, activeDayEndAbs, allowedAfterFirst);
++    if (limitAbs != null) {
++      for (const event of timeline) {
++        if (event.status !== 'D' || event.endAbs <= limitAbs || event.startAbs >= activeDayEndAbs) continue;
++        const range = eventPartOnDay(
++          event,
++          activeDay,
++          Math.max(event.startAbs, limitAbs),
++          Math.min(event.endAbs, activeDayEndAbs),
++          'drive11',
++          `Split drive clock expired at ${shortTime(limitAbs)}.`,
++        );
++        if (range) adjusted.push(range);
++      }
++    }
++  }
++
++  if (split.shiftExpired) {
++    const limitAbs = splitShiftLimitAbs(split, activeDayEndAbs);
++    if (limitAbs != null) {
++      for (const event of timeline) {
++        if (event.status !== 'D' || event.endAbs <= limitAbs || event.startAbs >= activeDayEndAbs) continue;
++        const range = eventPartOnDay(
++          event,
++          activeDay,
++          Math.max(event.startAbs, limitAbs),
++          Math.min(event.endAbs, activeDayEndAbs),
++          'window14',
++          `Split shift clock expired at ${shortTime(limitAbs)}.`,
++        );
++        if (range) adjusted.push(range);
++      }
++    }
++  }
++
++  return adjusted;
++}
++
+ export function violationRangesForDay(eventsByDay = {}, activeDay) {
+   if (!activeDay) return [];
+   const timeZone = getHomeTerminalTimeZone();
+@@ -588,8 +686,15 @@ export function violationRangesForDay(eventsByDay = {}, activeDay) {
+     }
+   }
+ 
++  const adjustedRanges = splitAdjustedViolationRanges(
++    ranges,
++    timeline,
++    activeDay,
++    activeDayEndAbs,
++    activeDay === today,
++  );
+   const seen = new Set();
+-  return ranges.filter(r => {
++  return adjustedRanges.filter(r => {
+     const key = `${r.eventId}|${r.status}|${r.startMin}|${r.endMin}|${r.type}`;
+     if (seen.has(key)) return false;
+     seen.add(key);
+@@ -609,43 +714,46 @@ export function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}
+   const gaps = findGapsAndOverlaps(timeline);
+ 
+   const fullReset = latestFullReset(restBlocks, currentEndAbs);
+-  const splitPairs = findSplitPairs(restBlocks, currentEndAbs);
+-  const latestSplit = splitPairs[0] || null;
+-
+-  const resetAbs = Math.max(
+-    fullReset ? fullReset.endAbs : -Infinity,
+-    latestSplit ? latestSplit.recalculationPoint : -Infinity
+-  );
+-
+-  const validResetAbs = Number.isFinite(resetAbs) ? resetAbs : -Infinity;
+-  const afterReset = timeline.filter(e => e.endAbs > validResetAbs && e.startAbs <= currentEndAbs);
+-
+-  const dutyStartEvent = afterReset.find(e => isOnDuty(e.status));
+-  const dutyStartAbs = dutyStartEvent ? dutyStartEvent.startAbs : currentEndAbs;
+-
+-  const driveMins = afterReset.filter(e => e.status === 'D').reduce((sum, e) => sum + eventDuration(e), 0);
+-
+-  const limit14 = dutyStartEvent ? windowLimitAbs(dutyStartAbs, currentEndAbs, latestSplit) : null;
+-  const windowUsed = dutyStartEvent
+-    ? Math.min(14 * HOUR + Math.max(0, limit14 ? currentEndAbs - limit14 : 0), Math.max(0, currentEndAbs - dutyStartAbs))
+-    : 0;
++  const splitEvaluation = evaluateSplitSleeper(timeline, currentEndAbs, { allowPending:targetDay === today });
++  const splitActive = !!splitEvaluation.available;
++  const validResetAbs = splitActive
++    ? Number(splitEvaluation.recalculationAbs || -Infinity)
++    : (fullReset ? Number(fullReset.endAbs) : -Infinity);
++  const afterReset = timeline.filter(event => event.endAbs > validResetAbs && event.startAbs <= currentEndAbs);
++
++  const driveMins = splitActive
++    ? Number(splitEvaluation.driveUsedMinutes || 0)
++    : afterReset.filter(event => event.status === 'D').reduce((sum, event) => sum + eventDuration(event), 0);
++  const windowUsed = splitActive
++    ? Number(splitEvaluation.shiftUsedMinutes || 0)
++    : (() => {
++        const dutyStartEvent = afterReset.find(event => isOnDuty(event.status));
++        return dutyStartEvent ? Math.max(0, currentEndAbs - dutyStartEvent.startAbs) : 0;
++      })();
++  const shiftExpired = splitActive
++    ? !!splitEvaluation.shiftExpired
++    : windowUsed > 14 * HOUR;
+ 
+   const breakInfo = calculateBreak(afterReset, validResetAbs);
+   const cycle = calculateCycle(timeline, restBlocks, currentEndAbs, 70, 8);
+   const restProgress = currentRestProgress(restBlocks, currentEndAbs);
+-
+-  const missingLocation = timeline.filter(e => !e.city || !e.state).length;
+-
++  const missingLocation = timeline.filter(event => !event.city || !event.state).length;
+   const warnings = [...gaps, ...statusReasonWarnings(timeline)];
+ 
+-  if (!fullReset && !latestSplit) warnings.push({ severity:'medium', text:'No valid 10h reset or split pair found in recent logs.' });
++  if (!fullReset && !splitActive) warnings.push({ severity:'medium', text:'No valid 10h reset or split pair found in recent logs.' });
++  if (splitEvaluation.pending) {
++    warnings.push({
++      severity:'medium',
++      text:`Split sleeper pending. Need ${durLabel(splitEvaluation.partnerRemainingMinutes || 0)} more ${splitEvaluation.partnerRole === 'long' ? 'Sleeper Berth' : 'OFF/SB'} time to complete the pair.`,
++    });
++  }
+   if (driveMins > 11 * HOUR) warnings.push({ severity:'high', text:'Drive clock expired.' });
+-  if (limit14 != null && currentEndAbs > limit14) warnings.push({ severity:'high', text:`Shift clock expired at ${shortTime(limit14)}.` });
++  if (shiftExpired) warnings.push({ severity:'high', text:'Shift clock expired.' });
+   if (breakInfo.needed) warnings.push({ severity:'high', text:'Break required before more driving.' });
+   if (cycle.exceeded) warnings.push({ severity:'high', text:'Cycle clock expired.' });
+   if (missingLocation > 0) warnings.push({ severity:'medium', text:`${missingLocation} event(s) missing city/state.` });
+ 
+-  if (restProgress && restProgress.duration < 10 * HOUR) {
++  if (restProgress && restProgress.duration < 10 * HOUR && !splitActive) {
+     if (restProgress.block.allSleeper && restProgress.duration < 7 * HOUR) {
+       warnings.push({ severity:'medium', text:`Sleeper under 7h. Need ${durLabel(7*HOUR - restProgress.duration)} more for split long period.` });
+     } else {
+@@ -655,21 +763,36 @@ export function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}
+ 
+   if (certifyStatus?.[activeDay] !== 'Certified') warnings.push({ severity:'low', text:'Day is not certified.' });
+ 
++  const resetValue = splitEvaluation.complete
++    ? 'Split OK'
++    : splitEvaluation.pending
++      ? 'Split pending'
++      : fullReset
++        ? '10h OK'
++        : restProgress
++          ? durLabel(restProgress.duration)
++          : 'Needs reset';
++  const resetSub = splitEvaluation.available
++    ? splitEvaluation.summary
++    : fullReset
++      ? (restProgress ? `Current rest ${durLabel(restProgress.duration)}` : 'Ready')
++      : (restProgress ? `${durLabel(Math.max(0, 10*HOUR-restProgress.duration))} to 10h` : 'Need 10h');
++
+   return {
+     cards: [
+-      { label:'Reset', value: fullReset ? '10h OK' : latestSplit ? 'Split OK' : restProgress ? `${durLabel(restProgress.duration)}` : 'Needs reset', sub: (fullReset || latestSplit) ? (restProgress ? `Current rest ${durLabel(restProgress.duration)}` : 'Ready') : (restProgress ? `${durLabel(Math.max(0, 10*HOUR-restProgress.duration))} to 10h` : 'Need 10h'), ok: !!fullReset || !!latestSplit },
+-      { label:'11h Drive', value:`${durLabel(driveMins)} used`, sub:`${durLabel(Math.max(0, 11*HOUR-driveMins))} left`, ok: driveMins <= 11*HOUR },
+-      { label:'14h Window', value: limit14 != null && currentEndAbs > limit14 ? 'Over' : `${durLabel(Math.min(windowUsed, 14*HOUR))} used`, sub: limit14 != null && currentEndAbs > limit14 ? `${durLabel(currentEndAbs-limit14)} over` : `${durLabel(Math.max(0, 14*HOUR-windowUsed))} left`, ok: !(limit14 != null && currentEndAbs > limit14) },
+-      { label:'Break', value: breakInfo.needed ? 'Needed' : 'OK', sub: breakInfo.needed ? '30 min required' : `${durLabel(breakInfo.left)} to break`, ok: !breakInfo.needed },
+-      { label:'Cycle', value:`${durLabel(cycle.used)} / ${cycle.cycleHours}h`, sub:`${durLabel(cycle.left)} left`, ok: !cycle.exceeded },
+-      { label:'Split', value: latestSplit ? 'Complete' : 'Watch', sub: latestSplit ? `${durLabel(latestSplit.total)}` : '7/3 or 8/2', ok: !!latestSplit || !!fullReset },
++      { label:'Reset', value:resetValue, sub:resetSub, ok:!!fullReset || !!splitEvaluation.available },
