@@ -1,0 +1,259 @@
++function periodLabel(period = {}) {
++  const hours = Math.floor(Number(period.duration || 0) / HOUR);
++  const minutes = Number(period.duration || 0) % HOUR;
++  return `${hours}h${minutes ? ` ${minutes}m` : ''}`;
++}
++
++function requiredPartner(first = {}) {
++  const firstDuration = Number(first.duration || 0);
++  if (first.role === 'long') {
++    return {
++      role:'short',
++      minimumMinutes:Math.max(SPLIT_SHORT_MINUTES, SPLIT_TOTAL_MINUTES - firstDuration),
++      statusRequirement:'OFF or SB',
++    };
++  }
++  return {
++    role:'long',
++    minimumMinutes:Math.max(SPLIT_LONG_SLEEPER_MINUTES, SPLIT_TOTAL_MINUTES - firstDuration),
++    statusRequirement:'SB',
++  };
++}
++
++function pairIdentity(first = {}, second = {}) {
++  return `${first.kind}_${first.startAbs}_${first.endAbs}|${second.kind}_${second.startAbs}_${second.endAbs}`;
++}
++
++function completedCandidates(timeline = [], restBlocks = [], sleeperBlocks = [], nowAbs = 0, splitFloorAbs = -Infinity) {
++  const shorts = restBlocks.filter(block => block.duration >= SPLIT_SHORT_MINUTES && block.endAbs <= nowAbs + 1);
++  const longs = sleeperBlocks.filter(block => block.duration >= SPLIT_LONG_SLEEPER_MINUTES && block.endAbs <= nowAbs + 1);
++  const seen = new Set();
++  const pairs = [];
++
++  for (const long of longs) {
++    for (const short of shorts) {
++      if (overlaps(long, short)) continue;
++      if (long.duration + short.duration < SPLIT_TOTAL_MINUTES) continue;
++
++      const longPeriod = { ...long, role:'long', allSleeper:true };
++      const shortPeriod = { ...short, role:'short', allSleeper:short.statuses.size === 1 && short.statuses.has('SB') };
++      const first = longPeriod.startAbs < shortPeriod.startAbs ? longPeriod : shortPeriod;
++      const second = first === longPeriod ? shortPeriod : longPeriod;
++      if (first.startAbs < splitFloorAbs || second.startAbs < splitFloorAbs) continue;
++      if (second.endAbs > nowAbs + 1) continue;
++
++      const identity = pairIdentity(first, second);
++      if (seen.has(identity)) continue;
++      seen.add(identity);
++
++      const context = priorDutyContext(timeline, restBlocks, first);
++      const driveBetween = sumDuration(timeline, first.endAbs, second.startAbs, event => event.status === 'D');
++      const shiftBetween = Math.max(0, second.startAbs - first.endAbs);
++      const aroundFirstDriveUsed = context.driveBefore + driveBetween;
++      const aroundFirstShiftUsed = context.shiftBefore + shiftBetween;
++      const validAroundFirst = aroundFirstDriveUsed <= SPLIT_DRIVE_LIMIT_MINUTES
++        && aroundFirstShiftUsed <= SPLIT_SHIFT_LIMIT_MINUTES;
++      if (!validAroundFirst) continue;
++
++      const driveAfterSecond = sumDuration(timeline, second.endAbs, nowAbs, event => event.status === 'D');
++      const shiftAfterSecond = Math.max(0, nowAbs - second.endAbs);
++      const driveUsed = driveBetween + driveAfterSecond;
++      const shiftUsed = shiftBetween + shiftAfterSecond;
++
++      pairs.push({
++        id:identity,
++        mode:'complete',
++        complete:true,
++        pending:false,
++        first,
++        second,
++        longPeriod,
++        shortPeriod,
++        totalMinutes:long.duration + short.duration,
++        pairEndAbs:second.endAbs,
++        recalculationAbs:first.endAbs,
++        excludedPeriods:[second],
++        driveBeforeFirst:context.driveBefore,
++        shiftBeforeFirst:context.shiftBefore,
++        driveBetween,
++        shiftBetween,
++        driveUsedMinutes:driveUsed,
++        shiftUsedMinutes:shiftUsed,
++        driveRemainingMinutes:Math.max(0, SPLIT_DRIVE_LIMIT_MINUTES - driveUsed),
++        shiftRemainingMinutes:Math.max(0, SPLIT_SHIFT_LIMIT_MINUTES - shiftUsed),
++        driveExpired:driveUsed > SPLIT_DRIVE_LIMIT_MINUTES,
++        shiftExpired:shiftUsed > SPLIT_SHIFT_LIMIT_MINUTES,
++        partnerRemainingMinutes:0,
++        summary:`${periodLabel(longPeriod)} SB + ${periodLabel(shortPeriod)} ${shortPeriod.allSleeper ? 'SB' : 'OFF/SB'}`,
++      });
++    }
++  }
++
++  return pairs.sort((a, b) => {
++    const aLegal = Math.min(a.driveRemainingMinutes, a.shiftRemainingMinutes);
++    const bLegal = Math.min(b.driveRemainingMinutes, b.shiftRemainingMinutes);
++    return b.pairEndAbs - a.pairEndAbs || bLegal - aLegal || b.recalculationAbs - a.recalculationAbs;
++  });
++}
++
++function qualifyingFirstPeriods(restBlocks = [], sleeperBlocks = [], nowAbs = 0) {
++  const byKey = new Map();
++  for (const block of restBlocks) {
++    if (block.duration < SPLIT_SHORT_MINUTES || block.endAbs > nowAbs + 1) continue;
++    const key = `${block.startAbs}_${block.endAbs}`;
++    byKey.set(key, {
++      ...block,
++      role:'short',
++      allSleeper:block.statuses.size === 1 && block.statuses.has('SB'),
++    });
++  }
++  for (const block of sleeperBlocks) {
++    if (block.duration < SPLIT_LONG_SLEEPER_MINUTES || block.endAbs > nowAbs + 1) continue;
++    const key = `${block.startAbs}_${block.endAbs}`;
++    byKey.set(key, { ...block, role:'long', allSleeper:true });
++  }
++  return [...byKey.values()].sort((a, b) => b.endAbs - a.endAbs || b.duration - a.duration);
++}
++
++function partnerProgressFor(first = {}, restBlocks = [], sleeperBlocks = [], nowAbs = 0) {
++  const partner = requiredPartner(first);
++  const source = partner.role === 'long' ? sleeperBlocks : restBlocks;
++  const candidates = source
++    .filter(block => block.startAbs >= first.endAbs - 1)
++    .filter(block => !overlaps(block, first))
++    .filter(block => block.startAbs <= nowAbs)
++    .sort((a, b) => b.startAbs - a.startAbs);
++  const block = candidates[0] || null;
++  if (!block) return { block:null, progressMinutes:0, remainingMinutes:partner.minimumMinutes, requirement:partner };
++  const progressMinutes = Math.max(0, Math.min(nowAbs, block.endAbs) - block.startAbs);
++  return {
++    block,
++    progressMinutes,
++    remainingMinutes:Math.max(0, partner.minimumMinutes - progressMinutes),
++    requirement:partner,
++  };
++}
++
++function pendingCandidates(timeline = [], restBlocks = [], sleeperBlocks = [], nowAbs = 0, latestCompleted = null, splitFloorAbs = -Infinity) {
++  return qualifyingFirstPeriods(restBlocks, sleeperBlocks, nowAbs)
++    .filter(first => first.duration < SPLIT_TOTAL_MINUTES)
++    .filter(first => first.startAbs >= splitFloorAbs)
++    .filter(first => !latestCompleted || first.endAbs > latestCompleted.pairEndAbs)
++    .map(first => {
++      const context = priorDutyContext(timeline, restBlocks, first);
++      const progress = partnerProgressFor(first, restBlocks, sleeperBlocks, nowAbs);
++      const partnerIsInProgress = !!progress.block && progress.block.endAbs >= nowAbs - 1;
++      const afterEnd = partnerIsInProgress ? progress.block.startAbs : nowAbs;
++      const driveAfter = sumDuration(timeline, first.endAbs, afterEnd, event => event.status === 'D');
++      const shiftAfter = Math.max(0, afterEnd - first.endAbs);
++      const driveUsed = context.driveBefore + driveAfter;
++      const shiftUsed = context.shiftBefore + shiftAfter;
++      const partner = progress.requirement;
++      return {
++        id:`pending_${first.kind}_${first.startAbs}_${first.endAbs}`,
++        mode:'pending',
++        complete:false,
++        pending:true,
++        first,
++        second:null,
++        longPeriod:first.role === 'long' ? first : null,
++        shortPeriod:first.role === 'short' ? first : null,
++        totalMinutes:first.duration + progress.progressMinutes,
++        recalculationAbs:first.endAbs,
++        excludedPeriods:partnerIsInProgress ? [progress.block] : [],
++        driveBeforeFirst:context.driveBefore,
++        shiftBeforeFirst:context.shiftBefore,
++        driveAfterFirst:driveAfter,
++        shiftAfterFirst:shiftAfter,
++        driveUsedMinutes:driveUsed,
++        shiftUsedMinutes:shiftUsed,
++        driveRemainingMinutes:Math.max(0, SPLIT_DRIVE_LIMIT_MINUTES - driveUsed),
++        shiftRemainingMinutes:Math.max(0, SPLIT_SHIFT_LIMIT_MINUTES - shiftUsed),
++        driveExpired:driveUsed > SPLIT_DRIVE_LIMIT_MINUTES,
++        shiftExpired:shiftUsed > SPLIT_SHIFT_LIMIT_MINUTES,
++        partnerRole:partner.role,
++        partnerStatusRequirement:partner.statusRequirement,
++        partnerMinimumMinutes:partner.minimumMinutes,
++        partnerProgressMinutes:progress.progressMinutes,
++        partnerRemainingMinutes:progress.remainingMinutes,
++        partnerBlock:progress.block,
++        summary:first.role === 'long'
++          ? `${periodLabel(first)} SB complete · need ${periodLabel({ duration:partner.minimumMinutes })} OFF/SB later`
++          : `${periodLabel(first)} OFF/SB complete · need ${periodLabel({ duration:partner.minimumMinutes })} SB later`,
++      };
++    })
++    .filter(candidate => !candidate.driveExpired && !candidate.shiftExpired)
++    .sort((a, b) => b.first.endAbs - a.first.endAbs || Math.min(b.driveRemainingMinutes, b.shiftRemainingMinutes) - Math.min(a.driveRemainingMinutes, a.shiftRemainingMinutes));
++}
++
++/**
++ * Evaluates the property-carrying split sleeper provision from manual RODS.
++ * It never edits events. A completed pair is final; a pending pair is
++ * provisional and must later receive the required partner period.
++ */
++export function evaluateSplitSleeper(timeline = [], nowAbs = 0, options = {}) {
++  const ordered = sortByStart(timeline).filter(event => event.startAbs < nowAbs + 1);
++  const restBlocks = splitRestBlocks(ordered);
++  const sleeperBlocks = splitSleeperBlocks(ordered);
++  const latestFullResetBlock = restBlocks
++    .filter(block => block.duration >= SPLIT_TOTAL_MINUTES && block.startAbs + SPLIT_TOTAL_MINUTES <= nowAbs)
++    .sort((a, b) => b.endAbs - a.endAbs)[0] || null;
++  const splitFloorAbs = latestFullResetBlock?.endAbs ?? -Infinity;
++  const completed = completedCandidates(ordered, restBlocks, sleeperBlocks, nowAbs, splitFloorAbs)[0] || null;
++  const pending = options.allowPending === false
++    ? null
++    : (pendingCandidates(ordered, restBlocks, sleeperBlocks, nowAbs, completed, splitFloorAbs)[0] || null);
++
++  const selected = pending && (!completed || pending.first.endAbs > completed.pairEndAbs)
++    ? pending
++    : completed;
++
++  if (!selected) {
++    return {
++      supported:true,
++      available:false,
++      active:false,
++      mode:'none',
++      complete:false,
++      pending:false,
++      reason:'Need two qualifying rest periods: one at least 7h in SB, the other at least 2h OFF/SB, totaling at least 10h.',
++      restBlocks,
++      sleeperBlocks,
++    };
++  }
++
++  return {
++    supported:true,
++    available:true,
++    active:true,
++    ...selected,
++    restBlocks,
++    sleeperBlocks,
++  };
++}
++
++export function splitSleeperPeriodLabel(period = {}) {
++  return periodLabel(period);
++}
++diff --git a/mnt/data/orr967/scripts/verify-split-sleeper-v966.mjs b/mnt/data/orr967/scripts/verify-split-sleeper-v966.mjs
++new file mode 100644
++index 0000000..f73d0b2
++--- /dev/null
+++++ b/mnt/data/orr967/scripts/verify-split-sleeper-v966.mjs
++@@ -0,0 +1,73 @@
+++import assert from 'node:assert/strict';
+++import fs from 'node:fs';
+++import { calculateHosClocks } from '../source/src/core/hos/hosEngine.js';
+++import { evaluateSplitSleeper } from '../source/src/core/hos/splitSleeper.js';
+++
+++const eventsByDay = {
+++  '2026-07-11':[
+++    { id:'d0', status:'D', startMin:0, endMin:20, city:'Youngstown', state:'OH', note:'Driving' },
+++    { id:'sb0', status:'SB', startMin:20, endMin:1025, city:'Hubbard', state:'OH', note:'Sleeper Berth' },
+++    { id:'on0', status:'ON', startMin:1025, endMin:1040, city:'Hubbard', state:'OH', note:'Pre-trip inspection' },
+++    { id:'d1', status:'D', startMin:1040, endMin:1355, city:'Hubbard', state:'OH', note:'Driving' },
+++    { id:'off1', status:'OFF', startMin:1355, endMin:1388, city:'Spiceland', state:'IN', note:'Break' },
+++    { id:'d2', status:'D', startMin:1388, endMin:1440, city:'Wayne', state:'IN', note:'Driving' },
+++  ],
+++  '2026-07-12':[
+++    { id:'d3', status:'D', startMin:0, endMin:5, city:'Wayne', state:'IN', note:'Driving' },
