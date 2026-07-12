@@ -1,13 +1,13 @@
 {
-  "version": "96.4.0",
-  "build": "v96.4-midnight-pretrip-route-bol",
-  "releasedAt": "2026-07-11T15:45:00.000Z",
+  "version": "96.5.0",
+  "build": "v96.5-midnight-continuity-production-fix",
+  "releasedAt": "2026-07-12T14:30:00.000Z",
   "notes": [
-    "Recognizes continuous DRIVING across the midnight log-day boundary and removes the false request for a new 12:00 AM pre-trip event.",
-    "Guards the Pre-trip quick-fix so it cannot insert artificial ON DUTY time into a true midnight driving continuation.",
-    "Keeps BOL and Going to linked to the exact Pickup / Loading event, route leg, signing check, and DOT package.",
-    "Shows BOL and Going to directly on linked pickup event cards and synchronizes explicit Form route edits back to that exact event without changing its historical time or location."
+    "Recognizes continuous Driving across midnight even when whole-minute storage ends the prior row at 11:59 PM or rollover metadata carries the same duty tour.",
+    "Ignores display-only carryover placeholders and removes the false new Pre-trip request from both Sign and DOT Check without changing any recorded times.",
+    "Keeps the exact Pickup / Loading event as the source of truth for BOL and Going to; existing route/BOL regression checks remain active.",
+    "Bumps the PWA and service worker so the installed iPhone app receives the corrected checker bundle."
   ],
-  "label": "v96.4 Midnight Driving + Route/BOL Link",
-  "updatedAt": "2026-07-11T15:45:00.000Z"
+  "label": "v96.5 Midnight Continuity Production Fix",
+  "updatedAt": "2026-07-12T14:30:00.000Z"
 }
