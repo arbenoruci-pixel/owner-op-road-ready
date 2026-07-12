@@ -1,0 +1,62 @@
++const missingState = baseState(missingAfterReset);
++const signIssue = validateLogForSigning(missingState, day).find(issue => /pretrip_after_10h_rest_review/.test(String(issue.code)));
++assert.ok(signIssue, 'Sign shows review only after a proven 10h reset');
++assert.equal(isFatalSigningIssue(signIssue), false, 'accurate historical records can be certified with the review shown');
++const dotIssue = buildDotOfficerCheck(missingState, day).issues.find(issue => /pretrip_after_10h_rest_review/.test(String(issue.id)));
++assert.ok(dotIssue);
++assert.equal(dotIssue.severity, 'review');
++assert.equal(dotIssue.fixAction, 'OPEN_EVENT');
++
++// A pre-trip between the qualifying rest and Driving satisfies the gate.
++const satisfied = {
++  [day]:[
++    { id:'d1', status:'D', startMin:0, endMin:60, city:'Hubbard', state:'OH', note:'Driving' },
++    { id:'off10', status:'OFF', startMin:60, endMin:660, city:'Hubbard', state:'OH', note:'Off Duty' },
++    { id:'pt', status:'ON', startMin:660, endMin:675, city:'Hubbard', state:'OH', note:'Pre-trip Inspection' },
++    { id:'d2', status:'D', startMin:675, endMin:720, city:'Hubbard', state:'OH', note:'Driving' },
++  ],
++};
++assert.equal(preTripRequirementForDriving(satisfied, day, 675).satisfied, true);
++assert.equal(missingPreTripRequirementsForDay(satisfied, day).length, 0);
++
++const app = fs.readFileSync(new URL('../source/src/app/App.jsx', import.meta.url), 'utf8');
++const statusSheet = fs.readFileSync(new URL('../source/src/modules/status/StatusWorkflowSheet.jsx', import.meta.url), 'utf8');
++assert.match(app, /preTripRequirementForDriving[\s\S]*continuous OFF\/SB completed[\s\S]*Pre-trip is required before Driving/, 'live status transition blocks direct Driving after a 10h reset');
++assert.match(app, /kind === 'depart_loaded'[\s\S]*preTripRequirementForDriving/, 'Drive workflow direct-depart path uses the same gate');
++assert.match(statusSheet, /Pre-trip required after 10h\+ rest[\s\S]*Use ON DUTY · Pre-trip inspection/, 'status sheet explains the required next step');
++
++console.log('verify-pretrip-after-10h-reset-v965 passed');
++diff --git a/mnt/data/orr964/PATCH_V96_5_PRETRIP_AFTER_10H_RESET_NOTES.md b/mnt/data/orr964/PATCH_V96_5_PRETRIP_AFTER_10H_RESET_NOTES.md
++new file mode 100644
++index 0000000..526472f
++--- /dev/null
+++++ b/mnt/data/orr964/PATCH_V96_5_PRETRIP_AFTER_10H_RESET_NOTES.md
++@@ -0,0 +1,28 @@
+++# Owner-Op Road Ready v96.5.0
+++
+++## Pre-trip rule tied to a real 10-hour reset
+++- A new Pre-trip is requested only when the next Driving start follows at least 600 continuous minutes of OFF DUTY and/or SLEEPER BERTH.
+++- OFF and SB can be combined when they are continuous.
+++- A midnight calendar boundary by itself never creates a new Pre-trip requirement.
+++- Continuous Driving split between two log dates remains one Driving period.
+++
+++## Live Driving guard
+++- Direct Driving is blocked after a qualifying 10-hour reset until an ON DUTY Pre-trip event is saved.
+++- The status screen switches to ON DUTY / Pre-trip inspection and explains why.
+++- The Depart Loaded shortcut uses the same guard.
+++- The app does not save or invent Pre-trip time automatically.
+++
+++## Certification and DOT Check
+++- Historical missing Pre-trip records after 10h+ rest are review items instead of automatic time-changing fixes.
+++- Accurate logs can be certified with the review shown.
+++- The false “Add 15m pre-trip” card is removed from midnight-only cases.
+++
+++## Preserved behavior
+++- Pickup BOL / Shipping # and Going to remain linked to the exact event and route leg.
+++- Historical event locations, HOS calculations, manual Driving, signing data, DOT HTML, backup/import, and offline sync are unchanged.
+++
+++## Verification
+++- `verify-pretrip-after-10h-reset-v965.mjs`
+++- `verify-midnight-pretrip-continuity-v964.mjs`
+++- `verify-route-bol-event-link-v964.mjs`
+++- Existing shipping-doc, historical-location, pickup-editor, HOS reset, HOS midnight, and minute-boundary checks.
