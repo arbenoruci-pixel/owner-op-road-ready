@@ -1,0 +1,223 @@
+ import { rawStoredEventsForDay, stripSyntheticEventFields, isSyntheticEvent } from '../core/compliance/rawRodsChecks.js';
+-import { isDrivingContinuationFromPreviousDay } from '../core/compliance/preTripContinuity.js';
++import { missingPreTripRequirementsForDay, preTripRequirementForDriving } from '../core/compliance/preTripContinuity.js';
+ import { addMilesByState, detectState, guessGpsCity, haversineMiles, recalcMilesByTimeWindow } from '../core/gps/locationService.js';
+ import { insertManyOverride, applyEditOverride, applyPatchWithNeighbors, normalizeLogEvents, protectLiveTailFromInsert, shiftSelectedEventsForDay } from '../core/timeline/timelineEngine.js';
+ import { signableLogDays, signConfirmMessage, signBlockMessage } from '../modules/logbook/signing.js';
+@@ -1916,6 +1916,28 @@ export default function App() {
+       // array included carryover/synthetic rows and saved them back.
+       const existing = continuousBaseForDay(s, day);
+       const now = Math.max(1, Math.min(1439, nowMinute()));
++      if (kind === 'depart_loaded') {
++        const requirement = preTripRequirementForDriving(s.eventsByDay || {}, day, now, existing, { assumeLastStatusActive:true });
++        if (requirement.required && !requirement.satisfied) {
++          const restHours = Math.floor(Number(requirement.restMinutes || 0) / 60);
++          const restMinutes = Number(requirement.restMinutes || 0) % 60;
++          const restLabel = `${restHours}h${restMinutes ? ` ${restMinutes}m` : ''}`;
++          if (typeof window !== 'undefined') {
++            window.setTimeout(() => window.alert?.(`${restLabel} continuous OFF/SB completed. Add ON DUTY Pre-trip inspection before Driving.`), 0);
++          }
++          return {
++            ...s,
++            sheet:{ type:'status' },
++            preTripDriveBlock:{
++              day,
++              startMin:now,
++              restMinutes:requirement.restMinutes,
++              message:`${restLabel} continuous OFF/SB completed. Pre-trip is required before Driving.`,
++              at:Date.now(),
++            },
++          };
++        }
++      }
+       const stamp = Date.now();
+       const load = s.loadInfo || {};
+       const pu = loadLocation(s, 'pickup');
+@@ -2026,6 +2048,7 @@ export default function App() {
+         currentReason,
+         currentLocation,
+         manualDrivingSession,
++        preTripDriveBlock:null,
+         view: currentStatus === 'D' ? 'driveMode' : s.view,
+         routeLegsByDay,
+         selectedEventId:null,
+@@ -2379,27 +2402,30 @@ export default function App() {
+   function addPreTripBeforeDriving(payload = {}) {
+     const targetDay = payload.day || payload.issue?.day || state.activeDay;
+     const previewEvents = rawStoredEventsForDay(state.eventsByDay || {}, targetDay);
+-    if (isDrivingContinuationFromPreviousDay(state.eventsByDay || {}, targetDay, previewEvents)) {
+-      window.alert?.('Driving continues through midnight from the previous log day. No new pre-trip event is added at 12:00 AM.');
++    const previewMissing = missingPreTripRequirementsForDay(state.eventsByDay || {}, targetDay, previewEvents);
++    if (!previewMissing.length) {
++      window.alert?.('No missing Pre-trip requirement was found after a continuous 10-hour OFF/SB reset. Midnight alone does not require a new Pre-trip.');
+       return;
+     }
+     if (typeof window !== 'undefined' && window.confirm) {
+-      const ok = window.confirm('Add 15 minutes ON DUTY Pre-trip before first driving?');
++      const ok = window.confirm('Add 15 minutes ON DUTY Pre-trip only if the inspection was actually completed and omitted from the log?');
+       if (!ok) return;
+     }
+ 
+     setState(s => {
+       const day = targetDay || s.activeDay;
+       const baseEvents = continuousBaseForDay(s, day);
+-      if (isDrivingContinuationFromPreviousDay(s.eventsByDay || {}, day, baseEvents)) {
++      const missingRequirements = missingPreTripRequirementsForDay(s.eventsByDay || {}, day, baseEvents);
++      const targetRequirement = missingRequirements[0] || null;
++      if (!targetRequirement) {
+         return {
+           ...s,
+           activeDay:day,
+           view:'day',
+-          roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'continuous-driving-midnight' },
++          roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'no-10h-pretrip-requirement' },
+         };
+       }
+-      const firstDrive = baseEvents.find(event => event.status === 'D');
++      const firstDrive = targetRequirement.drivingEvent || baseEvents.find(event => event.status === 'D');
+       if (!firstDrive) return {
+         ...s,
+         activeDay: day,
+@@ -2652,6 +2678,29 @@ export default function App() {
+       const backdate = Math.max(0, Math.min(240, Number(backdateMinutes || 0)));
+       const changeAt = Math.max(0, nowLiveMin - backdate);
+       const existing = continuousBaseForDay(base, day);
++      if (status === 'D') {
++        const requirement = preTripRequirementForDriving(base.eventsByDay || {}, day, changeAt, existing, { assumeLastStatusActive:true });
++        if (requirement.required && !requirement.satisfied) {
++          const restHours = Math.floor(Number(requirement.restMinutes || 0) / 60);
++          const restMinutes = Number(requirement.restMinutes || 0) % 60;
++          const restLabel = `${restHours}h${restMinutes ? ` ${restMinutes}m` : ''}`;
++          if (typeof window !== 'undefined') {
++            window.setTimeout(() => window.alert?.(`${restLabel} continuous OFF/SB completed. Select ON DUTY → Pre-trip inspection before starting Driving.`), 0);
++          }
++          return {
++            ...base,
++            activeDay:day,
++            sheet:{ type:'status' },
++            preTripDriveBlock:{
++              day,
++              startMin:changeAt,
++              restMinutes:requirement.restMinutes,
++              message:`${restLabel} continuous OFF/SB completed. Pre-trip is required before Driving.`,
++              at:Date.now(),
++            },
++          };
++        }
++      }
+       let note = reason;
+       let trailer = base.currentTrailer;
+       const isDropHook = isDropHookReason(reason, dropHook);
+@@ -2772,6 +2821,7 @@ export default function App() {
+         dutySafetyBackupByDay,
+         gpsTrip,
+         manualDrivingSession,
++        preTripDriveBlock:null,
+         certifyStatus:{ ...(base.certifyStatus || {}), [day]:base.certifyStatus?.[day] || 'Active day / Not certified yet' },
+         ...(dropHookEquipment ? { equipment:dropHookEquipment } : {}),
+         ...((dropHookLoadPatch || loadInfoPatch) ? { loadInfo:{ ...(base.loadInfo || {}), ...(loadInfoPatch || {}), ...(dropHookLoadPatch || {}), sourceEventDay:day } } : {}),
+diff --git a/mnt/data/orr964/scripts/verify-pretrip-after-10h-reset-v965.mjs b/mnt/data/orr964/scripts/verify-pretrip-after-10h-reset-v965.mjs
+new file mode 100644
+index 0000000..31932dc
+--- /dev/null
++++ b/mnt/data/orr964/scripts/verify-pretrip-after-10h-reset-v965.mjs
+@@ -0,0 +1,127 @@
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import {
++  QUALIFYING_PRETRIP_REST_MINUTES,
++  missingPreTripRequirementsForDay,
++  preTripRequirementForDriving,
++  preTripRequirementsForDay,
++} from '../source/src/core/compliance/preTripContinuity.js';
++import { validateLogForSigning, isFatalSigningIssue } from '../source/src/modules/logbook/signing.js';
++import { buildDotOfficerCheck } from '../source/src/core/dot/dotOfficerCheckEngine.js';
++
++const prev = '2026-07-10';
++const day = '2026-07-11';
++
++function baseState(eventsByDay) {
++  return {
++    activeDay:day,
++    eventsByDay,
++    inspectionByDay:{ [day]:{ complete:true } },
++    signatureByDay:{},
++    certifyStatus:{ [day]:'Needs signature' },
++    manualMilesByDay:{ [day]:100 },
++    routeLegsByDay:{},
++    loadInfo:{},
++    driverProfile:{ name:'Arben Oruci' },
++    carrierName:'Narta Express LLC',
++    mainOfficeAddress:'Willowbrook, IL',
++    driver:{ truck:'228' },
++    currentLocation:{ city:'Hubbard', state:'OH' },
++  };
++}
++
++assert.equal(QUALIFYING_PRETRIP_REST_MINUTES, 600);
++
++// Exact user case: Driving continues through midnight, then 16h45 SB, then a
++// real ON DUTY Pre-trip before the next Driving start.
++const userCase = {
++  [prev]:[
++    { id:'prev_drive', status:'D', startMin:993, endMin:1440, city:'Cheshire', state:'CT', note:'Driving' },
++  ],
++  [day]:[
++    { id:'d_midnight', status:'D', startMin:0, endMin:20, city:'Youngstown', state:'OH', note:'Driving' },
++    { id:'sb_reset', status:'SB', startMin:20, endMin:1025, city:'Hubbard', state:'OH', note:'Sleeper Berth' },
++    { id:'pretrip', status:'ON', startMin:1025, endMin:1040, city:'Hubbard', state:'OH', note:'Pre-trip inspection · Fuel' },
++    { id:'d_after_reset', status:'D', startMin:1040, endMin:1440, city:'Hubbard', state:'OH', note:'Driving started' },
++  ],
++};
++const userRequirements = preTripRequirementsForDay(userCase, day);
++assert.equal(userRequirements.length, 1, 'only the post-reset Driving start requires a pre-trip');
++assert.equal(userRequirements[0].drivingEvent.id, 'd_after_reset');
++assert.equal(userRequirements[0].satisfied, true, 'the 5:05 PM pre-trip satisfies the post-reset requirement');
++assert.equal(missingPreTripRequirementsForDay(userCase, day).length, 0);
++const userState = baseState(userCase);
++assert.ok(!validateLogForSigning(userState, day).some(issue => /pretrip_after_10h/i.test(String(issue.code))), 'Sign has no false midnight pre-trip issue');
++assert.ok(!buildDotOfficerCheck(userState, day).issues.some(issue => /pretrip_after_10h/i.test(String(issue.id))), 'DOT Check has no false midnight pre-trip issue');
++
++// A continuous midnight split by itself never requires another pre-trip.
++const midnightOnly = {
++  [prev]:[{ id:'prev_drive', status:'D', startMin:600, endMin:1439, city:'Youngstown', state:'OH', note:'Driving' }],
++  [day]:[{ id:'next_drive', status:'D', startMin:0, endMin:80, city:'Youngstown', state:'OH', note:'Driving' }],
++};
++assert.equal(preTripRequirementForDriving(midnightOnly, day, 0).required, false, 'midnight and a one-minute storage boundary do not create a reset');
++
++// 9h59m rest is not the requested 10-hour reset threshold.
++const shortRest = {
++  [day]:[
++    { id:'d1', status:'D', startMin:0, endMin:60, city:'Hubbard', state:'OH', note:'Driving' },
++    { id:'sb_short', status:'SB', startMin:60, endMin:659, city:'Hubbard', state:'OH', note:'Sleeper' },
++    { id:'d2', status:'D', startMin:659, endMin:700, city:'Hubbard', state:'OH', note:'Driving' },
++  ],
++};
++assert.equal(preTripRequirementForDriving(shortRest, day, 659).required, false, '599 minutes does not trigger the pre-trip gate');
++
++// A live OFF/SB row is stored as a short raw tail until the next status change.
++// The Driving guard must treat that last rest status as active through "now".
++const liveRawTail = {
++  [day]:[
++    { id:'d1', status:'D', startMin:0, endMin:60, city:'Hubbard', state:'OH', note:'Driving' },
++    { id:'active_sb', status:'SB', startMin:60, endMin:61, city:'Hubbard', state:'OH', note:'Sleeper' },
++  ],
++};
++assert.equal(
++  preTripRequirementForDriving(liveRawTail, day, 660, liveRawTail[day], { assumeLastStatusActive:true }).required,
++  true,
++  'live direct Driving is blocked after the active raw rest tail reaches 10h',
++);
++
++// OFF + SB count together when they are continuous and total at least 10h.
++const missingAfterReset = {
++  [day]:[
++    { id:'d1', status:'D', startMin:0, endMin:60, city:'Hubbard', state:'OH', note:'Driving' },
++    { id:'off6', status:'OFF', startMin:60, endMin:420, city:'Hubbard', state:'OH', note:'Off Duty' },
++    { id:'sb4', status:'SB', startMin:420, endMin:660, city:'Hubbard', state:'OH', note:'Sleeper' },
++    { id:'d2', status:'D', startMin:660, endMin:720, city:'Hubbard', state:'OH', note:'Driving' },
++  ],
++};
++const missing = missingPreTripRequirementsForDay(missingAfterReset, day);
++assert.equal(missing.length, 1);
++assert.equal(missing[0].restMinutes, 600);
