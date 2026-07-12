@@ -1,0 +1,68 @@
+name: Materialize v96.6 Split Sleeper
+
+on:
+  push:
+    branches:
+      - release/v96.6-split-sleeper
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize-and-test:
+    if: ${{ !contains(github.event.head_commit.message || '', '[materialized-v966]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/v96.6-split-sleeper
+          fetch-depth: 0
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Materialize source patch
+        run: node .release/materialize-v966.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify version metadata
+        run: npm run check:version
+
+      - name: Verify pre-trip after 10h reset
+        run: node scripts/verify-pretrip-after-10h-reset-v965.mjs
+
+      - name: Verify split sleeper clocks
+        run: node scripts/verify-split-sleeper-v966.mjs
+
+      - name: Verify latest edit wins
+        run: node scripts/verify-latest-edit-authoritative-v966.mjs
+
+      - name: Regression checks
+        run: |
+          node scripts/verify-route-bol-event-link-v964.mjs
+          node scripts/verify-hos-drive-clock-no-midnight-reset-v9581.mjs
+          node scripts/verify-hos-drive-clock-resets-after-10h-off-v9581.mjs
+          node scripts/verify-hos-shift-clock-no-midnight-reset-v9581.mjs
+          node scripts/verify-hos-break-clock-30min-rule-v9581.mjs
+          node scripts/verify-hos-cycle-70hr-8day-v9581.mjs
+          node scripts/verify-hos-34hr-restart-v9581.mjs
+          node scripts/offline-sync-smoke-test.mjs
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit materialized v96.6 source
+        run: |
+          git config user.name "Owner-Op Release Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Release v96.6 split sleeper and authoritative edits [materialized-v966]"
+          git push origin HEAD:release/v96.6-split-sleeper
