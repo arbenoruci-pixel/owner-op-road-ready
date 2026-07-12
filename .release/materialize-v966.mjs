@@ -109,6 +109,8 @@ for (const [relative, needle] of checks) {
   if (!read(relative).includes(needle)) throw new Error(`Materialization verification failed: ${relative} missing ${needle}`);
 }
 
+execFileSync(process.execPath, ['scripts/apply-v967-batch-fixes.mjs'], { cwd:ROOT, stdio:'inherit' });
+
 for (const relative of [
   'source/src/core/hos/hosEngine.js.rej',
   'source/src/modules/drive/DriveModeScreen.jsx.rej',
@@ -123,4 +125,4 @@ for (const relative of [
 
 fs.rmSync(RELEASE, { recursive:true, force:true });
 fs.rmSync(path.join(ROOT, '.github/workflows/materialize-v966.yml'), { force:true });
-console.log('v96.6 materialized successfully');
+console.log('v96.7 materialized successfully');
