@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = process.env.MATERIALIZE_ROOT
   ? path.resolve(process.env.MATERIALIZE_ROOT)
-  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RELEASE = path.join(ROOT, '.release');
 
 function read(relative) {
