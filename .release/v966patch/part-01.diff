@@ -1,0 +1,303 @@
++      { label:'11h Drive', value:`${durLabel(driveMins)} used`, sub:`${durLabel(Math.max(0, 11*HOUR-driveMins))} left`, ok:driveMins <= 11*HOUR },
++      { label:'14h Window', value:shiftExpired ? 'Over' : `${durLabel(Math.min(windowUsed, 14*HOUR))} used`, sub:shiftExpired ? `${durLabel(Math.max(0, windowUsed-14*HOUR))} over` : `${durLabel(Math.max(0, 14*HOUR-windowUsed))} left`, ok:!shiftExpired },
++      { label:'Break', value:breakInfo.needed ? 'Needed' : 'OK', sub:breakInfo.needed ? '30 min required' : `${durLabel(breakInfo.left)} to break`, ok:!breakInfo.needed },
++      { label:'Cycle', value:`${durLabel(cycle.used)} / ${cycle.cycleHours}h`, sub:`${durLabel(cycle.left)} left`, ok:!cycle.exceeded },
++      { label:'Split', value:splitEvaluation.complete ? 'Complete' : splitEvaluation.pending ? 'Pending' : 'Available', sub:splitEvaluation.available ? splitEvaluation.summary : '7+ SB + 2+ OFF/SB', ok:!!splitEvaluation.available || !!fullReset },
+     ],
+     warnings,
+-    split: latestSplit,
++    split:splitEvaluation.available ? splitEvaluation : null,
+     fullReset,
+     restProgress,
+     cycle,
+-    violationRanges: violationRangesForDay(eventsByDay, activeDay),
++    violationRanges:violationRangesForDay(eventsByDay, activeDay),
+   };
+ }
+ 
+@@ -990,6 +1113,84 @@ function buildClockWarnings({ drive, effectiveDrive, shift, breakClock, cycle })
+   return warnings;
+ }
+ 
++function buildSplitSleeperClockSet({ split, timeline, nowAbs, currentStatus, cycle }) {
++  if (!split?.available) return null;
++
++  const driveUsed = clampDuration(split.driveUsedMinutes || 0);
++  const shiftUsed = clampDuration(split.shiftUsedMinutes || 0);
++  const breakClock = calculateBreakClockFromTimeline(
++    timeline,
++    Number(split.recalculationAbs || -Infinity),
++    nowAbs,
++    currentStatus,
++  );
++
++  const drive = {
++    label:'DRIVE',
++    usedMinutes:driveUsed,
++    remainingMinutes:clampDuration(Math.max(0, SPLIT_DRIVE_LIMIT_MINUTES - driveUsed)),
++    limitMinutes:SPLIT_DRIVE_LIMIT_MINUTES,
++    expired:driveUsed > SPLIT_DRIVE_LIMIT_MINUTES,
++    resetAbs:split.recalculationAbs ?? null,
++    splitSleeper:true,
++    tone:clockTone(SPLIT_DRIVE_LIMIT_MINUTES - driveUsed, driveUsed > SPLIT_DRIVE_LIMIT_MINUTES),
++  };
++
++  const shift = {
++    label:'SHIFT',
++    usedMinutes:shiftUsed,
++    remainingMinutes:clampDuration(Math.max(0, SPLIT_SHIFT_LIMIT_MINUTES - shiftUsed)),
++    limitMinutes:SPLIT_SHIFT_LIMIT_MINUTES,
++    expired:shiftUsed > SPLIT_SHIFT_LIMIT_MINUTES,
++    shiftStartAbs:split.recalculationAbs ?? null,
++    resetAbs:split.recalculationAbs ?? null,
++    splitSleeper:true,
++    tone:clockTone(SPLIT_SHIFT_LIMIT_MINUTES - shiftUsed, shiftUsed > SPLIT_SHIFT_LIMIT_MINUTES),
++  };
++
++  const breakOut = {
++    label:'BREAK',
++    ...breakClock,
++    splitSleeper:true,
++    tone: breakClock.expired
++      ? 'red'
++      : (breakClock.remainingMinutes <= HOUR || breakClock.requiresBreakBeforeDriving ? 'yellow' : 'green'),
++  };
++
++  const effectiveDrive = buildEffectiveDriveClock({ drive, shift, breakClock:breakOut, cycle });
++  const clocks = [breakOut, effectiveDrive, shift, cycle];
++  const warnings = buildClockWarnings({ drive, effectiveDrive, shift, breakClock:breakOut, cycle });
++
++  if (split.pending) {
++    const remaining = clampDuration(split.partnerRemainingMinutes || 0);
++    const partnerText = split.partnerRole === 'long'
++      ? `${formatHosClockMinutes(remaining)} more SB time`
++      : `${formatHosClockMinutes(remaining)} more OFF/SB time`;
++    warnings.unshift({
++      type:'splitPending',
++      severity:'medium',
++      text:`Split sleeper pending: ${partnerText} is still required. If the partner period is not completed, standard HOS clocks apply.`,
++    });
++  } else if (split.complete) {
++    warnings.unshift({
++      type:'splitComplete',
++      severity:'low',
++      text:`Split sleeper pair complete: ${split.summary}.`,
++    });
++  }
++
++  return {
++    drive,
++    effectiveDrive,
++    shift,
++    break:breakOut,
++    cycle,
++    clocks,
++    displayClocks:clocks,
++    warnings,
++  };
++}
++
+ /**
+  * Pure, deterministic advisory HOS clock calculation for smart paper RODS.
+  * Source of truth is manual duty-status events. This function never writes,
+@@ -1055,8 +1256,49 @@ export function calculateHosClocks(stateLike = {}, nowInput = new Date(), option
+ 
+   const effectiveDrive = buildEffectiveDriveClock({ drive, shift, breakClock: breakOut, cycle });
+   const restProgress = currentRestBlock(restBlocks, nowAbs);
+-  const clocks = [breakOut, effectiveDrive, shift, cycle];
+-  const warnings = buildClockWarnings({ drive, effectiveDrive, shift, breakClock: breakOut, cycle });
++  const standardClocks = [breakOut, effectiveDrive, shift, cycle];
++  const standardWarnings = buildClockWarnings({ drive, effectiveDrive, shift, breakClock: breakOut, cycle });
++
++  const rawSplit = evaluateSplitSleeper(timeline, nowAbs, {
++    allowPending: options.allowPendingSplitSleeper !== false,
++  });
++  const splitReferenceAbs = rawSplit.pending
++    ? Number(rawSplit.first?.endAbs || -Infinity)
++    : Number(rawSplit.pairEndAbs || rawSplit.second?.endAbs || -Infinity);
++  const splitIsNewerThanFullReset = !fullReset || splitReferenceAbs > Number(fullReset.resetAbs || -Infinity);
++  const splitEvaluation = rawSplit.available && splitIsNewerThanFullReset
++    ? rawSplit
++    : {
++        ...rawSplit,
++        available:false,
++        active:false,
++        mode:'none',
++        reason: fullReset && rawSplit.available
++          ? 'A newer 10-hour reset supersedes the older split pair.'
++          : rawSplit.reason,
++      };
++  const splitClockSet = buildSplitSleeperClockSet({
++    split:splitEvaluation,
++    timeline,
++    nowAbs,
++    currentStatus,
++    cycle,
++  });
++  const storedSplitPreference = stateLike?.hosSettings?.splitSleeperEnabled;
++  const splitRequested = options.splitSleeperEnabled ?? storedSplitPreference ?? true;
++  const useSplit = Boolean(splitClockSet && splitRequested !== false);
++  const selected = useSplit
++    ? splitClockSet
++    : {
++        drive,
++        effectiveDrive,
++        shift,
++        break:breakOut,
++        cycle,
++        clocks:standardClocks,
++        displayClocks:standardClocks,
++        warnings:standardWarnings,
++      };
+ 
+   return {
+     advisory:true,
+@@ -1067,14 +1309,24 @@ export function calculateHosClocks(stateLike = {}, nowInput = new Date(), option
+     nowDay,
+     generatedAt: nowDateFromInput(nowInput).toISOString(),
+     timeline,
+-    drive,
+-    effectiveDrive,
+-    shift,
+-    break: breakOut,
+-    cycle,
+-    clocks,
+-    displayClocks: clocks,
+-    warnings,
++    drive:selected.drive,
++    effectiveDrive:selected.effectiveDrive,
++    shift:selected.shift,
++    break:selected.break,
++    cycle:selected.cycle,
++    clocks:selected.clocks,
++    displayClocks:selected.displayClocks,
++    warnings:selected.warnings,
++    standard:{
++      drive,
++      effectiveDrive,
++      shift,
++      break:breakOut,
++      cycle,
++      clocks:standardClocks,
++      warnings:standardWarnings,
++    },
++    splitClockSet,
+     reset: {
+       last10HourResetAbs: fullReset?.resetAbs ?? null,
+       fullReset,
+@@ -1087,9 +1339,17 @@ export function calculateHosClocks(stateLike = {}, nowInput = new Date(), option
+       } : null,
+     },
+     splitSleeper: {
+-      supported:false,
+-      enabled:false,
+-      reason:'Split sleeper clocks are hidden/disabled until the full paired-period rule is implemented in the Drive Mode UI.',
++      ...splitEvaluation,
++      supported:true,
++      enabled:useSplit,
++      autoSelected:storedSplitPreference == null && useSplit,
++      standardAvailable:true,
++      legalClockRemainingMinutes:useSplit
++        ? Math.min(
++            Number(splitClockSet?.effectiveDrive?.remainingMinutes ?? Infinity),
++            Number(splitClockSet?.shift?.remainingMinutes ?? Infinity),
++          )
++        : Math.min(effectiveDrive.remainingMinutes, shift.remainingMinutes),
+     },
+   };
+ }
+diff --git a/mnt/data/orr964/source/src/modules/drive/DriveModeScreen.jsx b/mnt/data/orr967/source/src/modules/drive/DriveModeScreen.jsx
+index 6d09835..7bf718f 100644
+--- a/mnt/data/orr964/source/src/modules/drive/DriveModeScreen.jsx
++++ b/mnt/data/orr967/source/src/modules/drive/DriveModeScreen.jsx
+@@ -3,6 +3,28 @@ import { calculateHosClocks, formatHosClockMinutes } from '../../core/hos/hosEng
+ 
+ const CLOCK_ORDER = ['BREAK', 'DRIVE', 'SHIFT', 'CYCLE'];
+ 
++const SPLIT_TOGGLE_STYLE = {
++  alignSelf:'flex-start',
++  border:'0',
++  background:'transparent',
++  color:'#64748b',
++  fontSize:'18px',
++  fontWeight:800,
++  padding:'8px 2px',
++  textAlign:'left',
++};
++
++const SPLIT_SUMMARY_STYLE = {
++  margin:'0 0 18px',
++  padding:'14px 16px',
++  border:'1px solid #d9e2ec',
++  borderRadius:'18px',
++  background:'#f8fafc',
++  display:'grid',
++  gap:'6px',
++  color:'#334155',
++};
++
+ function statusToneClass(clock = {}) {
+   if (clock.tone === 'red' || clock.expired) return 'red';
+   if (clock.tone === 'yellow' || clock.warning) return 'yellow';
+@@ -50,15 +72,44 @@ function WarningStrip({ warnings = [] }) {
+   );
+ }
+ 
++function SplitSleeperSummary({ split, enabled }) {
++  if (!split?.available) return null;
++  const firstMinutes = Number(split.first?.duration || 0);
++  const partnerRemaining = Number(split.partnerRemainingMinutes || 0);
++
++  return (
++    <div className={`drive-mode-split-summary ${enabled ? 'active' : ''}`} style={{ ...SPLIT_SUMMARY_STYLE, ...(enabled ? { borderColor:'#86efac', background:'#f0fdf4' } : {}) }}>
++      <div>
++        <b>{split.complete ? 'Split SB complete' : 'Split SB pending'}</b>
++        <span>{split.summary}</span>
++      </div>
++      {split.pending ? (
++        <small>
++          First period: {formatHosClockMinutes(firstMinutes)} · partner still needed: {formatHosClockMinutes(partnerRemaining)} {split.partnerRole === 'long' ? 'SB' : 'OFF/SB'}
++        </small>
++      ) : (
++        <small>11h and 14h clocks are recalculated from the end of the first qualifying rest period.</small>
++      )}
++      {split.pending ? <em>Provisional until the second qualifying period is completed.</em> : null}
++    </div>
++  );
++}
++
+ export default function DriveModeScreen({ state, onOpenStatus, onOpenLog, onBack }) {
+   const [tick, setTick] = React.useState(0);
++  const [showSplitClocks, setShowSplitClocks] = React.useState(true);
+ 
+   React.useEffect(() => {
+     const timer = window.setInterval(() => setTick(value => value + 1), 60000);
+     return () => window.clearInterval(timer);
+   }, []);
+ 
+-  const hos = React.useMemo(() => calculateHosClocks(state, new Date()), [state, tick]);
++  const hos = React.useMemo(
++    () => calculateHosClocks(state, new Date(), { splitSleeperEnabled:showSplitClocks }),
++    [state, tick, showSplitClocks]
++  );
++  const split = hos.splitSleeper || {};
++  const splitEnabled = !!(split.available && split.enabled && showSplitClocks);
+   const displayClocks = hos.displayClocks || hos.clocks || [];
+   const byLabel = new Map(displayClocks.map(clock => [clock.label, clock]));
+   const clocks = CLOCK_ORDER.map(label => byLabel.get(label)).filter(Boolean);
+@@ -72,10 +123,20 @@ export default function DriveModeScreen({ state, onOpenStatus, onOpenLog, onBack
+         <button type="button" className="drive-mode-log-btn" onClick={onOpenLog}>Log</button>
+       </div>
+ 
+-      <button type="button" className="drive-mode-split-disabled" disabled>
+-        Show Split SB Clocks
++      <button
++        type="button"
++        className={`drive-mode-split-toggle ${splitEnabled ? 'active' : ''}`}
++        style={{ ...SPLIT_TOGGLE_STYLE, ...(splitEnabled ? { color:'#15803d' } : {}), ...(!split.available ? { opacity:0.45 } : {}) }}
++        disabled={!split.available}
++        onClick={() => setShowSplitClocks(value => !value)}
++      >
++        {split.available
++          ? (splitEnabled ? 'Using Split SB Clocks' : 'Show Split SB Clocks')
++          : 'Split SB Clocks unavailable'}
