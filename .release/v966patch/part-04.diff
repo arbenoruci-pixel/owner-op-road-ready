@@ -1,0 +1,127 @@
++    { id:'on1', status:'ON', startMin:5, endMin:22, city:'Greenwood', state:'IN', note:'ON DUTY' },
++    { id:'d4', status:'D', startMin:22, endMin:100, city:'Greenwood', state:'IN', note:'Driving' },
++    { id:'sb1', status:'SB', startMin:100, endMin:636, city:'Frankfort', state:'IN', note:'Sleeper Berth' },
++    { id:'on2', status:'ON', startMin:636, endMin:651, city:'Frankfort', state:'IN', note:'Pre-trip inspection' },
++    { id:'d5', status:'D', startMin:651, endMin:652, city:'Frankfort', state:'IN', note:'Driving started', source:'manual_drive' },
++  ],
++};
++const state = {
++  eventsByDay,
++  currentStatus:'D',
++  settings:{ homeTerminalTimeZone:'America/New_York' },
++};
++const now = new Date('2026-07-12T14:52:00Z');
++const split = calculateHosClocks(state, now, { splitSleeperEnabled:true });
++assert.equal(split.splitSleeper.mode, 'pending');
++assert.equal(split.splitSleeper.first.duration, 536, '8h56 SB is the first split period');
++assert.equal(split.splitSleeper.partnerRole, 'short');
++assert.equal(split.splitSleeper.partnerRemainingMinutes, 120, 'long-first split still needs at least 2h OFF/SB');
++assert.equal(split.drive.remainingMinutes, 209, 'pending split preserves only the legal 3h29 around-first drive allowance');
++assert.equal(split.shift.remainingMinutes, 309, '8h56 SB is excluded from the pending split 14h clock');
++assert.ok(split.warnings.some(item => item.type === 'splitPending'));
++
++const standard = calculateHosClocks(state, now, { splitSleeperEnabled:false });
++assert.equal(standard.splitSleeper.available, true);
++assert.equal(standard.splitSleeper.enabled, false);
++assert.equal(standard.shift.remainingMinutes, 0, 'standard comparison remains available and expired');
++
++const completedTimeline = [
++  { id:'reset', status:'SB', startAbs:0, endAbs:600 },
++  { id:'drive_before', status:'D', startAbs:600, endAbs:900 },
++  { id:'short', status:'OFF', startAbs:900, endAbs:1080 },
++  { id:'drive_between', status:'D', startAbs:1080, endAbs:1260 },
++  { id:'long', status:'SB', startAbs:1260, endAbs:1680 },
++  { id:'drive_after', status:'D', startAbs:1680, endAbs:1740 },
++];
++const completed = evaluateSplitSleeper(completedTimeline, 1740, { allowPending:true });
++assert.equal(completed.mode, 'complete');
++assert.equal(completed.totalMinutes, 600);
++assert.equal(completed.driveUsedMinutes, 240, 'recalculation starts at the end of the first 3h period');
++assert.equal(completed.shiftUsedMinutes, 240, 'the 7h sleeper period is excluded from the 14h window');
++assert.equal(completed.summary, '7h SB + 3h OFF/SB');
++
++const tooShortLong = evaluateSplitSleeper([
++  { status:'SB', startAbs:0, endAbs:600 },
++  { status:'D', startAbs:600, endAbs:720 },
++  { status:'OFF', startAbs:720, endAbs:900 },
++  { status:'D', startAbs:900, endAbs:960 },
++  { status:'SB', startAbs:960, endAbs:1379 },
++], 1379, { allowPending:false });
++assert.equal(tooShortLong.available, false, '6h59 SB is not a qualifying long period');
++
++const ui = fs.readFileSync(new URL('../source/src/modules/drive/DriveModeScreen.jsx', import.meta.url), 'utf8');
++assert.match(ui, /Using Split SB Clocks/);
++assert.match(ui, /Split SB pending/);
++assert.doesNotMatch(ui, /drive-mode-split-disabled/);
++
++console.log('verify-split-sleeper-v966 passed');
++diff --git a/mnt/data/orr967/scripts/verify-latest-edit-authoritative-v966.mjs b/mnt/data/orr967/scripts/verify-latest-edit-authoritative-v966.mjs
++new file mode 100644
++index 0000000..0b554cd
++--- /dev/null
+++++ b/mnt/data/orr967/scripts/verify-latest-edit-authoritative-v966.mjs
++@@ -0,0 +1,29 @@
+++import assert from 'node:assert/strict';
+++import fs from 'node:fs';
+++import { applyPatchWithNeighbors } from '../source/src/core/timeline/timelineEngine.js';
+++
+++const events = [
+++  { id:'off', status:'OFF', startMin:0, endMin:100 },
+++  { id:'sb', status:'SB', startMin:100, endMin:200 },
+++  { id:'on_old', status:'ON', startMin:200, endMin:250, note:'Old ON' },
+++  { id:'drive_old', status:'D', startMin:250, endMin:400, note:'Old driving' },
+++  { id:'on_keep', status:'ON', startMin:400, endMin:450, note:'Keep' },
+++];
+++
+++const extended = applyPatchWithNeighbors(events, 'sb', { endMin:420 });
+++assert.deepEqual(extended.map(event => [event.id, event.startMin, event.endMin]), [
+++  ['off', 0, 100],
+++  ['sb', 100, 420],
+++  ['on_keep', 420, 450],
+++]);
+++assert.ok(!extended.some(event => event.id === 'on_old' || event.id === 'drive_old'), 'older overlapped rows are removed');
+++
+++const shortened = applyPatchWithNeighbors(events, 'sb', { endMin:160 });
+++const next = shortened.find(event => event.id === 'on_old');
+++assert.equal(next.startMin, 160, 'next status starts at the latest saved end boundary');
+++
+++const source = fs.readFileSync(new URL('../source/src/core/timeline/timelineEngine.js', import.meta.url), 'utf8');
+++assert.match(source, /latest explicit edit is authoritative/);
+++assert.match(source, /insertEventOverride\(others, edited\)/);
+++
+++console.log('verify-latest-edit-authoritative-v966 passed');
++diff --git a/mnt/data/orr967/PATCH_V96_6_SPLIT_SLEEPER_NOTES.md b/mnt/data/orr967/PATCH_V96_6_SPLIT_SLEEPER_NOTES.md
++new file mode 100644
++index 0000000..1c58319
++--- /dev/null
+++++ b/mnt/data/orr967/PATCH_V96_6_SPLIT_SLEEPER_NOTES.md
++@@ -0,0 +1,29 @@
+++# Owner-Op Road Ready v96.6.0
+++
+++## Split sleeper berth clocks
+++- Implements the property-carrying split sleeper provision for two qualifying rest periods.
+++- Neither period may be under 2 consecutive hours.
+++- One period must contain at least 7 consecutive hours in Sleeper Berth.
+++- The two periods must total at least 10 hours.
+++- Supports long-first and short-first pair order.
+++- Recalculates the 11-hour and 14-hour clocks from the end of the first period.
+++- Excludes the paired qualifying rest period from the 14-hour calculation.
+++- Keeps the 30-minute break and 70/8 cycle clocks active.
+++- Shows a pending/provisional split when the first period is complete and tells the driver the exact partner time still required.
+++- Allows comparison with standard clocks from Drive Mode.
+++- Current-day graph violation ranges use the pending split interpretation; completed past-day pairs are evaluated as completed splits.
+++
+++## Latest manual edit wins
+++- An explicit event-time edit replaces every older event overlapped by the edited interval.
+++- Immediate neighbors reconnect to the edited start/end boundary.
+++- Older covered rows do not reappear after Save/reopen.
+++
+++## Preserved
+++- Pre-trip is requested only after a true 10-hour OFF/SB reset, never merely at midnight.
+++- Pickup BOL and Going to remain stored on the exact ON DUTY Pickup / Loading event.
+++- Historical event locations, signing, cycle totals, and route metadata remain day/event scoped.
+++
+++## Verification
+++- `verify-split-sleeper-v966.mjs`
+++- `verify-latest-edit-authoritative-v966.mjs`
+++- Existing v95.81 HOS, v95.89 violation graph, v96.4 route/BOL, and v96.5 pre-trip regression tests.
