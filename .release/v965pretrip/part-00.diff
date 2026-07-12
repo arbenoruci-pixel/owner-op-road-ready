@@ -1,0 +1,195 @@
+diff --git a/mnt/data/orr964orig/source/src/modules/logbook/signing.js b/mnt/data/orr964/source/src/modules/logbook/signing.js
+index 8c39d59..4d16eac 100644
+--- a/mnt/data/orr964orig/source/src/modules/logbook/signing.js
++++ b/mnt/data/orr964/source/src/modules/logbook/signing.js
+@@ -2,7 +2,7 @@ import { addDays, localDayKey } from '../../shared/utils/date.js';
+ import { violationRangesForDay } from '../../core/hos/hosEngine.js';
+ import { displayEventsForDay } from '../../core/timeline/displayTimeline.js';
+ import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../../core/compliance/rawRodsChecks.js';
+-import { isDrivingContinuationFromPreviousDay } from '../../core/compliance/preTripContinuity.js';
++import { missingPreTripRequirementsForDay, preTripRequirementsForDay } from '../../core/compliance/preTripContinuity.js';
+ import { haversineMiles, pointFromLogLocation } from '../../core/gps/locationService.js';
+ import { durLabel, timeLabel } from '../../shared/utils/time.js';
+ import { docsTokensForTransition, routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../../core/routes/routeNormalization.js';
+@@ -255,7 +255,7 @@ function issueSeverity(issue = {}) {
+   if (/active_day/i.test(issue.code || '')) return 'notice';
+   if (/previous_|missing_previous/i.test(issue.code || '')) return 'dot';
+   if (/hos_|drive11|window14|break8|cycle70|violation/i.test(text)) return 'violation';
+-  if (/location_jump|pretrip_after_driving|inspection_unlinked/i.test(text)) return 'review';
++  if (/location_jump|pretrip_after_driving|pretrip_after_10h_rest_review|inspection_unlinked/i.test(text)) return 'review';
+   if (/missing|invalid|overlap|gap|total|vehicle|shipping|location|inspection|driver|carrier|office/i.test(text)) return 'fix';
+   return 'review';
+ }
+@@ -264,7 +264,7 @@ export function isFatalSigningIssue(issue = {}) {
+   const severity = issueSeverity(issue);
+   const code = String(issue.code || issue.id || '').toLowerCase();
+   if (severity === 'notice' || severity === 'review') return false;
+-  if (/active_day|location_jump|duplicate_shipping_docs|pretrip_after_driving|inspection_unlinked|inspection_complete_unlinked/.test(code)) return false;
++  if (/active_day|location_jump|duplicate_shipping_docs|pretrip_after_driving|pretrip_after_10h_rest_review|inspection_unlinked|inspection_complete_unlinked/.test(code)) return false;
+   return severity === 'fix' || severity === 'violation' || severity === 'dot';
+ }
+ 
+@@ -388,10 +388,12 @@ export function validateLogForSigning(state, day) {
+   const inspection = state.inspectionByDay?.[day] || {};
+   const vehicle = String(state.driver?.truck || '').trim();
+   const hasOnOrDrive = events.some(event => event.status === 'ON' || event.status === 'D');
+-  const firstDriving = events.find(event => event.status === 'D');
+-  const preTrip = relevantPreTripContext(events, firstDriving);
++  const preTripRequirements = preTripRequirementsForDay(state.eventsByDay || {}, day, events);
++  const missingPreTripRequirements = missingPreTripRequirementsForDay(state.eventsByDay || {}, day, events);
++  const satisfiedRequiredPreTrip = preTripRequirements.find(result => result.satisfied && result.preTripEvent) || null;
++  const firstDriving = satisfiedRequiredPreTrip?.drivingEvent || events.find(event => event.status === 'D');
++  const preTrip = satisfiedRequiredPreTrip?.preTripEvent || relevantPreTripContext(events, firstDriving);
+   const preTripIsActualPreTrip = !!preTrip && isPreTripEvent(preTrip);
+-  const continuousDrivingFromPreviousDay = isDrivingContinuationFromPreviousDay(state.eventsByDay || {}, day, events);
+   const completedEvents = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));
+   const driverName = stateText(state, 'driverProfile.name', 'driver.name');
+   const carrier = stateText(state, 'carrierName', 'driver.carrier');
+@@ -527,17 +529,24 @@ export function validateLogForSigning(state, day) {
+     }
+   });
+ 
+-  if (firstDriving && !preTrip && !continuousDrivingFromPreviousDay) {
++  missingPreTripRequirements.forEach(requirement => {
++    const drivingEvent = requirement.drivingEvent || {};
++    const restHours = Math.floor(Number(requirement.restMinutes || 0) / 60);
++    const restMinutes = Number(requirement.restMinutes || 0) % 60;
++    const restLabel = `${restHours}h${restMinutes ? ` ${restMinutes}m` : ''}`;
+     issues.push({
+-      code: `missing_pretrip_event_${firstDriving.id || firstDriving.startMin}`,
+-      title: 'Pre-trip ON DUTY event is missing',
+-      detail: `Driving starts at ${timeLabel(firstDriving.startMin, true)}. Add an ON DUTY Pre-trip inspection before driving if it was done.`,
+-      where: 'Log tab → before first driving',
++      code: `pretrip_after_10h_rest_review_${drivingEvent.id || drivingEvent.startMin}`,
++      title: 'Pre-trip review after 10h+ rest',
++      detail: `Driving starts at ${timeLabel(drivingEvent.startMin, true)} after ${restLabel} continuous OFF/SB. Review whether an ON DUTY Pre-trip was completed and omitted. Keep accurate times unchanged.`,
++      where: 'Log tab → after 10h OFF/SB reset',
+       day,
+-      eventId: firstDriving.id || '',
+-      startMin: firstDriving.startMin,
++      eventId: drivingEvent.id || '',
++      startMin: drivingEvent.startMin,
++      restMinutes: requirement.restMinutes,
++      fixAction:'OPEN_LOG',
++      actionLabel:'Review',
+     });
+-  }
++  });
+ 
+   if (
+     firstDriving &&
+diff --git a/mnt/data/orr964orig/source/src/core/dot/dotOfficerCheckEngine.js b/mnt/data/orr964/source/src/core/dot/dotOfficerCheckEngine.js
+index 43630aa..6436314 100644
+--- a/mnt/data/orr964orig/source/src/core/dot/dotOfficerCheckEngine.js
++++ b/mnt/data/orr964/source/src/core/dot/dotOfficerCheckEngine.js
+@@ -1,7 +1,7 @@
+ import { addDays, localDayKey } from '../../shared/utils/date.js';
+ import { durLabel, nowMin, timeLabel } from '../../shared/utils/time.js';
+ import { buildCoverageFixGroup, coverageIssuesWithoutGroupedChildren, rawCoverageIssues, rawStoredEventsForDay } from '../compliance/rawRodsChecks.js';
+-import { isDrivingContinuationFromPreviousDay } from '../compliance/preTripContinuity.js';
++import { missingPreTripRequirementsForDay, preTripRequirementsForDay } from '../compliance/preTripContinuity.js';
+ import { analyzeLinkedHos, violationRangesForDay } from '../hos/hosEngine.js';
+ import { haversineMiles, pointFromLogLocation } from '../gps/locationService.js';
+ import { docsTokensForTransition, routeLegsForDayCanonical, suggestedMilesForDayFromRoute } from '../routes/routeNormalization.js';
+@@ -377,25 +377,34 @@ function buildHosIssues(state, day, events) {
+ function buildInspectionIssues(state, day, events) {
+   const issues = [];
+   const inspection = state.inspectionByDay?.[day] || {};
+-  const firstDriving = events.find(event => event.status === 'D');
+-  const preTrip = relevantPreTripContext(events, firstDriving);
++  const preTripRequirements = preTripRequirementsForDay(state.eventsByDay || {}, day, events);
++  const missingPreTripRequirements = missingPreTripRequirementsForDay(state.eventsByDay || {}, day, events);
++  const satisfiedRequiredPreTrip = preTripRequirements.find(result => result.satisfied && result.preTripEvent) || null;
++  const firstDriving = satisfiedRequiredPreTrip?.drivingEvent || events.find(event => event.status === 'D');
++  const preTrip = satisfiedRequiredPreTrip?.preTripEvent || relevantPreTripContext(events, firstDriving);
+   const preTripIsActualPreTrip = !!preTrip && hasPreTripText(preTrip);
+-  const continuousDrivingFromPreviousDay = isDrivingContinuationFromPreviousDay(state.eventsByDay || {}, day, events);
+   const eventIds = new Set(events.map(event => event.id));
+   const hasWork = hasVehicleWork(events);
+ 
+-  if (firstDriving && !preTrip && !continuousDrivingFromPreviousDay) {
++  missingPreTripRequirements.forEach(requirement => {
++    const drivingEvent = requirement.drivingEvent || {};
++    const restHours = Math.floor(Number(requirement.restMinutes || 0) / 60);
++    const restMinutes = Number(requirement.restMinutes || 0) % 60;
++    const restLabel = `${restHours}h${restMinutes ? ` ${restMinutes}m` : ''}`;
+     issues.push(makeIssue('inspection', {
+-      id:`missing_pretrip_event_${firstDriving.id || firstDriving.startMin}`,
+-      severity:'fix',
+-      title:'Pre-trip ON DUTY event missing',
+-      detail:`Driving starts ${timeLabel(firstDriving.startMin, true)} · add 15m ON DUTY before driving`,
+-      fixAction:'ADD_PRETRIP_BEFORE_DRIVING',
+-      eventId:firstDriving.id || '',
+-      startMin:firstDriving.startMin,
+-      actionLabel:'Add 15m pre-trip',
++      id:`pretrip_after_10h_rest_review_${drivingEvent.id || drivingEvent.startMin}`,
++      severity:'review',
++      title:'Pre-trip review after 10h+ rest',
++      detail:`Driving starts ${timeLabel(drivingEvent.startMin, true)} after ${restLabel} continuous OFF/SB. Review the accurate record; do not add time that did not occur.`,
++      fixAction:'OPEN_EVENT',
++      eventId:drivingEvent.id || '',
++      startMin:drivingEvent.startMin,
++      restMinutes:requirement.restMinutes,
++      actionLabel:'Review',
+     }));
+-  } else if (
++  });
++
++  if (
+     firstDriving &&
+     preTrip &&
+     preTripIsActualPreTrip &&
+diff --git a/mnt/data/orr964orig/source/src/modules/status/StatusWorkflowSheet.jsx b/mnt/data/orr964/source/src/modules/status/StatusWorkflowSheet.jsx
+index 9cb0acb..139be73 100644
+--- a/mnt/data/orr964orig/source/src/modules/status/StatusWorkflowSheet.jsx
++++ b/mnt/data/orr964/source/src/modules/status/StatusWorkflowSheet.jsx
+@@ -218,6 +218,15 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
+     }
+   }, [status]);
+ 
++  useEffect(() => {
++    if (!state.preTripDriveBlock?.at) return;
++    // The app blocked a direct Driving start after a qualifying 10-hour OFF/SB
++    // reset. Preselect the truthful next step without saving anything for the
++    // driver: ON DUTY → Pre-trip inspection.
++    setStatus('ON');
++    setSelectedReasons(['Pre-trip inspection']);
++  }, [state.preTripDriveBlock?.at]);
++
+   function choose(next) {
+     const leavingDriving = state.currentStatus === 'D' && next !== 'D';
+     setStatus(next);
+@@ -414,6 +423,26 @@ export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onS
+           </div>
+         </section>
+ 
++        {state.preTripDriveBlock && (
++          <section className="picker-section pretrip-drive-block" role="alert">
++            <div className="picker-label-row">
++              <label>Pre-trip required after 10h+ rest</label>
++              <span>{Math.floor(Number(state.preTripDriveBlock.restMinutes || 0) / 60)}h rest</span>
++            </div>
++            <p>{state.preTripDriveBlock.message || 'Complete an ON DUTY Pre-trip inspection before starting Driving.'}</p>
++            <button
++              type="button"
++              className="picked"
++              onClick={() => {
++                setStatus('ON');
++                setSelectedReasons(['Pre-trip inspection']);
++              }}
++            >
++              Use ON DUTY · Pre-trip inspection
++            </button>
++          </section>
++        )}
++
+         <section className="picker-section">
+           <div className="picker-label-row">
+             <label>{actionHeading(status)}</label>
+diff --git a/mnt/data/orr964orig/source/src/app/App.jsx b/mnt/data/orr964/source/src/app/App.jsx
+index c61bae8..a2f3b33 100644
+--- a/mnt/data/orr964orig/source/src/app/App.jsx
++++ b/mnt/data/orr964/source/src/app/App.jsx
+@@ -23,7 +23,7 @@ import { initialCertifyStatus, initialEventsByDay } from '../state/mockData.js';
+ import { addDays, localDayKey, isToday } from '../shared/utils/date.js';
+ import { displayEventsForDay, displayEventsForDayFromState, currentFromEvents } from '../core/timeline/displayTimeline.js';
