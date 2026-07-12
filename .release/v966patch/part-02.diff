@@ -1,0 +1,269 @@
+       </button>
+ 
++      <SplitSleeperSummary split={split} enabled={splitEnabled} />
++
+       <div className="drive-mode-clock-grid">
+         {clocks.map(clock => <ClockCircle key={clock.label} clock={clock} />)}
+       </div>
+diff --git a/mnt/data/orr964/source/src/core/timeline/timelineEngine.js b/mnt/data/orr967/source/src/core/timeline/timelineEngine.js
+index c9accdf..856e948 100644
+--- a/mnt/data/orr964/source/src/core/timeline/timelineEngine.js
++++ b/mnt/data/orr967/source/src/core/timeline/timelineEngine.js
+@@ -304,20 +304,28 @@ export function applyEditOverride(events, id, patch) {
+ }
+ 
+ export function applyPatchWithNeighbors(events, id, patch) {
+-  let evs = sortEvents(events).map(e => e.id === id ? { ...e, ...patch } : { ...e });
+-  let idx = evs.findIndex(e => e.id === id);
+-  if (idx < 0) return normalizeLogEvents(evs);
++  const original = (events || []).find(event => event?.id === id) || null;
++  if (!original) return normalizeLogEvents(events || []);
+ 
+-  evs = sortEvents(evs);
+-  idx = evs.findIndex(e => e.id === id);
+-  const current = evs[idx];
++  const edited = cleanEvent({ ...original, ...patch, id });
++  const others = sortEvents(events).filter(event => event?.id !== id);
++
++  // The latest explicit edit is authoritative for its whole interval. Remove or
++  // trim every older event overlapped by the edited block, then reconnect the
++  // immediate neighbors. This prevents stale rows from resurfacing when the
++  // driver reopens the day after saving a larger/smaller event window.
++  let evs = sortEvents(insertEventOverride(others, edited));
++  let idx = evs.findIndex(event => event.id === id);
++  if (idx < 0) return normalizeLogEvents(evs);
+ 
+   if (patch.startMin !== undefined && idx > 0) {
+-    evs[idx - 1].endMin = Math.max(evs[idx - 1].startMin + 1, current.startMin);
++    const previous = evs[idx - 1];
++    previous.endMin = Math.max(previous.startMin + 1, edited.startMin);
+   }
+ 
+   if (patch.endMin !== undefined && idx < evs.length - 1) {
+-    evs[idx + 1].startMin = Math.max(current.endMin, current.startMin + 1);
++    const next = evs[idx + 1];
++    next.startMin = Math.max(edited.endMin, edited.startMin + 1);
+   }
+ 
+   return normalizeLogEvents(evs);
+diff --git a/mnt/data/orr964/package.json b/mnt/data/orr967/package.json
+index 47b7511..a697200 100644
+--- a/mnt/data/orr964/package.json
++++ b/mnt/data/orr967/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "owner-op-road-ready-next",
+-  "version": "96.5.0",
++  "version": "96.6.0",
+   "private": true,
+   "type": "module",
+   "scripts": {
+@@ -82,7 +82,9 @@
+     "verify-sign-minute-boundary-v963": "node scripts/verify-sign-minute-boundary-v963.mjs",
+     "verify-midnight-pretrip-continuity-v964": "node scripts/verify-midnight-pretrip-continuity-v964.mjs",
+     "verify-route-bol-event-link-v964": "node scripts/verify-route-bol-event-link-v964.mjs",
+-    "verify-pretrip-after-10h-reset-v965": "node scripts/verify-pretrip-after-10h-reset-v965.mjs"
++    "verify-pretrip-after-10h-reset-v965": "node scripts/verify-pretrip-after-10h-reset-v965.mjs",
++    "verify-split-sleeper-v966": "node scripts/verify-split-sleeper-v966.mjs",
++    "verify-latest-edit-authoritative-v966": "node scripts/verify-latest-edit-authoritative-v966.mjs"
+   },
+   "dependencies": {
+     "@supabase/supabase-js": "^2.49.4",
+diff --git a/mnt/data/orr964/package-lock.json b/mnt/data/orr967/package-lock.json
+index 52ad0bf..f6984c0 100644
+--- a/mnt/data/orr964/package-lock.json
++++ b/mnt/data/orr967/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "owner-op-road-ready-next",
+-  "version": "96.5.0",
++  "version": "96.6.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "owner-op-road-ready-next",
+-      "version": "96.5.0",
++      "version": "96.6.0",
+       "dependencies": {
+         "@supabase/supabase-js": "^2.49.4",
+         "dexie": "^4.0.11",
+diff --git a/mnt/data/orr964/public/app-version.json b/mnt/data/orr967/public/app-version.json
+index d4cbcdf..a0e7b05 100644
+--- a/mnt/data/orr964/public/app-version.json
++++ b/mnt/data/orr967/public/app-version.json
+@@ -1,13 +1,14 @@
+ {
+-  "version": "96.5.0",
+-  "build": "v96.5-pretrip-after-10h-reset",
+-  "releasedAt": "2026-07-12T14:30:45Z",
++  "version": "96.6.0",
++  "build": "v96.6-split-sleeper-authoritative-edit",
++  "releasedAt": "2026-07-12T15:30:00.000Z",
+   "notes": [
+-    "Requires a new ON DUTY Pre-trip only after a proven continuous 10-hour OFF/SB reset, including combined OFF plus Sleeper time.",
+-    "Never requests a new Pre-trip merely because Driving crosses midnight or a new log date begins.",
+-    "Blocks a live direct Driving start after 10h+ rest and opens the status workflow on ON DUTY Pre-trip without saving artificial time.",
+-    "Historical missing Pre-trip records are shown as review items so accurate times can remain unchanged; route/BOL linking stays intact."
++    "Implements property-carrying split sleeper clocks for qualifying 7+ hour Sleeper Berth and 2+ hour OFF/SB periods totaling at least 10 hours.",
++    "Shows pending split clocks provisionally, identifies the exact partner rest still required, and switches to completed split calculations when the pair is finished.",
++    "Recalculates the 11-hour and 14-hour clocks from the end of the first qualifying period, excludes the paired rest period from the 14-hour window, and keeps cycle and 30-minute-break rules active.",
++    "Makes the latest explicit event-time edit authoritative across its interval so older overlapped rows cannot resurface after Save.",
++    "Preserves the v96.5 pre-trip-after-10h-reset rule and the exact-event Pickup/BOL/Going-to link."
+   ],
+-  "label": "v96.5 Pre-trip After 10h Reset",
+-  "updatedAt": "2026-07-12T14:30:45Z"
++  "label": "v96.6 Split Sleeper + Latest Edit Wins",
++  "updatedAt": "2026-07-12T15:30:00.000Z"
+ }
+diff --git a/mnt/data/orr964/public/sw.js b/mnt/data/orr967/public/sw.js
+index 1fb1dc0..84bbf36 100644
+--- a/mnt/data/orr964/public/sw.js
++++ b/mnt/data/orr967/public/sw.js
+@@ -1,4 +1,4 @@
+-const OWNER_OP_SW_VERSION = '96.5.0';
++const OWNER_OP_SW_VERSION = '96.6.0';
+ 
+ async function clearAllCaches() {
+   if (typeof caches === 'undefined') return;
+diff --git a/mnt/data/orr964/source/src/core/update/appUpdate.js b/mnt/data/orr967/source/src/core/update/appUpdate.js
+index 493fc67..8ae8832 100644
+--- a/mnt/data/orr964/source/src/core/update/appUpdate.js
++++ b/mnt/data/orr967/source/src/core/update/appUpdate.js
+@@ -1,4 +1,4 @@
+-const FALLBACK_APP_VERSION = '96.5.0';
++const FALLBACK_APP_VERSION = '96.6.0';
+ 
+ export const CURRENT_APP_VERSION = String(
+   process.env.NEXT_PUBLIC_OWNER_OP_APP_VERSION || FALLBACK_APP_VERSION,
+diff --git a/mnt/data/orr964/CHANGELOG.md b/mnt/data/orr967/CHANGELOG.md
+index 232ddcf..a02c208 100644
+--- a/mnt/data/orr964/CHANGELOG.md
++++ b/mnt/data/orr967/CHANGELOG.md
+@@ -1,3 +1,12 @@
++# v96.6.0
++
++- Added full property-carrying split sleeper clock support for qualifying 7+ hour SB and 2+ hour OFF/SB periods totaling at least 10 hours.
++- Added pending/provisional split guidance, completed-pair calculations, standard-clock comparison, and split-aware graph violation ranges.
++- Recalculates 11-hour and 14-hour clocks from the end of the first qualifying period while excluding the paired rest period from the 14-hour window.
++- Keeps the 30-minute break and cycle clocks active under split mode.
++- Made the latest explicit event-time edit authoritative and removed older events covered by the edited interval.
++- Preserved pre-trip-after-10h-reset, route/BOL, historical locations, signing, and PWA update behavior.
++
+ # v96.3.0
+ 
+ - Fixed false certification blocking from a one-minute raw status-boundary artifact at midnight.
+diff --git a/mnt/data/orr967/source/src/core/hos/splitSleeper.js b/mnt/data/orr967/source/src/core/hos/splitSleeper.js
+new file mode 100644
+index 0000000..04884ec
+--- /dev/null
++++ b/mnt/data/orr967/source/src/core/hos/splitSleeper.js
+@@ -0,0 +1,345 @@
++const HOUR = 60;
++
++export const SPLIT_SHORT_MINUTES = 2 * HOUR;
++export const SPLIT_LONG_SLEEPER_MINUTES = 7 * HOUR;
++export const SPLIT_TOTAL_MINUTES = 10 * HOUR;
++export const SPLIT_DRIVE_LIMIT_MINUTES = 11 * HOUR;
++export const SPLIT_SHIFT_LIMIT_MINUTES = 14 * HOUR;
++
++function duration(event = {}) {
++  return Math.max(0, Number(event.endAbs || 0) - Number(event.startAbs || 0));
++}
++
++function sortByStart(events = []) {
++  return [...(events || [])]
++    .filter(Boolean)
++    .filter(event => Number(event.endAbs || 0) > Number(event.startAbs || 0))
++    .sort((a, b) => Number(a.startAbs || 0) - Number(b.startAbs || 0) || Number(a.endAbs || 0) - Number(b.endAbs || 0));
++}
++
++function isRestStatus(status = '') {
++  return status === 'OFF' || status === 'SB';
++}
++
++function isDutyStatus(status = '') {
++  return status === 'ON' || status === 'D';
++}
++
++function mergeBlocks(timeline = [], predicate = () => false, kind = 'rest') {
++  const blocks = [];
++  for (const event of sortByStart(timeline)) {
++    if (!predicate(event)) continue;
++    const eventStart = Number(event.startAbs || 0);
++    const eventEnd = Number(event.endAbs || 0);
++    const last = blocks.at(-1) || null;
++    if (last && eventStart <= last.endAbs + 1) {
++      last.endAbs = Math.max(last.endAbs, eventEnd);
++      last.duration = Math.max(0, last.endAbs - last.startAbs);
++      last.events.push(event);
++      last.statuses.add(event.status);
++      continue;
++    }
++    blocks.push({
++      id:`${kind}_${event.id || eventStart}`,
++      kind,
++      startAbs:eventStart,
++      endAbs:eventEnd,
++      duration:eventEnd - eventStart,
++      events:[event],
++      statuses:new Set([event.status]),
++    });
++  }
++  return blocks;
++}
++
++export function splitRestBlocks(timeline = []) {
++  return mergeBlocks(timeline, event => isRestStatus(event.status), 'rest');
++}
++
++export function splitSleeperBlocks(timeline = []) {
++  return mergeBlocks(timeline, event => event.status === 'SB', 'sleeper');
++}
++
++function overlaps(a = {}, b = {}) {
++  return Number(a.startAbs || 0) < Number(b.endAbs || 0)
++    && Number(b.startAbs || 0) < Number(a.endAbs || 0);
++}
++
++function sumDuration(timeline = [], startAbs = -Infinity, endAbs = Infinity, predicate = () => true) {
++  return sortByStart(timeline).reduce((sum, event) => {
++    if (!predicate(event)) return sum;
++    const start = Math.max(Number(event.startAbs || 0), Number(startAbs));
++    const end = Math.min(Number(event.endAbs || 0), Number(endAbs));
++    return sum + Math.max(0, end - start);
++  }, 0);
++}
++
++function latestFullResetBefore(restBlocks = [], beforeAbs = Infinity) {
++  return restBlocks
++    .filter(block => block.duration >= SPLIT_TOTAL_MINUTES)
++    .map(block => ({ ...block, resetAbs:block.startAbs + SPLIT_TOTAL_MINUTES }))
++    .filter(block => block.resetAbs <= beforeAbs)
++    .sort((a, b) => b.resetAbs - a.resetAbs)[0] || null;
++}
++
++function dutyStartAfter(timeline = [], resetAbs = -Infinity, beforeAbs = Infinity) {
++  const event = sortByStart(timeline).find(item => (
++    isDutyStatus(item.status)
++    && Number(item.endAbs || 0) > resetAbs
++    && Number(item.startAbs || 0) < beforeAbs
++  ));
++  if (!event) return null;
++  return Math.max(Number(event.startAbs || 0), Number(resetAbs));
++}
++
++function priorDutyContext(timeline = [], restBlocks = [], firstPeriod = {}) {
++  const priorReset = latestFullResetBefore(restBlocks, Number(firstPeriod.startAbs || 0));
++  const floor = priorReset ? priorReset.resetAbs : (sortByStart(timeline)[0]?.startAbs ?? Number(firstPeriod.startAbs || 0));
++  const dutyStart = dutyStartAfter(timeline, floor, Number(firstPeriod.startAbs || 0));
++  const driveBefore = sumDuration(
++    timeline,
++    floor,
++    Number(firstPeriod.startAbs || 0),
++    event => event.status === 'D',
++  );
++  const shiftBefore = dutyStart == null ? 0 : Math.max(0, Number(firstPeriod.startAbs || 0) - dutyStart);
++  return { priorReset, floor, dutyStart, driveBefore, shiftBefore };
++}
++
