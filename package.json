@@ -1,13 +1,14 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "96.5.0",
+  "version": "96.6.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/apply-v966-runtime-patches.mjs && npm run sync:version",
     "dev": "next dev --hostname 0.0.0.0",
     "sync:version": "node scripts/sync-release-version.mjs",
     "check:version": "node scripts/sync-release-version.mjs --check",
-    "prebuild": "npm run sync:version",
+    "prebuild": "node scripts/apply-v966-runtime-patches.mjs && npm run sync:version && node scripts/verify-pretrip-reset-and-tail-edit-v966.mjs && node scripts/verify-route-bol-event-link-v964.mjs",
     "build": "next build",
     "start": "next start",
     "test:offline": "node scripts/offline-sync-smoke-test.mjs",
@@ -82,7 +83,8 @@
     "verify-sign-minute-boundary-v963": "node scripts/verify-sign-minute-boundary-v963.mjs",
     "verify-midnight-pretrip-continuity-v964": "node scripts/verify-midnight-pretrip-continuity-v964.mjs",
     "verify-route-bol-event-link-v964": "node scripts/verify-route-bol-event-link-v964.mjs",
-    "verify-midnight-pretrip-continuity-v965": "node scripts/verify-midnight-pretrip-continuity-v965.mjs"
+    "verify-midnight-pretrip-continuity-v965": "node scripts/verify-midnight-pretrip-continuity-v965.mjs",
+    "verify-pretrip-reset-and-tail-edit-v966": "node scripts/apply-v966-runtime-patches.mjs && node scripts/verify-pretrip-reset-and-tail-edit-v966.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
