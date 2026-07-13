@@ -21,21 +21,19 @@ graph = graph
   .replace(/const HOUR_GRID_OPACITY = [0-9.]+;/, 'const HOUR_GRID_OPACITY = 0.8;')
   .replace(/const QUARTER_GRID_OPACITY = [0-9.]+;/, 'const QUARTER_GRID_OPACITY = 0.58;');
 
-// Remove any white halo line that belongs to a vertical connector. The halo
-// was visually cutting the horizontal status stroke at the exact bend.
+// Remove only the white halo SVG line that belongs to a vertical connector.
+// [^>] keeps the match inside one JSX tag so grid lines are never touched.
 graph = graph.replace(
-  /\s*<line(?=[\s\S]*?x1=\{x\})(?=[\s\S]*?x2=\{x\})(?=[\s\S]*?stroke="#ffffff")(?=[\s\S]*?VERTICAL_LINE_W[\s\S]*?)[\s\S]*?\/\>/g,
+  /\s*<line\b(?=[^>]*x1=\{x\})(?=[^>]*x2=\{x\})(?=[^>]*stroke="#ffffff")(?=[^>]*VERTICAL_LINE_W)[^>]*\/>/g,
   ''
 );
 
-// Extend the real connector into both horizontal strokes. Support both the
-// original y1/y2 form and an already-patched form so the materializer is safe
-// to run more than once.
-const connectorLine = /<line(?=[^>]*x1=\{x\})(?=[^>]*x2=\{x\})(?=[^>]*stroke=\{CONNECTOR_COLOR\})[^>]*\/>/g;
-graph = graph.replace(connectorLine, match => {
-  if (match.includes('Math.min(y1, y2) - LINE_W / 2')) return match;
-  return '<line x1={x} x2={x} y1={Math.min(y1, y2) - LINE_W / 2} y2={Math.max(y1, y2) + LINE_W / 2} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />';
-});
+// Replace only the real neutral connector line, extending it slightly into
+// both horizontal strokes to make each corner visually solid.
+graph = graph.replace(
+  /<line\b(?=[^>]*x1=\{x\})(?=[^>]*x2=\{x\})(?=[^>]*stroke=\{CONNECTOR_COLOR\})[^>]*\/>/g,
+  '<line x1={x} x2={x} y1={Math.min(y1, y2) - LINE_W / 2} y2={Math.max(y1, y2) + LINE_W / 2} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />'
+);
 
 if (!graph.includes('v97.4-solid-junctions')) {
   graph = graph.replace(
@@ -69,7 +67,7 @@ write('public/app-version.json', `${JSON.stringify({
 write('public/sw.js', read('public/sw.js').replace(/const OWNER_OP_SW_VERSION = '[^']+';/, `const OWNER_OP_SW_VERSION = '${VERSION}';`));
 write('source/src/core/update/appUpdate.js', read('source/src/core/update/appUpdate.js').replace(/const FALLBACK_APP_VERSION = '[^']+';/, `const FALLBACK_APP_VERSION = '${VERSION}';`));
 
-if (!graph.includes("D:'#00c98d'") || !graph.includes('v97.4-solid-junctions')) {
+if (!graph.includes("D:'#00c98d'") || !graph.includes('v97.4-solid-junctions') || !graph.includes('Math.min(y1, y2) - LINE_W / 2')) {
   throw new Error('v97.4 graph junction verification failed');
 }
 console.log('v97.4 solid graph junctions materialized');
