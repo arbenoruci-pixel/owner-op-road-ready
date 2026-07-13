@@ -11,22 +11,11 @@ function write(relative, content) {
   fs.mkdirSync(path.dirname(target), { recursive:true });
   fs.writeFileSync(target, content);
 }
-function replaceOnce(content, before, after, label) {
-  if (content.includes(after)) return content;
-  if (!content.includes(before)) throw new Error(`v97.0 patch failed: ${label}`);
-  return content.replace(before, after);
-}
 
 const timelinePath = 'source/src/core/timeline/timelineEngine.js';
 let timeline = read(timelinePath);
 
-timeline = replaceOnce(
-  timeline,
-  `  if (!hasOnlyContiguousIndexes(indexes)) {
-    return { events, appliedDeltaMin: 0, changedEventIds: [], adjustedNeighborIds: [], warnings, blockedReason: 'Select one continuous block' };
-  }
-`,
-  `  if (!hasOnlyContiguousIndexes(indexes)) {
+const replacement = `  if (!hasOnlyContiguousIndexes(indexes)) {
     const groups = [];
     let current = [];
     for (const index of indexes) {
@@ -76,9 +65,14 @@ timeline = replaceOnce(
       mode:'disjoint_selected_groups',
     };
   }
-`,
-  'disjoint selection shifting'
-);
+
+  const firstIdx`;
+
+if (!timeline.includes("mode:'disjoint_selected_groups'")) {
+  const pattern = /  if \(!hasOnlyContiguousIndexes\(indexes\)\) \{[\s\S]*?\n  \}\n\n  const firstIdx/;
+  if (!pattern.test(timeline)) throw new Error('v97.0 patch failed: disjoint selection block not found');
+  timeline = timeline.replace(pattern, replacement);
+}
 
 write(timelinePath, timeline);
 
