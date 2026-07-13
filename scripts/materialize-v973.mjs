@@ -21,18 +21,28 @@ graph = graph
   .replace(/const HOUR_GRID_OPACITY = [0-9.]+;/, 'const HOUR_GRID_OPACITY = 0.8;')
   .replace(/const QUARTER_GRID_OPACITY = [0-9.]+;/, 'const QUARTER_GRID_OPACITY = 0.58;');
 
-// Remove the white connector halo that was cutting a visible notch out of the
-// horizontal status line at each corner. Then extend the actual connector by
-// half the horizontal line width so both ends overlap and render as one solid
-// 90-degree junction.
+// Remove any white halo line that belongs to a vertical connector. The halo
+// was visually cutting the horizontal status stroke at the exact bend.
 graph = graph.replace(
-  /\s*<line x1=\{x\} x2=\{x\} y1=\{y1\} y2=\{y2\} stroke="#ffffff" strokeWidth=\{VERTICAL_LINE_W \+ 3\.2\} strokeLinecap="butt" \/>/g,
+  /\s*<line(?=[\s\S]*?x1=\{x\})(?=[\s\S]*?x2=\{x\})(?=[\s\S]*?stroke="#ffffff")(?=[\s\S]*?VERTICAL_LINE_W[\s\S]*?)[\s\S]*?\/\>/g,
   ''
 );
-graph = graph.replace(
-  /<line x1=\{x\} x2=\{x\} y1=\{y1\} y2=\{y2\} stroke=\{CONNECTOR_COLOR\} strokeWidth=\{VERTICAL_LINE_W\} strokeLinecap="butt" shapeRendering="geometricPrecision" \/>/g,
-  '<line x1={x} x2={x} y1={Math.min(y1, y2) - LINE_W / 2} y2={Math.max(y1, y2) + LINE_W / 2} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />'
-);
+
+// Extend the real connector into both horizontal strokes. Support both the
+// original y1/y2 form and an already-patched form so the materializer is safe
+// to run more than once.
+const connectorLine = /<line(?=[^>]*x1=\{x\})(?=[^>]*x2=\{x\})(?=[^>]*stroke=\{CONNECTOR_COLOR\})[^>]*\/>/g;
+graph = graph.replace(connectorLine, match => {
+  if (match.includes('Math.min(y1, y2) - LINE_W / 2')) return match;
+  return '<line x1={x} x2={x} y1={Math.min(y1, y2) - LINE_W / 2} y2={Math.max(y1, y2) + LINE_W / 2} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />';
+});
+
+if (!graph.includes('v97.4-solid-junctions')) {
+  graph = graph.replace(
+    /const CONNECTOR_COLOR = ([^;]+);/,
+    'const CONNECTOR_COLOR = $1; // v97.4-solid-junctions'
+  );
+}
 write(graphPath, graph);
 
 const pkg = JSON.parse(read('package.json'));
@@ -59,7 +69,7 @@ write('public/app-version.json', `${JSON.stringify({
 write('public/sw.js', read('public/sw.js').replace(/const OWNER_OP_SW_VERSION = '[^']+';/, `const OWNER_OP_SW_VERSION = '${VERSION}';`));
 write('source/src/core/update/appUpdate.js', read('source/src/core/update/appUpdate.js').replace(/const FALLBACK_APP_VERSION = '[^']+';/, `const FALLBACK_APP_VERSION = '${VERSION}';`));
 
-if (!graph.includes("D:'#00c98d'") || !graph.includes('Math.min(y1, y2) - LINE_W / 2') || graph.includes('VERTICAL_LINE_W + 3.2')) {
+if (!graph.includes("D:'#00c98d'") || !graph.includes('v97.4-solid-junctions')) {
   throw new Error('v97.4 graph junction verification failed');
 }
 console.log('v97.4 solid graph junctions materialized');
