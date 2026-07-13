@@ -1,14 +1,14 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "96.9.0",
+  "version": "97.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node .release/materialize-v966.mjs && node scripts/materialize-v968.mjs && node scripts/materialize-v969-runner.mjs && npm run sync:version",
+    "predev": "node .release/materialize-v966.mjs && node scripts/materialize-v968.mjs && node scripts/materialize-v969-runner.mjs && node scripts/materialize-v970.mjs && npm run sync:version",
     "dev": "next dev --hostname 0.0.0.0",
     "sync:version": "node scripts/sync-release-version.mjs",
     "check:version": "node scripts/sync-release-version.mjs --check",
-    "prebuild": "node .release/materialize-v966.mjs && node scripts/materialize-v968.mjs && node scripts/materialize-v969-runner.mjs && npm run sync:version && node scripts/verify-pretrip-after-10h-reset-v965.mjs && node scripts/verify-split-sleeper-v966.mjs && node scripts/verify-latest-edit-authoritative-v966.mjs && node scripts/verify-route-bol-event-link-v964.mjs",
+    "prebuild": "node .release/materialize-v966.mjs && node scripts/materialize-v968.mjs && node scripts/materialize-v969-runner.mjs && node scripts/materialize-v970.mjs && npm run sync:version && node scripts/verify-disjoint-event-shift-v970.mjs && node scripts/verify-pretrip-after-10h-reset-v965.mjs && node scripts/verify-split-sleeper-v966.mjs && node scripts/verify-latest-edit-authoritative-v966.mjs && node scripts/verify-route-bol-event-link-v964.mjs",
     "build": "next build",
     "start": "next start",
     "test:offline": "node scripts/offline-sync-smoke-test.mjs",
