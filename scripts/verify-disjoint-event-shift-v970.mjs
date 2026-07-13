@@ -15,3 +15,5 @@ assert.equal(result.mode, 'disjoint_selected_groups');
 assert.equal(result.events.find(event => event.id === 'b').startMin, 180);
 assert.equal(result.events.find(event => event.id === 'e').startMin, 480);
 console.log('verify-disjoint-event-shift-v970 passed');
+
+await import('./materialize-v971.mjs');
