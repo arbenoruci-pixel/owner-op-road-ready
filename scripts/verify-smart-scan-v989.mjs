@@ -1,3 +1,6 @@
+await import('./materialize-v990.mjs');
+await import('./verify-smart-scan-v990.mjs');
+
 import { extractProDocumentFieldsV989 } from '../source/src/modules/scan/smartScanExtractionV989.js';
 
 const fieldResults = {
