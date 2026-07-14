@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import TurboDocumentScanner from './TurboDocumentScanner.jsx';
 
 const SCAN_TYPES = [
@@ -24,19 +24,34 @@ function Icon({ name, size = 23 }) {
   if (name === 'wrench') return <svg {...common}><path d="M14.5 6.5a4 4 0 0 0-5-5L12 4 9 7 6.5 4.5a4 4 0 0 0 5 5L19 17a2.1 2.1 0 0 1-3 3l-7.5-7.5" /></svg>;
   if (name === 'receipt') return <svg {...common}><path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21z" /><path d="M9 8h6M9 12h6M9 16h4" /></svg>;
   if (name === 'camera') return <svg {...common}><path d="M4 7h4l2-2h4l2 2h4v12H4z" /><circle cx="12" cy="13" r="4" /></svg>;
+  if (name === 'flash') return <svg {...common}><path d="m13 2-8 12h7l-1 8 8-12h-7z" /></svg>;
   if (name === 'chevron') return <svg {...common}><path d="m9 18 6-6-6-6" /></svg>;
   return <svg {...common}><circle cx="12" cy="12" r="9" /></svg>;
 }
 
 export default function SmartDocumentCapture({ onReady, onClose }) {
+  const nativeCameraRef = useRef(null);
   const [preferredType, setPreferredType] = useState('auto');
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [initialFile, setInitialFile] = useState(null);
   const selected = useMemo(() => SCAN_TYPES.find(item => item.id === preferredType) || SCAN_TYPES[0], [preferredType]);
+
+  function openLiveScanner() {
+    setInitialFile(null);
+    setScannerOpen(true);
+  }
+
+  function openNativePhoto(file) {
+    if (!file) return;
+    setInitialFile(file);
+    setScannerOpen(true);
+  }
 
   if (scannerOpen) {
     return (
       <TurboDocumentScanner
-        onCancel={() => setScannerOpen(false)}
+        initialFile={initialFile}
+        onCancel={() => { setScannerOpen(false); setInitialFile(null); }}
         onComplete={(file, metadata = {}) => onReady?.(file, preferredType, { ...metadata, preferredType })}
       />
     );
@@ -82,8 +97,21 @@ export default function SmartDocumentCapture({ onReady, onClose }) {
         </div>
       </main>
 
-      <footer className="scan-preflight-actions">
-        <button type="button" onClick={() => setScannerOpen(true)}><Icon name="camera" /> Open document camera <Icon name="chevron" size={18} /></button>
+      <footer className="scan-preflight-actions two">
+        <button type="button" className="primary" onClick={openLiveScanner}><Icon name="camera" /> Document camera <Icon name="chevron" size={18} /></button>
+        <button type="button" className="native" onClick={() => nativeCameraRef.current?.click()}><Icon name="flash" /> Phone camera + flash</button>
+        <input
+          ref={nativeCameraRef}
+          className="smart-scan-file-input"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={event => {
+            const file = event.target.files?.[0] || null;
+            event.target.value = '';
+            openNativePhoto(file);
+          }}
+        />
       </footer>
     </section>
   );
