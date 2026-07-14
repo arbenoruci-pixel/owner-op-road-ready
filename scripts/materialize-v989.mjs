@@ -24,6 +24,67 @@ function appendOnce(content, marker, addition) {
   return content.includes(marker) ? content : `${content.trimEnd()}\n\n${addition.trim()}\n`;
 }
 
+// Prefer the comma/line segment that actually contains the company suffix. This
+// prevents damaged text before "Garden of Light Inc." or "Greenwood DC" from
+// becoming part of the saved shipper/receiver name.
+const extractionPath = 'source/src/modules/scan/smartScanExtractionV989.js';
+let extraction = read(extractionPath);
+extraction = replaceOnce(
+  extraction,
+  `function companyFromText(value = '') {
+  const tokens = clean(value).split(/\\s+/).filter(Boolean);
+  const suffixes = /^(?:inc\\.?|llc|ltd\\.?|corp\\.?|company|co\\.?|dc|distribution|warehouse|logistics)$/i;
+  let best = '';
+  tokens.forEach((token, index) => {
+    if (!suffixes.test(token)) return;
+    let start = Math.max(0, index - 7);
+    let selected = tokens.slice(start, index + 1);
+    while (selected.length && (/^[A-Z]$/i.test(selected[0]) || /^(?:page|of|the|a|an|ss|heirs)$/i.test(selected[0]) || /^\\d+$/.test(selected[0]))) selected.shift();
+    const candidate = clean(selected.join(' ').replace(/^[^A-Za-z]+/, ''));
+    const words = candidate.match(/[A-Za-z]{2,}/g) || [];
+    if (words.length >= 2 && candidate.length <= 70 && candidate.length > best.length) best = candidate;
+  });
+  return best;
+}`,
+  `function cleanCompanyCandidate(value = '') {
+  const suffixes = /^(?:inc\\.?|llc|ltd\\.?|corp\\.?|company|co\\.?|dc|distribution|warehouse|logistics)$/i;
+  let tokens = clean(value)
+    .split(/\\s+/)
+    .map(token => token.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9.'-]+$/g, ''))
+    .filter(Boolean);
+  const suffixIndex = tokens.findIndex(token => suffixes.test(token));
+  if (suffixIndex < 0) return '';
+  tokens = tokens.slice(0, suffixIndex + 1);
+  while (tokens.length > 2 && (
+    /^[A-Z]$/i.test(tokens[0])
+    || /^(?:page|oft|the|a|an|ss|heirs)$/i.test(tokens[0])
+    || /^\\d+$/.test(tokens[0])
+  )) tokens.shift();
+  if (tokens.length > 7) tokens = tokens.slice(-7);
+  const candidate = clean(tokens.join(' ').replace(/^[^A-Za-z]+/, ''));
+  const words = candidate.match(/[A-Za-z]{2,}/g) || [];
+  if (words.length < 2 || candidate.length > 70 || LABEL_NOISE.test(candidate)) return '';
+  return candidate;
+}
+
+function companyFromText(value = '') {
+  const raw = String(value || '');
+  const candidates = [];
+  for (const segment of raw.split(/[\\r\\n,;|]+/).map(clean).filter(Boolean)) {
+    const candidate = cleanCompanyCandidate(segment);
+    if (candidate) candidates.push({
+      value:candidate,
+      score:100 - Math.max(0, candidate.split(/\\s+/).length - 5) * 3,
+    });
+  }
+  const fallback = cleanCompanyCandidate(raw);
+  if (fallback) candidates.push({ value:fallback, score:20 });
+  return candidates.sort((a, b) => b.score - a.score || a.value.length - b.value.length)[0]?.value || '';
+}`,
+  'anchored shipper/receiver company cleanup'
+);
+write(extractionPath, extraction);
+
 // Use the focused field OCR analyzer and the perspective-corrected high-resolution
 // source rather than the downscaled preview image.
 const scanPath = 'source/src/modules/scan/SmartScanSheet.jsx';
