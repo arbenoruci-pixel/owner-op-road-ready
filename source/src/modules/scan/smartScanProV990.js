@@ -143,13 +143,11 @@ function fieldScore(fields = {}) {
   return critical.filter(value => value !== '' && value !== 0 && value != null).length / critical.length;
 }
 
-export async function analyzeDocumentFileProV990(file, options = {}) {
-  const result = await analyzeDocumentFileProV989(file, options);
+export function postProcessBolResultV990(result = {}, now = new Date()) {
   if (!['bol','pod'].includes(result?.type?.id)) return result;
-
   const text = String(result.text || '');
   const fields = { ...(result.fields || {}) };
-  fields.date = bestDocumentDate(text);
+  fields.date = bestDocumentDate(text, now);
   fields.bolNo = strictBol(text, result.barcodes || []);
   fields.loadNo = fields.bolNo;
   fields.poNumber = strictPo(text);
@@ -179,6 +177,11 @@ export async function analyzeDocumentFileProV990(file, options = {}) {
     method:'pro-ocr-v990',
     needsReview:coverage < .875 || confidence < .86,
   };
+}
+
+export async function analyzeDocumentFileProV990(file, options = {}) {
+  const result = await analyzeDocumentFileProV989(file, options);
+  return postProcessBolResultV990(result, new Date());
 }
 
 export const analyzeDocumentFilePro = analyzeDocumentFileProV990;
