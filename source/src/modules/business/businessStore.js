@@ -3,9 +3,11 @@ export const BUSINESS_STORE_EVENT = 'owner-op-business-updated';
 
 const EMPTY_STORE = {
   loads: [],
+  settlements: [],
   fuel: [],
   maintenance: [],
   expenses: [],
+  documents: [],
   updatedAt: 0,
 };
 
@@ -28,15 +30,25 @@ function cleanRecord(record = {}) {
 }
 
 export function emptyBusinessStore() {
-  return { ...EMPTY_STORE, loads: [], fuel: [], maintenance: [], expenses: [] };
+  return {
+    ...EMPTY_STORE,
+    loads: [],
+    settlements: [],
+    fuel: [],
+    maintenance: [],
+    expenses: [],
+    documents: [],
+  };
 }
 
 export function normalizeBusinessStore(value = {}) {
   return {
     loads: list(value.loads).map(cleanRecord),
+    settlements: list(value.settlements).map(cleanRecord),
     fuel: list(value.fuel).map(cleanRecord),
     maintenance: list(value.maintenance).map(cleanRecord),
     expenses: list(value.expenses).map(cleanRecord),
+    documents: list(value.documents).map(cleanRecord),
     updatedAt: number(value.updatedAt, 0),
   };
 }
@@ -140,6 +152,7 @@ export function recordsThisWeek(records = [], reference = new Date()) {
 export function businessSummary(value = {}, reference = new Date()) {
   const store = normalizeBusinessStore(value);
   const loads = recordsThisWeek(store.loads, reference);
+  const settlements = recordsThisWeek(store.settlements, reference);
   const fuel = recordsThisWeek(store.fuel, reference);
   const maintenance = recordsThisWeek(store.maintenance, reference);
   const expenses = recordsThisWeek(store.expenses, reference);
@@ -154,11 +167,15 @@ export function businessSummary(value = {}, reference = new Date()) {
   const otherExpenses = expenses.reduce((sum, record) => sum + number(record.total), 0);
   const totalExpenses = fuelCost + maintenanceCost + otherExpenses;
   const estimatedNet = gross - totalExpenses;
+  const settlementExpected = settlements.reduce((sum, record) => sum + number(record.expectedPay || record.expected), 0);
+  const settlementActual = settlements.reduce((sum, record) => sum + number(record.actualPay || record.netPay || record.actual), 0);
+  const settlementDifference = settlementActual - settlementExpected;
   const unpaid = store.loads.filter(record => !['paid', 'cancelled'].includes(String(record.status || '').toLowerCase()))
     .reduce((sum, record) => sum + number(record.gross), 0);
   const readyToInvoice = store.loads.filter(record => ['delivered', 'invoice_ready'].includes(String(record.status || '').toLowerCase())).length;
   const activeLoads = store.loads.filter(record => !['paid', 'cancelled', 'completed'].includes(String(record.status || '').toLowerCase())).length;
   const missingFuelReceipts = store.fuel.filter(record => !record.receiptAttached).length;
+  const estimatedTaxReserve = Math.max(0, estimatedNet * 0.25);
 
   return {
     gross,
@@ -171,6 +188,12 @@ export function businessSummary(value = {}, reference = new Date()) {
     otherExpenses,
     totalExpenses,
     estimatedNet,
+    estimatedTaxReserve,
+    settlementExpected,
+    settlementActual,
+    settlementDifference,
+    settlementCount:settlements.length,
+    documentCount:store.documents.length,
     unpaid,
     readyToInvoice,
     activeLoads,
