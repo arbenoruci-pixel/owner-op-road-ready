@@ -1,10 +1,11 @@
 import '../source/src/styles.css';
 import '../source/src/command-center.css';
+import '../source/src/setup-scan.css';
 
 export const metadata = {
-  title: 'Owner-Op Road Ready',
-  applicationName: 'Owner-Op Road Ready',
-  description: 'Smart paper logbook, DOT check, inspection, and manual RODS workflow for ELD-exempt owner-operators.',
+  title: 'Road Ready Owner-Op Hub',
+  applicationName: 'Road Ready',
+  description: 'A modular owner-operator business hub for loads, documents, fuel, settlements, expenses, maintenance, wallet, performance, and optional Road Ready Logbook.',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
