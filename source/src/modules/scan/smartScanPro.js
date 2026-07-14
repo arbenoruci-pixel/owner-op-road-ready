@@ -96,6 +96,7 @@ async function runWebOcr(file, preferredType, onProgress) {
   let first = null;
   try {
     first = await recognizeDocumentText(file, {
+      pageSegMode:'11',
       onProgress(progress, status) {
         onProgress?.(0.28 + (Number(progress || 0) * 0.39), `${String(status || 'Reading text').replace(/_/g, ' ')}…`);
       },
@@ -121,6 +122,7 @@ async function runWebOcr(file, preferredType, onProgress) {
       name:`road-ready-ocr-bw-${Date.now()}.jpg`,
     });
     second = await recognizeDocumentText(blackAndWhite, {
+      pageSegMode:'6',
       onProgress(progress, status) {
         onProgress?.(0.7 + (Number(progress || 0) * 0.18), `${String(status || 'Reading high contrast').replace(/_/g, ' ')}…`);
       },
