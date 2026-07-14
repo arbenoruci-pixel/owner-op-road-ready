@@ -82,8 +82,8 @@ turbo = replaceOnce(
 );
 turbo = replaceOnce(
   turbo,
-  "          <button type=\"button\" className=\"filter-label\" onClick={() => setFilter(current => current === 'bw' ? 'auto' : 'bw')}>{FILTERS.find(item => item.id === filter)?.label || 'Auto'}</button>",
-  "          <button type=\"button\" className=\"filter-label\" onClick={() => setFilter(current => current === 'bw' ? 'auto' : 'bw')}>{filterDisplayNameV985(filter)}</button>",
+  "<button type=\"button\" className=\"filter-label\" onClick={() => setFilter(current => current === 'bw' ? 'auto' : 'bw')}>{FILTERS.find(item => item.id === filter)?.label || 'Auto'}</button>",
+  "<button type=\"button\" className=\"filter-label\" onClick={() => setFilter(current => current === 'bw' ? 'auto' : 'bw')}>{filterDisplayNameV985(filter)}</button>",
   'filter display name'
 );
 write(turboPath, turbo);
