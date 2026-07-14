@@ -3,8 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '98.3.0';
-const RELEASED_AT = '2026-07-14T04:45:00.000Z';
+const VERSION = '98.3.1';
+const RELEASED_AT = '2026-07-14T05:00:00.000Z';
 const file = relative => path.join(ROOT, relative);
 const read = relative => fs.readFileSync(file(relative), 'utf8');
 function write(relative, content) {
@@ -45,7 +45,7 @@ scan = replaceOnce(
 scan = replaceOnce(
   scan,
   "      const result = await analyzeScanFile(nextFile, {\n        onProgress:(value, text) => {",
-  "      const result = await analyzeDocumentFilePro(nextFile, {\n        preferredType,\n        onProgress:(value, text) => {",
+  "      const result = await analyzeDocumentFilePro(nextFile, {\n        preferredType,\n        scanMeta,\n        onProgress:(value, text) => {",
   'enhanced analyzer call'
 );
 scan = replaceOnce(
@@ -81,6 +81,12 @@ const turboPath = 'source/src/modules/scan/TurboDocumentScanner.jsx';
 let turbo = read(turboPath);
 turbo = replaceOnce(
   turbo,
+  'export default function TurboDocumentScanner({ onComplete, onCancel }) {',
+  'export default function TurboDocumentScanner({ onComplete, onCancel, initialFile = null }) {',
+  'native camera initial file support'
+);
+turbo = replaceOnce(
+  turbo,
   '  const lastCornersRef = useRef(null);',
   '  const lastCornersRef = useRef(null);\n  const stableFramesRef = useRef(0);',
   'scanner stability ref'
@@ -102,6 +108,12 @@ turbo = replaceOnce(
   "    setLiveCorners(defaultDocumentCorners());\n    lastCornersRef.current = null;",
   "    setLiveCorners(defaultDocumentCorners());\n    setFrameDetected(false);\n    stableFramesRef.current = 0;\n    lastCornersRef.current = null;",
   'scanner detection reset'
+);
+turbo = replaceOnce(
+  turbo,
+  "    mountedRef.current = true;\n    startBestScanner();",
+  "    mountedRef.current = true;\n    if (initialFile) void chooseImportedFile(initialFile);\n    else void startBestScanner();",
+  'native photo crop entry'
 );
 turbo = replaceOnce(
   turbo,
@@ -151,15 +163,16 @@ write('package-lock.json', `${JSON.stringify(lock, null, 2)}\n`);
 
 write('public/app-version.json', `${JSON.stringify({
   version:VERSION,
-  build:'v98.3-turbo-document-scanner',
+  build:'v98.3.1-turbo-document-scanner',
   releasedAt:RELEASED_AT,
   notes:[
     'Replaces the weak photo picker with a Turbo-style live document camera, document-type preflight, automatic edge detection, stability capture, quality guidance, gallery import, and supported-camera flash control.',
+    'Adds an iPhone and Android system-camera fallback so the driver can use the phone camera flash, then continue through the same crop, enhancement, OCR, and review flow.',
     'Adds four-corner crop, perspective correction, multi-page scanning, rotation, and Auto, Color, Gray, Black-and-White, and Original filters before OCR.',
     'Adds enhanced browser OCR with a high-contrast retry, barcode reading, document hints, and trucking-specific extraction for BOL number, PO, trailer, route, weight, pieces, check-in, appointment, and check-out.',
-    'Keeps the native iPhone VisionKit and Android ML Kit bridge ready while preserving logbook, HOS, DOT, route, signature, wallet, load, and business data.'
+    'Preserves logbook, HOS, DOT, route, signature, wallet, load, and business data.'
   ],
-  label:'v98.3 Turbo Document Scanner',
+  label:'v98.3.1 Turbo Document Scanner',
   updatedAt:RELEASED_AT
 }, null, 2)}\n`);
 write('public/sw.js', read('public/sw.js').replace(/const OWNER_OP_SW_VERSION = '[^']+';/, `const OWNER_OP_SW_VERSION = '${VERSION}';`));
@@ -169,10 +182,11 @@ const verifyScan = read(scanPath);
 const verifyTurbo = read(turboPath);
 const analyzer = read('source/src/modules/scan/smartScanPro.js');
 const extraction = read('source/src/modules/scan/smartScanExtractionPro.js');
+const capture = read('source/src/modules/scan/SmartDocumentCapture.jsx');
 if (!verifyScan.includes('SmartDocumentCapture') || !verifyScan.includes('analyzeDocumentFilePro') || !verifyScan.includes('Customer PO')) {
   throw new Error('v98.3 Smart Scan integration verification failed');
 }
-if (!verifyTurbo.includes('stableFramesRef') || !verifyTurbo.includes('perspectiveCropFile') || !verifyTurbo.includes("filter:'bw'") && !verifyTurbo.includes("id:'bw'")) {
+if (!verifyTurbo.includes('stableFramesRef') || !verifyTurbo.includes('perspectiveCropFile') || !verifyTurbo.includes('initialFile')) {
   throw new Error('v98.3 Turbo scanner verification failed');
 }
 if (!analyzer.includes('recognizeDocumentText') || !analyzer.includes('high-contrast OCR') || !analyzer.includes('BarcodeDetector')) {
@@ -181,7 +195,10 @@ if (!analyzer.includes('recognizeDocumentText') || !analyzer.includes('high-cont
 if (!extraction.includes('bill\\s+of\\s+lading') || !extraction.includes('appointmentTime') || !extraction.includes('trailerNo')) {
   throw new Error('v98.3 trucking extraction verification failed');
 }
+if (!capture.includes('Phone camera + flash') || !capture.includes('capture="environment"')) {
+  throw new Error('v98.3 phone camera fallback verification failed');
+}
 if (!layout.includes('turbo-scan.css') || !layout.includes('turbo-scan-flow.css')) {
   throw new Error('v98.3 scanner CSS verification failed');
 }
-console.log('v98.3 Turbo document scanner materialized');
+console.log('v98.3.1 Turbo document scanner materialized');
