@@ -46,6 +46,8 @@ async function worker() {
           preserve_interword_spaces:'1',
           user_defined_dpi:'300',
           tessedit_pageseg_mode:'11',
+          tessedit_char_whitelist:'',
+          tessedit_char_blacklist:'',
         });
       } catch {}
       return instance;
@@ -63,26 +65,98 @@ function runSerial(task) {
   return next;
 }
 
+function parseTsv(tsv = '') {
+  const rows = String(tsv || '').trim().split(/\r?\n/).filter(Boolean);
+  if (rows.length < 2) return { words:[], lines:[] };
+  const words = [];
+  const groups = new Map();
+
+  for (const row of rows.slice(1)) {
+    const parts = row.split('\t');
+    if (parts.length < 11) continue;
+    const [level, pageNum, blockNum, parNum, lineNum, wordNum, left, top, width, height, confidence, ...textParts] = parts;
+    const text = textParts.join('\t').trim();
+    if (Number(level) !== 5 || !text) continue;
+    const word = {
+      text,
+      confidence:Number(confidence),
+      left:Number(left),
+      top:Number(top),
+      width:Number(width),
+      height:Number(height),
+      right:Number(left) + Number(width),
+      bottom:Number(top) + Number(height),
+      page:Number(pageNum),
+      block:Number(blockNum),
+      paragraph:Number(parNum),
+      line:Number(lineNum),
+      word:Number(wordNum),
+    };
+    words.push(word);
+    const key = `${pageNum}:${blockNum}:${parNum}:${lineNum}`;
+    const group = groups.get(key) || { key, words:[], left:Infinity, top:Infinity, right:0, bottom:0, confidenceTotal:0, confidenceCount:0 };
+    group.words.push(word);
+    group.left = Math.min(group.left, word.left);
+    group.top = Math.min(group.top, word.top);
+    group.right = Math.max(group.right, word.right);
+    group.bottom = Math.max(group.bottom, word.bottom);
+    if (Number.isFinite(word.confidence) && word.confidence >= 0) {
+      group.confidenceTotal += word.confidence;
+      group.confidenceCount += 1;
+    }
+    groups.set(key, group);
+  }
+
+  const lines = [...groups.values()].map(group => ({
+    text:group.words.sort((a, b) => a.left - b.left).map(word => word.text).join(' ').replace(/\s+/g, ' ').trim(),
+    confidence:group.confidenceCount ? group.confidenceTotal / group.confidenceCount : 0,
+    left:Number.isFinite(group.left) ? group.left : 0,
+    top:Number.isFinite(group.top) ? group.top : 0,
+    width:Math.max(0, group.right - group.left),
+    height:Math.max(0, group.bottom - group.top),
+    right:group.right,
+    bottom:group.bottom,
+  })).filter(line => line.text).sort((a, b) => a.top - b.top || a.left - b.left);
+
+  return { words, lines };
+}
+
 export async function recognizeDocumentText(file, options = {}) {
   if (!String(file?.type || '').startsWith('image/')) return null;
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const pageSegMode = String(options.pageSegMode || '11');
+  const returnLayout = options.returnLayout === true;
+
   return runSerial(async () => {
     activeProgress = onProgress;
     try {
       const engine = await worker();
       try {
         await engine.setParameters({
-          preserve_interword_spaces:'1',
-          user_defined_dpi:'300',
+          preserve_interword_spaces:options.preserveSpaces === false ? '0' : '1',
+          user_defined_dpi:String(options.dpi || 300),
           tessedit_pageseg_mode:pageSegMode,
+          tessedit_char_whitelist:String(options.charWhitelist || ''),
+          tessedit_char_blacklist:String(options.charBlacklist || ''),
+          ...(options.numericMode ? { classify_bln_numeric_mode:'1' } : {}),
         });
       } catch {}
+
       onProgress(0.03, 'Loading OCR model…');
-      const result = await engine.recognize(file);
+      const recognizeOptions = options.rectangle ? { rectangle:options.rectangle } : {};
+      const outputOptions = returnLayout ? { text:true, tsv:true } : { text:true };
+      const result = await engine.recognize(file, recognizeOptions, outputOptions);
       const text = String(result?.data?.text || '').trim();
       const confidence = Number(result?.data?.confidence || 0) / 100;
-      return text ? { text, confidence, method:'web-ocr', pageSegMode } : null;
+      const layout = returnLayout ? parseTsv(result?.data?.tsv || '') : { words:[], lines:[] };
+      return text ? {
+        text,
+        confidence,
+        method:'web-ocr',
+        pageSegMode,
+        words:layout.words,
+        lines:layout.lines,
+      } : null;
     } finally {
       activeProgress = () => {};
     }
