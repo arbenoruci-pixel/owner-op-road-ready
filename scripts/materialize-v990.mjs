@@ -18,6 +18,18 @@ function replaceOnce(content, search, replacement, label) {
   return content.replace(search, replacement);
 }
 
+// Keep the city/state parser downstream of the matched street. Without this,
+// a street suffix such as "Park Avenue" can become part of the city name.
+const strictPath = 'source/src/modules/scan/smartScanProV990.js';
+let strict = read(strictPath);
+strict = replaceOnce(
+  strict,
+  "  const cityMatch = source.match(new RegExp(`([A-Za-z][A-Za-z .'-]{2,40})[, ]+(${STATES})\\\\s+(\\\\d{5}(?:-\\\\d{4})?)`, 'i'));",
+  "  const citySource = source.slice(Math.max(0, Number(streetMatch.index || 0) + String(streetMatch[0] || '').length));\n  const cityMatch = citySource.match(new RegExp(`([A-Za-z][A-Za-z .'-]{2,40})[, ]+(${STATES})\\\\s+(\\\\d{5}(?:-\\\\d{4})?)`, 'i'));",
+  'city after street boundary'
+);
+write(strictPath, strict);
+
 const scanPath = 'source/src/modules/scan/SmartScanSheet.jsx';
 let scan = read(scanPath);
 scan = replaceOnce(
