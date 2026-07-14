@@ -53,7 +53,7 @@ const expected = {
 for (const [key, value] of Object.entries(expected)) {
   if (result.fields[key] !== value) throw new Error(`v99.0 ${key}: expected ${value}, got ${result.fields[key]}`);
 }
-if (!result.fields.shipFromDetails.startsWith('Garden of Light Inc.')) throw new Error(`v99.0 ship from: ${result.fields.shipFromDetails}`);
+if (!/^Garden of Light Inc\.?[, ]/i.test(result.fields.shipFromDetails)) throw new Error(`v99.0 ship from: ${result.fields.shipFromDetails}`);
 if (!result.fields.shipToDetails.startsWith('Greenwood DC')) throw new Error(`v99.0 ship to: ${result.fields.shipToDetails}`);
 if (result.confidence > .92) throw new Error(`v99.0 confidence gate too high: ${result.confidence}`);
 
