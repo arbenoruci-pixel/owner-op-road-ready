@@ -188,9 +188,15 @@ function extractRoute(raw = '') {
     [/^(?:third\s+party|freight\s+charges|delivery\s+instructions|notes?|handling\s+unit|commodity)\b/i],
     7
   );
+  const shipFromDetails = addressDisplay(fromBlock);
+  const shipToDetails = addressDisplay(toBlock);
+  const origin = fromBlock.map(cityStateFromLine).find(Boolean) || shipFromDetails;
+  const destination = toBlock.map(cityStateFromLine).find(Boolean) || shipToDetails;
   return {
-    origin:addressDisplay(fromBlock),
-    destination:addressDisplay(toBlock),
+    origin,
+    destination,
+    shipFromDetails,
+    shipToDetails,
   };
 }
 
@@ -350,6 +356,8 @@ export function extractProDocumentFields(text = '', typeId = 'other') {
     carrierName,
     origin:route.origin,
     destination:route.destination,
+    shipFromDetails:route.shipFromDetails,
+    shipToDetails:route.shipToDetails,
     weight,
     totalPieces,
     commodity,
