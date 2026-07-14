@@ -1,4 +1,5 @@
 import '../source/src/styles.css';
+import '../source/src/command-center.css';
 
 export const metadata = {
   title: 'Owner-Op Road Ready',
