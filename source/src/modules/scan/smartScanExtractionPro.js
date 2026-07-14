@@ -85,9 +85,10 @@ function titleCaseLoose(value = '') {
 export function extractProDocumentFields(text = '', typeId = 'other') {
   const raw = String(text || '');
   const bolNo = firstMatch(raw, [
-    /bill\s+of\s+lading\s*(?:number|no\.?|#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{2,})/i,
-    /\bb\/?l\s*(?:number|no\.?|#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{2,})/i,
-    /\bbol\s*(?:number|no\.?|#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{2,})/i,
+    /bill\s+of\s+lading\s*(?:number|no\.?|#)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{2,})/i,
+    /bill\s+of\s+lading\s*[:#]\s*([A-Z0-9][A-Z0-9-]{2,})/i,
+    /\bb\/?l\s*(?:number|no\.?|#)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{2,})/i,
+    /\bbol\s*(?:number|no\.?|#)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{2,})/i,
   ]).toUpperCase();
   const genericLoadNo = firstMatch(raw, [
     /(?:load|order|trip|confirmation|pro)\s*(?:number|no\.?|#)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9_-]{3,})/i,
