@@ -1,6 +1,7 @@
 import '../source/src/styles.css';
 import '../source/src/command-center.css';
 import '../source/src/setup-scan.css';
+import '../source/src/business-extensions.css';
 
 export const metadata = {
   title: 'Road Ready Owner-Op Hub',
