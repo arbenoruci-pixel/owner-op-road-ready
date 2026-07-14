@@ -3,8 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '98.5.0';
-const RELEASED_AT = '2026-07-14T06:15:00.000Z';
+const VERSION = '98.6.0';
+const RELEASED_AT = '2026-07-14T14:20:00.000Z';
 const file = relative => path.join(ROOT, relative);
 const read = relative => fs.readFileSync(file(relative), 'utf8');
 function write(relative, content) {
@@ -14,7 +14,7 @@ function write(relative, content) {
 }
 function replaceOnce(content, search, replacement, label) {
   if (content.includes(replacement)) return content;
-  if (!content.includes(search)) throw new Error(`v98.5 missing ${label}`);
+  if (!content.includes(search)) throw new Error(`v98.6 missing ${label}`);
   return content.replace(search, replacement);
 }
 
@@ -113,16 +113,16 @@ if (lock.packages?.['']) lock.packages[''].version = VERSION;
 write('package-lock.json', `${JSON.stringify(lock, null, 2)}\n`);
 write('public/app-version.json', `${JSON.stringify({
   version:VERSION,
-  build:'v98.5-document-quality-engine',
+  build:'v98.6-professional-text-detection',
   releasedAt:RELEASED_AT,
   notes:[
-    'Rebuilds document edge detection with multi-pass contour scoring, quadrilateral validation, stable corner smoothing, and stricter auto-capture locking.',
-    'Measures light and focus inside the detected paper instead of the whole camera frame, preventing unnecessary Auto Flash while retaining low-light capture flash.',
-    'Adds high-resolution cubic perspective correction and Smart Clean, Color, Gray, and adaptive Black-and-White enhancement with shadow removal and background whitening.',
-    'Uses the iPhone system camera as the recommended best-quality capture path while keeping live auto-frame scanning available.',
-    'Preserves Smart Scan, OCR, BOL fields, logbook, HOS, DOT, wallet, route, load, and owner-operator business data.'
+    'Adds multi-pass high-resolution OCR for trucking documents with full-page, table-layout, header, route, totals, and footer recognition passes.',
+    'Reads BOL number, customer PO, ship-from, ship-to, seal, trailer, total pieces, total weight, and handwritten timing areas from dedicated document regions.',
+    'Rejects OCR label fragments such as ACCOUNT, NUMBER, LOADES, and two-letter noise instead of inserting them as field values.',
+    'Separates freight weight from money so BOL line-item weights no longer populate the Amount field.',
+    'Ties the displayed confidence to extracted-field coverage while preserving scanner quality, logbook, HOS, DOT, wallet, route, load, and business data.'
   ],
-  label:'v98.5 Document Quality Engine',
+  label:'v98.6 Professional Text Detection',
   updatedAt:RELEASED_AT
 }, null, 2)}\n`);
 write('public/sw.js', read('public/sw.js').replace(/const OWNER_OP_SW_VERSION = '[^']+';/, `const OWNER_OP_SW_VERSION = '${VERSION}';`));
@@ -131,13 +131,21 @@ write('source/src/core/update/appUpdate.js', read('source/src/core/update/appUpd
 const verifyTurbo = read(turboPath);
 const verifyQuality = read('source/src/modules/scan/documentQualityV985.js');
 const verifyCapture = read(capturePath);
+const verifyOcr = read('source/src/modules/scan/smartScanPro.js');
+const verifyExtraction = read('source/src/modules/scan/smartScanExtractionPro.js');
 if (!verifyTurbo.includes('analyzeDocumentFrameV985') || !verifyTurbo.includes('perspectiveCropFileV985') || !verifyTurbo.includes('darkFramesRef.current >= 4')) {
-  throw new Error('v98.5 Turbo quality integration verification failed');
+  throw new Error('v98.6 Turbo quality integration verification failed');
 }
 if (!verifyQuality.includes('collectContourCandidates') || !verifyQuality.includes('adaptiveThreshold') || !verifyQuality.includes('boxBlur') || !verifyQuality.includes('autoFlashNeeded')) {
-  throw new Error('v98.5 quality engine verification failed');
+  throw new Error('v98.6 quality engine verification failed');
 }
 if (!verifyCapture.includes('Best quality scan') || !verifyCapture.includes('isAppleMobile')) {
-  throw new Error('v98.5 iPhone capture verification failed');
+  throw new Error('v98.6 iPhone capture verification failed');
 }
-console.log('v98.5 document quality engine materialized');
+if (!verifyOcr.includes('runBolRegionOcr') || !verifyOcr.includes('fieldCoverage') || !verifyOcr.includes("next.total = ''")) {
+  throw new Error('v98.6 professional OCR verification failed');
+}
+if (!verifyExtraction.includes('extractBolNumber') || !verifyExtraction.includes('validIdentifier') || !verifyExtraction.includes("regionText(raw, 'TOTALS')")) {
+  throw new Error('v98.6 BOL extraction verification failed');
+}
+console.log('v98.6 professional text detection materialized');
