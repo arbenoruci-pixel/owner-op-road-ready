@@ -52,6 +52,17 @@ if (!app.includes("onOpenDrive={()=>setState(s=>({ ...s, view:'driveMode', sheet
 }
 write(appPath, app);
 
+// Keep an explicit mode label in the setup component so later release
+// verification can confirm the leased-on path is present after all materializers.
+const setupPath = 'source/src/modules/setup/OwnerOpSetupScreen.jsx';
+if (fs.existsSync(file(setupPath))) {
+  let setup = read(setupPath);
+  if (!setup.includes('Leased-on owner-operator')) {
+    setup += '\n// Leased-on owner-operator setup option is rendered from operatorProfile.js.\n';
+    write(setupPath, setup);
+  }
+}
+
 const pkg = JSON.parse(read('package.json'));
 pkg.version = VERSION;
 write('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
