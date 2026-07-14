@@ -70,10 +70,11 @@ function longValueAfterLabel(text = '', labelPattern) {
 
 function timeMatch(text = '', labels = []) {
   const joined = labels.join('|');
-  return firstMatch(text, [
-    new RegExp(`(?:${joined})\\s*(?:time)?\\s*[:#-]?\\s*(\\d{1,2}[:.]\\d{2}\\s*(?:[ap]\\.?m\\.?)?)`, 'i'),
-    new RegExp(`(?:${joined})[^\\n]{0,28}?(\\d{1,2}\\s*(?:[ap]\\.?m\\.?))`, 'i'),
-  ]).replace('.', ':');
+  const value = firstMatch(text, [
+    new RegExp(`(?:${joined})[^\\n\\d]{0,42}(\\d{1,2}(?::|\\.)\\d{2}\\s*(?:[ap]\\.?m\\.?)?)`, 'i'),
+    new RegExp(`(?:${joined})[^\\n\\d]{0,42}(\\d{1,2}\\s*(?:[ap]\\.?m\\.?))`, 'i'),
+  ]);
+  return value.replace('.', ':').replace(/\s+/g, ' ').trim();
 }
 
 function titleCaseLoose(value = '') {
