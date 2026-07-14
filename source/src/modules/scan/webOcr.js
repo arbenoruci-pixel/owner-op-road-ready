@@ -42,7 +42,11 @@ async function worker() {
       },
     }).then(async instance => {
       try {
-        await instance.setParameters({ preserve_interword_spaces:'1' });
+        await instance.setParameters({
+          preserve_interword_spaces:'1',
+          user_defined_dpi:'300',
+          tessedit_pageseg_mode:'11',
+        });
       } catch {}
       return instance;
     }).catch(error => {
@@ -62,15 +66,26 @@ function runSerial(task) {
 export async function recognizeDocumentText(file, options = {}) {
   if (!String(file?.type || '').startsWith('image/')) return null;
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+  const pageSegMode = String(options.pageSegMode || '11');
   return runSerial(async () => {
     activeProgress = onProgress;
-    const engine = await worker();
-    onProgress(0.03, 'Loading OCR model…');
-    const result = await engine.recognize(file);
-    const text = String(result?.data?.text || '').trim();
-    const confidence = Number(result?.data?.confidence || 0) / 100;
-    activeProgress = () => {};
-    return text ? { text, confidence, method:'web-ocr' } : null;
+    try {
+      const engine = await worker();
+      try {
+        await engine.setParameters({
+          preserve_interword_spaces:'1',
+          user_defined_dpi:'300',
+          tessedit_pageseg_mode:pageSegMode,
+        });
+      } catch {}
+      onProgress(0.03, 'Loading OCR model…');
+      const result = await engine.recognize(file);
+      const text = String(result?.data?.text || '').trim();
+      const confidence = Number(result?.data?.confidence || 0) / 100;
+      return text ? { text, confidence, method:'web-ocr', pageSegMode } : null;
+    } finally {
+      activeProgress = () => {};
+    }
   });
 }
 
