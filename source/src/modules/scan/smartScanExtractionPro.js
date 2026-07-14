@@ -112,7 +112,9 @@ export function extractProDocumentFields(text = '', typeId = 'other') {
     /net\s+weight\s*[:#-]?\s*([\d,]+(?:\.\d+)?)\s*(?:lb|lbs|pounds)?/i,
   ]);
   const totalPieces = numericMatch(raw, [
-    /total\s+(?:qty|quantity|pieces?)\s*[:#-]?\s*([\d,]+)/i,
+    /total\s+(?:qty|quantity)\s+pieces?\s*[:#-]?\s*([\d,]+)/i,
+    /total\s+pieces?\s*[:#-]?\s*([\d,]+)/i,
+    /total\s+(?:qty|quantity)\s*[:#-]?\s*([\d,]+)/i,
   ]);
   const origin = locationFromLabel(raw, /^(?:ship\s+from|pickup|pick\s*up|origin)\b/i);
   const destination = locationFromLabel(raw, /^(?:ship\s+to|delivery|deliver\s+to|destination|consignee)\b/i);
