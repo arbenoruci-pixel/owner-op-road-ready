@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '98.0.0';
+const VERSION = '98.1.0';
 const file = relative => path.join(ROOT, relative);
 const read = relative => fs.readFileSync(file(relative), 'utf8');
 function write(relative, content) {
@@ -28,8 +28,7 @@ graph = graph.replace(
   ''
 );
 
-// Reduce the overlap one more equal step. Around Driving, nudge the connector
-// outward at each end so the vertical stroke aligns with the green segment.
+// Keep the v98.0 aligned graph junction geometry while the command center ships.
 graph = graph.replace(
   /<line\b(?=[^>]*x1=\{x\})(?=[^>]*x2=\{x\})(?=[^>]*stroke=\{CONNECTOR_COLOR\})[^>]*\/>/g,
   '<line x1={transition.to.status === \'D\' ? x - LINE_W * 0.06 : transition.from.status === \'D\' ? x + LINE_W * 0.06 : x} x2={transition.to.status === \'D\' ? x - LINE_W * 0.06 : transition.from.status === \'D\' ? x + LINE_W * 0.06 : x} y1={Math.min(y1, y2) - LINE_W * 0.47} y2={Math.max(y1, y2) + LINE_W * 0.47} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />'
@@ -41,6 +40,18 @@ graph = graph.replace(
 );
 write(graphPath, graph);
 
+// The Home component can fall back to Status, but production should route the
+// center Drive button straight into the existing Drive Mode screen.
+const appPath = 'source/src/app/App.jsx';
+let app = read(appPath);
+if (!app.includes("onOpenDrive={()=>setState(s=>({ ...s, view:'driveMode', sheet:null }))}")) {
+  app = app.replace(
+    "        onOpenWallet={()=>setState(s=>({ ...s, view:'wallet', sheet:null }))}\n      />",
+    "        onOpenWallet={()=>setState(s=>({ ...s, view:'wallet', sheet:null }))}\n        onOpenDrive={()=>setState(s=>({ ...s, view:'driveMode', sheet:null }))}\n      />"
+  );
+}
+write(appPath, app);
+
 const pkg = JSON.parse(read('package.json'));
 pkg.version = VERSION;
 write('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
@@ -51,20 +62,30 @@ write('package-lock.json', `${JSON.stringify(lock, null, 2)}\n`);
 
 write('public/app-version.json', `${JSON.stringify({
   version:VERSION,
-  build:'v98.0-aligned-graph-junction-overlap',
-  releasedAt:'2026-07-14T01:15:00.000Z',
+  build:'v98.1-owner-op-command-center',
+  releasedAt:'2026-07-14T01:30:00.000Z',
   notes:[
-    'Reduces the vertical connector overhang by one more small step.',
-    'Nudges each connector outward at the start and end of the green Driving trace for cleaner alignment.',
-    'Keeps trace thickness, status colors, grid, events, HOS logic, routes, signatures, and stored log data unchanged.'
+    'Replaces the old logs-first home with a clean Owner-Op Command Center and smart next-step card.',
+    'Adds active-load, HOS, DOT, Wallet, Loads & Billing, Fuel & IFTA, Maintenance, Expenses, Performance, attention, and weekly summary cards.',
+    'Adds a local business center for rate confirmations, weekly gross, mileage, fuel, repairs, expenses, invoice status, and per-mile performance.',
+    'Keeps duty events, HOS calculations, route records, signatures, DOT logic, and stored log data unchanged.'
   ],
-  label:'v98.0 Aligned Graph Junctions',
-  updatedAt:'2026-07-14T01:15:00.000Z'
+  label:'v98.1 Owner-Op Command Center',
+  updatedAt:'2026-07-14T01:30:00.000Z'
 }, null, 2)}\n`);
 write('public/sw.js', read('public/sw.js').replace(/const OWNER_OP_SW_VERSION = '[^']+';/, `const OWNER_OP_SW_VERSION = '${VERSION}';`));
 write('source/src/core/update/appUpdate.js', read('source/src/core/update/appUpdate.js').replace(/const FALLBACK_APP_VERSION = '[^']+';/, `const FALLBACK_APP_VERSION = '${VERSION}';`));
 
-if (!graph.includes("D:'#00c98d'") || !graph.includes('v98.0-aligned-junction-overlap') || !graph.includes('LINE_W * 0.47') || !graph.includes("transition.to.status === 'D'")) {
-  throw new Error('v98.0 graph junction verification failed');
+const home = read('source/src/modules/home/HomeScreen.jsx');
+const business = read('source/src/modules/business/OwnerOpBusinessScreen.jsx');
+const commandCss = read('source/src/command-center.css');
+if (!graph.includes("D:'#00c98d'") || !graph.includes('LINE_W * 0.47') || !graph.includes("transition.to.status === 'D'")) {
+  throw new Error('v98.1 graph preservation verification failed');
 }
-console.log('v98.0 aligned graph junction overlap materialized');
+if (!home.includes('Owner-Op Command Center') || !business.includes('Business Center') || !commandCss.includes('v98.1 Owner-Op Command Center')) {
+  throw new Error('v98.1 command center verification failed');
+}
+if (!app.includes("onOpenDrive={()=>setState(s=>({ ...s, view:'driveMode', sheet:null }))}")) {
+  throw new Error('v98.1 Drive Mode route verification failed');
+}
+console.log('v98.1 owner-op command center materialized');
