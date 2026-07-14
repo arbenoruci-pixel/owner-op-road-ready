@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '97.4.0';
+const VERSION = '97.5.0';
 const file = relative => path.join(ROOT, relative);
 const read = relative => fs.readFileSync(file(relative), 'utf8');
 function write(relative, content) {
@@ -28,19 +28,17 @@ graph = graph.replace(
   ''
 );
 
-// Replace only the real neutral connector line, extending it slightly into
-// both horizontal strokes to make each corner visually solid.
+// Extend the neutral connector farther into both horizontal status strokes.
+// The full LINE_W overlap removes the last anti-aliased gap at each bend.
 graph = graph.replace(
   /<line\b(?=[^>]*x1=\{x\})(?=[^>]*x2=\{x\})(?=[^>]*stroke=\{CONNECTOR_COLOR\})[^>]*\/>/g,
-  '<line x1={x} x2={x} y1={Math.min(y1, y2) - LINE_W / 2} y2={Math.max(y1, y2) + LINE_W / 2} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />'
+  '<line x1={x} x2={x} y1={Math.min(y1, y2) - LINE_W} y2={Math.max(y1, y2) + LINE_W} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />'
 );
 
-if (!graph.includes('v97.4-solid-junctions')) {
-  graph = graph.replace(
-    /const CONNECTOR_COLOR = ([^;]+);/,
-    'const CONNECTOR_COLOR = $1; // v97.4-solid-junctions'
-  );
-}
+graph = graph.replace(
+  /const CONNECTOR_COLOR = ([^;]+);(?:\s*\/\/[^\n]*)?/,
+  'const CONNECTOR_COLOR = $1; // v97.5-tight-junction-overlap'
+);
 write(graphPath, graph);
 
 const pkg = JSON.parse(read('package.json'));
@@ -53,21 +51,20 @@ write('package-lock.json', `${JSON.stringify(lock, null, 2)}\n`);
 
 write('public/app-version.json', `${JSON.stringify({
   version:VERSION,
-  build:'v97.4-solid-graph-junctions',
-  releasedAt:'2026-07-13T06:45:00.000Z',
+  build:'v97.5-tight-graph-junction-overlap',
+  releasedAt:'2026-07-14T00:00:00.000Z',
   notes:[
-    'Removes the white connector halo that caused small gaps at graph corners.',
-    'Extends vertical connectors into the horizontal status traces so every bend looks solid.',
-    'Keeps the bright emerald Driving trace and stronger grid.',
-    'Does not modify duty events, times, HOS, routes, signatures, or stored log data.'
+    'Extends each vertical duty connector farther into both horizontal status traces.',
+    'Removes the remaining tiny visual gap where neutral connectors meet the green Driving line and other statuses.',
+    'Keeps the existing trace thickness, status colors, grid, events, HOS logic, routes, signatures, and stored log data unchanged.'
   ],
-  label:'v97.4 Solid Graph Junctions',
-  updatedAt:'2026-07-13T06:45:00.000Z'
+  label:'v97.5 Tight Graph Junctions',
+  updatedAt:'2026-07-14T00:00:00.000Z'
 }, null, 2)}\n`);
 write('public/sw.js', read('public/sw.js').replace(/const OWNER_OP_SW_VERSION = '[^']+';/, `const OWNER_OP_SW_VERSION = '${VERSION}';`));
 write('source/src/core/update/appUpdate.js', read('source/src/core/update/appUpdate.js').replace(/const FALLBACK_APP_VERSION = '[^']+';/, `const FALLBACK_APP_VERSION = '${VERSION}';`));
 
-if (!graph.includes("D:'#00c98d'") || !graph.includes('v97.4-solid-junctions') || !graph.includes('Math.min(y1, y2) - LINE_W / 2')) {
-  throw new Error('v97.4 graph junction verification failed');
+if (!graph.includes("D:'#00c98d'") || !graph.includes('v97.5-tight-junction-overlap') || !graph.includes('Math.min(y1, y2) - LINE_W}')) {
+  throw new Error('v97.5 graph junction verification failed');
 }
-console.log('v97.4 solid graph junctions materialized');
+console.log('v97.5 tight graph junction overlap materialized');
