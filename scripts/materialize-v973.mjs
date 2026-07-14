@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '97.9.0';
+const VERSION = '98.0.0';
 const file = relative => path.join(ROOT, relative);
 const read = relative => fs.readFileSync(file(relative), 'utf8');
 function write(relative, content) {
@@ -28,16 +28,16 @@ graph = graph.replace(
   ''
 );
 
-// Reduce the overlap by the same small step again. The 0.54 multiplier keeps
-// the connector touching the horizontal trace while minimizing overhang.
+// Reduce the overlap one more equal step. Around Driving, nudge the connector
+// outward at each end so the vertical stroke aligns with the green segment.
 graph = graph.replace(
   /<line\b(?=[^>]*x1=\{x\})(?=[^>]*x2=\{x\})(?=[^>]*stroke=\{CONNECTOR_COLOR\})[^>]*\/>/g,
-  '<line x1={x} x2={x} y1={Math.min(y1, y2) - LINE_W * 0.54} y2={Math.max(y1, y2) + LINE_W * 0.54} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />'
+  '<line x1={transition.to.status === \'D\' ? x - LINE_W * 0.06 : transition.from.status === \'D\' ? x + LINE_W * 0.06 : x} x2={transition.to.status === \'D\' ? x - LINE_W * 0.06 : transition.from.status === \'D\' ? x + LINE_W * 0.06 : x} y1={Math.min(y1, y2) - LINE_W * 0.47} y2={Math.max(y1, y2) + LINE_W * 0.47} stroke={CONNECTOR_COLOR} strokeWidth={VERTICAL_LINE_W} strokeLinecap="square" shapeRendering="geometricPrecision" />'
 );
 
 graph = graph.replace(
   /const CONNECTOR_COLOR = ([^;]+);(?:\s*\/\/[^\n]*)?/,
-  'const CONNECTOR_COLOR = $1; // v97.9-minimal-junction-overlap'
+  'const CONNECTOR_COLOR = $1; // v98.0-aligned-junction-overlap'
 );
 write(graphPath, graph);
 
@@ -51,20 +51,20 @@ write('package-lock.json', `${JSON.stringify(lock, null, 2)}\n`);
 
 write('public/app-version.json', `${JSON.stringify({
   version:VERSION,
-  build:'v97.9-minimal-graph-junction-overlap',
-  releasedAt:'2026-07-14T01:35:00.000Z',
+  build:'v98.0-aligned-graph-junction-overlap',
+  releasedAt:'2026-07-14T01:15:00.000Z',
   notes:[
-    'Reduces the vertical connector overhang by the same small step once more.',
-    'Keeps a minimal overlap so the connector still meets the green Driving line and other horizontal traces cleanly.',
+    'Reduces the vertical connector overhang by one more small step.',
+    'Nudges each connector outward at the start and end of the green Driving trace for cleaner alignment.',
     'Keeps trace thickness, status colors, grid, events, HOS logic, routes, signatures, and stored log data unchanged.'
   ],
-  label:'v97.9 Minimal Graph Junctions',
-  updatedAt:'2026-07-14T01:35:00.000Z'
+  label:'v98.0 Aligned Graph Junctions',
+  updatedAt:'2026-07-14T01:15:00.000Z'
 }, null, 2)}\n`);
 write('public/sw.js', read('public/sw.js').replace(/const OWNER_OP_SW_VERSION = '[^']+';/, `const OWNER_OP_SW_VERSION = '${VERSION}';`));
 write('source/src/core/update/appUpdate.js', read('source/src/core/update/appUpdate.js').replace(/const FALLBACK_APP_VERSION = '[^']+';/, `const FALLBACK_APP_VERSION = '${VERSION}';`));
 
-if (!graph.includes("D:'#00c98d'") || !graph.includes('v97.9-minimal-junction-overlap') || !graph.includes('LINE_W * 0.54')) {
-  throw new Error('v97.9 graph junction verification failed');
+if (!graph.includes("D:'#00c98d'") || !graph.includes('v98.0-aligned-junction-overlap') || !graph.includes('LINE_W * 0.47') || !graph.includes("transition.to.status === 'D'")) {
+  throw new Error('v98.0 graph junction verification failed');
 }
-console.log('v97.9 minimal graph junction overlap materialized');
+console.log('v98.0 aligned graph junction overlap materialized');
