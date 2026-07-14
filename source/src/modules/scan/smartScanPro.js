@@ -5,10 +5,9 @@ import {
   documentTypeMeta,
   extractDocumentFields,
 } from './smartScan.js';
-
-let tesseractLoadPromise = null;
-let tesseractWorkerPromise = null;
-let tesseractProgress = null;
+import { renderDocumentFile } from './documentScannerEngine.js';
+import { recognizeDocumentText } from './webOcr.js';
+import { extractProDocumentFields } from './smartScanExtractionPro.js';
 
 function uniqueTypes(values = []) {
   const seen = new Set();
@@ -19,78 +18,29 @@ function uniqueTypes(values = []) {
   });
 }
 
-function loadScript(src, id) {
-  if (typeof document === 'undefined') return Promise.reject(new Error('document_unavailable'));
-  const existing = document.getElementById(id);
-  if (existing?.dataset.loaded === 'true') return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = existing || document.createElement('script');
-    script.id = id;
-    script.async = true;
-    script.crossOrigin = 'anonymous';
-    script.src = src;
-    script.onload = () => {
-      script.dataset.loaded = 'true';
-      resolve();
-    };
-    script.onerror = () => reject(new Error('web_ocr_script_failed'));
-    if (!existing) document.head.appendChild(script);
-  });
+function meaningful(value) {
+  if (value == null || value === '') return false;
+  if (typeof value === 'number' && value === 0) return false;
+  return true;
 }
 
-async function loadTesseract() {
-  if (typeof window === 'undefined') return null;
-  if (window.Tesseract?.createWorker) return window.Tesseract;
-  if (!tesseractLoadPromise) {
-    tesseractLoadPromise = loadScript(
-      'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
-      'road-ready-tesseract-v5'
-    ).then(() => window.Tesseract || null);
+function mergeFields(...sources) {
+  const out = {};
+  for (const source of sources) {
+    for (const [key, value] of Object.entries(source || {})) {
+      if (meaningful(value)) out[key] = value;
+    }
   }
-  return tesseractLoadPromise;
-}
-
-async function webOcrWorker(onProgress) {
-  tesseractProgress = onProgress;
-  if (!tesseractWorkerPromise) {
-    tesseractWorkerPromise = (async () => {
-      const Tesseract = await loadTesseract();
-      if (!Tesseract?.createWorker) throw new Error('web_ocr_unavailable');
-      const worker = await Tesseract.createWorker('eng', 1, {
-        logger(message = {}) {
-          if (typeof tesseractProgress === 'function') tesseractProgress(message);
-        },
-      });
-      try {
-        await worker.setParameters({
-          preserve_interword_spaces:'1',
-          tessedit_pageseg_mode:'6',
-        });
-      } catch {}
-      return worker;
-    })();
-  }
-  return tesseractWorkerPromise;
-}
-
-async function readWithWebOcr(file, onProgress) {
-  if (typeof window === 'undefined' || !String(file?.type || '').startsWith('image/')) return null;
-  try {
-    const worker = await webOcrWorker(message => {
-      const progress = Number(message?.progress || 0);
-      const status = String(message?.status || 'Reading document').replace(/_/g, ' ');
-      onProgress?.(0.32 + (progress * 0.48), `${status.charAt(0).toUpperCase()}${status.slice(1)}…`);
-    });
-    const result = await worker.recognize(file, { rotateAuto:true });
-    const text = String(result?.data?.text || '').trim();
-    return text ? { text, method:'web-ocr', confidence:Number(result?.data?.confidence || 0) / 100 } : null;
-  } catch {
-    return null;
-  }
+  return out;
 }
 
 async function readBarcodes(file) {
-  if (typeof window === 'undefined' || typeof window.BarcodeDetector !== 'function' || !String(file?.type || '').startsWith('image/')) return [];
+  if (
+    typeof window === 'undefined'
+    || typeof window.BarcodeDetector !== 'function'
+    || typeof createImageBitmap !== 'function'
+    || !String(file?.type || '').startsWith('image/')
+  ) return [];
   let bitmap;
   try {
     bitmap = await createImageBitmap(file);
@@ -114,29 +64,82 @@ function preferredTypeResult(preferredType, detected, hasText) {
   const preferred = documentTypeMeta(preferredType);
   if (!preferred?.id || preferred.id === 'other') return detected;
   if (detected?.type?.id === preferred.id) {
-    return { ...detected, type:preferred, confidence:Math.max(detected.confidence || 0, hasText ? 0.88 : 0.76) };
+    return {
+      ...detected,
+      type:preferred,
+      confidence:Math.max(Number(detected.confidence || 0), hasText ? 0.91 : 0.78),
+    };
   }
-  const detectedStrong = hasText && Number(detected?.confidence || 0) >= 0.94 && detected?.type?.id !== 'other';
+  const detectedStrong = hasText && Number(detected?.confidence || 0) >= 0.96 && detected?.type?.id !== 'other';
   if (detectedStrong) return detected;
   return {
     ...detected,
     type:preferred,
-    confidence:Math.max(hasText ? 0.82 : 0.72, Math.min(0.9, Number(detected?.confidence || 0))),
+    confidence:Math.max(hasText ? 0.84 : 0.73, Math.min(0.91, Number(detected?.confidence || 0))),
     alternatives:uniqueTypes([preferred, detected?.type, ...(detected?.alternatives || [])]),
     hinted:true,
   };
 }
 
+function ocrCandidateScore(result, preferredType = 'auto') {
+  if (!result?.text) return -1;
+  const classification = classifyDocument(result.text, 'scan.jpg');
+  let score = Number(result.confidence || 0) * 100;
+  score += Math.min(34, String(result.text).length / 28);
+  score += Number(classification.confidence || 0) * 22;
+  if (preferredType !== 'auto' && classification.type?.id === preferredType) score += 22;
+  return score;
+}
+
+async function runWebOcr(file, preferredType, onProgress) {
+  if (!String(file?.type || '').startsWith('image/')) return null;
+  let first = null;
+  try {
+    first = await recognizeDocumentText(file, {
+      onProgress(progress, status) {
+        onProgress?.(0.28 + (Number(progress || 0) * 0.39), `${String(status || 'Reading text').replace(/_/g, ' ')}…`);
+      },
+    });
+  } catch {}
+
+  const firstText = String(first?.text || '').trim();
+  const firstClass = firstText ? classifyDocument(firstText, file?.name || '') : null;
+  const needsSecondPass = !firstText
+    || firstText.length < 90
+    || Number(first?.confidence || 0) < 0.52
+    || (preferredType !== 'auto' && firstClass?.type?.id !== preferredType && Number(firstClass?.confidence || 0) < 0.9);
+
+  if (!needsSecondPass) return first;
+
+  let second = null;
+  try {
+    onProgress?.(0.69, 'Trying high-contrast OCR…');
+    const blackAndWhite = await renderDocumentFile(file, {
+      filter:'bw',
+      maxDimension:2500,
+      quality:.96,
+      name:`road-ready-ocr-bw-${Date.now()}.jpg`,
+    });
+    second = await recognizeDocumentText(blackAndWhite, {
+      onProgress(progress, status) {
+        onProgress?.(0.7 + (Number(progress || 0) * 0.18), `${String(status || 'Reading high contrast').replace(/_/g, ' ')}…`);
+      },
+    });
+  } catch {}
+
+  return ocrCandidateScore(second, preferredType) > ocrCandidateScore(first, preferredType) ? second : first;
+}
+
 export async function analyzeDocumentFilePro(file, options = {}) {
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const preferredType = options.preferredType || 'auto';
-  onProgress(0.04, 'Preparing enhanced scan…');
+  onProgress(0.03, 'Preparing enhanced scan…');
 
   let base;
   try {
     base = await analyzeScanFile(file, {
       onProgress(value, text) {
-        onProgress(0.05 + (Number(value || 0) * 0.2), text);
+        onProgress(0.04 + (Number(value || 0) * 0.19), text);
       },
     });
   } catch {
@@ -153,34 +156,39 @@ export async function analyzeDocumentFilePro(file, options = {}) {
 
   const baseText = String(base?.text || '').trim();
   let webOcr = null;
-  if (baseText.length < 24 && String(file?.type || '').startsWith('image/')) {
-    onProgress(0.27, 'Starting enhanced on-device OCR…');
-    webOcr = await readWithWebOcr(file, onProgress);
+  const shouldRunWebOcr = String(file?.type || '').startsWith('image/')
+    && base?.method !== 'native'
+    && (baseText.length < 130 || Number(base?.confidence || 0) < 0.88 || preferredType !== 'auto');
+  if (shouldRunWebOcr) {
+    onProgress(0.25, 'Starting document OCR…');
+    webOcr = await runWebOcr(file, preferredType, onProgress);
   }
 
-  onProgress(0.83, 'Reading barcodes and document numbers…');
+  onProgress(0.9, 'Reading barcodes and document numbers…');
   const barcodes = await readBarcodes(file);
-  const textParts = [baseText, webOcr?.text || '', barcodes.length ? `Detected barcode values:\n${barcodes.join('\n')}` : ''].filter(Boolean);
+  const textParts = [];
+  for (const value of [baseText, webOcr?.text || '', barcodes.length ? `Detected barcode values:\n${barcodes.join('\n')}` : '']) {
+    const clean = String(value || '').trim();
+    if (clean && !textParts.includes(clean)) textParts.push(clean);
+  }
   const text = textParts.join('\n').trim();
   const detected = classifyDocument(text, file?.name || '');
   const selected = preferredTypeResult(preferredType, detected, Boolean(text));
-  const extracted = extractDocumentFields(text, selected.type.id);
-  const fields = {
-    ...(base?.fields || {}),
-    ...extracted,
-  };
+  const standardFields = extractDocumentFields(text, selected.type.id);
+  const proFields = extractProDocumentFields(text, selected.type.id);
+  const fields = mergeFields(base?.fields, standardFields, proFields);
   if (!fields.loadNo && barcodes.length) fields.loadNo = barcodes[0].toUpperCase();
+  if (barcodes.length) fields.barcodeValues = barcodes;
 
   const confidence = Math.max(
     Number(selected.confidence || 0),
-    Number(webOcr?.confidence || 0) * 0.75,
-    preferredType !== 'auto' ? (text ? 0.82 : 0.72) : 0
+    Number(webOcr?.confidence || 0) * 0.78,
+    preferredType !== 'auto' ? (text ? 0.84 : 0.73) : 0
   );
   const method = base?.method === 'native'
     ? 'native'
-    : base?.method === 'on-device'
-      ? 'on-device'
-      : webOcr?.method || base?.method || 'smart-review';
+    : webOcr?.method
+      || (base?.method === 'on-device' ? 'on-device' : base?.method || 'smart-review');
   const alternatives = uniqueTypes([
     selected.type,
     ...(selected.alternatives || []),
@@ -193,6 +201,7 @@ export async function analyzeDocumentFilePro(file, options = {}) {
     type:selected.type,
     detectedType:detected.type,
     confidence:Math.min(0.99, confidence),
+    ocrConfidence:Number(webOcr?.confidence || 0),
     alternatives,
     text,
     method,
@@ -200,6 +209,6 @@ export async function analyzeDocumentFilePro(file, options = {}) {
     barcodes,
     preferredType,
     hinted:Boolean(selected.hinted),
-    needsReview:!text || confidence < 0.78,
+    needsReview:!text || confidence < 0.8 || selected.type?.id === 'other',
   };
 }
