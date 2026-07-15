@@ -24,7 +24,7 @@ let hos = read(hosPath);
 hos = replaceOnce(
   hos,
   `  const activeDayEndAbs = dayStartAbs(activeDay) + (activeDay === today ? nowMin(timeZone) : 1440);\n  const activeDayStartAbs = dayStartAbs(activeDay);\n  const timeline = buildContinuousTimeline(eventsByDay, activeDay)\n    .filter(event => event.startAbs < activeDayEndAbs && event.endAbs > activeDayEndAbs - 21 * 1440)\n    .sort((a, b) => a.startAbs - b.startAbs || a.endAbs - b.endAbs);`,
-  `  const activeDayEndAbs = dayStartAbs(activeDay) + (activeDay === today ? nowMin(timeZone) : 1440);\n  const activeDayStartAbs = dayStartAbs(activeDay);\n  const reviewNowAbsV109 = dayStartAbs(today) + nowMin(timeZone);\n  // Keep the historical HOS calculation clipped to the selected day, while\n  // allowing a rest block that starts on that day to continue after midnight.\n  // This prevents a 7:29 PM–9:33 AM Sleeper period from being judged as only\n  // the 4h31 portion visible before midnight. Raw RODS are never modified.\n  const fullTimelineV109 = buildContinuousTimeline(eventsByDay, activeDay)\n    .filter(event => event.startAbs < reviewNowAbsV109 && event.endAbs > activeDayEndAbs - 21 * 1440)\n    .sort((a, b) => a.startAbs - b.startAbs || a.endAbs - b.endAbs);\n  const timeline = fullTimelineV109.filter(event => event.startAbs < activeDayEndAbs);`,
+  `  const activeDayEndAbs = dayStartAbs(activeDay) + (activeDay === today ? nowMin(timeZone) : 1440);\n  const activeDayStartAbs = dayStartAbs(activeDay);\n  const reviewNowAbsV109 = dayStartAbs(today) + nowMin(timeZone);\n  // Historical violation math remains clipped to the selected log day, while\n  // rest review is allowed to follow the same OFF/SB block after midnight.\n  // Raw RODS are never edited by this derived HOS calculation.\n  const fullTimelineV109 = buildContinuousTimeline(eventsByDay, activeDay)\n    .filter(event => event.startAbs < reviewNowAbsV109 && event.endAbs > activeDayEndAbs - 21 * 1440)\n    .sort((a, b) => a.startAbs - b.startAbs || a.endAbs - b.endAbs);\n  const timeline = fullTimelineV109.filter(event => event.startAbs < activeDayEndAbs);`,
   'historical forward rest timeline'
 );
 
@@ -35,28 +35,33 @@ hos = replaceOnce(
   'split watch full rest block'
 );
 
-hos = replaceOnce(
-  hos,
-  `  const restProgress = currentRestProgress(restBlocks, currentEndAbs);\n\n  const missingLocation = timeline.filter(e => !e.city || !e.state).length;`,
-  `  const restProgress = currentRestProgress(restBlocks, currentEndAbs);\n  const reviewNowAbsV109 = dayStartAbs(today) + nowMin(timeZone);\n  const forwardTimelineV109 = targetDay === today\n    ? timeline\n    : buildContinuousTimeline(eventsByDay, targetDay)\n      .filter(event => event.startAbs < reviewNowAbsV109 && event.endAbs > activeDayEndAbs - 21 * 1440);\n  const forwardRestBlocksV109 = findRestBlocks(forwardTimelineV109);\n  const continuedRestBlockV109 = targetDay === today ? null : forwardRestBlocksV109\n    .filter(block => block.startAbs < activeDayEndAbs && block.endAbs >= activeDayEndAbs - 1)\n    .sort((a, b) => b.endAbs - a.endAbs)[0] || null;\n  const restProgressForReviewV109 = continuedRestBlockV109 && continuedRestBlockV109.endAbs > activeDayEndAbs\n    ? {\n        duration:continuedRestBlockV109.duration,\n        fullResetLeft:Math.max(0, 10 * HOUR - continuedRestBlockV109.duration),\n        sleeperLeft:continuedRestBlockV109.allSleeper ? Math.max(0, 7 * HOUR - continuedRestBlockV109.duration) : null,\n        block:continuedRestBlockV109,\n        continuedAfterMidnight:true,\n      }\n    : restProgress;\n  const forwardFullResetV109 = !!continuedRestBlockV109 && continuedRestBlockV109.duration >= 10 * HOUR;\n  const resetSatisfiedForReviewV109 = !!fullReset || !!latestSplit || forwardFullResetV109;\n\n  const missingLocation = timeline.filter(e => !e.city || !e.state).length;`,
-  'historical continued rest progress'
-);
+const restMarker = '  const restProgress = currentRestProgress(restBlocks, currentEndAbs);';
+if (!hos.includes('continuedRestBlockV109')) {
+  if (!hos.includes(restMarker)) throw new Error('v100.9 missing rest progress marker');
+  hos = hos.replace(restMarker, `${restMarker}\n  const reviewNowAbsV109 = dayStartAbs(today) + nowMin(timeZone);\n  const forwardTimelineV109 = targetDay === today\n    ? timeline\n    : buildContinuousTimeline(eventsByDay, targetDay)\n      .filter(event => event.startAbs < reviewNowAbsV109 && event.endAbs > activeDayEndAbs - 21 * 1440);\n  const forwardRestBlocksV109 = findRestBlocks(forwardTimelineV109);\n  const continuedRestBlockV109 = targetDay === today ? null : forwardRestBlocksV109\n    .filter(block => block.startAbs < activeDayEndAbs && block.endAbs > activeDayEndAbs)\n    .sort((a, b) => b.endAbs - a.endAbs)[0] || null;\n  const restProgressForReviewV109 = continuedRestBlockV109\n    ? {\n        duration:continuedRestBlockV109.duration,\n        fullResetLeft:Math.max(0, 10 * HOUR - continuedRestBlockV109.duration),\n        sleeperLeft:continuedRestBlockV109.allSleeper ? Math.max(0, 7 * HOUR - continuedRestBlockV109.duration) : null,\n        block:continuedRestBlockV109,\n        continuedAfterMidnight:true,\n      }\n    : restProgress;\n  const forwardFullResetV109 = !!continuedRestBlockV109 && continuedRestBlockV109.duration >= 10 * HOUR;\n  const resetSatisfiedForReviewV109 = !!fullReset || !!splitEvaluation.available || forwardFullResetV109;`);
+}
 
 hos = hos.replace(
-  `  if (!fullReset && !latestSplit) warnings.push({ severity:'medium', text:'No valid 10h reset or split pair found in recent logs.' });`,
-  `  if (!resetSatisfiedForReviewV109) warnings.push({ severity:'medium', text:'No valid 10h reset or split pair found in recent logs.' });`
+  `  if (!fullReset && !splitActive) warnings.push({ severity:'medium', text:'No valid 10h reset or split pair found in recent logs.' });`,
+  `  if (!fullReset && !splitActive && !forwardFullResetV109) warnings.push({ severity:'medium', text:'No valid 10h reset or split pair found in recent logs.' });`
 );
+hos = hos.replace('  if (splitEvaluation.pending) {', '  if (splitEvaluation.pending && !forwardFullResetV109) {');
 
 hos = hos.replace(
-  `  if (restProgress && restProgress.duration < 10 * HOUR) {\n    if (restProgress.block.allSleeper && restProgress.duration < 7 * HOUR) {\n      warnings.push({ severity:'medium', text:\`Sleeper under 7h. Need \${durLabel(7*HOUR - restProgress.duration)} more for split long period.\` });\n    } else {\n      warnings.push({ severity:'low', text:\`Rest \${durLabel(restProgress.duration)} / 10h full reset.\` });\n    }\n  }`,
-  `  if (restProgressForReviewV109 && restProgressForReviewV109.duration < 10 * HOUR) {\n    if (restProgressForReviewV109.block.allSleeper && restProgressForReviewV109.duration < 7 * HOUR) {\n      warnings.push({ severity:'medium', text:\`Sleeper under 7h. Need \${durLabel(7*HOUR - restProgressForReviewV109.duration)} more for split long period.\` });\n    } else {\n      warnings.push({ severity:'low', text:\`Rest \${durLabel(restProgressForReviewV109.duration)} / 10h full reset.\` });\n    }\n  }`
+  `  if (restProgress && restProgress.duration < 10 * HOUR && !splitActive) {\n    if (restProgress.block.allSleeper && restProgress.duration < 7 * HOUR) {\n      warnings.push({ severity:'medium', text:\`Sleeper under 7h. Need \${durLabel(7*HOUR - restProgress.duration)} more for split long period.\` });\n    } else {\n      warnings.push({ severity:'low', text:\`Rest \${durLabel(restProgress.duration)} / 10h full reset.\` });\n    }\n  }`,
+  `  if (restProgressForReviewV109 && restProgressForReviewV109.duration < 10 * HOUR && !splitActive && !forwardFullResetV109) {\n    if (restProgressForReviewV109.block.allSleeper && restProgressForReviewV109.duration < 7 * HOUR) {\n      warnings.push({ severity:'medium', text:\`Sleeper under 7h. Need \${durLabel(7*HOUR - restProgressForReviewV109.duration)} more for split long period.\` });\n    } else {\n      warnings.push({ severity:'low', text:\`Rest \${durLabel(restProgressForReviewV109.duration)} / 10h full reset.\` });\n    }\n  }`
 );
+
+const resetBlockPattern = /  const resetValue = splitEvaluation\.complete[\s\S]*?  const resetSub = splitEvaluation\.available[\s\S]*?;\n\n  return \{/;
+if (!hos.includes("? '10h continued'")) {
+  if (!resetBlockPattern.test(hos)) throw new Error('v100.9 missing split reset card block');
+  hos = hos.replace(resetBlockPattern, `  const resetValue = splitEvaluation.complete\n    ? 'Split OK'\n    : forwardFullResetV109\n      ? '10h continued'\n      : splitEvaluation.pending\n        ? 'Split pending'\n        : fullReset\n          ? '10h OK'\n          : restProgressForReviewV109\n            ? durLabel(restProgressForReviewV109.duration)\n            : 'Needs reset';\n  const resetSub = forwardFullResetV109\n    ? \`Rest continued after midnight · \${durLabel(restProgressForReviewV109.duration)}\`\n    : splitEvaluation.available\n      ? splitEvaluation.summary\n      : fullReset\n        ? (restProgressForReviewV109 ? \`Current rest \${durLabel(restProgressForReviewV109.duration)}\` : 'Ready')\n        : (restProgressForReviewV109 ? \`\${durLabel(Math.max(0, 10*HOUR-restProgressForReviewV109.duration))} to 10h\` : 'Need 10h');\n\n  return {`);
+}
 
 hos = hos.replace(
-  `      { label:'Reset', value: fullReset ? '10h OK' : latestSplit ? 'Split OK' : restProgress ? \`\${durLabel(restProgress.duration)}\` : 'Needs reset', sub: (fullReset || latestSplit) ? (restProgress ? \`Current rest \${durLabel(restProgress.duration)}\` : 'Ready') : (restProgress ? \`\${durLabel(Math.max(0, 10*HOUR-restProgress.duration))} to 10h\` : 'Need 10h'), ok: !!fullReset || !!latestSplit },`,
-  `      { label:'Reset', value: fullReset ? '10h OK' : latestSplit ? 'Split OK' : forwardFullResetV109 ? '10h continued' : restProgressForReviewV109 ? \`\${durLabel(restProgressForReviewV109.duration)}\` : 'Needs reset', sub: resetSatisfiedForReviewV109 ? (restProgressForReviewV109 ? \`Rest block \${durLabel(restProgressForReviewV109.duration)}\` : 'Ready') : (restProgressForReviewV109 ? \`\${durLabel(Math.max(0, 10*HOUR-restProgressForReviewV109.duration))} to 10h\` : 'Need 10h'), ok: resetSatisfiedForReviewV109 },`
+  `{ label:'Reset', value:resetValue, sub:resetSub, ok:!!fullReset || !!splitEvaluation.available },`,
+  `{ label:'Reset', value:resetValue, sub:resetSub, ok:resetSatisfiedForReviewV109 },`
 );
-
 hos = hos.replace('    restProgress,\n    cycle,', '    restProgress:restProgressForReviewV109,\n    cycle,');
 
 write(hosPath, hos);
