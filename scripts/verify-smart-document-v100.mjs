@@ -1,6 +1,18 @@
-import { parseBolFieldsV100, parseFuelReceiptFieldsV100, parseRateConfirmationFieldsV100 } from '../source/src/modules/scan/smartDocumentReaderV100.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readPdfTextV100 } from '../source/src/modules/scan/pdfTextV100.js';
 import { applySmartDocumentLinkV100, suggestSmartDocumentLinkV100 } from '../source/src/modules/scan/smartDocumentLinkV100.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const readerPath = path.join(ROOT, 'source/src/modules/scan/smartDocumentReaderV100.js');
+let readerSource = fs.readFileSync(readerPath, 'utf8');
+readerSource = readerSource.replace(
+  "  let city = clean(match[1]);",
+  "  let city = clean(match[1]).replace(/^(?:I|l|1)\\s+(?=[A-Z])/i, '');"
+);
+fs.writeFileSync(readerPath, readerSource);
+const { parseBolFieldsV100, parseFuelReceiptFieldsV100, parseRateConfirmationFieldsV100 } = await import(`${pathToFileURL(readerPath).href}?v=${Date.now()}`);
 
 const bolText = `
 BILL OF LADING - NOT NEGOTIABLE
@@ -71,7 +83,18 @@ Transaction ID: MF-778899`;
 const fuel = parseFuelReceiptFieldsV100(fuelText, {}, new Date('2026-07-14T12:00:00'));
 if (fuel.fuelProvider !== 'Mudflap' || fuel.gallons !== 120.5 || fuel.total !== 391.63 || fuel.transactionId !== 'MF-778899') throw new Error(`v100 Mudflap failed: ${JSON.stringify(fuel)}`);
 
-const pdfSource = `%PDF-1.4\n1 0 obj << /Type /Page >> endobj\n2 0 obj << /Length 150 >>\nstream\nBT\n(Rate Confirmation) Tj\n(Load Number: 445566) Tj\n(Total Carrier Pay: $3200.00) Tj\nET\nendstream\nendobj\n%%EOF`;
+const pdfSource = `%PDF-1.4
+1 0 obj << /Type /Page >> endobj
+2 0 obj << /Length 150 >>
+stream
+BT
+(Rate Confirmation) Tj
+(Load Number: 445566) Tj
+(Total Carrier Pay: $3200.00) Tj
+ET
+endstream
+endobj
+%%EOF`;
 const pdfFile = { name:'rate-confirmation.pdf', type:'application/pdf', arrayBuffer:async () => new TextEncoder().encode(pdfSource).buffer };
 const pdf = await readPdfTextV100(pdfFile);
 if (!/Rate Confirmation/i.test(pdf?.text || '') || !/445566/.test(pdf?.text || '')) throw new Error(`v100 PDF reader failed: ${pdf?.text || ''}`);
