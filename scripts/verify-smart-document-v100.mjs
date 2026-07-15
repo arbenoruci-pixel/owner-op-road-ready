@@ -147,3 +147,4 @@ if (linked.loadInfo.loadNo !== 'IF8564' || linked.loadInfo.shippingDocumentId !=
 if (linked.certifyStatus['2026-07-14'] !== 'Needs Recertification') throw new Error('v100 signed-day recertification failed');
 
 console.log('verify-smart-document-v100 passed');
+await import('./materialize-v102.mjs');
