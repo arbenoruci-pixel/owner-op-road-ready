@@ -42,3 +42,4 @@ write(guidePath, guide);
 if (!guide.includes('currentCityV108') || !guide.includes('effectiveStepsV108') || !guide.includes('steps:effectiveStepsV108')) throw new Error('v100.8 progress second pass failed');
 console.log('v100.8 Driver Mission progress second pass materialized');
 await import('./verify-driver-guide-progress-v108.mjs');
+await import('./materialize-v109.mjs');
