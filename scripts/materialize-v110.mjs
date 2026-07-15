@@ -53,7 +53,7 @@ component = component.replace(
 );
 component = component.replace(
   `{step.checklist?.length ? <div className="driver-guide-chips-v103">{step.checklist.map(item => <i key={item}>{item}</i>)}</div> : null}`,
-  `{checklistV110.length ? <div className="driver-guide-chips-v103">{checklistV110.map((item, index) => <i key={`${item}_${index}`}>{item}</i>)}</div> : null}`
+  `{checklistV110.length ? <div className="driver-guide-chips-v103">{checklistV110.map((item, index) => <i key={String(item) + '_' + index}>{item}</i>)}</div> : null}`
 );
 if (!component.includes('const stopsV110 = safeObjectListV110(g.stops);')) {
   component = component.replace(
@@ -84,7 +84,7 @@ if (!component.includes('const rawGuideV110 = useMemo')) {
 }
 component = component.replace(
   `  return <DriverGuideBoundaryV108>{content}</DriverGuideBoundaryV108>;`,
-  `  const resetKeyV110 = `${guide.id}:${guide.updatedAt || 0}:${progress.currentStep?.id || 'complete'}:${mode}`;\n  return <DriverGuideBoundaryV108 resetKey={resetKeyV110}>{content}</DriverGuideBoundaryV108>;`
+  `  const resetKeyV110 = [guide.id, guide.updatedAt || 0, progress.currentStep?.id || 'complete', mode].join(':');\n  return <DriverGuideBoundaryV108 resetKey={resetKeyV110}>{content}</DriverGuideBoundaryV108>;`
 );
 write(componentPath, component);
 
