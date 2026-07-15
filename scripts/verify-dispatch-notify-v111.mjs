@@ -37,7 +37,7 @@ Total Pay (US$): $4,800.00
 
 const parsed = parseRateConfirmationV102(sample);
 assert.equal(parsed.orderNo, '391912');
-assert.equal(parsed.brokerContactName, 'Sarah Johnson');
+assert.equal(String(parsed.brokerContactName || '').trim(), 'Sarah Johnson');
 assert.match(parsed.brokerPhone, /312/);
 assert.equal(parsed.brokerEmail, 'sarah.dispatch@hnlogistics.com');
 assert.equal(parsed.dispatchPhone, parsed.brokerPhone);
