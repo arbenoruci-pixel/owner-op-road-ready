@@ -6,11 +6,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const file = relative => path.join(ROOT, relative);
 const read = relative => fs.readFileSync(file(relative), 'utf8');
 const write = (relative, content) => fs.writeFileSync(file(relative), content);
-function replaceOnce(content, before, after, label) {
-  if (content.includes(after)) return content;
-  if (!content.includes(before)) throw new Error(`v100.5 missing ${label}`);
-  return content.replace(before, after);
-}
 
 const routePath = 'source/src/core/routes/routeNormalization.js';
 let route = read(routePath);
@@ -80,48 +75,45 @@ write(routePath, route);
 
 const signingPath = 'source/src/modules/logbook/signing.js';
 let signing = read(signingPath);
-signing = replaceOnce(
-  signing,
-  `  if (severity === 'notice' || severity === 'review') return false;
+if (!signing.includes("severity === 'notice' || severity === 'review' || severity === 'violation'")) {
+  const fatalPattern = /export function isFatalSigningIssue\(issue = \{\}\) \{[\s\S]*?\n\}/;
+  if (!fatalPattern.test(signing)) throw new Error('v100.5 missing isFatalSigningIssue');
+  signing = signing.replace(fatalPattern, `export function isFatalSigningIssue(issue = {}) {
+  const severity = issueSeverity(issue);
+  const code = String(issue.code || issue.id || '').toLowerCase();
+  if (severity === 'notice' || severity === 'review' || severity === 'violation') return false;
   if (/active_day|location_jump|duplicate_shipping_docs|pretrip_after_driving|inspection_unlinked|inspection_complete_unlinked/.test(code)) return false;
-  return severity === 'fix' || severity === 'violation' || severity === 'dot';`,
-  `  if (severity === 'notice' || severity === 'review' || severity === 'violation') return false;
-  if (/active_day|location_jump|duplicate_shipping_docs|pretrip_after_driving|inspection_unlinked|inspection_complete_unlinked/.test(code)) return false;
-  return severity === 'fix' || severity === 'dot';`,
-  'nonfatal HOS review'
-);
-signing = replaceOnce(
-  signing,
-  `  const fixRequired = dayIssues.filter(issue => isFatalSigningIssue(issue) && issueSeverity(issue) === 'fix');
-  const hosViolations = dayIssues.filter(issue => isFatalSigningIssue(issue) && issueSeverity(issue) === 'violation');
-  const notices = dayIssues.filter(issue => issueSeverity(issue) === 'notice');
-  const review = dayIssues.filter(issue => issueSeverity(issue) === 'review');
-  const ready = fixRequired.length === 0 && hosViolations.length === 0;
-  const status = ready && review.length === 0 && dotPackage.length === 0 ? 'READY' : fixRequired.length || hosViolations.length ? 'FIX_REQUIRED' : 'REVIEW';`,
-  `  const fixRequired = dayIssues.filter(issue => isFatalSigningIssue(issue) && issueSeverity(issue) === 'fix');
+  return severity === 'fix' || severity === 'dot';
+}`);
+}
+if (!signing.includes('const ready = fixRequired.length === 0;')) {
+  const groupPattern = /  const fixRequired = dayIssues\.filter[\s\S]*?\n  const status = [^\n]+;/;
+  if (!groupPattern.test(signing)) throw new Error('v100.5 missing SignGuard grouping');
+  signing = signing.replace(groupPattern, `  const fixRequired = dayIssues.filter(issue => isFatalSigningIssue(issue) && issueSeverity(issue) === 'fix');
   const hosViolations = dayIssues.filter(issue => issueSeverity(issue) === 'violation');
   const notices = dayIssues.filter(issue => issueSeverity(issue) === 'notice');
   const review = dayIssues.filter(issue => issueSeverity(issue) === 'review');
   const ready = fixRequired.length === 0;
-  const status = ready && review.length === 0 && hosViolations.length === 0 && dotPackage.length === 0 ? 'READY' : fixRequired.length ? 'FIX_REQUIRED' : 'REVIEW';`,
-  'SignGuard HOS grouping'
-);
+  const status = ready && review.length === 0 && hosViolations.length === 0 && dotPackage.length === 0 ? 'READY' : fixRequired.length ? 'FIX_REQUIRED' : 'REVIEW';`);
+}
 write(signingPath, signing);
 
 const dayPath = 'source/src/modules/logbook/DayLogScreen.jsx';
 let dayScreen = read(dayPath);
-dayScreen = replaceOnce(
-  dayScreen,
-  `import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';`,
-  `import { buildChatGptLogReviewPrompt, buildIssueFixPrompt, buildSignGuardSummary, isFatalSigningIssue, issueSuggestedAction, logSignState, signingWarnings, validateLogForSigning } from './signing.js';`,
-  'DayLog fatal issue import'
-);
-dayScreen = replaceOnce(
-  dayScreen,
-  `  const fixBlockers = blockers.filter(issue => !/active_day/i.test(String(issue.code || '')));`,
-  `  const fixBlockers = blockers.filter(isFatalSigningIssue);`,
-  'Sign button fatal issue filter'
-);
+if (!dayScreen.includes('isFatalSigningIssue')) {
+  const importPattern = /import \{ ([^}]*validateLogForSigning[^}]*) \} from '\.\/signing\.js';/;
+  if (!importPattern.test(dayScreen)) throw new Error('v100.5 missing DayLog signing import');
+  dayScreen = dayScreen.replace(importPattern, (full, names) => {
+    const list = names.split(',').map(value => value.trim()).filter(Boolean);
+    if (!list.includes('isFatalSigningIssue')) list.push('isFatalSigningIssue');
+    return `import { ${list.join(', ')} } from './signing.js';`;
+  });
+}
+if (!dayScreen.includes('blockers.filter(isFatalSigningIssue)')) {
+  const blockerPattern = /  const fixBlockers = blockers\.filter\([^\n]+\);/;
+  if (!blockerPattern.test(dayScreen)) throw new Error('v100.5 missing Sign tab blocker line');
+  dayScreen = dayScreen.replace(blockerPattern, '  const fixBlockers = blockers.filter(isFatalSigningIssue);');
+}
 write(dayPath, dayScreen);
 
 console.log('v100.5 route and signing patch applied');
