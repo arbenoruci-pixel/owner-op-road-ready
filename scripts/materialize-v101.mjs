@@ -26,12 +26,16 @@ app = replaceOnce(
   "import { insertManyOverride, applyEditOverride, applyPatchWithNeighbors, normalizeLogEvents, protectLiveTailFromInsert } from '../core/timeline/timelineEngine.js';\nimport { resolveRawShiftSelectionV101, shiftSelectedEventsV101 } from '../core/timeline/multiEventShiftV101.js';",
   'App multi-event shift import'
 );
-app = replaceOnce(
-  app,
-  "  const rawEvents = useMemo(() => rawStoredEventsForDay(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);\n  const events = useMemo(() => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);\n  const liveCurrent = useMemo(() => currentFromEvents(events, state.currentStatus || 'OFF', state.currentLocation || { city:'GPS', state:'UNK' }, state.currentReason || 'Off Duty'), [events, state.currentStatus, state.currentLocation, state.currentReason]);",
-  "  const rawEvents = useMemo(() => rawStoredEventsForDay(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);\n  const events = useMemo(() => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay), [state.eventsByDay, state.activeDay]);\n  const resolvedShiftIds = useMemo(\n    () => resolveRawShiftSelectionV101(rawEvents, events, state.selectedIds || []),\n    [rawEvents, events, state.selectedIds]\n  );\n  const liveCurrent = useMemo(() => currentFromEvents(events, state.currentStatus || 'OFF', state.currentLocation || { city:'GPS', state:'UNK' }, state.currentReason || 'Off Duty'), [events, state.currentStatus, state.currentLocation, state.currentReason]);",
-  'resolved display-to-raw shift selection'
-);
+
+if (!app.includes('const resolvedShiftIds = useMemo')) {
+  const liveMarker = "  const liveCurrent = useMemo";
+  if (!app.includes(liveMarker)) throw new Error('v100.1 missing liveCurrent insertion point');
+  app = app.replace(
+    liveMarker,
+    "  const resolvedShiftIds = useMemo(\n    () => resolveRawShiftSelectionV101(rawEvents, events, state.selectedIds || []),\n    [rawEvents, events, state.selectedIds]\n  );\n  const liveCurrent = useMemo"
+  );
+}
+
 app = replaceOnce(
   app,
   `  function applyShift(delta, options = {}) {
@@ -77,7 +81,11 @@ app = replaceOnce(
   `  function applyShift(delta, options = {}) {
     setState(s => {
       const baseEvents = rawStoredEventsForDay(s.eventsByDay || {}, s.activeDay);
-      const displayEvents = displayEventsForDayFromState(s.eventsByDay || {}, s.activeDay);
+      const displayEvents = displayEventsForDayFromState(s.eventsByDay || {}, s.activeDay, {
+        currentStatus:s.currentStatus,
+        currentReason:s.currentReason,
+        currentLocation:s.currentLocation,
+      });
       const selectedIds = resolveRawShiftSelectionV101(baseEvents, displayEvents, (s.selectedIds || []).filter(Boolean));
       const result = shiftSelectedEventsV101(baseEvents, selectedIds, delta);
 
