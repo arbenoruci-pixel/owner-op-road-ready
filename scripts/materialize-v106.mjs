@@ -126,3 +126,4 @@ if (!verifyUtility.includes('logbookIndexV105') || !verifyUtility.includes('busi
 console.log('v100.6 Full Logbook Export & Import materialized');
 await import('./verify-full-backup-v105.mjs');
 await import('./materialize-v107.mjs');
+await import('./materialize-v108.mjs');
