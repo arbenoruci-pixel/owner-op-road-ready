@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { parseRateConfirmationV102 } from '../source/src/modules/scan/rateConfirmationParserV102.js';
 import {
   buildDispatchMessageV111,
   dispatchChannelsV111,
@@ -7,6 +6,10 @@ import {
   loadContactCandidatesV111,
   preferredLoadContactV111,
 } from '../source/src/modules/loads/loadContactV111.js';
+
+// Earlier release checks import the Rate Con parser before v101.1 materializes it.
+// A cache-busted module URL verifies the file that was actually written by this build.
+const { parseRateConfirmationV102 } = await import(`../source/src/modules/scan/rateConfirmationParserV102.js?v111=${Date.now()}`);
 
 const sample = `
 H & N Logistics, LLC
