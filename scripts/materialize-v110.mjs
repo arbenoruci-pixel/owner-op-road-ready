@@ -118,4 +118,5 @@ if (!verifyGuide.includes('normalizeDriverGuideV110')) throw new Error('v101.0 r
 if (!verifyComponent.includes('checklistV110') || !verifyComponent.includes('stopsV110') || !verifyComponent.includes('resetKeyV110')) throw new Error('v101.0 resilient renderer failed');
 console.log('v101.0 Driver Mission Resilience materialized');
 await import('./verify-driver-guide-v110.mjs');
+await import('./prepare-v111-app.mjs');
 await import('./materialize-v111.mjs');
