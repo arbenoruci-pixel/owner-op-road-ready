@@ -94,3 +94,4 @@ if (!verifyReader.includes('readPdfTextV102') || !verifyReader.includes('parseRa
 if (!verifyRate.includes('parseRateConfirmationStopsV102') || !verifyRate.includes('deliveryCount')) throw new Error('v100.2 multi-stop parser failed');
 console.log('v100.2 native PDF.js and multi-stop Rate Con materialized');
 await import('./verify-rate-confirmation-v102.mjs');
+await import('./materialize-v103.mjs');
