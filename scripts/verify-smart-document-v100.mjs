@@ -67,8 +67,8 @@ const bolExpected = {
   origin:'East Hartford, CT', destination:'Greenwood, IN', checkIn:'12:06', appointmentTime:'1 AM', checkOut:'1:45',
 };
 for (const [key, value] of Object.entries(bolExpected)) if (bol[key] !== value) throw new Error(`v100 BOL ${key}: expected ${value}, got ${bol[key]}`);
-if (!bol.shipFromDetails.startsWith('Garden of Light Inc.')) throw new Error(`v100 ship from failed: ${bol.shipFromDetails}`);
-if (!bol.shipToDetails.startsWith('Greenwood DC')) throw new Error(`v100 ship to failed: ${bol.shipToDetails}`);
+if (!/^Garden of Light Inc\.?(?:,|$)/.test(bol.shipFromDetails)) throw new Error(`v100 ship from failed: ${bol.shipFromDetails}`);
+if (!/^Greenwood DC(?:,|$)/.test(bol.shipToDetails)) throw new Error(`v100 ship to failed: ${bol.shipToDetails}`);
 
 const rateText = `Carrier Rate Confirmation
 Load Number: 1243484
