@@ -94,3 +94,4 @@ const verifyHos = read(hosPath);
 if (!verifyHos.includes('fullTimelineV109') || !verifyHos.includes('continuedRestBlockV109') || !verifyHos.includes('resetSatisfiedForReviewV109')) throw new Error('v100.9 HOS continuity integration failed');
 console.log('v100.9 Cross-midnight Rest Continuity materialized');
 await import('./verify-cross-midnight-rest-v109.mjs');
+await import('./materialize-v110.mjs');
