@@ -125,3 +125,4 @@ if (!verifyReader.includes('arbitrateDocumentTypeV104') || !verifyReader.include
 if (!verifyArbiter.includes('Total\\s+Pay') || !verifyArbiter.includes('first page is an actual BOL title')) throw new Error('v100.4 type arbitration failed');
 console.log('v100.4 Smart Document Type Arbitration materialized');
 await import('./verify-smart-document-type-v104.mjs');
+await import('./materialize-v105.mjs');
