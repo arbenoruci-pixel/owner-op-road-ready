@@ -118,8 +118,8 @@ if (!status.includes("from '../loads/loadContactV111.js'")) {
 }
 status = replaceOnce(
   status,
-  `  const [notes, setNotes] = useState('');\n  const [showNotes, setShowNotes] = useState(false);`,
-  `  const [notes, setNotes] = useState('');\n  const [showNotes, setShowNotes] = useState(false);\n  const initialDispatchContactV111 = preferredLoadContactV111(state) || {};\n  const [notifyNameV111, setNotifyNameV111] = useState(initialDispatchContactV111.name || '');\n  const [notifyPhoneV111, setNotifyPhoneV111] = useState(initialDispatchContactV111.phone || '');\n  const [notifyEmailV111, setNotifyEmailV111] = useState(initialDispatchContactV111.email || '');\n  const initialNotifyChannelsV111 = dispatchChannelsV111(initialDispatchContactV111);\n  const [notifyChannelV111, setNotifyChannelV111] = useState(initialNotifyChannelsV111[0] || '');\n  const [notifyAfterSaveV111, setNotifyAfterSaveV111] = useState(initialNotifyChannelsV111.length > 0);\n  const [notifyMessageV111, setNotifyMessageV111] = useState('');`,
+  `  const [notes, setNotes] = useState(guidePrefill.notes || '');\n  const [showNotes, setShowNotes] = useState(false);`,
+  `  const [notes, setNotes] = useState(guidePrefill.notes || '');\n  const [showNotes, setShowNotes] = useState(false);\n  const initialDispatchContactV111 = preferredLoadContactV111(state) || {};\n  const [notifyNameV111, setNotifyNameV111] = useState(initialDispatchContactV111.name || '');\n  const [notifyPhoneV111, setNotifyPhoneV111] = useState(initialDispatchContactV111.phone || '');\n  const [notifyEmailV111, setNotifyEmailV111] = useState(initialDispatchContactV111.email || '');\n  const initialNotifyChannelsV111 = dispatchChannelsV111(initialDispatchContactV111);\n  const [notifyChannelV111, setNotifyChannelV111] = useState(initialNotifyChannelsV111[0] || '');\n  const [notifyAfterSaveV111, setNotifyAfterSaveV111] = useState(initialNotifyChannelsV111.length > 0);\n  const [notifyMessageV111, setNotifyMessageV111] = useState('');`,
   'status notification state'
 );
 status = replaceOnce(
