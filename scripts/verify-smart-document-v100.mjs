@@ -15,6 +15,10 @@ readerSource = readerSource.replace(
   "    if (after.length >= 2) city = after;",
   "    if (after.length >= 2) city = after;\n    city = city.replace(/^(?:I|l|1)\\s+(?=[A-Z])/i, '');"
 );
+readerSource = readerSource.replace(
+  "  const joined = clean(rawLines.join(' | '));",
+  "  const joined = clean(rawLines.join(' , '));"
+);
 fs.writeFileSync(readerPath, readerSource);
 const { parseBolFieldsV100, parseFuelReceiptFieldsV100, parseRateConfirmationFieldsV100 } = await import(`${pathToFileURL(readerPath).href}?v=${Date.now()}`);
 
