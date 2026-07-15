@@ -125,3 +125,4 @@ if (!verifyBackup.includes('Export all days') || !verifyBackup.includes('Import 
 if (!verifyUtility.includes('logbookIndexV105') || !verifyUtility.includes('businessStore')) throw new Error('v100.6 full backup payload failed');
 console.log('v100.6 Full Logbook Export & Import materialized');
 await import('./verify-full-backup-v105.mjs');
+await import('./materialize-v107.mjs');
