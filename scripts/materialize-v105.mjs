@@ -52,3 +52,4 @@ if (!home.includes('activeGuideLoadSummaryV105')) throw new Error('v100.5 Home a
 if (!guide.includes('eventMatchesGuideReferenceV105') || !guide.includes('statusStepComplete(state, guide, step)')) throw new Error('v100.5 guide progress integration failed');
 console.log('v100.5 Active Load & Signing Integrity materialized');
 await import('./verify-logbook-load-integrity-v105.mjs');
+await import('./materialize-v106.mjs');
