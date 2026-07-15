@@ -180,3 +180,4 @@ if (!verifyApp.includes('resolveRawShiftSelectionV101') || !verifyApp.includes('
 }
 if (!verifySheet.includes('shiftSelectedEventsV101')) throw new Error('v100.1 ShiftSheet integration failed');
 console.log('v100.1 reliable multi-event movement materialized');
+await import('./verify-multi-event-shift-v101.mjs');
