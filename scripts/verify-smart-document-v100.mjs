@@ -23,6 +23,10 @@ readerSource = readerSource.replace(
   "  company = company.replace(/^.*?\\b(?=([A-Z][A-Za-z]+\\s+){1,6}(?:Inc\\.?|LLC|Ltd\\.?|Corp\\.?|DC)\\b)/, '').replace(/^[^A-Za-z]+/, '').trim();",
   "  const companyMatches = [...company.matchAll(/\\b((?:[A-Z][A-Za-z'.-]+|of|the|and|&)(?:\\s+(?:[A-Z][A-Za-z'.-]+|of|the|and|&)){0,6}\\s+(?:Inc\\.?|LLC|Ltd\\.?|Corp\\.?|DC))\\b/g)];\n  if (companyMatches.length) company = companyMatches.at(-1)[1];\n  company = company.replace(/^[^A-Za-z]+/, '').trim();"
 );
+readerSource = readerSource.replace(
+  "    /(?:load|order|trip|confirmation)\\s*(?:number|no\\.?|#)?\\s*[:#-]?\\s*([A-Z0-9][A-Z0-9_-]{3,24})/i,",
+  "    /\\b(?:load|order|trip)\\s*(?:number|no\\.?|#)\\s*[:#-]?\\s*([A-Z0-9][A-Z0-9_-]{3,24})/i,\n    /\\bconfirmation\\s*(?:number|no\\.?|#)\\s*[:#-]?\\s*([A-Z0-9][A-Z0-9_-]{3,24})/i,"
+);
 fs.writeFileSync(readerPath, readerSource);
 const { parseBolFieldsV100, parseFuelReceiptFieldsV100, parseRateConfirmationFieldsV100 } = await import(`${pathToFileURL(readerPath).href}?v=${Date.now()}`);
 
