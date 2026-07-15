@@ -72,7 +72,11 @@ assert.equal(isFatalSigningIssue({ code:'hos_split_sleeper', title:'Sleeper unde
 assert.equal(isFatalSigningIssue({ code:'missing_location_x', title:'Event location is missing' }), true);
 
 const progress = resolveDriverGuideV103(state, guide);
-assert.equal(progress.steps.find(step => step.id === 'pretrip')?.complete, true, 'Chicago pre-trip on pickup day should count');
+const pretripProgress = progress.steps.find(step => step.id === 'pretrip');
+if (!pretripProgress?.complete) {
+  console.error('v100.5 pretrip debug', JSON.stringify({ pretripProgress, guidePickupDate:guide.pickupDate, guideStops:guide.stops, eventDays:Object.keys(state.eventsByDay), events:state.eventsByDay['2026-07-14'] }, null, 2));
+}
+assert.equal(pretripProgress?.complete, true, 'Chicago pre-trip on pickup day should count');
 assert.equal(progress.steps.find(step => step.id === 'depart_pickup')?.complete, true, 'Rochelle driving departure should count');
 assert.equal(progress.steps.find(step => step.id === 'depart_delivery_1')?.complete, false, 'Rochelle driving must not complete a future Mounds View departure');
 
