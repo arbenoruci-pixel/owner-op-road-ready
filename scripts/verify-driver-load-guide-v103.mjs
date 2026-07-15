@@ -121,3 +121,4 @@ assert.ok(progress.completed >= 2);
 assert.ok(progress.currentStep);
 
 console.log('verify-driver-load-guide-v103 passed');
+await import('./materialize-v104.mjs');
