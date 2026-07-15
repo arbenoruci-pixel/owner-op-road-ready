@@ -40,3 +40,4 @@ assert.strictEqual(next.routeLegsByDay, base.routeLegsByDay);
 assert.equal(next.loadGuidesById[guide.id].manualDone.route_pickup > 0, true);
 
 console.log('verify-driver-guide-v108 passed');
+await import('./materialize-v108-progress.mjs');
