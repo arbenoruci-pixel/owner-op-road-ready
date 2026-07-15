@@ -161,3 +161,4 @@ if (!verifyLink.includes('applyShippingDocumentReference') || !verifyLink.includ
 if (!verifyPdf.includes('DecompressionStream') || !verifyPdf.includes('FlateDecode') || !verifyPdf.includes('pdf-text-v100')) throw new Error('v100 PDF reader failed');
 if (!verifyApp.includes('SMART_DOCUMENT_LINK_EVENT') || !verifyApp.includes('applySmartDocumentLinkV100')) throw new Error('v100 App listener failed');
 console.log('v100 Pro Document Inbox materialized');
+await import('./materialize-v101.mjs');
