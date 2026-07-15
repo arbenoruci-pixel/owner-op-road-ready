@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { resolveDriverGuideV103 } from '../source/src/modules/loads/loadGuideV103.js';
+
+const { resolveDriverGuideV103 } = await import(`../source/src/modules/loads/loadGuideV103.js?v108=${Date.now()}`);
 
 const guide = {
   id:'load_guide_391912',
