@@ -27,6 +27,10 @@ readerSource = readerSource.replace(
   "    /(?:load|order|trip|confirmation)\\s*(?:number|no\\.?|#)?\\s*[:#-]?\\s*([A-Z0-9][A-Z0-9_-]{3,24})/i,",
   "    /\\b(?:load|order|trip)\\s*(?:number|no\\.?|#)\\s*[:#-]?\\s*([A-Z0-9][A-Z0-9_-]{3,24})/i,\n    /\\bconfirmation\\s*(?:number|no\\.?|#)\\s*[:#-]?\\s*([A-Z0-9][A-Z0-9_-]{3,24})/i,"
 );
+readerSource = readerSource.replace(
+  "  const transactionId = firstMatch(text, [/(?:transaction|receipt|authorization|auth)\\s*(?:id|number|no\\.?|#)?\\s*[:#-]?\\s*([A-Z0-9-]{4,30})/i]);",
+  "  const transactionId = firstMatch(text, [/(?:transaction|receipt|authorization|auth)\\s*(?:id|number|no\\.?|#)\\s*[:#-]?\\s*([A-Z0-9-]{4,30})/i]);"
+);
 fs.writeFileSync(readerPath, readerSource);
 const { parseBolFieldsV100, parseFuelReceiptFieldsV100, parseRateConfirmationFieldsV100 } = await import(`${pathToFileURL(readerPath).href}?v=${Date.now()}`);
 
