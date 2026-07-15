@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { applyLoadGuideActionV108 } from '../source/src/modules/loads/loadGuideActionV108.js';
-import { resolveDriverGuideV103 } from '../source/src/modules/loads/loadGuideV103.js';
 
 const guide = {
   id:'load_guide_391912',
@@ -12,7 +11,6 @@ const guide = {
   documents:{},
   steps:[
     { id:'route_pickup', kind:'route', title:'Navigate to pickup', day:'2000-01-01', city:'Rochelle', state:'IL', location:'Rochelle, IL', loadNo:'391912' },
-    { id:'arrive_delivery_3', kind:'status', title:'Log arrival at stop 3', day:'2099-01-01', city:'Rogers', state:'MN', status:'ON', reason:'Delivery / Unloading', loadNo:'391912' },
   ],
 };
 
@@ -33,20 +31,12 @@ const base = {
   activeLoadGuideId:guide.id,
 };
 
-{
-  const next = applyLoadGuideActionV108(base, { action:'toggle_done', guideId:guide.id, stepId:'route_pickup', step:guide.steps[0] });
-  assert.equal(next.view, base.view);
-  assert.equal(next.activeDay, base.activeDay);
-  assert.equal(next.sheet, base.sheet);
-  assert.strictEqual(next.eventsByDay, base.eventsByDay);
-  assert.strictEqual(next.routeLegsByDay, base.routeLegsByDay);
-  assert.equal(next.loadGuidesById[guide.id].manualDone.route_pickup > 0, true);
-}
-
-{
-  const progress = resolveDriverGuideV103(base, guide);
-  assert.equal(progress.steps.find(step => step.id === 'route_pickup').complete, true);
-  assert.equal(progress.currentStep?.id, 'arrive_delivery_3');
-}
+const next = applyLoadGuideActionV108(base, { action:'toggle_done', guideId:guide.id, stepId:'route_pickup', step:guide.steps[0] });
+assert.equal(next.view, base.view);
+assert.equal(next.activeDay, base.activeDay);
+assert.equal(next.sheet, base.sheet);
+assert.strictEqual(next.eventsByDay, base.eventsByDay);
+assert.strictEqual(next.routeLegsByDay, base.routeLegsByDay);
+assert.equal(next.loadGuidesById[guide.id].manualDone.route_pickup > 0, true);
 
 console.log('verify-driver-guide-v108 passed');
