@@ -22,9 +22,10 @@ const derived = extendCurrentStatusTailV1036(events, {
   targetEnd:913,
   currentStatus:'OFF',
 });
-assert.equal(derived.extended, true);
-assert.equal(derived.events.at(-1).startMin, 907);
-assert.equal(derived.events.at(-1).endMin, 913);
+console.log('v103.6 direct tail diagnostic', JSON.stringify({ extended:derived.extended, last:derived.events.at(-1), inputLast:events.at(-1) }));
+assert.equal(derived.extended, true, 'direct helper must mark the active OFF tail extended');
+assert.equal(derived.events.at(-1).startMin, 907, 'direct helper must preserve OFF start');
+assert.equal(derived.events.at(-1).endMin, 913, 'direct helper must extend OFF through target now');
 assert.equal(events.at(-1).endMin, 908, 'stored input must not be mutated');
 
 const liveCoverage = rawCoverageIssues({ [today]:events }, today, {
@@ -32,7 +33,8 @@ const liveCoverage = rawCoverageIssues({ [today]:events }, today, {
   currentStatus:'OFF',
   currentLocation:{ city:'St. Cloud', state:'MN' },
 });
-assert.equal(liveCoverage.total, 913);
+console.log('v103.6 coverage diagnostic', JSON.stringify({ today, total:liveCoverage.total, targetEnd:liveCoverage.targetEnd, issues:(liveCoverage.issues || []).map(issue => ({ code:issue.code || issue.id, startMin:issue.startMin, endMin:issue.endMin })), liveTailDerivedV1036:liveCoverage.liveTailDerivedV1036, events:(liveCoverage.events || []).map(event => ({ id:event.id, status:event.status, startMin:event.startMin, endMin:event.endMin })) }));
+assert.equal(liveCoverage.total, 913, 'raw coverage total must include the active OFF tail through now');
 assert.equal(liveCoverage.issues.some(issue => String(issue.code || issue.id) === 'day_end_gap'), false, 'active OFF must cover through now');
 
 const mismatched = rawCoverageIssues({ [today]:events }, today, {
