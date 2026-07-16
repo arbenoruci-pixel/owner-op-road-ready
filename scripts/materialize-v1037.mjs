@@ -19,16 +19,7 @@ function replaceOnce(content, before, after, label) {
 }
 function replacePattern(content, pattern, replacement, label, marker = '') {
   if (marker && content.includes(marker)) return content;
-  if (!pattern.test(content)) {
-    if (/14h|warning|card/i.test(label)) {
-      const lines = content.split('\n');
-      const interesting = lines
-        .map((line, index) => ({ index:index + 1, line }))
-        .filter(item => /analyzeLinkedHos|Shift clock|14h Window|limit14|windowUsed|shift\.expired|buildClockWarnings/.test(item.line));
-      console.log(`v103.7 ${label} diagnostic\n${interesting.map(item => `${item.index}: ${item.line}`).join('\n')}`);
-    }
-    throw new Error(`v103.7 missing ${label}`);
-  }
+  if (!pattern.test(content)) throw new Error(`v103.7 missing ${label}`);
   return content.replace(pattern, replacement);
 }
 
@@ -41,19 +32,17 @@ hos = replacePattern(
   '14h helper',
   'function drivingAfterLimitMinutesV1037('
 );
-hos = replacePattern(
+hos = replaceOnce(
   hos,
-  /\s*if \(limit14 != null && currentEndAbs > limit14\) warnings\.push\(\{ severity:'high', text:`Shift clock expired at \$\{shortTime\(limit14\)\}\.` \}\);/,
-  `\n  const drivingAfter14V1037 = drivingAfterLimitMinutesV1037(afterReset, limit14, currentEndAbs);\n  const windowViolationV1037 = drivingAfter14V1037 > 0;\n  const windowExpiredNoViolationV1037 = limit14 != null && currentEndAbs > limit14 && !windowViolationV1037;\n  if (windowViolationV1037) warnings.push({ severity:'high', text:\`14h window violation: \${durLabel(drivingAfter14V1037)} Driving after \${shortTime(limit14)}.\` });`,
-  '14h warning',
-  'const drivingAfter14V1037 = drivingAfterLimitMinutesV1037(afterReset, limit14, currentEndAbs);'
+  `  if (shiftExpired) warnings.push({ severity:'high', text:'Shift clock expired.' });`,
+  `  const window14RangesV1037 = violationRangesForDay(eventsByDay, activeDay).filter(range => range.type === 'window14');\n  const drivingAfter14V1037 = window14RangesV1037.reduce((sum, range) => sum + Math.max(0, Number(range.endMin || 0) - Number(range.startMin || 0)), 0);\n  const windowViolationV1037 = window14RangesV1037.length > 0 && drivingAfter14V1037 > 0;\n  const windowExpiredNoViolationV1037 = shiftExpired && !windowViolationV1037;\n  if (windowViolationV1037) warnings.push({ severity:'high', text:\`14h window violation: \${durLabel(drivingAfter14V1037)} Driving after the limit.\` });`,
+  '14h warning'
 );
-hos = replacePattern(
+hos = replaceOnce(
   hos,
-  /\{ label:'14h Window',[^\n]+\}/,
-  `{ label:'14h Window', value: windowViolationV1037 ? 'Violation' : windowExpiredNoViolationV1037 ? 'Expired' : \`\${durLabel(Math.min(windowUsed, 14*HOUR))} used\`, sub: windowViolationV1037 ? \`\${durLabel(drivingAfter14V1037)} driving after limit\` : windowExpiredNoViolationV1037 ? 'No driving after limit' : \`\${durLabel(Math.max(0, 14*HOUR-windowUsed))} left\`, ok: !windowViolationV1037 }`,
-  '14h card',
-  `value: windowViolationV1037 ? 'Violation'`
+  `      { label:'14h Window', value:shiftExpired ? 'Over' : \`\${durLabel(Math.min(windowUsed, 14*HOUR))} used\`, sub:shiftExpired ? \`\${durLabel(Math.max(0, windowUsed-14*HOUR))} over\` : \`\${durLabel(Math.max(0, 14*HOUR-windowUsed))} left\`, ok:!shiftExpired },`,
+  `      { label:'14h Window', value:windowViolationV1037 ? 'Violation' : windowExpiredNoViolationV1037 ? 'Expired' : \`\${durLabel(Math.min(windowUsed, 14*HOUR))} used\`, sub:windowViolationV1037 ? \`\${durLabel(drivingAfter14V1037)} driving after limit\` : windowExpiredNoViolationV1037 ? 'No driving after limit' : \`\${durLabel(Math.max(0, 14*HOUR-windowUsed))} left\`, ok:!windowViolationV1037 },`,
+  '14h card'
 );
 write(hosPath, hos);
 
@@ -103,7 +92,7 @@ write('public/sw.js', read('public/sw.js').replace(/const OWNER_OP_SW_VERSION = 
 write('source/src/core/update/appUpdate.js', read('source/src/core/update/appUpdate.js').replace(/const FALLBACK_APP_VERSION = '[^']+';/, `const FALLBACK_APP_VERSION = '${VERSION}';`));
 
 for (const [relative, marker] of [
-  [hosPath,'drivingAfter14V1037'],
+  [hosPath,'window14RangesV1037'],
   [appPath,'crossMidnightRepairedV1037'],
   ['source/src/core/hos/crossMidnightFlagV1037.js','repairCrossMidnightFlagsV1037'],
 ]) {
