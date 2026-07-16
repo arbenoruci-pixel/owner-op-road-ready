@@ -27,20 +27,21 @@ const hosPath = 'source/src/core/hos/hosEngine.js';
 let hos = read(hosPath);
 hos = replacePattern(
   hos,
-  /(  const limit14 = dutyStartEvent \? windowLimitAbs\(dutyStartAbs, currentEndAbs, latestSplit\) : null;[\s\S]*?  const windowUsed = dutyStartEvent[\s\S]*?\n    : 0;)/,
-  `$1\n\n  // v103.7: the 14-hour rule prohibits Driving after the window closes.\n  // OFF DUTY or Sleeper after the limit may show the window as expired, but\n  // they are not a window14 violation and must not create a high warning.\n  const drivingAfter14V1037 = limit14 == null ? 0 : afterReset\n    .filter(event => event.status === 'D')\n    .reduce((sum, event) => {\n      const start = Math.max(Number(event.startAbs || 0), Number(limit14 || 0));\n      const end = Math.min(Number(event.endAbs || 0), Number(currentEndAbs || 0));\n      return sum + Math.max(0, end - start);\n    }, 0);\n  const windowViolationV1037 = drivingAfter14V1037 > 0;\n  const windowExpiredNoViolationV1037 = limit14 != null && currentEndAbs > limit14 && !windowViolationV1037;`,
-  '14h driving-only calculation',
-  'const drivingAfter14V1037 ='
-);
-hos = replaceOnce(
-  hos,
-  `  if (limit14 != null && currentEndAbs > limit14) warnings.push({ severity:'high', text:\`Shift clock expired at \${shortTime(limit14)}.\` });`,
-  `  if (windowViolationV1037) warnings.push({ severity:'high', text:\`14h window violation: \${durLabel(drivingAfter14V1037)} Driving after \${shortTime(limit14)}.\` });`,
-  '14h warning'
+  /export function analyzeLinkedHos\(eventsByDay = \{\}, activeDay, certifyStatus = \{\}\) \{/,
+  `function drivingAfterLimitMinutesV1037(events = [], limitAbs = null, currentEndAbs = Infinity) {\n  if (limitAbs == null || !Number.isFinite(Number(limitAbs))) return 0;\n  return (events || [])\n    .filter(event => event?.status === 'D')\n    .reduce((sum, event) => {\n      const start = Math.max(Number(event.startAbs || 0), Number(limitAbs || 0));\n      const end = Math.min(Number(event.endAbs || 0), Number(currentEndAbs || 0));\n      return sum + Math.max(0, end - start);\n    }, 0);\n}\n\nexport function analyzeLinkedHos(eventsByDay = {}, activeDay, certifyStatus = {}) {`,
+  '14h helper',
+  'function drivingAfterLimitMinutesV1037('
 );
 hos = replacePattern(
   hos,
-  /\{ label:'14h Window', value:[^\n]+\}/,
+  /\s*if \(limit14 != null && currentEndAbs > limit14\) warnings\.push\(\{ severity:'high', text:`Shift clock expired at \$\{shortTime\(limit14\)\}\.` \}\);/,
+  `\n  const drivingAfter14V1037 = drivingAfterLimitMinutesV1037(afterReset, limit14, currentEndAbs);\n  const windowViolationV1037 = drivingAfter14V1037 > 0;\n  const windowExpiredNoViolationV1037 = limit14 != null && currentEndAbs > limit14 && !windowViolationV1037;\n  if (windowViolationV1037) warnings.push({ severity:'high', text:\`14h window violation: \${durLabel(drivingAfter14V1037)} Driving after \${shortTime(limit14)}.\` });`,
+  '14h warning',
+  'const drivingAfter14V1037 = drivingAfterLimitMinutesV1037(afterReset, limit14, currentEndAbs);'
+);
+hos = replacePattern(
+  hos,
+  /\{ label:'14h Window',[^\n]+\}/,
   `{ label:'14h Window', value: windowViolationV1037 ? 'Violation' : windowExpiredNoViolationV1037 ? 'Expired' : \`\${durLabel(Math.min(windowUsed, 14*HOUR))} used\`, sub: windowViolationV1037 ? \`\${durLabel(drivingAfter14V1037)} driving after limit\` : windowExpiredNoViolationV1037 ? 'No driving after limit' : \`\${durLabel(Math.max(0, 14*HOUR-windowUsed))} left\`, ok: !windowViolationV1037 }`,
   '14h card',
   `value: windowViolationV1037 ? 'Violation'`
