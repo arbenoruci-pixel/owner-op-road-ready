@@ -63,14 +63,14 @@ export async function openVaultDocumentV102(document = {}) {
   return { ok:!!opened, url };
 }
 
-export async function downloadVaultDocumentV102(document = {}) {
-  const blob = await vaultBlobV102(document);
+export async function downloadVaultDocumentV102(doc = {}) {
+  const blob = await vaultBlobV102(doc);
   if (!blob || typeof window === 'undefined') return false;
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
+  const anchor = window.document.createElement('a');
   anchor.href = url;
-  anchor.download = text(document.original_file_name || document.title || 'road-ready-document').replace(/[^a-zA-Z0-9._-]+/g,'-');
-  document.body.appendChild(anchor);
+  anchor.download = text(doc.original_file_name || doc.title || 'road-ready-document').replace(/[^a-zA-Z0-9._-]+/g,'-');
+  window.document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
