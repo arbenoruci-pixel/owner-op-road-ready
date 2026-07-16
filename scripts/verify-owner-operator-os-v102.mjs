@@ -75,3 +75,4 @@ assert.match(osScreen,/Generate invoice/);
 assert.match(osScreen,/Audit Center/);
 assert.match(pdf,/buildBillingPacketPdfV102/);
 console.log('verify-owner-operator-os-v102 passed');
+await import('./materialize-v1021.mjs');
