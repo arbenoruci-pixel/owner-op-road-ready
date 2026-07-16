@@ -24,11 +24,12 @@ function MiniMapV102({ stops = [], completed = 0 }) {
   const points = stops.length ? stops : [{ type:'pickup' }, { type:'delivery' }];
   const count = Math.max(2, points.length);
   const x = index => 28 + (index * (244 / Math.max(1, count - 1)));
+  const routePercent = Math.max(8, Math.min(100, (completed / Math.max(1, count - 1)) * 100));
   return (
     <div className="active-live-map-v102" aria-label="Load route overview">
       <svg viewBox="0 0 300 96" role="img" aria-label="Current load route">
-        <path d="M28 51 C82 21, 117 78, 163 48 S235 24, 272 51" className="route-base-v102" />
-        <path d="M28 51 C82 21, 117 78, 163 48 S235 24, 272 51" className="route-progress-v102" style={{ strokeDasharray:`${Math.max(8, Math.min(100, (completed / Math.max(1, count - 1)) * 100))} 100` }} />
+        <path pathLength="100" d="M28 51 C82 21, 117 78, 163 48 S235 24, 272 51" className="route-base-v102" />
+        <path pathLength="100" d="M28 51 C82 21, 117 78, 163 48 S235 24, 272 51" className="route-progress-v102" style={{ strokeDasharray:`${routePercent} 100` }} />
         {points.map((stop,index) => {
           const done = index <= completed;
           const current = index === Math.min(completed + 1, count - 1);
