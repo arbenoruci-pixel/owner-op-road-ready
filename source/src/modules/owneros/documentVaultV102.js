@@ -55,12 +55,23 @@ export async function vaultBlobV102(document = {}) {
 }
 
 export async function openVaultDocumentV102(document = {}) {
-  const blob = await vaultBlobV102(document);
-  if (!blob || typeof window === 'undefined') return { ok:false, reason:'blob_missing' };
-  const url = URL.createObjectURL(blob);
-  const opened = window.open(url, '_blank', 'noopener,noreferrer');
-  setTimeout(() => URL.revokeObjectURL(url), opened ? 120_000 : 5_000);
-  return { ok:!!opened, url };
+  if (typeof window === 'undefined') return { ok:false, reason:'browser_required' };
+  const preview = window.open('', '_blank');
+  try {
+    const blob = await vaultBlobV102(document);
+    if (!blob) {
+      preview?.close?.();
+      return { ok:false, reason:'blob_missing' };
+    }
+    const url = URL.createObjectURL(blob);
+    if (preview) preview.location.href = url;
+    else window.location.assign(url);
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+    return { ok:true, url };
+  } catch (error) {
+    preview?.close?.();
+    return { ok:false, reason:text(error?.message || error || 'open_failed') };
+  }
 }
 
 export async function downloadVaultDocumentV102(doc = {}) {
