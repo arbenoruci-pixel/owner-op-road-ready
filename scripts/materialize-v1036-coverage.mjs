@@ -50,17 +50,19 @@ dot = replaceOnce(
   `function cityState(city = '', state = '') {\n  return [safeText(city), safeText(state)].filter(Boolean).join(', ');\n}\n\nfunction liveCoverageOptionsV1036(state = {}) {\n  const manualEventId = state.manualDrivingSession?.active ? safeText(state.manualDrivingSession.eventId) : '';\n  const gpsEventId = state.gpsTrip?.status === 'active' ? safeText(state.gpsTrip.eventId) : '';\n  return {\n    currentLocation:state.currentLocation || {},\n    currentStatus:safeText(state.currentStatus).toUpperCase(),\n    currentEventId:manualEventId || gpsEventId || '',\n  };\n}`,
   'DOT options'
 );
-dot = replaceOnce(
-  dot,
-  `  const result = rawCoverageResult || rawCoverageIssues(state.eventsByDay || {}, day, { currentLocation: state.currentLocation || {} });`,
-  `  const result = rawCoverageResult || rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));`,
-  'DOT grouped coverage'
+// Materializers before v103.6 may format this object differently. Replace the
+// compact semantic argument rather than depending on the surrounding line.
+dot = dot.replaceAll(
+  `{ currentLocation: state.currentLocation || {} }`,
+  `liveCoverageOptionsV1036(state)`
 );
-dot = replaceOnce(
-  dot,
-  `  const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, { currentLocation: state.currentLocation || {} });`,
-  `  const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));`,
-  'DOT coverage'
+dot = dot.replaceAll(
+  `{currentLocation:state.currentLocation || {}}`,
+  `liveCoverageOptionsV1036(state)`
+);
+dot = dot.replace(
+  /\{\s*currentLocation\s*:\s*state\.currentLocation\s*\|\|\s*\{\}\s*\}/g,
+  'liveCoverageOptionsV1036(state)'
 );
 write(dotPath, dot);
 
@@ -72,15 +74,26 @@ signing = replaceOnce(
   `function liveCoverageOptionsV1036(state = {}) {\n  const manualEventId = state.manualDrivingSession?.active ? String(state.manualDrivingSession.eventId || '').trim() : '';\n  const gpsEventId = state.gpsTrip?.status === 'active' ? String(state.gpsTrip.eventId || '').trim() : '';\n  return {\n    currentLocation:state.currentLocation || {},\n    currentStatus:String(state.currentStatus || '').trim().toUpperCase(),\n    currentEventId:manualEventId || gpsEventId || '',\n  };\n}\n\nfunction hasRealEvents(events = []) {`,
   'signing options'
 );
-signing = replaceOnce(
-  signing,
-  `  const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, { currentLocation: state.currentLocation || {} });`,
-  `  const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));`,
-  'signing coverage'
+signing = signing.replaceAll(
+  `{ currentLocation: state.currentLocation || {} }`,
+  `liveCoverageOptionsV1036(state)`
+);
+signing = signing.replaceAll(
+  `{currentLocation:state.currentLocation || {}}`,
+  `liveCoverageOptionsV1036(state)`
+);
+signing = signing.replace(
+  /\{\s*currentLocation\s*:\s*state\.currentLocation\s*\|\|\s*\{\}\s*\}/g,
+  'liveCoverageOptionsV1036(state)'
 );
 write(signPath, signing);
 
-if (!read(rawPath).includes('coverageBaseV1036')) throw new Error('v103.6 raw coverage patch failed');
-if (!read(dotPath).includes('liveCoverageOptionsV1036')) throw new Error('v103.6 DOT patch failed');
-if (!read(signPath).includes('liveCoverageOptionsV1036')) throw new Error('v103.6 signing patch failed');
+const finalRaw = read(rawPath);
+const finalDot = read(dotPath);
+const finalSigning = read(signPath);
+if (!finalRaw.includes('coverageBaseV1036')) throw new Error('v103.6 raw coverage patch failed');
+if (!finalDot.includes('liveCoverageOptionsV1036')) throw new Error('v103.6 DOT options patch failed');
+if (!/rawCoverageIssues\([\s\S]*?liveCoverageOptionsV1036\(state\)/.test(finalDot)) throw new Error('v103.6 DOT raw coverage call was not patched');
+if (!finalSigning.includes('liveCoverageOptionsV1036')) throw new Error('v103.6 signing options patch failed');
+if (!/rawCoverageIssues\([\s\S]*?liveCoverageOptionsV1036\(state\)/.test(finalSigning)) throw new Error('v103.6 signing raw coverage call was not patched');
 console.log('v103.6 live coverage patched');
