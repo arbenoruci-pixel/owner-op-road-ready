@@ -105,14 +105,14 @@ app = replaceOnce(
     }
     const blocked = uniqueDays.map(day => ({ day, message:signBlockMessage(state, day) })).filter(item => item.message);
     if (blocked.length) {
-      window.alert?.(blocked.map(item => `${item.day}:\n${item.message}`).join('\n\n'));
+      window.alert?.(blocked.map(item => item.day + ':\\n' + item.message).join('\\n\\n'));
       return;
     }
     const warnings = uniqueDays.flatMap(day => {
       const message = signConfirmMessage(state, day);
-      return message ? [`${day}: ${message.replace(/^Review before signing this log:\s*/i, '')}`] : [];
+      return message ? [day + ': ' + message.replace('Review before signing this log:', '').trim()] : [];
     });
-    if (warnings.length && !window.confirm(`Review before signing listed logs:\n\n${warnings.join('\n\n')}`)) return;
+    if (warnings.length && !window.confirm('Review before signing listed logs:\\n\\n' + warnings.join('\\n\\n'))) return;
 
     setState(s => {
       let signatureByDay = { ...(s.signatureByDay || {}) };
