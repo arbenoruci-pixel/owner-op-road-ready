@@ -65,4 +65,4 @@ assert.match(reader,/scanMeta\?\.pageFiles/);
 assert.doesNotMatch(reader,/saveDuty|currentStatus|eventsByDay|startMin|endMin/);
 
 console.log('verify-scanner-intelligence-v1030 passed');
-await import('./materialize-v1031.mjs');
+await import('./materialize-v1031-prep.mjs');
