@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { localDayKey } from '../source/src/shared/utils/date.js';
-import { rawCoverageIssues } from '../source/src/core/compliance/rawRodsChecks.js';
 import { extendCurrentStatusTailV1036 } from '../source/src/core/timeline/liveStatusTailV1036.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
+// rawRodsChecks is imported by earlier regression suites in the same materializer
+// process. Use a query-string import so this test executes the just-written
+// v103.6 source rather than Node's cached pre-patch module instance.
+const rawChecksUrl = pathToFileURL(path.join(ROOT, 'source/src/core/compliance/rawRodsChecks.js')).href;
+const { rawCoverageIssues } = await import(`${rawChecksUrl}?v=1036-${Date.now()}`);
 const today = localDayKey();
 const events = [
   { id:'off_start', status:'OFF', startMin:0, endMin:654, city:'Rogers', state:'MN', note:'Off Duty' },
@@ -22,7 +26,6 @@ const derived = extendCurrentStatusTailV1036(events, {
   targetEnd:913,
   currentStatus:'OFF',
 });
-console.log('v103.6 direct tail diagnostic', JSON.stringify({ extended:derived.extended, last:derived.events.at(-1), inputLast:events.at(-1) }));
 assert.equal(derived.extended, true, 'direct helper must mark the active OFF tail extended');
 assert.equal(derived.events.at(-1).startMin, 907, 'direct helper must preserve OFF start');
 assert.equal(derived.events.at(-1).endMin, 913, 'direct helper must extend OFF through target now');
@@ -33,7 +36,7 @@ const liveCoverage = rawCoverageIssues({ [today]:events }, today, {
   currentStatus:'OFF',
   currentLocation:{ city:'St. Cloud', state:'MN' },
 });
-console.log('v103.6 coverage diagnostic', JSON.stringify({ today, total:liveCoverage.total, targetEnd:liveCoverage.targetEnd, issues:(liveCoverage.issues || []).map(issue => ({ code:issue.code || issue.id, startMin:issue.startMin, endMin:issue.endMin })), liveTailDerivedV1036:liveCoverage.liveTailDerivedV1036, events:(liveCoverage.events || []).map(event => ({ id:event.id, status:event.status, startMin:event.startMin, endMin:event.endMin })) }));
+assert.equal(liveCoverage.targetEnd, 913, 'coverage test must use supplied home-terminal minute');
 assert.equal(liveCoverage.total, 913, 'raw coverage total must include the active OFF tail through now');
 assert.equal(liveCoverage.issues.some(issue => String(issue.code || issue.id) === 'day_end_gap'), false, 'active OFF must cover through now');
 
@@ -53,6 +56,7 @@ assert.match(dayScreen,/window\.setInterval\(tickV1036, 10000\)/);
 assert.match(dayScreen,/nowMinute:liveMinuteV1036/);
 assert.match(rawChecks,/extendCurrentStatusTailV1036/);
 assert.match(rawChecks,/coverageBaseV1036/);
+assert.match(rawChecks,/liveCoverageTotalV1036/);
 assert.match(dotCheck,/currentStatus:safeText\(state\.currentStatus\)/);
 assert.match(signing,/currentStatus:String\(state\.currentStatus/);
 console.log('verify-live-duty-status-v1036 passed');
