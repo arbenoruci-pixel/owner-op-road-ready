@@ -30,13 +30,37 @@ turbo = replaceOnce(
   "  const [capturing, setCapturing] = useState(false);\n  const [captureDiagnostics, setCaptureDiagnostics] = useState(null);",
   'capture diagnostics state'
 );
-if (!turbo.includes('const captureV1030 = await captureBestDocumentFileV1030')) {
-  const capturePattern = /(\s+)const file = await captureVideoFile\(videoRef\.current,\s*trackRef\.current,\s*`[^`]+`\);/;
-  const match = turbo.match(capturePattern);
-  if (!match) throw new Error('v103 missing best-frame capture');
-  const indent = match[1];
-  turbo = turbo.replace(capturePattern, `${indent}const captureV1030 = await captureBestDocumentFileV1030(videoRef.current, trackRef.current, \`road-ready-capture-\${Date.now()}.jpg\`, { onStatus:setVisionStatus });${indent}const file = captureV1030.file;${indent}setCaptureDiagnostics(captureV1030.diagnostics);`);
-}
+const flashCaptureBefore = `      const needsFlash = flashMode === 'on' || (flashMode === 'auto' && quality.brightness > 0 && quality.brightness < 82);
+      if (needsFlash && torchSupported && trackRef.current && !torchRef.current) {
+        const changed = await setTrackTorch(trackRef.current, true);
+        if (changed) {
+          torchRef.current = true;
+          await new Promise(resolve => setTimeout(resolve, 220));
+        }
+      }
+      const file = await captureVideoFile(
+        videoRef.current,
+        trackRef.current,
+        \`road-ready-capture-\${Date.now()}.jpg\`,
+        { flashMode, lowLight:needsFlash }
+      );`;
+const flashCaptureAfter = `      const needsFlash = flashMode === 'on' || (flashMode === 'auto' && quality.brightness > 0 && quality.brightness < 82);
+      if (needsFlash && torchSupported && trackRef.current && !torchRef.current) {
+        const changed = await setTrackTorch(trackRef.current, true);
+        if (changed) {
+          torchRef.current = true;
+          await new Promise(resolve => setTimeout(resolve, 220));
+        }
+      }
+      const captureV1030 = await captureBestDocumentFileV1030(
+        videoRef.current,
+        trackRef.current,
+        \`road-ready-capture-\${Date.now()}.jpg\`,
+        { onStatus:setVisionStatus, flashMode, lowLight:needsFlash }
+      );
+      const file = captureV1030.file;
+      setCaptureDiagnostics(captureV1030.diagnostics);`;
+turbo = replaceOnce(turbo, flashCaptureBefore, flashCaptureAfter, 'flash-aware best-frame capture');
 turbo = replaceOnce(
   turbo,
   "        ocrSource:'pro-text-v102',",
