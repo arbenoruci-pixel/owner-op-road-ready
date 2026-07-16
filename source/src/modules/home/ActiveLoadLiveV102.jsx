@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { billingReadinessV102 } from '../owneros/ownerOpsStoreV102.js';
+import ReceiverIntelV1021 from '../receiver/ReceiverIntelV1021.jsx';
 
 function text(value = '') { return String(value ?? '').replace(/\s+/g,' ').trim(); }
 function money(value = 0) { return Number(value || 0).toLocaleString(undefined, { style:'currency', currency:'USD', maximumFractionDigits:0 }); }
@@ -55,6 +56,7 @@ export default function ActiveLoadLiveV102({ state = {}, activeLoad = null, busi
     id:leg.id || index,
     type:index===0?'pickup':'delivery',
     company:leg.stopCompany || '', city:leg.toCity, state:leg.toState,
+    address:leg.address || leg.toAddress || '',
     appointment:leg.appointment || leg.deliveryAppointment || '',
   }));
   const deliveryStops = stops.filter(stop => stop.type !== 'pickup');
@@ -103,6 +105,14 @@ export default function ActiveLoadLiveV102({ state = {}, activeLoad = null, busi
         <button type="button" onClick={onArrive}>Arrived</button>
         <button type="button" onClick={() => onOpenSection?.('documents')}>Documents</button>
         <button type="button" onClick={() => onOpenSection?.('billing')}>Billing</button>
+        <ReceiverIntelV1021
+          facility={nextStop.company || nextPlace}
+          address={nextStop.address || nextStop.fullAddress || nextStop.streetAddress || ''}
+          city={nextStop.city || ''}
+          state={nextStop.state || ''}
+          placeId={nextStop.placeId || nextStop.googlePlaceId || ''}
+          mapsUrl={nextStop.googleMapsUrl || nextStop.mapsUrl || ''}
+        />
       </div>
     </section>
   );
