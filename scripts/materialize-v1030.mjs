@@ -30,12 +30,13 @@ turbo = replaceOnce(
   "  const [capturing, setCapturing] = useState(false);\n  const [captureDiagnostics, setCaptureDiagnostics] = useState(null);",
   'capture diagnostics state'
 );
-turbo = replaceOnce(
-  turbo,
-  "      const file = await captureVideoFile(videoRef.current, trackRef.current, `road-ready-capture-${Date.now()}.jpg`);",
-  "      const captureV1030 = await captureBestDocumentFileV1030(videoRef.current, trackRef.current, `road-ready-capture-${Date.now()}.jpg`, { onStatus:setVisionStatus });\n      const file = captureV1030.file;\n      setCaptureDiagnostics(captureV1030.diagnostics);",
-  'best-frame capture'
-);
+if (!turbo.includes('const captureV1030 = await captureBestDocumentFileV1030')) {
+  const capturePattern = /(\s+)const file = await captureVideoFile\(videoRef\.current,\s*trackRef\.current,\s*`[^`]+`\);/;
+  const match = turbo.match(capturePattern);
+  if (!match) throw new Error('v103 missing best-frame capture');
+  const indent = match[1];
+  turbo = turbo.replace(capturePattern, `${indent}const captureV1030 = await captureBestDocumentFileV1030(videoRef.current, trackRef.current, \`road-ready-capture-\${Date.now()}.jpg\`, { onStatus:setVisionStatus });${indent}const file = captureV1030.file;${indent}setCaptureDiagnostics(captureV1030.diagnostics);`);
+}
 turbo = replaceOnce(
   turbo,
   "        ocrSource:'pro-text-v102',",
