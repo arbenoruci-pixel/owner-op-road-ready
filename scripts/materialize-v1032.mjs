@@ -28,12 +28,9 @@ app = replaceOnce(
 );
 app = replaceOnce(
   app,
-  `  const routeNormalized = normalizeRoadReadyState(normalized);
-  return reconcilePreTripInspections(routeNormalized, Object.keys(routeNormalized.eventsByDay || eventsByDay));`,
-  `  const routeNormalized = normalizeRoadReadyState(normalized);
-  const inspectionNormalized = reconcilePreTripInspections(routeNormalized, Object.keys(routeNormalized.eventsByDay || eventsByDay));
-  return reconcileCertificationStatusesV1032(inspectionNormalized);`,
-  'startup certification reconciliation'
+  '      return normalizeState(corrected);',
+  '      return reconcileCertificationStatusesV1032(normalizeState(corrected));',
+  'saved-state certification reconciliation'
 );
 app = replaceOnce(
   app,
