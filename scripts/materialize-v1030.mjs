@@ -69,16 +69,29 @@ turbo = replaceOnce(
 );
 write(turboPath, turbo);
 
-// Route all scans through page-by-page multi-pass OCR consensus.
+// Keep the latest V104 document-type arbitration as the base reader beneath V103.
+const readerPath = 'source/src/modules/scan/smartDocumentReaderV1030.js';
+let reader = read(readerPath);
+reader = replaceOnce(
+  reader,
+  "import { analyzeSmartDocumentV102 } from './smartDocumentReaderV102.js';",
+  "import { analyzeSmartDocumentV104 } from './smartDocumentReaderV104.js';",
+  'V104 base reader import'
+);
+reader = reader.replace(/analyzeSmartDocumentV102\(/g, 'analyzeSmartDocumentV104(');
+write(readerPath, reader);
+
+// Route all scans through page-by-page multi-pass OCR consensus while preserving
+// the manual type-change parser from V104.
 const sheetPath = 'source/src/modules/scan/SmartScanSheetV100.jsx';
 let sheet = read(sheetPath);
 sheet = replaceOnce(
   sheet,
-  "import { analyzeSmartDocumentV102 } from './smartDocumentReaderV102.js';",
-  "import { analyzeSmartDocumentV1030 } from './smartDocumentReaderV1030.js';",
+  "import { analyzeSmartDocumentV104, parseSmartDocumentTextByTypeV104 } from './smartDocumentReaderV104.js';",
+  "import { analyzeSmartDocumentV1030 } from './smartDocumentReaderV1030.js';\nimport { parseSmartDocumentTextByTypeV104 } from './smartDocumentReaderV104.js';",
   'V103 reader import'
 );
-sheet = sheet.replace(/analyzeSmartDocumentV102\(/g, 'analyzeSmartDocumentV1030(');
+sheet = sheet.replace(/analyzeSmartDocumentV104\(/g, 'analyzeSmartDocumentV1030(');
 if (!sheet.includes("return 'Scanner Intelligence';")) {
   sheet = replaceOnce(
     sheet,
@@ -126,7 +139,7 @@ write('public/app-version.json', `${JSON.stringify({
     'Reads multi-page camera scans page by page instead of shrinking every page into one long OCR image.',
     'Runs multi-pass on-device OCR only when needed, compares the passes and keeps field-level evidence and confidence for every imported value.',
     'Validates load numbers, dates, trucking ranges, carrier-rate math and fuel gallons × price before marking a scan as verified.',
-    'Keeps native PDF text as the first choice and upgrades the browser OCR worker to Tesseract.js 7 with cached English language data.',
+    'Keeps native PDF text and V104 document-type arbitration as the first choices and upgrades the browser OCR worker to Tesseract.js 7.',
     'Does not create or change Logbook duty status, event times, signatures, route completion or billing records without the existing review and save flow.'
   ],
   label:'v103.0 Scanner Intelligence',
@@ -139,6 +152,8 @@ const checks = [
   ['source/src/modules/scan/TurboDocumentScanner.jsx','captureBestDocumentFileV1030'],
   ['source/src/modules/scan/TurboDocumentScanner.jsx','pageFiles:allPages'],
   ['source/src/modules/scan/SmartScanSheetV100.jsx','analyzeSmartDocumentV1030'],
+  ['source/src/modules/scan/SmartScanSheetV100.jsx','parseSmartDocumentTextByTypeV104'],
+  ['source/src/modules/scan/smartDocumentReaderV1030.js','analyzeSmartDocumentV104'],
   ['source/src/modules/scan/smartDocumentReaderV1030.js','consensusFieldsV1030'],
   ['source/src/modules/scan/scannerIntelligenceV1030.js','adaptiveThreshold'],
   ['source/src/modules/scan/webOcr.js','tesseract.js@7.0.0'],
