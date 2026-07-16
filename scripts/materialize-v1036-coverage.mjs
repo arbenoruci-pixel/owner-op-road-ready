@@ -10,6 +10,11 @@ function replaceOnce(content, before, after, label) {
   if (!content.includes(before)) throw new Error(`v103.6 coverage missing ${label}`);
   return content.replace(before, after);
 }
+function replacePattern(content, pattern, replacement, label, marker = '') {
+  if (marker && content.includes(marker)) return content;
+  if (!pattern.test(content)) throw new Error(`v103.6 coverage missing ${label}`);
+  return content.replace(pattern, replacement);
+}
 
 const rawPath = 'source/src/core/compliance/rawRodsChecks.js';
 let raw = read(rawPath);
@@ -50,19 +55,19 @@ dot = replaceOnce(
   `function cityState(city = '', state = '') {\n  return [safeText(city), safeText(state)].filter(Boolean).join(', ');\n}\n\nfunction liveCoverageOptionsV1036(state = {}) {\n  const manualEventId = state.manualDrivingSession?.active ? safeText(state.manualDrivingSession.eventId) : '';\n  const gpsEventId = state.gpsTrip?.status === 'active' ? safeText(state.gpsTrip.eventId) : '';\n  return {\n    currentLocation:state.currentLocation || {},\n    currentStatus:safeText(state.currentStatus).toUpperCase(),\n    currentEventId:manualEventId || gpsEventId || '',\n  };\n}`,
   'DOT options'
 );
-// Materializers before v103.6 may format this object differently. Replace the
-// compact semantic argument rather than depending on the surrounding line.
-dot = dot.replaceAll(
-  `{ currentLocation: state.currentLocation || {} }`,
-  `liveCoverageOptionsV1036(state)`
+dot = replacePattern(
+  dot,
+  /(function buildCoverageIssues\(state, day, rawCoverageResult = null\) \{[\s\S]*?)(\s+const result = rawCoverageResult \|\| rawCoverageIssues\([\s\S]*?\);)/,
+  `$1\n  const result = rawCoverageResult || rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));`,
+  'DOT grouped coverage declaration',
+  'const result = rawCoverageResult || rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));'
 );
-dot = dot.replaceAll(
-  `{currentLocation:state.currentLocation || {}}`,
-  `liveCoverageOptionsV1036(state)`
-);
-dot = dot.replace(
-  /\{\s*currentLocation\s*:\s*state\.currentLocation\s*\|\|\s*\{\}\s*\}/g,
-  'liveCoverageOptionsV1036(state)'
+dot = replacePattern(
+  dot,
+  /(export function buildDotOfficerCheck\(state, day\) \{[\s\S]*?)(\s+const rawCoverageResult = rawCoverageIssues\([\s\S]*?\);)/,
+  `$1\n  const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));`,
+  'DOT main coverage declaration',
+  'const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));'
 );
 write(dotPath, dot);
 
@@ -74,17 +79,12 @@ signing = replaceOnce(
   `function liveCoverageOptionsV1036(state = {}) {\n  const manualEventId = state.manualDrivingSession?.active ? String(state.manualDrivingSession.eventId || '').trim() : '';\n  const gpsEventId = state.gpsTrip?.status === 'active' ? String(state.gpsTrip.eventId || '').trim() : '';\n  return {\n    currentLocation:state.currentLocation || {},\n    currentStatus:String(state.currentStatus || '').trim().toUpperCase(),\n    currentEventId:manualEventId || gpsEventId || '',\n  };\n}\n\nfunction hasRealEvents(events = []) {`,
   'signing options'
 );
-signing = signing.replaceAll(
-  `{ currentLocation: state.currentLocation || {} }`,
-  `liveCoverageOptionsV1036(state)`
-);
-signing = signing.replaceAll(
-  `{currentLocation:state.currentLocation || {}}`,
-  `liveCoverageOptionsV1036(state)`
-);
-signing = signing.replace(
-  /\{\s*currentLocation\s*:\s*state\.currentLocation\s*\|\|\s*\{\}\s*\}/g,
-  'liveCoverageOptionsV1036(state)'
+signing = replacePattern(
+  signing,
+  /(export function validateLogForSigning\(state, day\) \{[\s\S]*?)(\s+const rawCoverageResult = rawCoverageIssues\([\s\S]*?\);)/,
+  `$1\n  const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));`,
+  'signing coverage declaration',
+  'const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));'
 );
 write(signPath, signing);
 
@@ -92,8 +92,7 @@ const finalRaw = read(rawPath);
 const finalDot = read(dotPath);
 const finalSigning = read(signPath);
 if (!finalRaw.includes('coverageBaseV1036')) throw new Error('v103.6 raw coverage patch failed');
-if (!finalDot.includes('liveCoverageOptionsV1036')) throw new Error('v103.6 DOT options patch failed');
-if (!/rawCoverageIssues\([\s\S]*?liveCoverageOptionsV1036\(state\)/.test(finalDot)) throw new Error('v103.6 DOT raw coverage call was not patched');
-if (!finalSigning.includes('liveCoverageOptionsV1036')) throw new Error('v103.6 signing options patch failed');
-if (!/rawCoverageIssues\([\s\S]*?liveCoverageOptionsV1036\(state\)/.test(finalSigning)) throw new Error('v103.6 signing raw coverage call was not patched');
+if (!finalDot.includes('const result = rawCoverageResult || rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 DOT grouped call was not patched');
+if (!finalDot.includes('const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 DOT main call was not patched');
+if (!finalSigning.includes('const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 signing call was not patched');
 console.log('v103.6 live coverage patched');
