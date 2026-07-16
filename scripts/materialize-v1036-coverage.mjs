@@ -42,8 +42,12 @@ raw = raw.replaceAll('rawCompleted[0], rawCompleted[rawCompleted.length - 1]', '
 raw = replaceOnce(
   raw,
   `  const completed = deriveShortOnDutyTransitionCoverage(carryStartCoverageFromPreviousDay(rawCompleted, previousDayEvent));`,
-  `  const completed = deriveShortOnDutyTransitionCoverage(carryStartCoverageFromPreviousDay(coverageBaseV1036, previousDayEvent));`,
-  'coverage base'
+  `  const completed = deriveShortOnDutyTransitionCoverage(carryStartCoverageFromPreviousDay(coverageBaseV1036, previousDayEvent));\n  const liveCoverageTotalV1036 = completed.reduce((sum, event) => sum + Math.max(0, Number(event.endMin || 0) - Number(event.startMin || 0)), 0);`,
+  'coverage base and live total'
+);
+raw = raw.replaceAll(
+  `return { events, issues, total, targetEnd, current, future };`,
+  `return { events, issues, total:liveCoverageTotalV1036, targetEnd, current, future };`
 );
 write(rawPath, raw);
 
@@ -91,7 +95,8 @@ write(signPath, signing);
 const finalRaw = read(rawPath);
 const finalDot = read(dotPath);
 const finalSigning = read(signPath);
-if (!finalRaw.includes('rawCompleted.splice(0, rawCompleted.length, ...coverageBaseV1036')) throw new Error('v103.6 raw coverage local tail sync failed');
+if (!finalRaw.includes('liveCoverageTotalV1036')) throw new Error('v103.6 live coverage total patch failed');
+if (!finalRaw.includes('total:liveCoverageTotalV1036')) throw new Error('v103.6 live total return patch failed');
 if (!finalDot.includes('const result = rawCoverageResult || rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 DOT grouped call was not patched');
 if (!finalDot.includes('const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 DOT main call was not patched');
 if (!finalSigning.includes('const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 signing call was not patched');
