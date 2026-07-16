@@ -63,3 +63,4 @@ for (const [relative, needle] of checks) {
 }
 console.log('v102.1 Google Receiver Intel materialized');
 await import('./verify-receiver-intel-v1021.mjs');
+await import('./materialize-v1030.mjs');
