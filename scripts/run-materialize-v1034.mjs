@@ -27,5 +27,33 @@ source = `${source.slice(0, payloadPatchStart)}workflow = replaceOnce(
 );
 ${source.slice(payloadPatchEnd)}`;
 
+// Run this after all older materializers have generated their final V107 file.
+// It prevents a current delivery/unloading event from ever becoming the pickup
+// event of the first Rate Con leg.
+const checksAt = source.indexOf('const checks = [');
+if (checksAt < 0) throw new Error('v103.4 runner could not locate final checks');
+const finalIntegrityPatch = `
+integrity = read(integrityPath);
+if (!integrity.includes('sourceEventCandidateIdV1034')) {
+  integrity = integrity.replace(
+    /    const sourceEventId = text\(state\.loadInfo\?\.guideId\) === text\(guide\.id\) \? text\(state\.loadInfo\?\.sourceEventId\) : '';?/,
+    "    const sourceEventCandidateIdV1034 = text(state.loadInfo?.guideId) === text(guide.id) ? text(state.loadInfo?.sourceEventId) : '';\\n    const sourceEventCandidateV1034 = sourceEventCandidateIdV1034 ? findEvent(state, sourceDay || pickupDay, sourceEventCandidateIdV1034) : null;\\n    const sourceEventId = sourceEventCandidateV1034 && /pickup|loading/i.test(eventText(sourceEventCandidateV1034)) ? sourceEventCandidateIdV1034 : '';"
+  );
+}
+if (!integrity.includes('oldPickupEventIdV1034')) {
+  integrity = integrity.replace(
+    /    const pickupEventId = sequence === 1 \? \(sourceEventId \|\| old\.pickupEventId \|\| ''\) : \(old\.pickupEventId \|\| ''\);?/,
+    "    const oldPickupEventIdV1034 = text(old.pickupEventId);\\n    const oldPickupEventV1034 = oldPickupEventIdV1034 ? findEvent(state, validDay(old.pickupDay || old.day || pickupDay), oldPickupEventIdV1034) : null;\\n    const validOldPickupEventIdV1034 = oldPickupEventV1034 && /pickup|loading/i.test(eventText(oldPickupEventV1034)) ? oldPickupEventIdV1034 : '';\\n    const pickupEventId = sequence === 1 ? (sourceEventId || validOldPickupEventIdV1034) : (validOldPickupEventIdV1034 || '');"
+  );
+}
+integrity = integrity.replace(
+  "  if (sourceEvent && sourceEvent.status === 'ON') {",
+  "  if (sourceEvent && sourceEvent.status === 'ON' && /pickup|loading/i.test(eventText(sourceEvent))) {"
+);
+write(integrityPath, integrity);
+
+`;
+source = `${source.slice(0, checksAt)}${finalIntegrityPatch}${source.slice(checksAt)}`;
+
 fs.writeFileSync(runtimePath, source);
 await import(`${pathToFileURL(runtimePath).href}?v=${Date.now()}`);
