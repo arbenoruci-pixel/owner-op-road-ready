@@ -36,4 +36,4 @@ assert.match(styles,/background:#0b7dec!important/);
 assert.match(styles,/-webkit-text-fill-color:#ffffff!important/);
 
 console.log('verify-on-duty-multi-activity-v1033 passed');
-await import('./run-materialize-v1034.mjs');
+await import('./run-materialize-v1034-v1035.mjs');
