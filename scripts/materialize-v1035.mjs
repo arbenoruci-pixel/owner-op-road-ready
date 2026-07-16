@@ -57,8 +57,10 @@ sheet = replacePattern(
 
 sheet = replacePattern(
   sheet,
-  /      const next = \{ \.\.\.current, title:current\.title === analysis\?\.type\?\.label \|\| !current\.title \? meta\.label : current\.title, linkToLogbook:linkableType\(id\)([^}]*) \};\n      const suggestion = suggestSmartDocumentLinkV100\(state, id, next\);\n      setLinkSuggestion\(suggestion\);/,
-  `      let next = { ...current, title:current.title === analysis?.type?.label || !current.title ? meta.label : current.title, linkToLogbook:linkableType(id)$1 };
+  /    setFields\(current => \{\n      const next = \{([\s\S]*?)\n      \};\n      const suggestion = suggestSmartDocumentLinkV100\(state, id, next\);\n      setLinkSuggestion\(suggestion\);/,
+  `    setFields(current => {
+      let next = {$1
+      };
       const podMatchV1035 = matchSmartPodToLoadV1035(state, id, next, analysis || {});
       next = applySmartPodMatchV1035(next, podMatchV1035);
       const suggestion = applySmartPodSuggestionV1035(suggestSmartDocumentLinkV100(state, id, next), podMatchV1035);
