@@ -23,7 +23,10 @@ assert.deepEqual(nextFlashDecisionV1031({ mode:'auto', supported:true, torchOn:f
 assert.deepEqual(nextFlashDecisionV1031({ mode:'auto', supported:true, torchOn:false, darkFrames:6, brightFrames:0, sinceChangeMs:4000 }).desired,true);
 assert.deepEqual(nextFlashDecisionV1031({ mode:'off', supported:true, torchOn:true }).desired,false);
 
-const podText = `BILL OF LADING\nCONSIGNED TO SYSCO MINNESOTA\nRECEIVED SYSCO MINNESOTA WITH THE FOLLOWING EXCEPTIONS\nCONSIGNEE SIGNATURE`;
+const podText = `BILL OF LADING
+CONSIGNED TO SYSCO MINNESOTA
+RECEIVED SYSCO MINNESOTA WITH THE FOLLOWING EXCEPTIONS
+CONSIGNEE SIGNATURE`;
 const autoPod = resolvePodDecisionV1031({ preferredType:'auto', detectedType:'bol', text:podText });
 assert.equal(autoPod.isPod,true);
 assert.equal(autoPod.signedEvidence,true);
@@ -57,3 +60,4 @@ assert.match(ownerStore,/document\.extracted\?\.podSigned !== false/);
 assert.doesNotMatch(sheet,/currentStatus\s*=|startMin\s*=|endMin\s*=/);
 
 console.log('verify-turboscan-pod-v1031 passed');
+await import('./materialize-v1032.mjs');
