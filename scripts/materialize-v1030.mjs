@@ -30,7 +30,7 @@ turbo = replaceOnce(
   "  const [capturing, setCapturing] = useState(false);\n  const [captureDiagnostics, setCaptureDiagnostics] = useState(null);",
   'capture diagnostics state'
 );
-const flashCaptureBefore = `      const needsFlash = flashMode === 'on' || (flashMode === 'auto' && quality.brightness > 0 && quality.brightness < 82);
+const flashCaptureBefore = `      const needsFlash = flashMode === 'on' || (flashMode === 'auto' && Boolean(quality.autoFlashNeeded));
       if (needsFlash && torchSupported && trackRef.current && !torchRef.current) {
         const changed = await setTrackTorch(trackRef.current, true);
         if (changed) {
@@ -44,7 +44,7 @@ const flashCaptureBefore = `      const needsFlash = flashMode === 'on' || (flas
         \`road-ready-capture-\${Date.now()}.jpg\`,
         { flashMode, lowLight:needsFlash }
       );`;
-const flashCaptureAfter = `      const needsFlash = flashMode === 'on' || (flashMode === 'auto' && quality.brightness > 0 && quality.brightness < 82);
+const flashCaptureAfter = `      const needsFlash = flashMode === 'on' || (flashMode === 'auto' && Boolean(quality.autoFlashNeeded));
       if (needsFlash && torchSupported && trackRef.current && !torchRef.current) {
         const changed = await setTrackTorch(trackRef.current, true);
         if (changed) {
