@@ -54,3 +54,4 @@ for (const [relative, marker] of [
 }
 console.log('v103.6 live duty status materialized');
 await import('./verify-live-duty-status-v1036.mjs');
+await import('./materialize-v1037.mjs');
