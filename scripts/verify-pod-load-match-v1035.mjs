@@ -92,3 +92,4 @@ assert.match(sheet,/Load matched automatically/);
 assert.match(sheet,/podBillingPatchV1035/);
 assert.match(link,/const exactRef = !eventId/);
 console.log('verify-pod-load-match-v1035 passed');
+await import('./materialize-v1036.mjs');
