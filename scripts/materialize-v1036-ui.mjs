@@ -10,6 +10,11 @@ function replaceOnce(before, after, label) {
   if (!source.includes(before)) throw new Error(`v103.6 UI missing ${label}`);
   source = source.replace(before, after);
 }
+function replacePattern(pattern, after, label, marker = '') {
+  if (marker && source.includes(marker)) return;
+  if (!pattern.test(source)) throw new Error(`v103.6 UI missing ${label}`);
+  source = source.replace(pattern, after);
+}
 
 replaceOnce(
   `import { durLabel, timeLabel } from '../../shared/utils/time.js';`,
@@ -21,29 +26,31 @@ replaceOnce(
   `  const [coverageWizardIssue, setCoverageWizardIssue] = useState(null);\n  const [missingDayIssue, setMissingDayIssue] = useState(null);\n  const [liveMinuteV1036, setLiveMinuteV1036] = useState(() => nowMin());\n\n  useEffect(() => {\n    if (state.activeDay !== localDayKey()) return undefined;\n    const tickV1036 = () => {\n      const nextMinuteV1036 = nowMin();\n      setLiveMinuteV1036(current => current === nextMinuteV1036 ? current : nextMinuteV1036);\n    };\n    const visibleV1036 = () => {\n      if (!document.hidden) tickV1036();\n    };\n    tickV1036();\n    const timerV1036 = window.setInterval(tickV1036, 10000);\n    window.addEventListener('focus', tickV1036);\n    document.addEventListener('visibilitychange', visibleV1036);\n    return () => {\n      window.clearInterval(timerV1036);\n      window.removeEventListener('focus', tickV1036);\n      document.removeEventListener('visibilitychange', visibleV1036);\n    };\n  }, [state.activeDay]);`,
   'live minute ticker'
 );
-replaceOnce(
-  `  const displayEvents = useMemo(\n    () => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay),\n    [state.eventsByDay, state.activeDay]\n  );`,
+replacePattern(
+  /  const displayEvents = useMemo\(\s*\(\) => displayEventsForDayFromState\(state\.eventsByDay \|\| \{\}, state\.activeDay(?:,\s*\{[\s\S]*?\})?\),\s*\[[^\]]*\]\s*\);/,
   `  const displayEvents = useMemo(\n    () => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay, { nowMinute:liveMinuteV1036 }),\n    [state.eventsByDay, state.activeDay, liveMinuteV1036]\n  );`,
-  'live display events'
+  'live display events',
+  'displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay, { nowMinute:liveMinuteV1036 })'
 );
-replaceOnce(
-  `  const baseViolationRanges = useMemo(\n    () => violationRangesForDay(state.eventsByDay || {}, state.activeDay),\n    [state.eventsByDay, state.activeDay]\n  );`,
+replacePattern(
+  /  const baseViolationRanges = useMemo\(\s*\(\) => violationRangesForDay\(state\.eventsByDay \|\| \{\}, state\.activeDay\),\s*\[[^\]]*\]\s*\);/,
   `  const baseViolationRanges = useMemo(\n    () => violationRangesForDay(state.eventsByDay || {}, state.activeDay),\n    [state.eventsByDay, state.activeDay, liveMinuteV1036]\n  );`,
-  'live HOS refresh'
+  'live HOS refresh',
+  '[state.eventsByDay, state.activeDay, liveMinuteV1036]'
 );
-source = source.replace(
-  `() => (isMoving ? displayEventsForDay(previewRawEvents, isToday(state.activeDay)) : displayEvents),`,
-  `() => (isMoving ? displayEventsForDay(previewRawEvents, isToday(state.activeDay), { nowMinute:liveMinuteV1036 }) : displayEvents),`
+source = source.replaceAll(
+  `displayEventsForDay(previewRawEvents, isToday(state.activeDay))`,
+  `displayEventsForDay(previewRawEvents, isToday(state.activeDay), { nowMinute:liveMinuteV1036 })`
 );
-source = source.replace(
+source = source.replaceAll(
   `[isMoving, previewRawEvents, state.activeDay, displayEvents]`,
   `[isMoving, previewRawEvents, state.activeDay, displayEvents, liveMinuteV1036]`
 );
-source = source.replace(
-  `? displayEventsForDay(bulkShiftResult.events, isToday(state.activeDay))`,
-  `? displayEventsForDay(bulkShiftResult.events, isToday(state.activeDay), { nowMinute:liveMinuteV1036 })`
+source = source.replaceAll(
+  `displayEventsForDay(bulkShiftResult.events, isToday(state.activeDay))`,
+  `displayEventsForDay(bulkShiftResult.events, isToday(state.activeDay), { nowMinute:liveMinuteV1036 })`
 );
-source = source.replace(
+source = source.replaceAll(
   `[state.selectMode, selectedCount, bulkMoveDelta, bulkShiftResult.events, state.activeDay, previewGraphEvents]`,
   `[state.selectMode, selectedCount, bulkMoveDelta, bulkShiftResult.events, state.activeDay, previewGraphEvents, liveMinuteV1036]`
 );
