@@ -224,3 +224,4 @@ if (!verifyStatus.includes('Notify broker / dispatch') || !verifyStatus.includes
 if (!verifyApp.includes('lastDispatchNotification:payload.dispatchNotification')) throw new Error('v101.1 notification audit persistence failed');
 console.log('v101.1 Rate Con Dispatch Check-in materialized');
 await import('./verify-dispatch-notify-v111.mjs');
+await import('./materialize-v1020.mjs');
