@@ -105,3 +105,4 @@ assert.match(unsigned,/onSignAll \? onSignAll\(days\)/);
 assert.doesNotMatch(app,/eventsByDay\s*=\s*.*certificationFingerprint/);
 
 console.log('verify-certification-fingerprint-v1032 passed');
+await import('./materialize-v1033.mjs');
