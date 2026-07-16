@@ -19,7 +19,16 @@ function replaceOnce(content, before, after, label) {
 }
 function replacePattern(content, pattern, replacement, label, marker = '') {
   if (marker && content.includes(marker)) return content;
-  if (!pattern.test(content)) throw new Error(`v103.7 missing ${label}`);
+  if (!pattern.test(content)) {
+    if (/14h|warning|card/i.test(label)) {
+      const lines = content.split('\n');
+      const interesting = lines
+        .map((line, index) => ({ index:index + 1, line }))
+        .filter(item => /analyzeLinkedHos|Shift clock|14h Window|limit14|windowUsed|shift\.expired|buildClockWarnings/.test(item.line));
+      console.log(`v103.7 ${label} diagnostic\n${interesting.map(item => `${item.index}: ${item.line}`).join('\n')}`);
+    }
+    throw new Error(`v103.7 missing ${label}`);
+  }
   return content.replace(pattern, replacement);
 }
 
