@@ -33,7 +33,7 @@ raw = replaceOnce(
 raw = replaceOnce(
   raw,
   `  const rawCompleted = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));\n  const issues = [];`,
-  `  const rawCompleted = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));\n  const liveTailV1036 = extendCurrentStatusTailV1036(rawCompleted, {\n    isCurrentDay:current,\n    targetEnd,\n    currentStatus:options.currentStatus || options.activeStatus || '',\n    currentEventId:options.currentEventId || options.activeEventId || '',\n  });\n  const coverageBaseV1036 = liveTailV1036.events;\n  const issues = [];`,
+  `  const rawCompleted = events.filter(event => Number(event.endMin || 0) > Number(event.startMin || 0));\n  const liveTailV1036 = extendCurrentStatusTailV1036(rawCompleted, {\n    isCurrentDay:current,\n    targetEnd,\n    currentStatus:options.currentStatus || options.activeStatus || '',\n    currentEventId:options.currentEventId || options.activeEventId || '',\n  });\n  const coverageBaseV1036 = liveTailV1036.events;\n  // Keep every legacy calculation in this function on the same derived current\n  // tail. This is a local array only; eventsByDay and stored raw rows are not\n  // mutated.\n  rawCompleted.splice(0, rawCompleted.length, ...coverageBaseV1036.map(event => ({ ...event })));\n  const issues = [];`,
   'tail derivation'
 );
 raw = raw.replaceAll('isRestOnlyCoverageDay(rawCompleted)', 'isRestOnlyCoverageDay(coverageBaseV1036)');
@@ -91,7 +91,7 @@ write(signPath, signing);
 const finalRaw = read(rawPath);
 const finalDot = read(dotPath);
 const finalSigning = read(signPath);
-if (!finalRaw.includes('coverageBaseV1036')) throw new Error('v103.6 raw coverage patch failed');
+if (!finalRaw.includes('rawCompleted.splice(0, rawCompleted.length, ...coverageBaseV1036')) throw new Error('v103.6 raw coverage local tail sync failed');
 if (!finalDot.includes('const result = rawCoverageResult || rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 DOT grouped call was not patched');
 if (!finalDot.includes('const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 DOT main call was not patched');
 if (!finalSigning.includes('const rawCoverageResult = rawCoverageIssues(state.eventsByDay || {}, day, liveCoverageOptionsV1036(state));')) throw new Error('v103.6 signing call was not patched');
