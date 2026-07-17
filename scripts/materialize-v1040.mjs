@@ -245,9 +245,9 @@ sheet = replaceOnce(
   'rich local and cloud metadata'
 );
 
-sheet = replaceOnce(
+sheet = replaceRegex(
   sheet,
-  `      nextStore = addBusinessRecord(nextStore, 'documents', { date:fields.date || localDateKey(), type:meta.id, label:meta.label, title, loadNo, amount:total, localDocumentId:stored.localDocument.local_id, clientDocumentId:stored.localDocument.client_document_id, fileName:stored.localDocument.original_file_name, syncState:stored.cloud.status, confidence:analysis?.confidence || 0, linkDay:fields.linkDay || '', source:'smart_scan_v100' });`,
+  /      nextStore = addBusinessRecord\(nextStore, 'documents', \{[\s\S]*?\}\);/,
   `      nextStore = addBusinessRecord(nextStore, 'documents', {
         date:fields.date || localDateKey(),
         type:meta.id,
@@ -273,12 +273,14 @@ sheet = replaceOnce(
         fieldConfidence:intelligence.fieldConfidence,
         source:'truck_document_intelligence_v1040',
       });`,
+  "source:'truck_document_intelligence_v1040'",
   'document vault index'
 );
-sheet = replaceOnce(
+sheet = replaceRegex(
   sheet,
-  `      const result = { type:meta, fields:{ ...fields, loadNo }, localDocument:stored.localDocument, cloud:stored.cloud, store:nextStore, analysis, linkSuggestion };`,
+  /      const result = \{ type:meta,[^\n]+\};/,
   `      const result = { type:meta, fields:{ ...fields, loadNo }, localDocument:stored.localDocument, cloud:stored.cloud, store:nextStore, analysis:{ ...analysis, type:meta, fields:{ ...(analysis?.fields || {}), ...fields }, routing:intelligence.routing }, intelligence, linkSuggestion };`,
+  'routing:intelligence.routing }, intelligence',
   'saved intelligence result'
 );
 
