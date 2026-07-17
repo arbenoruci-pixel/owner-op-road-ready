@@ -87,3 +87,4 @@ for (const [relative, marker] of [
 }
 console.log('v103.8 adaptive Home materialized');
 await import('./verify-adaptive-home-v1038.mjs');
+await import('./materialize-v1040.mjs');
