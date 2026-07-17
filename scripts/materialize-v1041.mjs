@@ -150,3 +150,4 @@ for (const [relative, marker] of [
 }
 console.log('v104.1 POD / Signed BOL structural reader materialized');
 await import('./verify-pod-bol-v1041.mjs');
+await import('./materialize-v1042.mjs');
