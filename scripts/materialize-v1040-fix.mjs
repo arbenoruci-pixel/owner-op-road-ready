@@ -16,3 +16,4 @@ if (!api.includes(validJoin)) {
 }
 fs.writeFileSync(apiPath, api);
 console.log('v104.0 generated cloud notes source repaired');
+await import('./materialize-v1041.mjs');
