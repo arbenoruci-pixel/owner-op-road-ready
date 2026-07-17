@@ -292,7 +292,7 @@ sheet = replaceOnce(
 );
 sheet = replaceRegex(
   sheet,
-  /<div className="smart-scan-saved-actions"><button type="button" onClick=\{scanAgain\}>Import another<\/button>\{savedResult\.type\.target[\s\S]*?<\/div><\/main>/,
+  /<div className="smart-scan-saved-actions">[\s\S]*?<\/div><\/main>/,
   `<div className="smart-scan-saved-actions"><button type="button" onClick={scanAgain}>Import another</button><button type="button" className="primary" onClick={() => onOpenBusiness?.('documents')}>Open Document Vault</button></div></main>`,
   'Open Document Vault',
   'saved document vault action'
