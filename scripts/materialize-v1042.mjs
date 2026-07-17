@@ -114,4 +114,5 @@ for(const [relative,marker] of [
 
 console.log('v104.2 researched document template intelligence materialized');
 await import('./verify-document-template-intelligence-v1042.mjs');
+await import('./prepare-v1043.mjs');
 await import('./materialize-v1043.mjs');
