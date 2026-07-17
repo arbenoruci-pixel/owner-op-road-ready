@@ -51,15 +51,6 @@ The original bill of lading accepted and signed by Consignee must be presented b
 `;
 
 const classification = classifyTruckDocumentTextV1040({ text:signedBol, fileName:'IMG_7741.jpeg' });
-console.log('DEBUG_V1041_CLASSIFICATION', JSON.stringify({
-  type:classification.type?.id,
-  detectedType:classification.detectedType?.id,
-  score:classification.score,
-  confidence:classification.confidence,
-  arbitration:classification.arbitration,
-  profile:classification.bolPodProfileV1041,
-  alternatives:(classification.alternatives || []).slice(0, 4).map(item => ({ id:item.id, score:item.score })),
-}, null, 2));
 assert(classification.type.id === 'pod', 'signed customer-copy BOL is classified as POD');
 assert(classification.arbitration?.to === 'pod', 'OS&D disclaimer is structurally overruled');
 
