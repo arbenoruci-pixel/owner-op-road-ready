@@ -177,11 +177,10 @@ sheet = replaceOnce(
   'dynamic document fields'
 );
 
-sheet = replaceOnce(
+sheet = replaceRegex(
   sheet,
-  `      const title = String(fields.title || meta.label).trim();
-      const stored = await saveScannedDocument({`,
-  `      const title = String(fields.title || meta.label).trim();
+  /(      const title = String\(fields\.title \|\| meta\.label\)\.trim\(\);)/,
+  `$1
       const intelligence = documentIntelligencePayloadV1040({
         ...(analysis || {}),
         type:meta,
@@ -210,8 +209,8 @@ sheet = replaceOnce(
             stacks:(segment.stacks || []).map(stack => stack.id),
           })),
         } : null,
-      };
-      const stored = await saveScannedDocument({`,
+      };`,
+  'const intelligence = documentIntelligencePayloadV1040',
   'intelligence save payload'
 );
 sheet = replaceOnce(sheet, '        type:meta.documentType,', '        type:backendDocumentTypeV1040(meta.id),', 'backend type compatibility');
@@ -358,7 +357,7 @@ function storedDocumentNotes(note, intelligence) {
   const compact = compactIntelligence(intelligence);
   if (!compact) return userNote || null;
   const payload = JSON.stringify(compact).slice(0, 24000);
-  return [userNote, \`[[ROAD_READY_INTELLIGENCE_V1040]]\${payload}\`].filter(Boolean).join('\n\n');
+  return [userNote, `[[ROAD_READY_INTELLIGENCE_V1040]]${payload}`].filter(Boolean).join('\n\n');
 }`,
     'server intelligence envelope'
   );
