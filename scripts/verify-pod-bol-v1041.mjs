@@ -1,8 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { classifyTruckDocumentTextV1040 } from '../source/src/modules/scan/truckDocumentEngineV1040.js';
-import { inspectBolPodDocumentV1041, sanitizeBolPodFieldsV1041 } from '../source/src/modules/scan/podBolIntelligenceV1041.js';
+
+const engineModule = await import(new URL('../source/src/modules/scan/truckDocumentEngineV1040.js?v1041', import.meta.url));
+const podBolModule = await import(new URL('../source/src/modules/scan/podBolIntelligenceV1041.js?v1041', import.meta.url));
+const { classifyTruckDocumentTextV1040 } = engineModule;
+const { inspectBolPodDocumentV1041, sanitizeBolPodFieldsV1041 } = podBolModule;
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 function assert(condition, message) {
