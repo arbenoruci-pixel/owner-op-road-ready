@@ -357,7 +357,7 @@ function storedDocumentNotes(note, intelligence) {
   const compact = compactIntelligence(intelligence);
   if (!compact) return userNote || null;
   const payload = JSON.stringify(compact).slice(0, 24000);
-  return [userNote, `[[ROAD_READY_INTELLIGENCE_V1040]]${payload}`].filter(Boolean).join('\n\n');
+  return [userNote, '[[ROAD_READY_INTELLIGENCE_V1040]]' + payload].filter(Boolean).join('\n\n');
 }`,
     'server intelligence envelope'
   );
