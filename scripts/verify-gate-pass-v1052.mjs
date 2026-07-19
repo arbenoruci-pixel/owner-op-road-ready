@@ -116,3 +116,5 @@ pass(appSource.includes("sheet:{ type:'status', preferredReason:detail.reason"),
 pass(read('public/app-version.json').includes('105.2.0'), 'v105.2 release metadata is written');
 
 console.log('PASS — v105.2 Gate Pass & Trailer Workflow regression suite');
+
+await import('./run-v106-smart-capture.mjs');
