@@ -19,8 +19,8 @@ function runCleanVerifier() {
 }
 
 // An explicit Driver's Name row wins over generic OCR guesses. Correct the label
-// pattern so "Driver's Name" is parsed as one label, strip any leaked label text,
-// and keep "Truck" plus a phone number blank for driver review.
+// pattern so "Driver's Name" is parsed as one label, strip leaked label text,
+// reject the word "Truck" as a name, and normalize its phone independently.
 const gatePassPath = 'source/src/modules/scan/gatePassIntelligenceV1052.js';
 let gatePassSource = read(gatePassPath);
 gatePassSource = gatePassSource
@@ -31,6 +31,10 @@ gatePassSource = gatePassSource
   .replace(
     "const driverLine = labeled(source, [\"driver'?s?\\s+name\", 'driver']);",
     "const driverLine = labeled(source, [\"driver'?s?\\\\s+name\", 'driver\\\\s+name']);",
+  )
+  .replace(
+    "  const driverPhone = first(driverLine || source, [/\\b(\\(?\\d{3}\\)?[\\s.-]\\d{3}[\\s.-]\\d{4})\\b/]);",
+    "  const driverPhoneRaw = first(driverLine || source, [/\\b(\\(?\\d{3}\\)?[\\s.-]\\d{3}[\\s.-]\\d{4})\\b/]);\n  const driverPhoneDigits = driverPhoneRaw.replace(/\\D/g, '');\n  const driverPhone = driverPhoneDigits.length === 10 ? driverPhoneDigits.slice(0, 3) + '-' + driverPhoneDigits.slice(3, 6) + '-' + driverPhoneDigits.slice(6) : driverPhoneRaw;",
   )
   .replace(
     '    driverName:safeDriverName(driverLine) || safeDriverName(fields.driverName),',
