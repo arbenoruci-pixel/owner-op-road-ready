@@ -74,9 +74,10 @@ source = source.replace(
 );
 
 if (!source.includes('photo-first-guide-v1065')) {
-  const overlayMarker = "              {cameraState === 'ready' && liveCandidate ? (";
-  const guide = `              {cameraState === 'ready' && PHOTO_FIRST_CAPTURE_V1065 ? (\n                <div className=\"photo-first-guide-v1065\" aria-hidden=\"true\" style={{ position:'absolute', left:'7%', top:'6%', width:'86%', height:'88%', border:'2px dashed rgba(255,255,255,.82)', borderRadius:12, boxShadow:'0 0 0 999px rgba(0,0,0,.08) inset', pointerEvents:'none' }}>\n                  <span style={{ position:'absolute', left:12, bottom:10, padding:'5px 8px', borderRadius:8, background:'rgba(0,0,0,.58)', color:'#fff', fontSize:12, fontWeight:800 }}>One photo — paper is found after capture</span>\n                </div>\n              ) : null}\n              {cameraState === 'ready' && !PHOTO_FIRST_CAPTURE_V1065 && liveCandidate ? (`;
-  replaceOnce(overlayMarker, guide, 'photo-first camera guide');
+  const videoPattern = /(<video\s+ref=\{videoRef\}[^>]*\/>)/;
+  if (!videoPattern.test(source)) throw new Error('v106.5 missing camera video element');
+  const guide = `$1\n              {cameraState === 'ready' && PHOTO_FIRST_CAPTURE_V1065 ? (\n                <div className=\"photo-first-guide-v1065\" aria-hidden=\"true\" style={{ position:'absolute', left:'7%', top:'6%', width:'86%', height:'88%', border:'2px dashed rgba(255,255,255,.82)', borderRadius:12, boxShadow:'0 0 0 999px rgba(0,0,0,.08) inset', pointerEvents:'none' }}>\n                  <span style={{ position:'absolute', left:12, bottom:10, padding:'5px 8px', borderRadius:8, background:'rgba(0,0,0,.58)', color:'#fff', fontSize:12, fontWeight:800 }}>One photo — paper is found after capture</span>\n                </div>\n              ) : null}`;
+  source = source.replace(videoPattern, guide);
 }
 
 source = source.replace(
