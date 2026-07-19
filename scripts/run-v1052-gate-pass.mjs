@@ -1,11 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const absolute = relative => path.join(ROOT, relative);
 const read = relative => fs.readFileSync(absolute(relative), 'utf8');
 const write = (relative, value) => fs.writeFileSync(absolute(relative), value);
+
+function runCleanVerifier() {
+  const result = spawnSync(process.execPath, [absolute('scripts/verify-gate-pass-v1052.mjs')], {
+    cwd:ROOT,
+    stdio:'inherit',
+    env:{ ...process.env, ROAD_READY_V1052_CLEAN_VERIFY:'1' },
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`v105.2 clean verifier exited with ${result.status}`);
+}
 
 // The legacy prebuild chain reaches the latest release more than once in separate
 // Node processes. Once every v105.2 runtime marker exists, verify the generated
@@ -24,7 +35,7 @@ const alreadyMaterialized = [
 });
 
 if (alreadyMaterialized) {
-  await import(`${pathToFileURL(absolute('scripts/verify-gate-pass-v1052.mjs')).href}?verify=${Date.now()}`);
+  runCleanVerifier();
 } else {
   const sourcePath = absolute('scripts/materialize-v1052-gate-pass.mjs');
   const runtimePath = absolute('scripts/.materialize-v1052-gate-pass-runtime.mjs');
@@ -44,8 +55,9 @@ if (alreadyMaterialized) {
   }
 
   // The source materializer embeds App JSX/JS inside template literals. Convert
-  // the two generated note expressions to concatenation before Node parses the
-  // runtime copy, so the generated App still receives the same exact text.
+  // generated note expressions to concatenation before Node parses the runtime
+  // copy. Its in-process verifier is delegated to a clean child process because
+  // earlier release tests have the old engine and catalog in the ESM cache.
   source = source
     .replace(
       "        note = dropped ? `Drop Load / Trailer · Trailer ${dropped}` : 'Drop Load / Trailer';",
@@ -54,6 +66,10 @@ if (alreadyMaterialized) {
     .replace(
       "        note = hooked ? `Hook / Pickup Trailer · Trailer ${hooked}` : 'Hook / Pickup Trailer';",
       "        note = hooked ? 'Hook / Pickup Trailer · Trailer ' + hooked : 'Hook / Pickup Trailer';",
+    )
+    .replace(
+      "await import('./verify-gate-pass-v1052.mjs');",
+      "console.log('v105.2 clean verifier delegated by run-v1052-gate-pass');",
     );
 
   fs.writeFileSync(runtimePath, source);
@@ -68,4 +84,5 @@ if (alreadyMaterialized) {
       }
     }
   }
+  runCleanVerifier();
 }
