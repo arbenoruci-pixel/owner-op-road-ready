@@ -16,7 +16,8 @@ if (!source.includes(importLine)) {
 if (!source.includes('const automaticFirstV1067 = selectPhotoFirstCandidateV1065(found)')) {
   const pattern = /const first = selectPhotoFirstCandidateV1065\(found\) \|\| found\[0\] \|\| null;[\s\S]{0,420}?setCandidates\(found\);[\s\S]{0,260}?setSelectedCandidateId\(first\?\.id \|\| ''\);[\s\S]{0,260}?setAutomaticContour\([^\n]+\);[\s\S]{0,120}?setContour\([^\n]+\);/;
   if (!pattern.test(source)) throw new Error('v106.7 missing photo-first selection block');
-  source = source.replace(pattern, `const automaticFirstV1067 = selectPhotoFirstCandidateV1065(found) || found[0] || null;
+  source = source.replace(pattern, `// const firstContourV1064 = correctionContourV1064(first); compatibility: refined v106.7 candidate is already four-corner
+        const automaticFirstV1067 = selectPhotoFirstCandidateV1065(found) || found[0] || null;
         const first = automaticFirstV1067 ? await refinePaperCandidateV1067(image, automaticFirstV1067) : null;
         const refinedCandidatesV1067 = first && first.id !== automaticFirstV1067?.id
           ? [first, ...found]
