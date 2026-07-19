@@ -175,3 +175,4 @@ await import('./verify-multistop-progress-v1043.mjs');
 await import('./prepare-v105-foundation-logic.mjs');
 await import('./prepare-v105-review-status.mjs');
 await import('./materialize-v105-road-ready-os.mjs');
+await import('./materialize-v1051-log-integrity.mjs');
