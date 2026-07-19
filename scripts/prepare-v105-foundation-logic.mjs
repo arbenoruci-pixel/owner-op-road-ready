@@ -138,5 +138,31 @@ if (!source.includes('excludedFromActiveLoad:true')) {
   );
 }
 
+// Documents already linked to a Logbook day are migrated into the same Vault
+// as scanner/business documents. IDs are deduplicated before normalization.
+if (!source.includes('const stateDocumentRowsV105')) {
+  source = source.replace(
+    "  const candidateStore = { ...base, documents:[] };\n  const documents = base.documents.map(document => {",
+    `  const stateDocumentRowsV105 = Object.entries(state.documentsByDay || {}).flatMap(([day, rows]) =>
+    (Array.isArray(rows) ? rows : []).filter(Boolean).map(document => ({
+      ...document,
+      date:document.date || day,
+      documentDate:document.documentDate || document.date || day,
+      source:document.source || 'logbook_state',
+    }))
+  );
+  const sourceDocumentsV105 = [...base.documents];
+  const knownDocumentIdsV105 = new Set(sourceDocumentsV105.map(document => textV105(document.id || document.localDocumentId || document.clientDocumentId)).filter(Boolean));
+  for (const document of stateDocumentRowsV105) {
+    const id = textV105(document.id || document.localDocumentId || document.clientDocumentId);
+    if (id && knownDocumentIdsV105.has(id)) continue;
+    sourceDocumentsV105.push(document);
+    if (id) knownDocumentIdsV105.add(id);
+  }
+  const candidateStore = { ...base, documents:[] };
+  const documents = sourceDocumentsV105.map(document => {`,
+  );
+}
+
 fs.writeFileSync(target, source);
-console.log('v105 evidence-aware log and invalid-route repair prepared');
+console.log('v105 evidence-aware log, route and Vault migration prepared');
