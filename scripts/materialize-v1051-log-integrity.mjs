@@ -125,3 +125,4 @@ for (const [relative, marker] of [
 
 console.log('v105.1 Log Integrity First materialized');
 await import('./verify-log-integrity-v1051.mjs');
+await import('./run-v1052-gate-pass.mjs');
