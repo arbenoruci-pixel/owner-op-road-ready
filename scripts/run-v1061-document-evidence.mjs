@@ -20,6 +20,13 @@ materializerSource = materializerSource.replace(
   "  [catalogPath,'Southeast\\\\s+unloading'],",
   "  [catalogPath,'southeast\\\\s+unloading'],",
 );
+const qualifierAssetPath = path.join(ROOT, 'scripts/v1061-assets/documentEvidenceQualificationV1061.js.gz.b64');
+let qualifierSource = gunzipSync(Buffer.from(fs.readFileSync(qualifierAssetPath, 'utf8'), 'base64')).toString('utf8');
+qualifierSource = qualifierSource.replace(
+  "  if (currentHighRisk && !current?.qualified) {",
+  "  if ((currentHighRisk && !current?.qualified) || (genericCurrent && currentId !== 'other')) {",
+);
+fs.writeFileSync(qualifierAssetPath, gzipSync(Buffer.from(qualifierSource), { mtime:0 }).toString('base64'));
 const verifyAssetPath = path.join(ROOT, 'scripts/v1061-assets/verify-document-evidence-v1061.mjs.gz.b64');
 let verifySource = gunzipSync(Buffer.from(fs.readFileSync(verifyAssetPath, 'utf8'), 'base64')).toString('utf8');
 verifySource = verifySource.replace(
