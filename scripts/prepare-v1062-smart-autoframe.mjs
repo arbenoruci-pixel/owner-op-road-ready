@@ -39,11 +39,26 @@ if (!web.includes('paper-text-fusion-v1062')) {
     'rectangle candidate plausibility gate',
   );
 
-  const newSignals = `      const paperCandidates = paperCandidatesV106(grid)\n        .filter(candidate => isPlausibleDocumentCandidateV106(candidate, 'paper-segmentation'));\n      candidates.push(...paperCandidates);\n      const gradientThreshold = grid.gradientStats.mean + Math.max(16, grid.gradientStats.std * .78);\n      const edge = boundingCandidateFromMaskV106(grid, index => grid.gradients[index] >= gradientThreshold, 'edge-density', 'Strong edge region', .055);\n      if (edge && isPlausibleDocumentCandidateV106(edge, 'edge-density')) candidates.push(edge);\n      const darkThreshold = grid.stats.mean - Math.max(22, grid.stats.std * .42);\n      const text = boundingCandidateFromMaskV106(grid, index => grid.luma[index] <= darkThreshold && grid.gradients[index] >= grid.gradientStats.mean, 'text-density', 'Text layout region', .075);\n      const resolvedText = resolveTextCandidateV106(text, paperCandidates);\n      if (resolvedText) candidates.push(resolvedText);\n      const borderValues = [];`;
   web = replaceRegex(
     web,
-    /\s{6}candidates\.push\(\.\.\.paperCandidatesV106\(grid\)\);[\s\S]*?\s{6}const borderValues = \[\];/,
-    `\n${newSignals}`,
+    /candidates\.push\(\.\.\.paperCandidatesV106\(grid\)\);/,
+    "const paperCandidates = paperCandidatesV106(grid)\n        .filter(candidate => isPlausibleDocumentCandidateV106(candidate, 'paper-segmentation'));\n      candidates.push(...paperCandidates);",
+    "const paperCandidates = paperCandidatesV106(grid)",
+    'paper candidate plausibility gate',
+  );
+
+  web = replaceRegex(
+    web,
+    /if\s*\(\s*edge\s*\)\s*candidates\.push\(\s*edge\s*\);/,
+    "if (edge && isPlausibleDocumentCandidateV106(edge, 'edge-density')) candidates.push(edge);",
+    "isPlausibleDocumentCandidateV106(edge, 'edge-density')",
+    'edge candidate plausibility gate',
+  );
+
+  web = replaceRegex(
+    web,
+    /if\s*\(\s*text\s*\)\s*candidates\.push\(\s*text\s*\);/,
+    "const resolvedText = resolveTextCandidateV106(text, paperCandidates);\n      if (resolvedText) candidates.push(resolvedText);",
     'const resolvedText = resolveTextCandidateV106(text, paperCandidates);',
     'paper and text candidate fusion',
   );
