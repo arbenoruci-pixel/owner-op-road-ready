@@ -33,6 +33,10 @@ verifySource = verifySource.replace(
   "catalogSource.includes('Southeast\\\\s+unloading')",
   "catalogSource.includes('southeast\\\\s+unloading')",
 );
+verifySource = verifySource.replace(
+  "  pass(breakdownOnly.type.id === 'other', 'generic receipt plus Breakdown and price remains Needs Review');",
+  "  console.log('V1061 DEBUG breakdown-only', JSON.stringify({ type:breakdownOnly.type?.id, detected:breakdownOnly.detectedType?.id, lowEvidence:breakdownOnly.lowEvidence, qualification:breakdownOnly.evidenceQualificationV1061?.selected, arbitration:breakdownOnly.qualificationArbitrationV1061 }));\n  pass(breakdownOnly.type.id === 'other', 'generic receipt plus Breakdown and price remains Needs Review');",
+);
 fs.writeFileSync(verifyAssetPath, gzipSync(Buffer.from(verifySource), { mtime:0 }).toString('base64'));
 const target = path.join(ROOT, 'scripts/materialize-v1061-document-evidence.mjs');
 fs.writeFileSync(target, materializerSource);
