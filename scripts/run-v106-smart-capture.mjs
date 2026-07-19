@@ -7,3 +7,4 @@ await import('./run-v1061-document-evidence.mjs');
 await import('./finalize-v1062-smart-autoframe.mjs');
 await import('./finalize-v1064-correction-contour.mjs');
 await import('./finalize-v1065-photo-first.mjs');
+await import('./finalize-v1066-outer-corners.mjs');
