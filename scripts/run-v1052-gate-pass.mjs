@@ -18,6 +18,17 @@ function runCleanVerifier() {
   if (result.status !== 0) throw new Error(`v105.2 clean verifier exited with ${result.status}`);
 }
 
+// An explicit Driver's Name row wins over generic OCR guesses. If that row says
+// only "Truck" plus a phone number, keep the driver name blank for review rather
+// than falling back to an unrelated company/person string from the base reader.
+const gatePassPath = 'source/src/modules/scan/gatePassIntelligenceV1052.js';
+let gatePassSource = read(gatePassPath);
+gatePassSource = gatePassSource.replace(
+  '    driverName:safeDriverName(driverLine) || safeDriverName(fields.driverName),',
+  '    driverName:driverLine ? safeDriverName(driverLine) : safeDriverName(fields.driverName),',
+);
+write(gatePassPath, gatePassSource);
+
 // The legacy prebuild chain reaches the latest release more than once in separate
 // Node processes. Once every v105.2 runtime marker exists, verify the generated
 // source again instead of attempting to patch it a second time.
