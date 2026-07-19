@@ -18,15 +18,24 @@ function runCleanVerifier() {
   if (result.status !== 0) throw new Error(`v105.2 clean verifier exited with ${result.status}`);
 }
 
-// An explicit Driver's Name row wins over generic OCR guesses. If that row says
-// only "Truck" plus a phone number, keep the driver name blank for review rather
-// than falling back to an unrelated company/person string from the base reader.
+// An explicit Driver's Name row wins over generic OCR guesses. Correct the label
+// pattern so "Driver's Name" is parsed as one label, strip any leaked label text,
+// and keep "Truck" plus a phone number blank for driver review.
 const gatePassPath = 'source/src/modules/scan/gatePassIntelligenceV1052.js';
 let gatePassSource = read(gatePassPath);
-gatePassSource = gatePassSource.replace(
-  '    driverName:safeDriverName(driverLine) || safeDriverName(fields.driverName),',
-  '    driverName:driverLine ? safeDriverName(driverLine) : safeDriverName(fields.driverName),',
-);
+gatePassSource = gatePassSource
+  .replace(
+    "const text = line(value).replace(/\\(?\\d{3}\\)?[\\s.-]\\d{3}[\\s.-]\\d{4}.*/g, '').trim();",
+    "const text = line(value).replace(/^(?:driver'?s?\\s+name|driver)\\s*[:#-]?\\s*/i, '').replace(/\\(?\\d{3}\\)?[\\s.-]\\d{3}[\\s.-]\\d{4}.*/g, '').trim();",
+  )
+  .replace(
+    "const driverLine = labeled(source, [\"driver'?s?\\s+name\", 'driver']);",
+    "const driverLine = labeled(source, [\"driver'?s?\\\\s+name\", 'driver\\\\s+name']);",
+  )
+  .replace(
+    '    driverName:safeDriverName(driverLine) || safeDriverName(fields.driverName),',
+    '    driverName:driverLine ? safeDriverName(driverLine) : safeDriverName(fields.driverName),',
+  );
 write(gatePassPath, gatePassSource);
 
 // The legacy prebuild chain reaches the latest release more than once in separate
