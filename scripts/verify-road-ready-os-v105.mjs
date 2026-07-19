@@ -107,14 +107,21 @@ const state = {
       event('delivery4','ON',228,'St. Cloud','MN','Pre-trip inspection · Delivery / Unloading','391912'),
       event('pickup983','ON',495,'Lakeville','MN','Pickup / Loading','98306'),
     ],
-    '2026-07-18':[event('pickup178','ON',635,'Sherman','IL','Pickup / Loading','178564')],
+    '2026-07-18':[
+      { ...event('pretrip18','ON',504,'Mount Sterling','IL','Delivery / Unloading · Pre-trip inspection','391912'), description:'Log arrival at stop 1 · Delivery' },
+      event('pickup178','ON',635,'Sherman','IL','Pickup / Loading','178564'),
+    ],
   },
   inspectionByDay:{
     '2026-07-15':{ source:'auto_on_duty_pretrip_event', sourceEventId:'delivery1', complete:true },
     '2026-07-17':{ source:'auto_on_duty_pretrip_event', sourceEventId:'delivery4', complete:true },
+    '2026-07-18':{ source:'auto_on_duty_pretrip_event', sourceEventId:'pretrip18', complete:true },
   },
   certifyStatus:{ '2026-07-17':'Certified' },
   signatureByDay:{ '2026-07-17':{ signed:true } },
+  documentsByDay:{
+    '2026-07-16':[{ id:'state-doc', type:'pod', title:'State-only POD', date:'2026-07-16', loadNo:'391912' }],
+  },
 };
 
 const businessStore = {
@@ -136,6 +143,15 @@ pass(!isDateLikeReferenceV105('391912'), 'real Load number remains valid');
 const candidates = collectLoadCandidatesV105(state, businessStore);
 pass(candidates.find(candidate => candidate.loadNo === '391912')?.status === 'completed', 'finished five-stop load is completed');
 pass(latestOpenLoadV105(state, businessStore)?.loadNo === '178564', 'latest real open pickup becomes active load');
+
+const fuelMatch = matchDocumentToLoadV105({
+  state,
+  businessStore,
+  typeId:'fuel_receipt',
+  fields:{ merchant:'Pilot', gallons:120.4, date:'2026-07-18' },
+  analysis:{ fields:{} },
+});
+pass(fuelMatch.loadNo === '', 'ordinary fuel receipt is not forced into an unrelated load folder');
 
 const match = matchDocumentToLoadV105({
   state,
@@ -167,6 +183,10 @@ pass(repaired.eventsByDay['2026-07-17'][0].status === 'ON', 'log repair preserve
 pass(repaired.eventsByDay['2026-07-17'][0].city === 'St. Cloud', 'log repair preserves location');
 pass(repaired.inspectionByDay['2026-07-17'] == null, 'false auto inspection is removed');
 pass(repaired.certifyStatus['2026-07-17'] === 'Needs Recertification', 'signed changed note requires driver recertification');
+pass(repaired.eventsByDay['2026-07-18'][0].note === 'Pre-trip inspection', 'off-route Jul 18 event keeps the real Pre-trip activity');
+pass(repaired.eventsByDay['2026-07-18'][0].description === '', 'stale mission delivery text is removed');
+pass(repaired.inspectionByDay['2026-07-18']?.sourceEventId === 'pretrip18', 'real Jul 18 Pre-trip inspection stays linked');
+pass(repaired.routeLegsByDay['2026-07-17'].find(leg => leg.id === 'g983').excludedFromActiveLoad === true, 'date-as-city route is excluded from active load');
 
 const record = buildVaultDocumentV105({
   stored:{
@@ -204,7 +224,7 @@ const stateAfterDocument = applyVaultDocumentCommitV105(repaired, { record });
 pass(JSON.stringify(stateAfterDocument.eventsByDay) === JSON.stringify(repaired.eventsByDay), 'document commit does not rewrite log events');
 pass(stateAfterDocument.loadInfo.loadNo === '178564', 'old POD cannot replace current active load');
 pass(stateAfterDocument.loadGuidesById.load_guide_391912.documents.podByStop['3'] === 'doc1', 'mission receives the stop document');
-pass(stateAfterDocument.loadGuidesById.load_391912?.documents?.podDocumentId !== 'doc1', 'intermediate POD does not close final billing');
+pass(stateAfterDocument.loadGuidesById.load_guide_391912.documents.podDocumentId !== 'doc1', 'intermediate POD does not close final billing');
 
 const migrated = migrateBusinessStoreV105({
   ...businessStore,
@@ -216,6 +236,10 @@ const migrated = migrateBusinessStoreV105({
 pass(migrated.documents.find(document => document.id === 'bad').status === 'needs_review', 'date-as-load legacy document moves to Needs Review');
 pass(migrated.documents.find(document => document.id === 'bad').canonicalLoadNo === '', 'invalid legacy load link is cleared');
 pass(migrated.documents.find(document => document.id === 'good').canonicalLoadNo === '391912', 'valid legacy document is retained');
+pass(migrated.documents.some(document => document.id === 'state-doc'), 'state-only log document is imported into the Vault');
+
+const reviewOnlyStore = migrateBusinessStoreV105({ ...businessStore, documents:[{ id:'review-bol', type:'bol', loadNo:'391912', date:'2020-07-19', status:'needs_review' }] }, state);
+pass(!doesLoadHaveDocumentV105(reviewOnlyStore, '391912', 'bol'), 'unverified document does not satisfy the load checklist');
 
 pass(read('source/src/modules/scan/SmartScanSheet.jsx').includes('SmartScanSheetV105'), 'v105 scan screen owns production export');
 pass(read('source/src/modules/scan/SmartScanSheetV105.jsx').includes('Save document'), 'scan confirmation is focused');
