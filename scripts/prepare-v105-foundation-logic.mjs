@@ -91,7 +91,52 @@ function repairDeliveryPretripContaminationV105(state = {}) {
   }
   return { changed, changedDays, eventsByDay, inspectionByDay, certifyStatus, signatureByDay };
 }`);
-  fs.writeFileSync(target, source);
 }
 
-console.log('v105 mixed Delivery / Pre-trip evidence repair prepared');
+// Invalid OCR routes stay visible for review while being excluded from the
+// active-load resolver. This prevents strings such as "Date: 2026-07-18" from
+// becoming a live destination.
+if (!source.includes('excludedFromActiveLoad:true')) {
+  source = source.replace(
+    "  if (!loadNo || HIDDEN_STATUS_V105.test(textV105(leg.status))) return null;",
+    "  if (!loadNo || leg.excludedFromActiveLoad === true || textV105(leg.reviewStatus).toLowerCase() === 'needs_review' || HIDDEN_STATUS_V105.test(textV105(leg.status))) return null;",
+  );
+  source = source.replace(
+    "  state.loadGuidesById = loadGuidesById;\n\n  const openRoute = latestOpenRouteV105(state);",
+    `  state.loadGuidesById = loadGuidesById;
+
+  const invalidGuideIds = new Set(Object.values(loadGuidesById).filter(guideHasInvalidStopsV105).map(guide => textV105(guide.id)));
+  const invalidLoadNos = new Set(Object.values(loadGuidesById).filter(guideHasInvalidStopsV105).map(guide => normalizeCanonicalLoadNoV105(guide.loadNo || guide.orderNo)).filter(Boolean));
+  const routeLegsByDay = {};
+  for (const [day, rows] of Object.entries(state.routeLegsByDay || {})) {
+    routeLegsByDay[day] = (Array.isArray(rows) ? rows : []).map(leg => {
+      const loadNo = canonicalRefFromLegV105(leg);
+      const invalidLocation = isDateLikePlaceV105(leg?.fromCity) || isDateLikePlaceV105(leg?.toCity) || isDateLikePlaceV105(leg?.stopAddress);
+      const invalidGuide = invalidGuideIds.has(textV105(leg?.loadGroupId)) || invalidLoadNos.has(loadNo);
+      if (!invalidLocation && !invalidGuide) return leg;
+      guideChanged = true;
+      return {
+        ...leg,
+        excludedFromActiveLoad:true,
+        reviewStatus:'needs_review',
+        reviewReason:'Route contains date text or an invalid OCR location. Original data remains available for review.',
+        foundationVersion:ROAD_READY_OS_FOUNDATION_VERSION_V105,
+      };
+    });
+  }
+  state.routeLegsByDay = routeLegsByDay;
+
+  const openRoute = latestOpenRouteV105(state);`,
+  );
+  source = source.replace(
+    "      if (!loadNo || HIDDEN_STATUS_V105.test(textV105(leg.status))) return false;",
+    "      if (!loadNo || leg.excludedFromActiveLoad === true || textV105(leg.reviewStatus).toLowerCase() === 'needs_review' || HIDDEN_STATUS_V105.test(textV105(leg.status))) return false;",
+  );
+  source = source.replace(
+    ".filter(({ leg }) => !HIDDEN_STATUS_V105.test(textV105(leg.status)) && !COMPLETE_STATUS_V105.test(textV105(leg.status)) && textV105(leg.stopStatus).toLowerCase() !== 'done')",
+    ".filter(({ leg }) => leg?.excludedFromActiveLoad !== true && textV105(leg.reviewStatus).toLowerCase() !== 'needs_review' && !HIDDEN_STATUS_V105.test(textV105(leg.status)) && !COMPLETE_STATUS_V105.test(textV105(leg.status)) && textV105(leg.stopStatus).toLowerCase() !== 'done')",
+  );
+}
+
+fs.writeFileSync(target, source);
+console.log('v105 evidence-aware log and invalid-route repair prepared');
