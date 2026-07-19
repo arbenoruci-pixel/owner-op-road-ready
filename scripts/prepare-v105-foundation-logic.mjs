@@ -164,5 +164,26 @@ if (!source.includes('const stateDocumentRowsV105')) {
   );
 }
 
+// Load/Billing checklists count only driver-verified documents. Needs Review
+// files remain searchable without falsely completing BOL/POD requirements.
+if (!source.includes('const verifiedDocumentsV105')) {
+  source = source.replace(
+    "  const types = new Set(documents.map(document => textV105(document.type)));\n  const podByStop = {};\n  for (const document of documents.filter(document => document.type === 'pod')) {",
+    "  const verifiedDocumentsV105 = documents.filter(document => document.status === 'verified' || document.reviewStatus === 'verified');\n  const types = new Set(verifiedDocumentsV105.map(document => textV105(document.type)));\n  const podByStop = {};\n  for (const document of verifiedDocumentsV105.filter(document => document.type === 'pod')) {",
+  );
+  source = source.replace(
+    "    documents,\n    count:documents.length,",
+    "    documents,\n    verifiedDocuments:verifiedDocumentsV105,\n    count:documents.length,\n    verifiedCount:verifiedDocumentsV105.length,",
+  );
+  source = source.replace(
+    "    finalPodPresent:documents.some(document => document.type === 'pod' && (document.isFinalStop || document.finalStop || document.stopSequence === document.stopCount)),",
+    "    finalPodPresent:verifiedDocumentsV105.some(document => document.type === 'pod' && (document.isFinalStop || document.finalStop || document.stopSequence === document.stopCount)),",
+  );
+  source = source.replace(
+    "  return summary.documents.some(document => textV105(document.type) === textV105(type));",
+    "  return summary.verifiedDocuments.some(document => textV105(document.type) === textV105(type));",
+  );
+}
+
 fs.writeFileSync(target, source);
-console.log('v105 evidence-aware log, route and Vault migration prepared');
+console.log('v105 evidence-aware log, route, Vault and checklist repair prepared');
