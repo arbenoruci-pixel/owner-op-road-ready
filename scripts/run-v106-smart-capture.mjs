@@ -1,3 +1,4 @@
+await import('./prepatch-v1063-materializer.mjs');
 await import('./prepare-v1062-smart-autoframe.mjs');
 await import('./prepare-v1063-stable-boundary.mjs');
 await import('./prepare-v10631-boundary-hotfix.mjs');
