@@ -119,7 +119,7 @@ profile = r(profile,
 write(profilePath, profile);
 
 const cssPath = 'source/src/command-center.css';
-write(cssPath, append(read(cssPath), '/* v105 Road Ready OS Foundation */', read('source/src/road-ready-os-v105.css')));
+write(cssPath, append(read(cssPath), '/* v105 Road Ready OS Foundation */', `/* v105 Road Ready OS Foundation */\n${read('source/src/road-ready-os-v105.css')}`));
 
 const pkg = JSON.parse(read('package.json'));
 pkg.version = VERSION;
