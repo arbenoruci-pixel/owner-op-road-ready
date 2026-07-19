@@ -13,6 +13,16 @@ if (!source.includes(after)) {
   source = source.replace(before, after);
 }
 
+// A document summary found only in Logbook state has no proof that the driver
+// reviewed its OCR fields. Keep it in Needs Review unless the record explicitly
+// carries verified/user-confirmed evidence.
+const stateDocumentSource = "      source:document.source || 'logbook_state',";
+const stateDocumentReview = "      source:document.source || 'logbook_state',\n      status:document.status || (document.reviewStatus === 'verified' || document.userConfirmed === true ? 'verified' : 'needs_review'),\n      reviewStatus:document.reviewStatus || (document.status === 'verified' || document.userConfirmed === true ? 'verified' : 'needs_review'),";
+if (!source.includes(stateDocumentReview)) {
+  if (!source.includes(stateDocumentSource)) throw new Error('v105 missing state document migration row');
+  source = source.replace(stateDocumentSource, stateDocumentReview);
+}
+
 const summaryPattern = /export function loadDocumentSummaryV105\(store = \{\}, loadNo = ''\) \{[\s\S]*?\n\}\n\nexport function searchVaultDocumentsV105/;
 if (!summaryPattern.test(source)) throw new Error('v105 missing load document checklist functions');
 source = source.replace(summaryPattern, `export function loadDocumentSummaryV105(store = {}, loadNo = '') {
@@ -55,4 +65,4 @@ export function doesLoadHaveDocumentV105(store = {}, loadNo = '', type = '', sto
 export function searchVaultDocumentsV105`);
 
 fs.writeFileSync(target, source);
-console.log('v105 explicit Needs Review status and verified checklist preserved');
+console.log('v105 state-only document review and verified checklist preserved');
