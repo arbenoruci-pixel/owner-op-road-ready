@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-function snippet(relative, needle, radius = 1400) {
+function snippet(relative, needle, radius = 2600) {
   const source = fs.readFileSync(path.join(ROOT, relative), 'utf8');
   const index = source.indexOf(needle);
   if (index < 0) {
@@ -17,18 +17,14 @@ function snippet(relative, needle, radius = 1400) {
 }
 
 for (const needle of [
-  'Text layout region',
-  'selectedCandidate',
-  'candidate.contour',
-  'candidate.bounds',
-  'setContour',
-  'defaultContour',
-]) snippet('source/src/modules/scan/SmartDocumentCaptureV106.jsx', needle);
+  'function boundingCandidateFromMaskV106',
+  'function paperCandidatesV106',
+  'candidates.push(...paperCandidatesV106(grid));',
+  "'text-density'",
+]) snippet('source/src/modules/scan/webScannerAdapterV106.js', needle);
 
 for (const needle of [
-  "source:'text-density'",
-  'detectDocumentRegions',
-  'rankDocumentCandidatesV106',
-  'contourFrom',
-  'bounds',
-]) snippet('source/src/modules/scan/webScannerAdapterV106.js', needle);
+  'function selectCandidate(candidate)',
+  "stage === 'correction'",
+  'candidate.label',
+]) snippet('source/src/modules/scan/SmartDocumentCaptureV106.jsx', needle, 1800);
