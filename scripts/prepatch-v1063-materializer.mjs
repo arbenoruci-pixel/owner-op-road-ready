@@ -25,6 +25,71 @@ const replacements = [
   }`,
     label:'live loop',
   },
+  {
+    before:`  capture = replaceOnce(
+    capture,
+    \`        const first = found[0];
+        setCandidates(found);
+        setSelectedCandidateId(first?.id || '');
+        setAutomaticContour(first?.contour || []);
+        setContour(first?.contour || []);\`,
+    \`        const first = chooseLiveCandidateV1063(found, null) || found[0] || null;
+        setCandidates(found);
+        setSelectedCandidateId(first?.id || '');
+        setAutomaticContour(first?.contour || []);
+        setContour(first?.contour || []);\`,
+    'full-resolution first paper selection',
+  );`,
+    after:`  if (!capture.includes('const first = chooseLiveCandidateV1063(found, null) || found[0] || null;')) {
+    const firstPattern = /const first = found\\[0\\];\\s*setCandidates\\(found\\);\\s*setSelectedCandidateId\\(first\\?\\.id \\|\\| ''\\);\\s*setAutomaticContour\\(first\\?\\.contour \\|\\| \\[\\]\\);\\s*setContour\\(first\\?\\.contour \\|\\| \\[\\]\\);/;
+    if (!firstPattern.test(capture)) throw new Error('v106.3 missing full-resolution first paper selection');
+    capture = capture.replace(firstPattern, \`const first = chooseLiveCandidateV1063(found, null) || found[0] || null;
+        setCandidates(found);
+        setSelectedCandidateId(first?.id || '');
+        setAutomaticContour(first?.contour || []);
+        setContour(first?.contour || []);\`);
+  }`,
+    label:'first selection',
+  },
+  {
+    before:`  capture = replaceOnce(
+    capture,
+    \`  function selectCandidate(candidate) {
+    setSelectedCandidateId(candidate.id);
+    setAutomaticContour(candidate.contour || []);
+    setContour(candidate.contour || []);\`,
+    \`  function selectCandidate(candidate) {
+    const normalizedCandidate = normalizeLiveCandidateV1063(candidate);
+    setSelectedCandidateId(candidate.id);
+    setAutomaticContour(normalizedCandidate?.contour || []);
+    setContour(normalizedCandidate?.contour || []);\`,
+    'manual candidate boundary normalization',
+  );`,
+    after:`  if (!capture.includes('const normalizedCandidate = normalizeLiveCandidateV1063(candidate);')) {
+    const selectPattern = /function selectCandidate\\(candidate\\) \\{\\s*setSelectedCandidateId\\(candidate\\.id\\);\\s*setAutomaticContour\\(candidate\\.contour \\|\\| \\[\\]\\);\\s*setContour\\(candidate\\.contour \\|\\| \\[\\]\\);/;
+    if (!selectPattern.test(capture)) throw new Error('v106.3 missing manual candidate boundary normalization');
+    capture = capture.replace(selectPattern, \`function selectCandidate(candidate) {
+    const normalizedCandidate = normalizeLiveCandidateV1063(candidate);
+    setSelectedCandidateId(candidate.id);
+    setAutomaticContour(normalizedCandidate?.contour || []);
+    setContour(normalizedCandidate?.contour || []);\`);
+  }`,
+    label:'select candidate',
+  },
+  {
+    before:`  capture = replaceOnce(
+    capture,
+    \`  const frameFound = Boolean(liveCandidate && contourAreaV106(liveCandidate.contour) >= .12);\`,
+    \`  const frameFound = Boolean(liveCandidate && normalizeContourV106(liveCandidate.contour).length === 4 && contourAreaV106(liveCandidate.contour) >= .12);\`,
+    'four-corner live frame requirement',
+  );`,
+    after:`  if (!capture.includes('normalizeContourV106(liveCandidate.contour).length === 4')) {
+    const framePattern = /const frameFound = Boolean\\(liveCandidate && contourAreaV106\\(liveCandidate\\.contour\\) >= \\.12\\);/;
+    if (!framePattern.test(capture)) throw new Error('v106.3 missing four-corner live frame requirement');
+    capture = capture.replace(framePattern, 'const frameFound = Boolean(liveCandidate && normalizeContourV106(liveCandidate.contour).length === 4 && contourAreaV106(liveCandidate.contour) >= .12);');
+  }`,
+    label:'frame requirement',
+  },
 ];
 
 for (const replacement of replacements) {
