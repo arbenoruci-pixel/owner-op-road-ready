@@ -41,6 +41,16 @@ vault = r(vault,
   'Vault trucking catalog');
 write('source/src/modules/documents/DocumentVaultV105.jsx', vault);
 
+// Non-load receipts may be linked to a load after explicit evidence or driver
+// confirmation. A shared date/location alone must never preselect a load.
+const foundationPath = 'source/src/modules/documents/documentFoundationV105.js';
+let foundation = read(foundationPath);
+foundation = r(foundation,
+  "  let chosen = top;\n  if ((!chosen || chosen.matchScore < 24) && active && loadLike) {",
+  "  let chosen = top;\n  if (!loadLike && chosen && !chosen.strongReference) chosen = null;\n  if ((!chosen || chosen.matchScore < 24) && active && loadLike) {",
+  'non-load document match guard');
+write(foundationPath, foundation);
+
 const appPath = 'source/src/app/App.jsx';
 let app = read(appPath);
 app = r(app,
@@ -151,6 +161,7 @@ for (const [relative, marker] of [
   ['source/src/modules/scan/SmartScanSheet.jsx','SmartScanSheetV105'],
   ['source/src/modules/scan/SmartScanSheetV105.jsx','CHECK 3 ITEMS'],
   ['source/src/modules/documents/DocumentVaultV105.jsx','Every document has a home'],
+  ['source/src/modules/documents/documentFoundationV105.js','!loadLike && chosen && !chosen.strongReference'],
   ['source/src/modules/home/HomeScreen.jsx',"businessSection === 'documents'"],
   ['source/src/modules/home/AdaptiveHomeV1038.jsx','Load folder · Vault'],
   ['source/src/app/App.jsx','ROAD_READY_DOCUMENT_COMMIT_EVENT_V105'],
