@@ -7,4 +7,4 @@ await import('./verify-smart-capture-v106.mjs');
 await import('./run-v1061-document-evidence.mjs');
 await import('./finalize-v1062-smart-autoframe.mjs');
 await import('./finalize-v1063-stable-boundary.mjs');
-// v106.3 stable-boundary release chain
+// v106.3 stable-boundary release chain — corrected regression
