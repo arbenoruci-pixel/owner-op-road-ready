@@ -9,23 +9,25 @@ let source = gunzipSync(Buffer.from(fs.readFileSync(assetPath, 'utf8'), 'base64'
 
 const importLine = "import { correctionContourV1064 } from './correctionContourV1064.js'; // correction-contour-v1064";
 if (!source.includes(importLine)) {
-  if (source.startsWith("'use client';")) {
-    source = source.replace("'use client';", `"use client";\n${importLine}`);
-  } else {
-    source = `${importLine}\n${source}`;
-  }
+  const directive = source.match(/^(?:'use client'|"use client");\s*/)?.[0] || '';
+  source = directive
+    ? `${directive}${importLine}\n${source.slice(directive.length)}`
+    : `${importLine}\n${source}`;
 }
 
 if (!source.includes('const firstContourV1064 = correctionContourV1064(first);')) {
-  const firstMarker = '        const first = found[0];';
-  if (!source.includes(firstMarker)) throw new Error('v106.4 missing first detected candidate');
-  source = source.replace(firstMarker, `${firstMarker}\n        const firstContourV1064 = correctionContourV1064(first);`);
+  const initialSelectionPattern = /(\n\s*setCandidates\(found\);\n)(\s*setSelectedCandidateId\(first\?\.id\s*\|\|\s*['"]{2}\);)/;
+  if (!initialSelectionPattern.test(source)) throw new Error('v106.4 missing initial candidate state block');
+  source = source.replace(
+    initialSelectionPattern,
+    `$1        const firstContourV1064 = correctionContourV1064(first);\n$2`,
+  );
 }
-source = source.replace('        setAutomaticContour(first?.contour || []);', '        setAutomaticContour(firstContourV1064);');
-source = source.replace('        setContour(first?.contour || []);', '        setContour(firstContourV1064);');
+source = source.replace(/setAutomaticContour\(first\?\.contour\s*\|\|\s*\[\]\);/, 'setAutomaticContour(firstContourV1064);');
+source = source.replace(/setContour\(first\?\.contour\s*\|\|\s*\[\]\);/, 'setContour(firstContourV1064);');
 
 if (!source.includes('const nextContourV1064 = correctionContourV1064(candidate);')) {
-  const selectPattern = /function selectCandidate\(candidate\) \{\n(?:    const[^\n]+\n)?    setSelectedCandidateId\(candidate\.id\);\n    setAutomaticContour\([^\n]+\);\n    setContour\([^\n]+\);/;
+  const selectPattern = /function selectCandidate\(candidate\) \{\n(?:\s+const[^\n]+\n)?\s+setSelectedCandidateId\(candidate\.id\);\n\s+setAutomaticContour\([^\n]+\);\n\s+setContour\([^\n]+\);/;
   if (!selectPattern.test(source)) throw new Error('v106.4 missing candidate selection block');
   source = source.replace(selectPattern, `function selectCandidate(candidate) {\n    const nextContourV1064 = correctionContourV1064(candidate);\n    setSelectedCandidateId(candidate.id);\n    setAutomaticContour(nextContourV1064);\n    setContour(nextContourV1064);`);
 }
@@ -38,6 +40,8 @@ source = source.replace(
 for (const marker of [
   'correction-contour-v1064',
   'const firstContourV1064 = correctionContourV1064(first);',
+  'setAutomaticContour(firstContourV1064);',
+  'setContour(firstContourV1064);',
   'const nextContourV1064 = correctionContourV1064(candidate);',
 ]) {
   if (!source.includes(marker)) throw new Error(`v106.4 verification missing ${marker}`);
