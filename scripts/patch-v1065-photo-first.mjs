@@ -47,9 +47,9 @@ source = source.replaceAll("setStatus('Capturing…');", "setStatus('Taking one 
 source = source.replaceAll("setStatus('Finding the actual paper…');", "setStatus('Reading the page and finding the paper…');");
 
 if (!source.includes('PHOTO_FIRST_CAPTURE_V1065) {\n            if (!mountedRef.current) return;')) {
-  const liveNeedle = '          const found = await adapter().detectDocumentRegions(canvas, { maxDimension:560, gridMax:64 });';
-  const guard = `          if (PHOTO_FIRST_CAPTURE_V1065) {\n            if (!mountedRef.current) return;\n            setLiveCandidate(null);\n            setStableFrames(0);\n            stableRef.current = { contour:null, count:0 };\n            setStatus(photoFirstCameraHintV1065(nextQuality));\n            return;\n          }\n${liveNeedle}`;
-  replaceOnce(liveNeedle, guard, 'photo-first live detector bypass');
+  const livePattern = /(\s*)const found = await adapter\(\)\.detectDocumentRegions\(canvas,\s*\{[\s\S]*?\}\);/;
+  if (!livePattern.test(source)) throw new Error('v106.5 missing photo-first live detector bypass');
+  source = source.replace(livePattern, (match, indent) => `${indent}if (PHOTO_FIRST_CAPTURE_V1065) {\n${indent}  if (!mountedRef.current) return;\n${indent}  setLiveCandidate(null);\n${indent}  setStableFrames(0);\n${indent}  stableRef.current = { contour:null, count:0 };\n${indent}  setStatus(photoFirstCameraHintV1065(nextQuality));\n${indent}  return;\n${indent}}\n${match}`);
 }
 
 source = source.replace(
