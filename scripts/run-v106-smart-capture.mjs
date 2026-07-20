@@ -32,5 +32,6 @@ await import('./patch-v1074-document-restore.mjs');
 await import('./finalize-v1074-document-restore.mjs');
 await import('./patch-v1075-scanbot-professional.mjs');
 await import('./finalize-v1075-scanbot-professional.mjs');
+await import('./prepare-v1076-template-escape.mjs');
 await import('./patch-v1076-real-scanbot-rtu.mjs');
 await import('./finalize-v1076-real-scanbot-rtu.mjs');
