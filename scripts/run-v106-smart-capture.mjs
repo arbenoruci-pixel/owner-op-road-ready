@@ -30,3 +30,5 @@ await import('./finalize-v1073-safari-preview-url.mjs');
 await import('./prepare-v1074-template-escape.mjs');
 await import('./patch-v1074-document-restore.mjs');
 await import('./finalize-v1074-document-restore.mjs');
+await import('./patch-v1075-scanbot-professional.mjs');
+await import('./finalize-v1075-scanbot-professional.mjs');
