@@ -43,14 +43,16 @@ const preparedReplacement = `  function preparedCandidate(candidate, editedConto
     };
   }`;
 if (!capture.includes('rectificationPolicyV1068:policy')) {
-  const startNeedle = '  function preparedCandidate(candidate, editedContour = null) {';
-  const endNeedle = '\n  async function processSelection';
-  const start = capture.indexOf(startNeedle);
-  const end = capture.indexOf(endNeedle, start + startNeedle.length);
+  const startNeedle = 'function preparedCandidate(candidate, editedContour = null) {';
+  const processNeedle = 'async function processSelection';
+  const rawStart = capture.indexOf(startNeedle);
+  const rawEnd = capture.indexOf(processNeedle, rawStart + startNeedle.length);
+  const start = rawStart < 0 ? -1 : capture.lastIndexOf('\n', rawStart) + 1;
+  const end = rawEnd < 0 ? -1 : capture.lastIndexOf('\n', rawEnd);
   if (start < 0 || end < 0 || end <= start) {
     throw new Error(`v106.8 missing preparedCandidate boundaries start=${start} end=${end}`);
   }
-  capture = `${capture.slice(0, start)}${preparedReplacement}${capture.slice(end)}`;
+  capture = `${capture.slice(0, start)}${preparedReplacement}\n${capture.slice(rawEnd - 2)}`;
 }
 write(capturePath, capture);
 
@@ -60,18 +62,19 @@ const adapterImport = "import { rectificationPolicyV1068 } from './rectification
 if (!adapter.includes(adapterImport)) adapter = `${adapterImport}\n${adapter}`;
 
 if (!adapter.includes("const policy = rectificationPolicyV1068(normalized")) {
-  const startNeedle = "      let corrected;\n      let geometryMode = 'planar';";
-  const endNeedle = "      if (!normalized.fullPhoto && useMesh) {";
-  const start = adapter.indexOf(startNeedle);
-  const end = adapter.indexOf(endNeedle, start + startNeedle.length);
-  if (start < 0 || end < 0 || end <= start) {
-    throw new Error(`v106.8 missing rectification decision boundaries start=${start} end=${end}`);
+  const rectifyNeedle = 'async rectifyCandidate(candidate, source, options = {}) {';
+  const rectifyStart = adapter.indexOf(rectifyNeedle);
+  const correctedToken = 'let corrected;';
+  const endToken = 'if (!normalized.fullPhoto && useMesh) {';
+  const correctedRaw = adapter.indexOf(correctedToken, rectifyStart + rectifyNeedle.length);
+  const endRaw = adapter.indexOf(endToken, correctedRaw + correctedToken.length);
+  const start = correctedRaw < 0 ? -1 : adapter.lastIndexOf('\n', correctedRaw) + 1;
+  const end = endRaw < 0 ? -1 : adapter.lastIndexOf('\n', endRaw) + 1;
+  if (rectifyStart < 0 || start < 0 || end < 0 || end <= start) {
+    throw new Error(`v106.8 missing rectification decision boundaries rectify=${rectifyStart} start=${start} end=${end}`);
   }
-  const replacement = `      let corrected;
-      const policy = rectificationPolicyV1068(normalized, normalized.geometryMode || 'auto');
-      let geometryMode = policy.geometryMode;
-      const useMesh = policy.useMesh;
-`;
+  const indent = adapter.slice(start, correctedRaw);
+  const replacement = `${indent}let corrected;\n${indent}const policy = rectificationPolicyV1068(normalized, normalized.geometryMode || 'auto');\n${indent}let geometryMode = policy.geometryMode;\n${indent}const useMesh = policy.useMesh;\n`;
   adapter = `${adapter.slice(0, start)}${replacement}${adapter.slice(end)}`;
 }
 
