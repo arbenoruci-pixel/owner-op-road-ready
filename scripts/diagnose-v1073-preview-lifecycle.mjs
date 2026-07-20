@@ -11,6 +11,8 @@ function printRange(relative, start, end) {
     console.log(`${index + 1}: ${lines[index].slice(0, 520)}`);
   }
 }
-printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 300, 425);
-printRange('source/src/modules/scan/lightweightDocumentEngineV1071.js', 260, 430);
-printRange('source/src/modules/scan/documentScannerEngine.js', 420, 500);
+printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 100, 190);
+printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 240, 320);
+printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 385, 415);
+printRange('source/src/modules/scan/lightweightDocumentEngineV1071.js', 250, 355);
+printRange('source/src/modules/scan/documentScannerEngine.js', 455, 480);
