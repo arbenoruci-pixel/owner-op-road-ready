@@ -95,7 +95,7 @@ if (!source.includes('enhanceDocumentCanvasV1069(canvas, cv, mode)')) {
 for (const marker of [
   'opencv-homography-v1069',
   'warpPerspectiveCanvasV1069(image, c, cv)',
-  "throw new Error('perspective_warp_failed')",
+  "const error = new Error('perspective_warp_failed')",
   'enhanceDocumentCanvasV1069(canvas, cv, mode)',
 ]) {
   if (!source.includes(marker)) throw new Error(`v106.9 engine verification missing ${marker}`);
