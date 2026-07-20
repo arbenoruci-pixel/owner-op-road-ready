@@ -5,12 +5,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TARGET = path.join(ROOT, 'source/src/modules/status/StatusWorkflowSheet.jsx');
 const LIVE_TRANSITION_TARGET = path.join(ROOT, 'source/src/core/timeline/liveDrivingSafety.js');
+const APP_TARGET = path.join(ROOT, 'source/src/app/App.jsx');
 const checkOnly = process.argv.includes('--check');
 const original = fs.readFileSync(TARGET, 'utf8');
 let text = original;
 
-const RELEASE_VERSION = '109.2.0';
-const RELEASED_AT = '2026-07-20T23:22:00.000Z';
+const RELEASE_VERSION = '109.2.1';
+const RELEASED_AT = '2026-07-20T23:24:00.000Z';
 
 function insertBefore(token, content, marker, label) {
   if (text.includes(marker)) return;
@@ -81,8 +82,152 @@ function protectSameMinutePreTripTail(events = [], incoming = {}) {
   };
 }
 
+export function recoverSameMinutePreTripFromSafetyBackup(saved = {}) {
+  const backups = saved?.dutySafetyBackupByDay || {};
+  const originalEventsByDay = saved?.eventsByDay || {};
+  let eventsByDay = originalEventsByDay;
+  const recoveredDays = [];
+
+  for (const [day, backup] of Object.entries(backups)) {
+    if (!/before_live_status_D/i.test(String(backup?.reason || ''))) continue;
+
+    const backupEvents = currentDayRaw(backup?.events || []);
+    const preTrip = backupEvents.at(-1) || null;
+    if (!isPreTripDutyEvent(preTrip)) continue;
+
+    const currentEvents = currentDayRaw(originalEventsByDay[day] || []);
+    if (currentEvents.some(event => event.id === preTrip.id)) continue;
+
+    const preTripStart = minute(preTrip.startMin, 0);
+    const preTripEnd = Math.max(preTripStart + 1, minute(preTrip.endMin, preTripStart + 1));
+    if (preTripEnd >= 1440) continue;
+
+    const overwrittenBy = currentEvents.find(event => {
+      const source = String(event.source || '').toLowerCase();
+      const id = String(event.id || '').toLowerCase();
+      return event.status === 'D'
+        && minute(event.startMin, 0) === preTripStart
+        && (source.includes('live_status') || id.startsWith('live_'));
+    });
+    if (!overwrittenBy) continue;
+
+    const driveStart = minute(overwrittenBy.startMin, preTripStart);
+    const driveEnd = Math.max(driveStart + 1, minute(overwrittenBy.endMin, driveStart + 1));
+    const driveDuration = Math.max(1, driveEnd - driveStart);
+    const shiftedDrive = {
+      ...overwrittenBy,
+      startMin: preTripEnd,
+      endMin: Math.min(1440, preTripEnd + driveDuration),
+      preservedPreTripEventId: preTrip.id || null,
+      sameMinutePreTripRecovered: true,
+    };
+
+    const restored = normalizeLogEvents([
+      ...currentEvents.filter(event => event.id !== overwrittenBy.id),
+      {
+        ...preTrip,
+        recoveredFromDutySafetyBackup: true,
+        recoveredAt: Date.now(),
+      },
+      shiftedDrive,
+    ]);
+    if (!restored.some(event => event.id === preTrip.id)) continue;
+
+    eventsByDay = { ...eventsByDay, [day]: restored };
+    recoveredDays.push(day);
+  }
+
+  if (!recoveredDays.length) return saved;
+  return {
+    ...saved,
+    eventsByDay,
+    dutyRecoveryMeta: {
+      ...(saved.dutyRecoveryMeta || {}),
+      kind: 'same_minute_pretrip_from_safety_backup',
+      recoveredAt: Date.now(),
+      recoveredDays,
+    },
+  };
+}
+
 `;
     after = `${after.slice(0, exportIndex)}${helper}${after.slice(exportIndex)}`;
+  }
+
+  if (!after.includes('export function recoverSameMinutePreTripFromSafetyBackup(saved = {})')) {
+    const exportToken = 'export function applyLiveStatusTransition(events = [], newEvent = {}) {';
+    const exportIndex = after.indexOf(exportToken);
+    if (exportIndex < 0) throw new Error('v109.2.1 PTI recovery target missing: applyLiveStatusTransition');
+    const recoveryHelper = `export function recoverSameMinutePreTripFromSafetyBackup(saved = {}) {
+  const backups = saved?.dutySafetyBackupByDay || {};
+  const originalEventsByDay = saved?.eventsByDay || {};
+  let eventsByDay = originalEventsByDay;
+  const recoveredDays = [];
+
+  for (const [day, backup] of Object.entries(backups)) {
+    if (!/before_live_status_D/i.test(String(backup?.reason || ''))) continue;
+
+    const backupEvents = currentDayRaw(backup?.events || []);
+    const preTrip = backupEvents.at(-1) || null;
+    if (!isPreTripDutyEvent(preTrip)) continue;
+
+    const currentEvents = currentDayRaw(originalEventsByDay[day] || []);
+    if (currentEvents.some(event => event.id === preTrip.id)) continue;
+
+    const preTripStart = minute(preTrip.startMin, 0);
+    const preTripEnd = Math.max(preTripStart + 1, minute(preTrip.endMin, preTripStart + 1));
+    if (preTripEnd >= 1440) continue;
+
+    const overwrittenBy = currentEvents.find(event => {
+      const source = String(event.source || '').toLowerCase();
+      const id = String(event.id || '').toLowerCase();
+      return event.status === 'D'
+        && minute(event.startMin, 0) === preTripStart
+        && (source.includes('live_status') || id.startsWith('live_'));
+    });
+    if (!overwrittenBy) continue;
+
+    const driveStart = minute(overwrittenBy.startMin, preTripStart);
+    const driveEnd = Math.max(driveStart + 1, minute(overwrittenBy.endMin, driveStart + 1));
+    const driveDuration = Math.max(1, driveEnd - driveStart);
+    const shiftedDrive = {
+      ...overwrittenBy,
+      startMin: preTripEnd,
+      endMin: Math.min(1440, preTripEnd + driveDuration),
+      preservedPreTripEventId: preTrip.id || null,
+      sameMinutePreTripRecovered: true,
+    };
+
+    const restored = normalizeLogEvents([
+      ...currentEvents.filter(event => event.id !== overwrittenBy.id),
+      {
+        ...preTrip,
+        recoveredFromDutySafetyBackup: true,
+        recoveredAt: Date.now(),
+      },
+      shiftedDrive,
+    ]);
+    if (!restored.some(event => event.id === preTrip.id)) continue;
+
+    eventsByDay = { ...eventsByDay, [day]: restored };
+    recoveredDays.push(day);
+  }
+
+  if (!recoveredDays.length) return saved;
+  return {
+    ...saved,
+    eventsByDay,
+    dutyRecoveryMeta: {
+      ...(saved.dutyRecoveryMeta || {}),
+      kind: 'same_minute_pretrip_from_safety_backup',
+      recoveredAt: Date.now(),
+      recoveredDays,
+    },
+  };
+}
+
+`;
+    after = `${after.slice(0, exportIndex)}${recoveryHelper}${after.slice(exportIndex)}`;
   }
 
   const oldStart = `export function applyLiveStatusTransition(events = [], newEvent = {}) {
@@ -105,6 +250,8 @@ function protectSameMinutePreTripTail(events = [], incoming = {}) {
     'const insert = protectSameMinutePreTripTail(events, normalizedInsert);',
     'sameMinutePreTripGuard: true',
     'preservedPreTripEventId: tail.id || null',
+    'export function recoverSameMinutePreTripFromSafetyBackup(saved = {})',
+    "kind: 'same_minute_pretrip_from_safety_backup'",
   ];
   for (const value of required) {
     if (!after.includes(value)) throw new Error(`v109.2 PTI verification failed: ${value}`);
@@ -117,9 +264,49 @@ function protectSameMinutePreTripTail(events = [], incoming = {}) {
   return after !== before;
 }
 
+function patchLostPreTripRecoveryIntegration() {
+  const before = fs.readFileSync(APP_TARGET, 'utf8');
+  let after = before;
+  const importMarker = 'recoverSameMinutePreTripFromSafetyBackup';
+
+  if (!after.includes(importMarker)) {
+    const importPattern = /import \{([^}]+)\} from '\.\.\/core\/timeline\/liveDrivingSafety\.js';/;
+    if (!importPattern.test(after)) throw new Error('v109.2.1 PTI recovery target missing: liveDrivingSafety import');
+    after = after.replace(importPattern, (full, names) => {
+      const imports = names.split(',').map(value => value.trim()).filter(Boolean);
+      imports.push(importMarker);
+      return `import { ${imports.join(', ')} } from '../core/timeline/liveDrivingSafety.js';`;
+    });
+  }
+
+  const recoveryCall = 'const ptiRecovered = recoverSameMinutePreTripFromSafetyBackup(saved);';
+  if (!after.includes(recoveryCall)) {
+    const oldCall = '      const recovered = await recoverSuspiciousTodayState(saved);';
+    const newCall = `      const ptiRecovered = recoverSameMinutePreTripFromSafetyBackup(saved);
+      const recovered = await recoverSuspiciousTodayState(ptiRecovered);`;
+    if (!after.includes(oldCall)) throw new Error('v109.2.1 PTI recovery target missing: startup recovery call');
+    after = after.replace(oldCall, newCall);
+  }
+
+  const required = [
+    importMarker,
+    recoveryCall,
+    'const recovered = await recoverSuspiciousTodayState(ptiRecovered);',
+  ];
+  for (const value of required) {
+    if (!after.includes(value)) throw new Error(`v109.2.1 PTI startup recovery verification failed: ${value}`);
+  }
+
+  if (checkOnly && after !== before) {
+    throw new Error('v109.2.1 PTI startup recovery has not been materialized');
+  }
+  if (!checkOnly && after !== before) fs.writeFileSync(APP_TARGET, after);
+  return after !== before;
+}
+
 async function verifySameMinutePreTripGuard() {
   const moduleUrl = `${pathToFileURL(LIVE_TRANSITION_TARGET).href}?v1092=${Date.now()}`;
-  const { applyLiveStatusTransition } = await import(moduleUrl);
+  const { applyLiveStatusTransition, recoverSameMinutePreTripFromSafetyBackup } = await import(moduleUrl);
   const preTrip = {
     id: 'pti_same_minute',
     status: 'ON',
@@ -168,7 +355,35 @@ async function verifySameMinutePreTripGuard() {
     throw new Error('v109.2 PTI regression: guard changed ordinary same-minute status replacement');
   }
 
-  console.log('PASS — v109.2 same-minute PTI persistence regression suite');
+  const day = '2026-07-20';
+  const savedWithLostPreTrip = {
+    currentStatus: 'D',
+    eventsByDay: {
+      [day]: [driving],
+    },
+    dutySafetyBackupByDay: {
+      [day]: {
+        reason: 'before_live_status_D',
+        savedAt: Date.now(),
+        events: [preTrip],
+      },
+    },
+  };
+  const recoveredState = recoverSameMinutePreTripFromSafetyBackup(savedWithLostPreTrip);
+  const recoveredEvents = recoveredState.eventsByDay?.[day] || [];
+  const recoveredPreTrip = recoveredEvents.find(event => event.id === preTrip.id);
+  const recoveredDriving = recoveredEvents.find(event => event.id === driving.id);
+  if (!recoveredPreTrip || recoveredPreTrip.recoveredFromDutySafetyBackup !== true) {
+    throw new Error('v109.2.1 PTI recovery regression: safety backup did not restore Pre-trip');
+  }
+  if (!recoveredDriving || recoveredDriving.startMin !== 601 || recoveredDriving.endMin !== 602) {
+    throw new Error('v109.2.1 PTI recovery regression: restored Driving boundary is incorrect');
+  }
+  if (recoveredState.dutyRecoveryMeta?.kind !== 'same_minute_pretrip_from_safety_backup') {
+    throw new Error('v109.2.1 PTI recovery regression: recovery metadata missing');
+  }
+
+  console.log('PASS — v109.2.1 same-minute PTI persistence and recovery regression suite');
 }
 
 function finalizeReleaseVersion() {
@@ -201,16 +416,17 @@ function finalizeReleaseVersion() {
     release.version = RELEASE_VERSION;
     release.appVersion = RELEASE_VERSION;
     release.codeVersion = RELEASE_VERSION;
-    release.build = 'v109.2-pti-same-minute-persistence';
+    release.build = 'v109.2.1-pti-same-minute-persistence-recovery';
     release.releasedAt = RELEASED_AT;
     release.updatedAt = RELEASED_AT;
     release.publishedAt = RELEASED_AT;
-    release.label = 'v109.2 PTI Persistence Fix';
+    release.label = 'v109.2.1 PTI Persistence & Recovery Fix';
     release.notes = [
       'Preserves an accepted ON DUTY Pre-trip when Driving starts in the same recorded minute.',
       'Moves the new status to the next minute boundary instead of replacing the PTI row.',
-      'Keeps the linked daily inspection sheet available after reconciliation and reload.',
-      'Adds regression coverage for the exact PTI-to-Driving transition that caused the loss.',
+      'Recovers a just-lost PTI from the existing duty safety backup during startup.',
+      'Keeps the linked daily inspection workflow available after reconciliation and reload.',
+      'Adds regression coverage for both prevention and recovery of the exact PTI-to-Driving loss.',
     ];
   });
 }
@@ -349,9 +565,10 @@ if (text.includes("if (dropOffSelected && !dropContainer.trim() && !dropChassis.
 
 if (!checkOnly && text !== original) fs.writeFileSync(TARGET, text);
 const liveTransitionChanged = patchSameMinutePreTripGuard();
+const appRecoveryChanged = patchLostPreTripRecoveryIntegration();
 if (!checkOnly) await verifySameMinutePreTripGuard();
 finalizeReleaseVersion();
 
 console.log(checkOnly
-  ? `v${RELEASE_VERSION} trailer Drop Off and PTI persistence verified`
-  : `${text === original ? 'Existing trailer Drop Off patch retained' : 'Trailer Drop Off patch applied'}; ${liveTransitionChanged ? 'PTI transition guard applied' : 'PTI transition guard retained'}; release finalized at v${RELEASE_VERSION}`);
+  ? `v${RELEASE_VERSION} trailer Drop Off and PTI persistence/recovery verified`
+  : `${text === original ? 'Existing trailer Drop Off patch retained' : 'Trailer Drop Off patch applied'}; ${liveTransitionChanged ? 'PTI transition guard applied' : 'PTI transition guard retained'}; ${appRecoveryChanged ? 'PTI startup recovery applied' : 'PTI startup recovery retained'}; release finalized at v${RELEASE_VERSION}`);
