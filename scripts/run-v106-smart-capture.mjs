@@ -22,3 +22,4 @@ await import('./finalize-v1069-opencv-homography.mjs');
 await import('./finalize-v1070-local-vision.mjs');
 await import('./patch-v1071-webgl-scanner.mjs');
 await import('./finalize-v1071-webgl-scanner.mjs');
+await import('./diagnose-v1072-scan-flow.mjs');
