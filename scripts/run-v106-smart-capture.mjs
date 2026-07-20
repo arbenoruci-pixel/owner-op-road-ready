@@ -25,4 +25,5 @@ await import('./finalize-v1071-webgl-scanner.mjs');
 await import('./prepare-v1072-remove-legacy-opencv.mjs');
 await import('./patch-v1072-reader-packet-preview.mjs');
 await import('./finalize-v1072-reader-packet-preview.mjs');
-await import('./diagnose-v1073-preview-lifecycle.mjs');
+await import('./patch-v1073-safari-preview-url.mjs');
+await import('./finalize-v1073-safari-preview-url.mjs');
