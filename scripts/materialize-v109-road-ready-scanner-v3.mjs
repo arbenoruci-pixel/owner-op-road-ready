@@ -14,15 +14,17 @@ const source = gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
 const runtime = path.join(ROOT, 'scripts/materialize-v109-road-ready-scanner-v3-runtime.mjs');
 fs.writeFileSync(runtime, source);
 
-// The first production upload split the large scanner asset manifest across
-// connector payload boundaries. Some boundaries contain an injected `"}`
-// immediately before the next base64 segment. Repair only this v109 manifest
-// signature while it is parsed; all other JSON parsing remains unchanged.
+// Repair connector payload boundaries in the one-time v109 asset manifest.
+// The first boundary injected `"}` into a base64 stream and the final upload
+// omitted the closing quote/braces. This repair is scoped only to the v109
+// scanner manifest; normal application JSON parsing remains unchanged.
 const parseJson = JSON.parse;
 JSON.parse = function roadReadyScannerV3JsonParse(value, reviver) {
-  const input = typeof value === 'string' && value.startsWith('{"version":"109.0.0","files":')
-    ? value.replace(/"\}(?=[A-Za-z0-9+/])/g, '')
-    : value;
+  let input = value;
+  if (typeof input === 'string' && input.startsWith('{"version":"109.0.0","files":')) {
+    input = input.replace(/"\}(?=[A-Za-z0-9+/])/g, '');
+    if (!input.endsWith('"}}}')) input += '"}}}';
+  }
   return parseJson(input, reviver);
 };
 
