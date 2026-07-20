@@ -56,7 +56,7 @@ pass(adapter.includes("ocrSelected:createVersionRecordV106('ocr-selected'"), 'OC
 
 const capture = read('source/src/modules/scan/SmartDocumentCaptureV106.jsx');
 pass(capture.includes('driverPreviewFileV1072'), 'driver preview continues to prefer the enhanced color version');
-pass(capture.includes('safePreviewUrlV1073'), 'Safari preview URL integrity remains installed');
+pass(capture.includes('const cleaned = fileUrl(cleanedFileV1073);') && capture.includes('previewProbeV1073.onload'), 'Safari preview URL integrity remains installed');
 
 const chain = read('scripts/run-v106-smart-capture.mjs');
 pass(chain.includes('patch-v1074-document-restore.mjs'), 'release chain installs Document Restore v107.4');
