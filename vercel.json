@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
-  "buildCommand": "npm run prebuild && node scripts/apply-v1091-trailer-drop-off.mjs && npx next build",
+  "buildCommand": "npm run prebuild && node scripts/apply-v1091-trailer-drop-off.mjs && node scripts/apply-v10922-on-duty-multiselect.mjs && npx next build",
   "outputDirectory": ".next"
 }
