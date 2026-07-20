@@ -8,6 +8,9 @@ const checkOnly = process.argv.includes('--check');
 const original = fs.readFileSync(TARGET, 'utf8');
 let text = original;
 
+const RELEASE_VERSION = '109.1.1';
+const RELEASED_AT = '2026-07-20T23:05:00.000Z';
+
 function insertBefore(token, content, marker, label) {
   if (text.includes(marker)) return;
   const index = text.indexOf(token);
@@ -21,6 +24,67 @@ function replaceSection(startToken, endToken, content, marker, label) {
   const end = start >= 0 ? text.indexOf(endToken, start + startToken.length) : -1;
   if (start < 0 || end < 0) throw new Error(`v109.1 patch target missing: ${label}`);
   text = `${text.slice(0, start)}${content}${text.slice(end)}`;
+}
+
+function writeJson(relativePath, transform) {
+  const target = path.join(ROOT, relativePath);
+  const value = JSON.parse(fs.readFileSync(target, 'utf8'));
+  transform(value);
+  if (!checkOnly) fs.writeFileSync(target, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function replaceText(relativePath, pattern, replacement, label) {
+  const target = path.join(ROOT, relativePath);
+  const before = fs.readFileSync(target, 'utf8');
+  const after = before.replace(pattern, replacement);
+  if (after === before && !before.includes(replacement)) {
+    throw new Error(`v109.1 release version target missing: ${label}`);
+  }
+  if (!checkOnly && after !== before) fs.writeFileSync(target, after);
+}
+
+function finalizeReleaseVersion() {
+  writeJson('package.json', pkg => {
+    pkg.version = RELEASE_VERSION;
+  });
+
+  const lockPath = path.join(ROOT, 'package-lock.json');
+  if (fs.existsSync(lockPath)) {
+    writeJson('package-lock.json', lock => {
+      lock.version = RELEASE_VERSION;
+      if (lock.packages?.['']) lock.packages[''].version = RELEASE_VERSION;
+    });
+  }
+
+  replaceText(
+    'source/src/core/update/appUpdate.js',
+    /const FALLBACK_APP_VERSION = '[^']+';/,
+    `const FALLBACK_APP_VERSION = '${RELEASE_VERSION}';`,
+    'app fallback version',
+  );
+  replaceText(
+    'public/sw.js',
+    /const OWNER_OP_SW_VERSION = '[^']+';/,
+    `const OWNER_OP_SW_VERSION = '${RELEASE_VERSION}';`,
+    'service worker version',
+  );
+
+  writeJson('public/app-version.json', release => {
+    release.version = RELEASE_VERSION;
+    release.appVersion = RELEASE_VERSION;
+    release.codeVersion = RELEASE_VERSION;
+    release.build = 'v109.1.1-storage-persistence';
+    release.releasedAt = RELEASED_AT;
+    release.updatedAt = RELEASED_AT;
+    release.publishedAt = RELEASED_AT;
+    release.label = 'v109.1.1 Storage Persistence Fix';
+    release.notes = [
+      'Persists every app snapshot to IndexedDB and a local browser fallback.',
+      'Verifies IndexedDB writes by reading the saved snapshot back before reporting success.',
+      'Restores the newest available snapshot after an iPhone or PWA storage interruption.',
+      'Forces the installed PWA and service worker to load the corrected storage bundle.',
+    ];
+  });
 }
 
 insertBefore(
@@ -79,7 +143,7 @@ replaceSection(
       locationSource: gpsFix ? 'gps' : 'manual',
     };
   }
-`,
+ `,
   "const reason = trailerDrop ? 'Drop Trailer' : selectedReason;",
   'payload section',
 );
@@ -128,7 +192,7 @@ replaceSection(
     }
     onApplyStatus(p);
   }
-`,
+ `,
   'const trailerDrop = dropOffSelected',
   'save section',
 );
@@ -154,6 +218,9 @@ if (text.includes("if (dropOffSelected && !dropContainer.trim() && !dropChassis.
 }
 
 if (!checkOnly && text !== original) fs.writeFileSync(TARGET, text);
+finalizeReleaseVersion();
 console.log(checkOnly
-  ? 'v109.1 trailer Drop Off verified'
-  : (text === original ? 'v109.1 trailer Drop Off already applied' : 'v109.1 trailer Drop Off applied'));
+  ? `v${RELEASE_VERSION} trailer Drop Off and storage release verified`
+  : (text === original
+    ? `v${RELEASE_VERSION} trailer Drop Off already applied; storage release finalized`
+    : `v${RELEASE_VERSION} trailer Drop Off applied; storage release finalized`));
