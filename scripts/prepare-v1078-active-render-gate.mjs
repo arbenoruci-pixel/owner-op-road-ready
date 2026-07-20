@@ -26,6 +26,8 @@ for (const forbidden of ['Check document edge', 'Paper edge — angle corrected'
 }
 console.log('PASS old blue-point edge scanner is unreachable from the active component render');`;
 if (finalize.includes(oldFinalizeGate)) finalize = finalize.replace(oldFinalizeGate, newFinalizeGate);
+finalize = finalize.replace(`[capture.includes("title.text = 'Photos'"), 'Photos import remains explicit']`, `[runtime.includes("title.text = 'Photos'"), 'Photos import remains explicit']`);
 if (!finalize.includes('old blue-point edge scanner is unreachable')) throw new Error('v107.8 final gate preparation failed');
+if (!finalize.includes(`[runtime.includes("title.text = 'Photos'")`)) throw new Error('v107.8 Photos gate preparation failed');
 fs.writeFileSync(finalizePath, finalize);
 console.log('v107.8 active render gate prepared');
