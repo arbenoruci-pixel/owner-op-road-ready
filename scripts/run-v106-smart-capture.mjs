@@ -40,3 +40,5 @@ await import('./finalize-v1077-gallery-restore.mjs');
 await import('./prepare-v1078-active-render-gate.mjs');
 await import('./patch-v1078-scanbot-submit-flow.mjs');
 await import('./finalize-v1078-scanbot-submit-flow.mjs');
+await import('./patch-v1079-single-page-review.mjs');
+await import('./finalize-v1079-single-page-review.mjs');
