@@ -1,3 +1,4 @@
+await import('./prepare-v1070-local-vision.mjs');
 await import('./prepare-v1062-smart-autoframe.mjs');
 await import('./prepare-v1064-correction-contour.mjs');
 await import('./materialize-v106-smart-capture.mjs');
@@ -7,6 +8,7 @@ await import('./patch-v1067-angle-refinement.mjs');
 await import('./patch-v1068-planar-rectification.mjs');
 await import('./patch-v1069-warp-module.mjs');
 await import('./patch-v1069-homography-enhance.mjs');
+await import('./patch-v1070-local-vision-loader.mjs');
 await import('./verify-smart-capture-v106.mjs');
 await import('./run-v1061-document-evidence.mjs');
 await import('./finalize-v1062-smart-autoframe.mjs');
@@ -16,3 +18,4 @@ await import('./finalize-v1066-outer-corners.mjs');
 await import('./finalize-v1067-angle-refinement.mjs');
 await import('./finalize-v1068-planar-rectification.mjs');
 await import('./finalize-v1069-opencv-homography.mjs');
+await import('./finalize-v1070-local-vision.mjs');
