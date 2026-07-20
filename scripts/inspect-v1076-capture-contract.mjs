@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+const path = 'source/src/modules/scan/SmartDocumentCaptureV106.jsx';
+const source = fs.readFileSync(path, 'utf8');
+const signature = source.match(/export default function SmartDocumentCaptureV106\s*\(([^)]*)\)/s)?.[1] || 'SIGNATURE_NOT_FOUND';
+const callbacks = [...new Set([...source.matchAll(/\b(on[A-Z][A-Za-z0-9_]*)\b/g)].map(match => match[1]))];
+const handlers = [...new Set([...source.matchAll(/(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/g)].map(match => match[1]))].filter(name => /capture|import|finish|complete|file|scan/i.test(name));
+console.log('V1076_CAPTURE_SIGNATURE=' + signature.replace(/\s+/g, ' '));
+console.log('V1076_CAPTURE_CALLBACKS=' + callbacks.join(','));
+console.log('V1076_CAPTURE_HANDLERS=' + handlers.join(','));
+console.log('V1076_CAPTURE_HEAD=' + source.slice(0, 2200).replace(/\s+/g, ' '));
