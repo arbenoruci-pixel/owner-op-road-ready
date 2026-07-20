@@ -1,0 +1,168 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const TARGET = path.join(ROOT, 'source/src/modules/status/StatusWorkflowSheet.jsx');
+const checkOnly = process.argv.includes('--check');
+const original = fs.readFileSync(TARGET, 'utf8');
+let text = original;
+
+function replaceOnce(before, after, label) {
+  if (text.includes(after)) return;
+  if (!text.includes(before)) throw new Error(`v109.1 patch target missing: ${label}`);
+  text = text.replace(before, after);
+}
+
+replaceOnce(
+`function parseDestinationState(value = '') {
+  const parsed = parseLocationText(value, '');
+  return { city: parsed.city, state: parsed.state };
+}
+
+export default function StatusWorkflowSheet`,
+`function parseDestinationState(value = '') {
+  const parsed = parseLocationText(value, '');
+  return { city: parsed.city, state: parsed.state };
+}
+
+function currentTrailerLabel(state = {}) {
+  const value = String(state.currentTrailer || state.equipment?.trailer || '').trim();
+  if (!value || /^(no|none|n\\/?a)\\s*(trailer|equipment)?$/i.test(value)) return '';
+  return value;
+}
+
+export default function StatusWorkflowSheet`,
+'currentTrailerLabel helper'
+);
+
+replaceOnce(
+`    const reason = reasonText(selectedReasons) || reasonList(status)[0];
+    const hookEmpty = reasonNeedsHookEmpty(status, selectedReasons);`,
+`    const selectedReason = reasonText(selectedReasons) || reasonList(status)[0];
+    const currentTrailer = currentTrailerLabel(state);
+    const trailerDrop = reasonNeedsDropOff(status, selectedReasons)
+      && !dropContainer.trim()
+      && !dropChassis.trim()
+      && !!currentTrailer;
+    const reason = trailerDrop ? 'Drop Trailer' : selectedReason;
+    const hookEmpty = reasonNeedsHookEmpty(status, selectedReasons);`,
+'payload trailer drop decision'
+);
+
+replaceOnce(
+`      droppedTrailer: '',
+      hookedTrailer: '',`,
+`      droppedTrailer: trailerDrop ? currentTrailer : '',
+      hookedTrailer: '',`,
+'payload droppedTrailer'
+);
+
+replaceOnce(
+`        mode: reasonNeedsDropOff(status, selectedReasons) ? 'drop_off' : (reasonNeedsDropHook(status, selectedReasons) ? 'drop_hook' : (hookEmpty ? 'hook_empty' : '')),`,
+`        mode: trailerDrop ? '' : (reasonNeedsDropOff(status, selectedReasons) ? 'drop_off' : (reasonNeedsDropHook(status, selectedReasons) ? 'drop_hook' : (hookEmpty ? 'hook_empty' : ''))),`,
+'payload trailer drop mode'
+);
+
+replaceOnce(
+`  function save() {
+    if (dropOffSelected && !dropContainer.trim() && !dropChassis.trim()) {
+      setGpsStatus('Add the container or chassis you dropped off.');
+      return;
+    }`,
+`  function save() {
+    const trailerDrop = dropOffSelected
+      && !dropContainer.trim()
+      && !dropChassis.trim()
+      && !!currentTrailerLabel(state);
+    if (dropOffSelected && !trailerDrop && !dropContainer.trim() && !dropChassis.trim()) {
+      setGpsStatus('Add the trailer, container, or chassis you dropped off.');
+      return;
+    }`,
+'save trailer drop validation'
+);
+
+replaceOnce(
+`  const equipmentDropSelected = dropHookSelected || dropOffSelected || hookEmptySelected;
+  const currentEquipmentText = [state.equipment?.container, state.equipment?.chassis].filter(Boolean).join(' / ') || state.currentTrailer || 'No equipment set';`,
+`  const equipmentDropSelected = dropHookSelected || dropOffSelected || hookEmptySelected;
+  const currentTrailer = currentTrailerLabel(state);
+  const hasIntermodalDropEquipment = Boolean(dropContainer.trim() || dropChassis.trim());
+  const trailerDropSelected = dropOffSelected && !hasIntermodalDropEquipment && !!currentTrailer;
+  const currentEquipmentText = [state.equipment?.container, state.equipment?.chassis].filter(Boolean).join(' / ') || currentTrailer || 'No equipment set';`,
+'trailer drop UI state'
+);
+
+replaceOnce(
+`              <label>{dropOffSelected ? 'Drop off equipment' : 'Drop & hook equipment'}</label>
+              <span>{dropOffSelected ? 'drop only' : (hookEmptySelected ? 'empty / reposition' : 'required for next load')}</span>`,
+`              <label>{trailerDropSelected ? 'Drop off trailer' : (dropOffSelected ? 'Drop off equipment' : 'Drop & hook equipment')}</label>
+              <span>{trailerDropSelected ? 'trailer only' : (dropOffSelected ? 'drop only' : (hookEmptySelected ? 'empty / reposition' : 'required for next load'))}</span>`,
+'trailer drop heading'
+);
+
+replaceOnce(
+`              <label>
+                <span>Drop container</span>
+                <input value={dropContainer} onChange={(e) => setDropContainer(e.target.value.toUpperCase())} placeholder="Old container #" autoComplete="off" />
+              </label>
+              <label>
+                <span>Drop chassis</span>
+                <input value={dropChassis} onChange={(e) => setDropChassis(e.target.value.toUpperCase())} placeholder="Old chassis #" autoComplete="off" />
+              </label>`,
+`              {!trailerDropSelected && (
+                <>
+                  <label>
+                    <span>Drop container</span>
+                    <input value={dropContainer} onChange={(e) => setDropContainer(e.target.value.toUpperCase())} placeholder="Old container #" autoComplete="off" />
+                  </label>
+                  <label>
+                    <span>Drop chassis</span>
+                    <input value={dropChassis} onChange={(e) => setDropChassis(e.target.value.toUpperCase())} placeholder="Old chassis #" autoComplete="off" />
+                  </label>
+                </>
+              )}`,
+'hide intermodal inputs for trailer drop'
+);
+
+replaceOnce(
+`              {hookEmptySelected && (
+                <div className="drop-hook-note hook-empty-note">`,
+`              {trailerDropSelected && (
+                <div className="drop-hook-note trailer-drop-note">
+                  Drop Off will save ON DUTY Drop Trailer and clear trailer {currentTrailer}. No container or chassis needed.
+                </div>
+              )}
+              {hookEmptySelected && (
+                <div className="drop-hook-note hook-empty-note">`,
+'trailer drop explanation'
+);
+
+replaceOnce(
+`              {dropOffSelected && (
+                <div className="drop-hook-note drop-off-note">`,
+`              {dropOffSelected && !trailerDropSelected && (
+                <div className="drop-hook-note drop-off-note">`,
+'intermodal-only drop note'
+);
+
+const required = [
+  'function currentTrailerLabel(state = {})',
+  "const reason = trailerDrop ? 'Drop Trailer' : selectedReason;",
+  "droppedTrailer: trailerDrop ? currentTrailer : ''",
+  "mode: trailerDrop ? ''",
+  'const trailerDropSelected = dropOffSelected',
+  "trailerDropSelected ? 'Drop off trailer'",
+  'No container or chassis needed.',
+];
+for (const marker of required) {
+  if (!text.includes(marker)) throw new Error(`v109.1 verification failed: ${marker}`);
+}
+if (text.includes("if (dropOffSelected && !dropContainer.trim() && !dropChassis.trim())")) {
+  throw new Error('v109.1 verification failed: old unconditional intermodal validation remains');
+}
+
+if (!checkOnly && text !== original) fs.writeFileSync(TARGET, text);
+console.log(checkOnly
+  ? 'v109.1 trailer Drop Off verified'
+  : (text === original ? 'v109.1 trailer Drop Off already applied' : 'v109.1 trailer Drop Off applied'));
