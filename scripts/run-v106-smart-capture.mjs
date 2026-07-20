@@ -35,3 +35,5 @@ await import('./finalize-v1075-scanbot-professional.mjs');
 await import('./prepare-v1076-template-escape.mjs');
 await import('./patch-v1076-real-scanbot-rtu.mjs');
 await import('./finalize-v1076-real-scanbot-rtu.mjs');
+await import('./patch-v1077-gallery-restore.mjs');
+await import('./finalize-v1077-gallery-restore.mjs');
