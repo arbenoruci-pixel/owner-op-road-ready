@@ -1,3 +1,4 @@
+await import('./prepare-v1070-jscanify-integrity.mjs');
 await import('./prepare-v1070-local-vision.mjs');
 await import('./prepare-v1062-smart-autoframe.mjs');
 await import('./prepare-v1064-correction-contour.mjs');
