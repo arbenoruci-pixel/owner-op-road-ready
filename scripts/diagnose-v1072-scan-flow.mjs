@@ -27,6 +27,16 @@ function walk(directory) {
   return output;
 }
 
+function printRange(relative, start, end) {
+  const absolute = path.join(ROOT, relative);
+  if (!fs.existsSync(absolute)) return;
+  const lines = fs.readFileSync(absolute, 'utf8').split(/\r?\n/);
+  console.log(`=== RANGE ${relative}:${start}-${end} ===`);
+  for (let index = Math.max(0, start - 1); index < Math.min(lines.length, end); index += 1) {
+    console.log(`${index + 1}: ${lines[index].slice(0, 360)}`);
+  }
+}
+
 console.log('=== v107.2 scan-flow diagnostics ===');
 for (const absolute of walk(scanDir)) {
   const relative = path.relative(ROOT, absolute);
@@ -42,4 +52,9 @@ for (const absolute of walk(scanDir)) {
     hits.slice(0, 80).forEach(hit => console.log(hit));
   }
 }
+printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 520, 580);
+printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 800, 900);
+printRange('source/src/modules/scan/webScannerAdapterV106.js', 700, 930);
+printRange('source/src/modules/scan/smartScanPro.js', 210, 310);
+printRange('source/src/modules/scan/smartScanProV989.js', 480, 550);
 console.log('=== end v107.2 scan-flow diagnostics ===');
