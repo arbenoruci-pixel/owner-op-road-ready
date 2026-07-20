@@ -26,7 +26,7 @@ export function restorePixelV1074(input = {}) {
   const highlight = Math.max(0, luminance - background);
   const detail = luminance - soft;
   let value = 246 - (inkDepth * 2.18) + (highlight * .18) + (detail * 1.08);
-  if (inkDepth < 9 && chroma < 24) value = Math.max(value, 243 + (highlight * .12));
+  if (inkDepth < 9 && chroma < 36) value = Math.max(value, 243 + (highlight * .12));
   if (inkDepth > 26) value -= Math.min(24, (inkDepth - 26) * .32);
   value = clampV1074(value, 5, 250);
 
@@ -37,7 +37,7 @@ export function restorePixelV1074(input = {}) {
   }
   if (mode === 'gray') return { red:value, green:value, blue:value, value };
 
-  const coloredMark = chroma > 20 && inkDepth > 7;
+  const coloredMark = chroma > 24 && inkDepth > 12;
   const saturation = coloredMark ? .92 : chroma > 10 && inkDepth > 14 ? .50 : .18;
   const redDelta = red - luminance;
   const greenDelta = green - luminance;
@@ -83,7 +83,7 @@ function expandedMapV1074(source, divisor, blurPx = 0) {
   context.fillRect(0, 0, output.width, output.height);
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
-  if (blurPx > 0 && 'filter' in context) context.filter = \`blur(\${blurPx}px)\`;
+  if (blurPx > 0 && 'filter' in context) context.filter = `blur(${blurPx}px)`;
   context.drawImage(small, 0, 0, output.width, output.height);
   context.filter = 'none';
   return context.getImageData(0, 0, output.width, output.height).data;
