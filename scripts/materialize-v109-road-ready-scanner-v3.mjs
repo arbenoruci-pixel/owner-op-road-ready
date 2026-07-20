@@ -13,8 +13,22 @@ const encoded = fs.readdirSync(chunkDir)
 const source = gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
 const runtime = path.join(ROOT, 'scripts/materialize-v109-road-ready-scanner-v3-runtime.mjs');
 fs.writeFileSync(runtime, source);
+
+// The first production upload split the large scanner asset manifest across
+// connector payload boundaries. Some boundaries contain an injected `"}`
+// immediately before the next base64 segment. Repair only this v109 manifest
+// signature while it is parsed; all other JSON parsing remains unchanged.
+const parseJson = JSON.parse;
+JSON.parse = function roadReadyScannerV3JsonParse(value, reviver) {
+  const input = typeof value === 'string' && value.startsWith('{"version":"109.0.0","files":')
+    ? value.replace(/"\}(?=[A-Za-z0-9+/])/g, '')
+    : value;
+  return parseJson(input, reviver);
+};
+
 try {
   await import(`${pathToFileURL(runtime).href}?v=${Date.now()}`);
 } finally {
+  JSON.parse = parseJson;
   fs.rmSync(runtime, { force:true });
 }
