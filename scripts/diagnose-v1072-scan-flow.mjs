@@ -15,6 +15,8 @@ const needles = [
   'candidates.slice',
   'renderDocumentFile',
   'detectDocumentRegions',
+  'previewUrls',
+  'turbo-preview-paper',
 ];
 
 function walk(directory) {
@@ -22,7 +24,7 @@ function walk(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes:true })) {
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) output.push(...walk(absolute));
-    else if (/\.(js|jsx|mjs|ts|tsx)$/.test(entry.name)) output.push(absolute);
+    else if (/\.(js|jsx|mjs|ts|tsx|css)$/.test(entry.name)) output.push(absolute);
   }
   return output;
 }
@@ -49,12 +51,12 @@ for (const absolute of walk(scanDir)) {
   });
   if (hits.length) {
     console.log(`--- ${relative}`);
-    hits.slice(0, 80).forEach(hit => console.log(hit));
+    hits.slice(0, 100).forEach(hit => console.log(hit));
   }
 }
-printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 520, 580);
-printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 800, 900);
-printRange('source/src/modules/scan/webScannerAdapterV106.js', 700, 930);
+printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 520, 700);
+printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 780, 840);
+printRange('source/src/modules/scan/webScannerAdapterV106.js', 700, 940);
 printRange('source/src/modules/scan/smartScanPro.js', 210, 310);
 printRange('source/src/modules/scan/smartScanProV989.js', 480, 550);
 console.log('=== end v107.2 scan-flow diagnostics ===');
