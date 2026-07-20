@@ -10,14 +10,13 @@ const capturePath = 'source/src/modules/scan/SmartDocumentCaptureV106.jsx';
 let capture = read(capturePath);
 const captureImport = "import { rectificationPolicyV1068 } from './rectificationPolicyV1068.js'; // safe-planar-v1068";
 if (!capture.includes(captureImport)) {
-  if (/^['\"]use client['\"];?\n/.test(capture)) {
-    capture = capture.replace(/^(['\"]use client['\"];?\n)/, `$1${captureImport}\n`);
+  if (/^['\"]use client['\"];?\r?\n/.test(capture)) {
+    capture = capture.replace(/^(['\"]use client['\"];?\r?\n)/, `$1${captureImport}\n`);
   } else {
     capture = `${captureImport}\n${capture}`;
   }
 }
 
-const preparedPattern = /  function preparedCandidate\(candidate, editedContour = null\) \{[\s\S]*?\n  \}(?=\n  async function processSelection)/;
 const preparedReplacement = `  function preparedCandidate(candidate, editedContour = null) {
     const edited = editedContour ? normalizeContourV106(editedContour) : null;
     const changed = Boolean(edited && candidateDelta(candidate.contour, edited) > .002);
@@ -44,8 +43,14 @@ const preparedReplacement = `  function preparedCandidate(candidate, editedConto
     };
   }`;
 if (!capture.includes('rectificationPolicyV1068:policy')) {
-  if (!preparedPattern.test(capture)) throw new Error('v106.8 missing preparedCandidate block');
-  capture = capture.replace(preparedPattern, preparedReplacement);
+  const startNeedle = '  function preparedCandidate(candidate, editedContour = null) {';
+  const endNeedle = '\n  async function processSelection';
+  const start = capture.indexOf(startNeedle);
+  const end = capture.indexOf(endNeedle, start + startNeedle.length);
+  if (start < 0 || end < 0 || end <= start) {
+    throw new Error(`v106.8 missing preparedCandidate boundaries start=${start} end=${end}`);
+  }
+  capture = `${capture.slice(0, start)}${preparedReplacement}${capture.slice(end)}`;
 }
 write(capturePath, capture);
 
@@ -54,20 +59,21 @@ let adapter = read(adapterPath);
 const adapterImport = "import { rectificationPolicyV1068 } from './rectificationPolicyV1068.js'; // safe-planar-v1068";
 if (!adapter.includes(adapterImport)) adapter = `${adapterImport}\n${adapter}`;
 
-const meshPattern = /      let corrected;\n      let geometryMode = 'planar';\n      const useMesh = normalized\.geometryMode === 'mesh'\n        \|\| normalized\.geometryMode !== 'planar' && Number\(normalized\.metrics\?\.curvatureScore \|\| 0\) > \.12;/;
-const meshReplacement = `      let corrected;
+if (!adapter.includes("const policy = rectificationPolicyV1068(normalized")) {
+  const startNeedle = "      let corrected;\n      let geometryMode = 'planar';";
+  const endNeedle = "      if (!normalized.fullPhoto && useMesh) {";
+  const start = adapter.indexOf(startNeedle);
+  const end = adapter.indexOf(endNeedle, start + startNeedle.length);
+  if (start < 0 || end < 0 || end <= start) {
+    throw new Error(`v106.8 missing rectification decision boundaries start=${start} end=${end}`);
+  }
+  const replacement = `      let corrected;
       const policy = rectificationPolicyV1068(normalized, normalized.geometryMode || 'auto');
       let geometryMode = policy.geometryMode;
-      const useMesh = policy.useMesh;`;
-if (!adapter.includes("const policy = rectificationPolicyV1068(normalized")) {
-  if (!meshPattern.test(adapter)) throw new Error('v106.8 missing rectification mesh decision');
-  adapter = adapter.replace(meshPattern, meshReplacement);
+      const useMesh = policy.useMesh;
+`;
+  adapter = `${adapter.slice(0, start)}${replacement}${adapter.slice(end)}`;
 }
-
-adapter = adapter.replace(
-  "          corrected = await meshDewarpFileV106(file, normalized.mesh, { name:options.name || `road-ready-dewarped-${Date.now()}.jpg` });\n          geometryMode = 'mesh';",
-  "          corrected = await meshDewarpFileV106(file, normalized.mesh, { name:options.name || `road-ready-dewarped-${Date.now()}.jpg` });\n          geometryMode = 'mesh';",
-);
 
 for (const marker of [
   'safe-planar-v1068',
