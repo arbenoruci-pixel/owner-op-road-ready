@@ -54,7 +54,7 @@ for (const absolute of walk(scanDir)) {
     hits.slice(0, 100).forEach(hit => console.log(hit));
   }
 }
-printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 520, 700);
+printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 430, 700);
 printRange('source/src/modules/scan/SmartDocumentCaptureV106.jsx', 780, 840);
 printRange('source/src/modules/scan/webScannerAdapterV106.js', 700, 940);
 printRange('source/src/modules/scan/smartScanPro.js', 210, 310);
