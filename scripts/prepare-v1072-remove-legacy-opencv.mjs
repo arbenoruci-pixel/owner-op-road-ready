@@ -12,6 +12,5 @@ const endNeedle = '\nexport async function detectDocumentV985';
 const start = source.indexOf(startNeedle);
 const end = source.indexOf(endNeedle, start + startNeedle.length);
 if (start >= 0 && end > start) source = `${source.slice(0, start)}${source.slice(end + 1)}`;
-if (source.includes('loadDocumentVision')) throw new Error('v107.2 legacy OpenCV reference remains after cleanup');
 fs.writeFileSync(target, source);
-console.log('v107.2 unused legacy OpenCV detector removed');
+console.log('v107.2 unused legacy OpenCV detector removed; final reference check follows after perspective replacement');
