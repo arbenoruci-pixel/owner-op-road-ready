@@ -13,14 +13,6 @@ const write = (relative, content) => {
 
 const runtimePath = 'source/src/modules/scan/scanbotRtuV1076.js';
 let runtime = read(runtimePath);
-const oldExport = `  for (let index = 0; index < result.document.pages.length; index += 1) {
-    const page = result.document.pages[index];
-    options.onStatus?.(\`Preparing page \${index + 1}…\`);
-    const originalImage = await page.loadOriginalImage();
-    const finalImage = await page.finalRawImage();
-    originals.push(jpegFileV1076(await sdk.imageToJpeg(originalImage), \`road-ready-scanbot-original-\${index + 1}.jpg\`));
-    cleaned.push(jpegFileV1076(await sdk.imageToJpeg(finalImage), \`road-ready-scanbot-cleaned-\${index + 1}.jpg\`));
-  }`;
 const newExport = `  for (let index = 0; index < result.document.pages.length; index += 1) {
     const page = result.document.pages[index];
     options.onStatus?.(\`Preparing page \${index + 1} of \${result.document.pages.length}…\`);
@@ -42,8 +34,10 @@ const newExport = `  for (let index = 0; index < result.document.pages.length; i
     cleaned.push(jpegFileV1076(finalBytes, \`road-ready-scanbot-cleaned-\${index + 1}.jpg\`));
   }`;
 if (!runtime.includes('scanbot_final_image_timeout')) {
-  if (!runtime.includes(oldExport)) throw new Error('v107.8 Scanbot page export block missing');
-  runtime = runtime.replace(oldExport, newExport);
+  const exportStart = runtime.indexOf('  for (let index = 0; index < result.document.pages.length; index += 1) {');
+  const exportEnd = runtime.indexOf('\n  return { originals, cleaned, pageCount:cleaned.length, document:result.document };', exportStart);
+  if (exportStart < 0 || exportEnd < 0 || exportEnd <= exportStart) throw new Error(`v107.8 Scanbot page export boundaries missing start=${exportStart} end=${exportEnd}`);
+  runtime = `${runtime.slice(0, exportStart)}${newExport}${runtime.slice(exportEnd)}`;
 }
 write(runtimePath, runtime);
 
