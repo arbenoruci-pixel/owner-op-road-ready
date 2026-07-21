@@ -6,7 +6,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const APP_TARGET = path.join(ROOT, 'source/src/app/App.jsx');
 const EDITOR_TARGET = path.join(ROOT, 'source/src/modules/editor/EditEventSheet.jsx');
 const RELEASE_VERSION = '109.2.5';
-const RELEASED_AT = '2026-07-21T02:20:00.000Z';
+const RELEASED_AT = '2026-07-21T02:25:00.000Z';
 
 function replaceOnce(text, oldValue, newValue, label) {
   if (text.includes(newValue)) return text;
@@ -33,11 +33,20 @@ function replaceFileText(relativePath, pattern, replacement, label) {
 
 function patchStatusArtifactGuard() {
   const before = fs.readFileSync(APP_TARGET, 'utf8');
-  const oldGuard = `  // Combined notes are usually evidence that an overridden event kept stale text.\n  if (/\\s\\/\\s/.test(value) && /(pre[- ]?trip|inspection|on duty|driving|new event)/i.test(value)) return true;`;
-  const newGuard = `  // A slash can be part of a legitimate ON DUTY activity label. Remove those\n  // known labels before checking for the legacy stale-status separator.\n  const artifactProbe = value\n    .replace(/pickup\\s*\\/\\s*loading/gi, 'pickup-loading')\n    .replace(/delivery\\s*\\/\\s*unloading/gi, 'delivery-unloading')\n    .replace(/hook empty\\s*\\/\\s*reposition/gi, 'hook-empty-reposition');\n  if (/\\s\\/\\s/.test(artifactProbe) && /(pre[- ]?trip|inspection|on duty|driving|new event)/i.test(artifactProbe)) return true;`;
-  const after = replaceOnce(before, oldGuard, newGuard, 'legitimate ON DUTY slash guard');
+  if (before.includes(".replace(/delivery\\s*\\/\\s*unloading/gi, 'delivery-unloading')")) return false;
+
+  const slashGuardLine = before
+    .split(/\r?\n/)
+    .find(line => line.includes('if (/\\s\\/\\s/.test(value)') && line.includes('new event'));
+  if (!slashGuardLine) throw new Error('v109.2.5 patch target missing: slash artifact guard line');
+
+  const indent = slashGuardLine.match(/^\s*/)?.[0] || '  ';
+  const newGuard = `${indent}// A slash can be part of a legitimate ON DUTY activity label. Remove those\n${indent}// known labels before checking for the legacy stale-status separator.\n${indent}const artifactProbe = value\n${indent}  .replace(/pickup\\s*\\/\\s*loading/gi, 'pickup-loading')\n${indent}  .replace(/delivery\\s*\\/\\s*unloading/gi, 'delivery-unloading')\n${indent}  .replace(/hook empty\\s*\\/\\s*reposition/gi, 'hook-empty-reposition');\n${indent}if (/\\s\\/\\s/.test(artifactProbe) && /(pre[- ]?trip|inspection|on duty|driving|new event)/i.test(artifactProbe)) return true;`;
+
+  const after = before.replace(slashGuardLine, newGuard);
+  if (after === before) throw new Error('v109.2.5 failed to replace slash artifact guard');
   fs.writeFileSync(APP_TARGET, after);
-  return after !== before;
+  return true;
 }
 
 function patchEditEventPersistence() {
@@ -67,9 +76,7 @@ function patchEditEventPersistence() {
 
   const oldEffectRestore = `    setSelectedOnReasons(parseOnDutyNote(next.note).selected);`;
   const newEffectRestore = `    setSelectedOnReasons(selectedReasonsFromForm(next));`;
-  if (after.includes(oldEffectRestore)) {
-    after = after.replace(oldEffectRestore, newEffectRestore);
-  }
+  if (after.includes(oldEffectRestore)) after = after.replace(oldEffectRestore, newEffectRestore);
 
   after = replaceOnce(
     after,
@@ -79,7 +86,7 @@ function patchEditEventPersistence() {
   );
 
   const required = [
-    "reasons:Array.isArray(event.reasons)",
+    'reasons:Array.isArray(event.reasons)',
     'function selectedReasonsFromForm(form = {})',
     'useState(() => selectedReasonsFromForm(initialForm))',
     "reasons:status === 'ON'",
