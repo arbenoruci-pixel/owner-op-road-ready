@@ -17,4 +17,6 @@ run(process.execPath, ['scripts/apply-v10935-reliable-update.mjs']);
 run(process.execPath, ['scripts/verify-v10935-reliable-update.mjs']);
 run(process.execPath, ['scripts/apply-v10936-reference-quality.mjs']);
 run(process.execPath, ['scripts/verify-v10936-reference-quality.mjs']);
+run(process.execPath, ['scripts/apply-v10937-update-reload-loop.mjs']);
+run(process.execPath, ['scripts/verify-v10937-update-reload-loop.mjs']);
 run('npx', ['next', 'build']);
