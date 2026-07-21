@@ -1,0 +1,210 @@
+import { applyHomographyV3, computeHomographyV3 } from './PerspectiveEngineV3.js';
+import { distanceV3, orderCornersV3, scannerErrorV3 } from './scannerTypesV3.js';
+
+export const STANDARD_PAGE_FORMATS_V10933 = Object.freeze([
+  { id:'letter', label:'US Letter', portraitRatio:8.5 / 11 },
+  { id:'a4', label:'A4', portraitRatio:210 / 297 },
+  { id:'legal', label:'US Legal', portraitRatio:8.5 / 14 },
+]);
+
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, Number(value) || 0));
+}
+
+function insetCorners(corners, ratio = 0) {
+  const safe = clamp(ratio, 0, .006);
+  if (!safe) return corners.map(point => ({ ...point }));
+  const center = corners.reduce((total, point) => ({
+    x:total.x + point.x / corners.length,
+    y:total.y + point.y / corners.length,
+  }), { x:0, y:0 });
+  return corners.map(point => ({
+    x:point.x + (center.x - point.x) * safe,
+    y:point.y + (center.y - point.y) * safe,
+  }));
+}
+
+function nearestStandardPage(portraitRatio, options = {}) {
+  if (options.snapToStandard === false) return null;
+  const ratio = clamp(portraitRatio, .01, 1);
+  const pageLike = ratio >= .54 && ratio <= .90;
+  if (!pageLike) return null;
+
+  // Road Ready is a US trucking product. Most full-page BOL, POD, rate and
+  // settlement documents are US Letter. A wider tolerance repairs the common
+  // perspective case where one side of the photographed page is farther away.
+  if (options.usLetterBias !== false && ratio >= .72 && ratio <= .90) {
+    const relativeError = Math.abs(ratio - (8.5 / 11)) / (8.5 / 11);
+    return {
+      ...STANDARD_PAGE_FORMATS_V10933[0],
+      score:relativeError,
+      confidence:clamp(1 - relativeError / .18, 0, 1),
+      reason:'us-letter-page-prior',
+    };
+  }
+
+  let best = null;
+  for (const format of STANDARD_PAGE_FORMATS_V10933) {
+    const relativeError = Math.abs(ratio - format.portraitRatio) / format.portraitRatio;
+    if (!best || relativeError < best.score) best = { ...format, score:relativeError };
+  }
+  const tolerance = clamp(options.snapTolerance ?? .16, .05, .24);
+  if (!best || best.score > tolerance) return null;
+  return {
+    ...best,
+    confidence:clamp(1 - best.score / tolerance, 0, 1),
+    reason:'nearest-standard-page',
+  };
+}
+
+function measuredGeometry(width, height, normalizedCorners) {
+  const [tl, tr, br, bl] = orderCornersV3(normalizedCorners).map(point => ({
+    x:point.x * width,
+    y:point.y * height,
+  }));
+  const top = Math.max(1, distanceV3(tl, tr));
+  const bottom = Math.max(1, distanceV3(bl, br));
+  const left = Math.max(1, distanceV3(tl, bl));
+  const right = Math.max(1, distanceV3(tr, br));
+
+  // Geometric means are less sensitive than a single edge to perspective and
+  // to one corner being a few pixels inside the paper.
+  const measuredWidth = Math.sqrt(top * bottom);
+  const measuredHeight = Math.sqrt(left * right);
+  return {
+    top,
+    bottom,
+    left,
+    right,
+    measuredWidth,
+    measuredHeight,
+    measuredAspect:measuredWidth / measuredHeight,
+  };
+}
+
+export function estimateOutputGeometryV10933(width, height, normalizedCorners, options = {}) {
+  const measurement = measuredGeometry(width, height, normalizedCorners);
+  const portrait = measurement.measuredHeight >= measurement.measuredWidth;
+  const portraitRatio = portrait
+    ? measurement.measuredAspect
+    : 1 / Math.max(1e-6, measurement.measuredAspect);
+  const standard = nearestStandardPage(portraitRatio, options);
+  const outputAspect = standard
+    ? (portrait ? standard.portraitRatio : 1 / standard.portraitRatio)
+    : measurement.measuredAspect;
+
+  const maxDimension = Math.max(1800, Number(options.maxDimension || 3600));
+  const maxUpscale = clamp(options.maxUpscale ?? 1, 1, 1.08);
+  const measuredLong = Math.max(measurement.measuredWidth, measurement.measuredHeight);
+  let scale = Math.min(maxUpscale, maxDimension / measuredLong);
+  scale = Math.max(.1, scale);
+
+  let outputWidth;
+  let outputHeight;
+  if (portrait) {
+    outputHeight = Math.max(1200, Math.round(measurement.measuredHeight * scale));
+    outputWidth = Math.max(860, Math.round(outputHeight * outputAspect));
+    if (outputWidth > maxDimension) {
+      outputWidth = maxDimension;
+      outputHeight = Math.round(outputWidth / outputAspect);
+    }
+  } else {
+    outputWidth = Math.max(1200, Math.round(measurement.measuredWidth * scale));
+    outputHeight = Math.max(860, Math.round(outputWidth / outputAspect));
+    if (outputHeight > maxDimension) {
+      outputHeight = maxDimension;
+      outputWidth = Math.round(outputHeight * outputAspect);
+    }
+  }
+
+  return {
+    width:Math.max(720, outputWidth),
+    height:Math.max(720, outputHeight),
+    ...measurement,
+    portrait,
+    portraitRatio,
+    outputAspect,
+    pageFormat:standard?.id || 'free',
+    pageFormatLabel:standard?.label || 'Original ratio',
+    formatConfidence:standard?.confidence || 0,
+    formatReason:standard?.reason || 'measured-page-ratio',
+    scale,
+  };
+}
+
+function bilinear(data, width, height, x, y, channel) {
+  const x0 = Math.max(0, Math.min(width - 1, Math.floor(x)));
+  const y0 = Math.max(0, Math.min(height - 1, Math.floor(y)));
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const dx = x - x0;
+  const dy = y - y0;
+  const p00 = data[(y0 * width + x0) * 4 + channel];
+  const p10 = data[(y0 * width + x1) * 4 + channel];
+  const p01 = data[(y1 * width + x0) * 4 + channel];
+  const p11 = data[(y1 * width + x1) * 4 + channel];
+  return p00 * (1 - dx) * (1 - dy)
+    + p10 * dx * (1 - dy)
+    + p01 * (1 - dx) * dy
+    + p11 * dx * dy;
+}
+
+export function warpPerspectiveV10933(image, normalizedCorners, options = {}) {
+  if (!image?.data || !image.width || !image.height) {
+    throw scannerErrorV3('image_missing', 'The document image is unavailable.');
+  }
+  const ordered = orderCornersV3(normalizedCorners);
+  const trimmed = insetCorners(ordered, options.trimRatio ?? .0008);
+  const source = trimmed.map(point => ({
+    x:point.x * (image.width - 1),
+    y:point.y * (image.height - 1),
+  }));
+  const geometry = estimateOutputGeometryV10933(
+    image.width,
+    image.height,
+    trimmed,
+    options,
+  );
+  const destination = [
+    { x:0, y:0 },
+    { x:geometry.width - 1, y:0 },
+    { x:geometry.width - 1, y:geometry.height - 1 },
+    { x:0, y:geometry.height - 1 },
+  ];
+  const inverse = computeHomographyV3(destination, source);
+  const out = new Uint8ClampedArray(geometry.width * geometry.height * 4);
+
+  for (let y = 0; y < geometry.height; y += 1) {
+    for (let x = 0; x < geometry.width; x += 1) {
+      const sourcePoint = applyHomographyV3(inverse, { x, y });
+      const offset = (y * geometry.width + x) * 4;
+      if (sourcePoint.x < 0 || sourcePoint.y < 0 || sourcePoint.x >= image.width || sourcePoint.y >= image.height) {
+        out[offset] = 255;
+        out[offset + 1] = 255;
+        out[offset + 2] = 255;
+        out[offset + 3] = 255;
+        continue;
+      }
+      out[offset] = bilinear(image.data, image.width, image.height, sourcePoint.x, sourcePoint.y, 0);
+      out[offset + 1] = bilinear(image.data, image.width, image.height, sourcePoint.x, sourcePoint.y, 1);
+      out[offset + 2] = bilinear(image.data, image.width, image.height, sourcePoint.x, sourcePoint.y, 2);
+      out[offset + 3] = 255;
+    }
+  }
+
+  return {
+    width:geometry.width,
+    height:geometry.height,
+    data:out,
+    homography:inverse,
+    sourceCorners:source,
+    pageFormat:geometry.pageFormat,
+    pageFormatLabel:geometry.pageFormatLabel,
+    formatConfidence:geometry.formatConfidence,
+    formatReason:geometry.formatReason,
+    measuredAspect:geometry.measuredAspect,
+    portraitRatio:geometry.portraitRatio,
+    outputAspect:geometry.outputAspect,
+    renderScale:geometry.scale,
+  };
+}
