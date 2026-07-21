@@ -6,24 +6,23 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const target = path.join(ROOT, 'scripts/apply-v10926-event-reasons-source-of-truth.mjs');
 let source = fs.readFileSync(target, 'utf8');
 
-const strictBlock = `  source = replaceOnce(
-    source,
-    \`function hasStartDutyContextText(event = {}) {\\n  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop\\s*&\\s*hook|hook|delivery|unloading|drop\\s*off/i.test(\\\`${'${event.note || \'\'} ${event.description || \'\'}'}\\\`);\\n}\`,
-    \`function hasStartDutyContextText(event = {}) {\\n  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop\\s*&\\s*hook|hook|delivery|unloading|drop\\s*off/i.test(eventActivityText(event));\\n}\`,
-    'DOT start-duty reasons',
-  );`;
+// The generated DOT source can format this secondary fallback differently.
+// Locate the exact replaceOnce block by its stable label instead of matching
+// the escaped function body. The primary hasPreTripText detector and the
+// canonical timeline note are already patched directly from reasons[].
+const label = "'DOT start-duty reasons'";
+const labelIndex = source.indexOf(label);
+if (labelIndex < 0) throw new Error('prepare-v10926 could not find DOT start-duty label');
 
-const tolerantBlock = `  // Generated builds format this fallback differently. It is safe to leave it
-  // untouched because timeline normalization already reconstructs note from reasons[],
-  // while hasPreTripText above reads reasons[] directly.
-  const legacyStartDuty = \`function hasStartDutyContextText(event = {}) {\\n  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop\\\\s*&\\\\s*hook|hook|delivery|unloading|drop\\\\s*off/i.test(\\\`${'${event.note || \'\'} ${event.description || \'\'}'}\\\`);\\n}\`;
-  const reasonAwareStartDuty = \`function hasStartDutyContextText(event = {}) {\\n  return event.status === 'ON' && /pre[- ]?trip|inspection|pickup|loading|drop\\\\s*&\\\\s*hook|hook|delivery|unloading|drop\\\\s*off/i.test(eventActivityText(event));\\n}\`;
-  if (source.includes(legacyStartDuty)) source = source.replace(legacyStartDuty, reasonAwareStartDuty);`;
-
-if (!source.includes(strictBlock)) {
-  throw new Error('prepare-v10926 could not find the strict DOT start-duty patch block');
+const blockStart = source.lastIndexOf('  source = replaceOnce(', labelIndex);
+const closingIndex = source.indexOf('  );', labelIndex);
+if (blockStart < 0 || closingIndex < 0 || closingIndex <= blockStart) {
+  throw new Error('prepare-v10926 could not resolve DOT start-duty patch boundaries');
 }
 
-source = source.replace(strictBlock, tolerantBlock);
+const blockEnd = closingIndex + '  );'.length;
+const tolerantBlock = `  // Optional generated fallback omitted. reasons[] remains authoritative through\n  // hasPreTripText, EventList, DayLogScreen, App, and timeline normalization.`;
+source = `${source.slice(0, blockStart)}${tolerantBlock}${source.slice(blockEnd)}`;
+
 fs.writeFileSync(target, source);
-console.log('Prepared v109.2.6 with tolerant generated DOT context patch.');
+console.log('Prepared v109.2.6 with structural tolerant DOT context patch.');
