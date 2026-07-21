@@ -5,7 +5,7 @@ function luminance(r, g, b) {
 }
 
 function byte(value) {
-  return Math.max(0, Math.min(255, Math.round(Number(value) || 0));
+  return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
 }
 
 function range(value, minimum, maximum) {
