@@ -30,5 +30,6 @@ run(process.execPath, ['scripts/apply-v10942-neutral-safe-render.mjs']);
 run(process.execPath, ['scripts/apply-v10943-auto-upright.mjs']);
 run(process.execPath, ['scripts/apply-v10944-load-guide-closeout.mjs']);
 run(process.execPath, ['scripts/apply-v10946-metadata-recertification.mjs']);
+run(process.execPath, ['scripts/apply-v10947-signed-log-stability.mjs']);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
