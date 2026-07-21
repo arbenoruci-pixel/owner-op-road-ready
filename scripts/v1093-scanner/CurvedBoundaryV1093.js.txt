@@ -1,0 +1,398 @@
+import { clampV3, orderCornersV3 } from './scannerTypesV3.js';
+
+export const BOUNDARY_SIDES_V1093 = Object.freeze(['top', 'right', 'bottom', 'left']);
+export const INTERNAL_POINTS_PER_SIDE_V1093 = 5;
+export const VISIBLE_HANDLES_V1093 = 6;
+
+function clonePoint(point = {}) {
+  return { x:clampV3(point.x), y:clampV3(point.y) };
+}
+
+function lerpPoint(start = {}, end = {}, t = 0) {
+  return {
+    x:clampV3(Number(start.x || 0) + (Number(end.x || 0) - Number(start.x || 0)) * t),
+    y:clampV3(Number(start.y || 0) + (Number(end.y || 0) - Number(start.y || 0)) * t),
+  };
+}
+
+function linePoints(start, end, count) {
+  const safeCount = Math.max(3, Math.round(Number(count || INTERNAL_POINTS_PER_SIDE_V1093)));
+  return Array.from({ length:safeCount }, (_, index) => lerpPoint(start, end, index / (safeCount - 1)));
+}
+
+export function boundaryFromCornersV1093(corners = [], pointsPerSide = INTERNAL_POINTS_PER_SIDE_V1093) {
+  const [topLeft, topRight, bottomRight, bottomLeft] = orderCornersV3(corners);
+  return {
+    top:linePoints(topLeft, topRight, pointsPerSide),
+    right:linePoints(topRight, bottomRight, pointsPerSide),
+    bottom:linePoints(bottomLeft, bottomRight, pointsPerSide),
+    left:linePoints(topLeft, bottomLeft, pointsPerSide),
+  };
+}
+
+export function cloneBoundaryV1093(boundary = {}) {
+  return Object.fromEntries(BOUNDARY_SIDES_V1093.map(side => [
+    side,
+    Array.isArray(boundary?.[side]) ? boundary[side].map(clonePoint) : [],
+  ]));
+}
+
+export function boundaryCornersV1093(boundary = {}) {
+  const top = boundary.top || [];
+  const right = boundary.right || [];
+  const bottom = boundary.bottom || [];
+  const left = boundary.left || [];
+  return orderCornersV3([
+    top[0] || left[0],
+    top.at(-1) || right[0],
+    right.at(-1) || bottom.at(-1),
+    bottom[0] || left.at(-1),
+  ]);
+}
+
+function syncCorners(boundary) {
+  const next = cloneBoundaryV1093(boundary);
+  const [topLeft, topRight, bottomRight, bottomLeft] = boundaryCornersV1093(next);
+  if (next.top.length) {
+    next.top[0] = clonePoint(topLeft);
+    next.top[next.top.length - 1] = clonePoint(topRight);
+  }
+  if (next.right.length) {
+    next.right[0] = clonePoint(topRight);
+    next.right[next.right.length - 1] = clonePoint(bottomRight);
+  }
+  if (next.bottom.length) {
+    next.bottom[0] = clonePoint(bottomLeft);
+    next.bottom[next.bottom.length - 1] = clonePoint(bottomRight);
+  }
+  if (next.left.length) {
+    next.left[0] = clonePoint(topLeft);
+    next.left[next.left.length - 1] = clonePoint(bottomLeft);
+  }
+  return next;
+}
+
+export function normalizeBoundaryV1093(boundary, fallbackCorners = []) {
+  const candidate = cloneBoundaryV1093(boundary);
+  if (BOUNDARY_SIDES_V1093.every(side => candidate[side]?.length >= 3)) return syncCorners(candidate);
+  return boundaryFromCornersV1093(fallbackCorners, INTERNAL_POINTS_PER_SIDE_V1093);
+}
+
+export function updateBoundaryPointV1093(boundary, side, index, point) {
+  const next = normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  if (!BOUNDARY_SIDES_V1093.includes(side) || !next[side]?.[index]) return next;
+  const updated = clonePoint(point);
+  next[side][index] = updated;
+  const last = next[side].length - 1;
+
+  if (side === 'top' && index === 0) next.left[0] = clonePoint(updated);
+  if (side === 'top' && index === last) next.right[0] = clonePoint(updated);
+  if (side === 'right' && index === 0) next.top[next.top.length - 1] = clonePoint(updated);
+  if (side === 'right' && index === last) next.bottom[next.bottom.length - 1] = clonePoint(updated);
+  if (side === 'bottom' && index === 0) next.left[next.left.length - 1] = clonePoint(updated);
+  if (side === 'bottom' && index === last) next.right[next.right.length - 1] = clonePoint(updated);
+  if (side === 'left' && index === 0) next.top[0] = clonePoint(updated);
+  if (side === 'left' && index === last) next.bottom[0] = clonePoint(updated);
+
+  return syncCorners(next);
+}
+
+export function boundaryPathPointsV1093(boundary = {}) {
+  const normalized = normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  return [
+    ...normalized.top,
+    ...normalized.right.slice(1),
+    ...normalized.bottom.slice(0, -1).reverse(),
+    ...normalized.left.slice(1, -1).reverse(),
+  ];
+}
+
+function pointLineDistance(point, start, end) {
+  const dx = Number(end?.x || 0) - Number(start?.x || 0);
+  const dy = Number(end?.y || 0) - Number(start?.y || 0);
+  const lengthSquared = (dx * dx) + (dy * dy);
+  if (lengthSquared < 1e-8) return Math.hypot(Number(point?.x || 0) - Number(start?.x || 0), Number(point?.y || 0) - Number(start?.y || 0));
+  const t = clampV3(
+    (((Number(point?.x || 0) - Number(start?.x || 0)) * dx)
+      + ((Number(point?.y || 0) - Number(start?.y || 0)) * dy)) / lengthSquared,
+  );
+  return Math.hypot(
+    Number(point?.x || 0) - (Number(start?.x || 0) + dx * t),
+    Number(point?.y || 0) - (Number(start?.y || 0) + dy * t),
+  );
+}
+
+function bowScore(points = []) {
+  if (points.length < 3) return 0;
+  const start = points[0];
+  const end = points.at(-1);
+  const length = Math.max(1e-6, Math.hypot(end.x - start.x, end.y - start.y));
+  const values = points.slice(1, -1).map(point => pointLineDistance(point, start, end) / length);
+  const maximum = Math.max(0, ...values);
+  const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  return (maximum * .72) + (average * .28);
+}
+
+export function boundaryHandlesV1093(boundary = {}) {
+  const normalized = normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  const last = side => Math.max(0, normalized[side].length - 1);
+  const middle = side => Math.max(1, Math.min(last(side) - 1, Math.round(last(side) / 2)));
+  const horizontalBow = bowScore(normalized.top) + bowScore(normalized.bottom);
+  const verticalBow = bowScore(normalized.left) + bowScore(normalized.right);
+  const verticalPair = verticalBow > Math.max(.006, horizontalBow * 1.18);
+  const handles = [];
+  const push = (side, index, isCorner = false, label = '') => {
+    const point = normalized?.[side]?.[index];
+    if (point) handles.push({ side, index, point, isCorner, label });
+  };
+
+  push('top', 0, true, 'Top left');
+  push('top', last('top'), true, 'Top right');
+  if (verticalPair) push('right', middle('right'), false, 'Right bend');
+  else push('top', middle('top'), false, 'Top bend');
+  push('bottom', last('bottom'), true, 'Bottom right');
+  push('bottom', 0, true, 'Bottom left');
+  if (verticalPair) push('left', middle('left'), false, 'Left bend');
+  else push('bottom', middle('bottom'), false, 'Bottom bend');
+
+  return handles.slice(0, VISIBLE_HANDLES_V1093);
+}
+
+export function sampleCurveV1093(points = [], t = 0) {
+  if (!points.length) return { x:0, y:0 };
+  if (points.length === 1) return clonePoint(points[0]);
+  const value = clampV3(t);
+  const scaled = value * (points.length - 1);
+  const index = Math.min(points.length - 2, Math.floor(scaled));
+  const local = scaled - index;
+  const p0 = points[Math.max(0, index - 1)];
+  const p1 = points[index];
+  const p2 = points[Math.min(points.length - 1, index + 1)];
+  const p3 = points[Math.min(points.length - 1, index + 2)];
+  const local2 = local * local;
+  const local3 = local2 * local;
+  const catmull = key => .5 * (
+    (2 * Number(p1[key] || 0))
+    + (-Number(p0[key] || 0) + Number(p2[key] || 0)) * local
+    + (2 * Number(p0[key] || 0) - 5 * Number(p1[key] || 0) + 4 * Number(p2[key] || 0) - Number(p3[key] || 0)) * local2
+    + (-Number(p0[key] || 0) + 3 * Number(p1[key] || 0) - 3 * Number(p2[key] || 0) + Number(p3[key] || 0)) * local3
+  );
+  return { x:clampV3(catmull('x')), y:clampV3(catmull('y')) };
+}
+
+export function boundaryOutlinePointsV1093(boundary = {}, samplesPerSide = 18) {
+  const normalized = normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  const samples = Math.max(4, Math.round(samplesPerSide));
+  const points = [];
+  for (let index = 0; index <= samples; index += 1) points.push(sampleCurveV1093(normalized.top, index / samples));
+  for (let index = 1; index <= samples; index += 1) points.push(sampleCurveV1093(normalized.right, index / samples));
+  for (let index = samples - 1; index >= 0; index -= 1) points.push(sampleCurveV1093(normalized.bottom, index / samples));
+  for (let index = samples - 1; index >= 1; index -= 1) points.push(sampleCurveV1093(normalized.left, index / samples));
+  return points;
+}
+
+export function coonsPointV1093(boundary = {}, u = 0, v = 0) {
+  const normalized = normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  const top = sampleCurveV1093(normalized.top, u);
+  const bottom = sampleCurveV1093(normalized.bottom, u);
+  const left = sampleCurveV1093(normalized.left, v);
+  const right = sampleCurveV1093(normalized.right, v);
+  const [topLeft, topRight, bottomRight, bottomLeft] = boundaryCornersV1093(normalized);
+  const oneU = 1 - u;
+  const oneV = 1 - v;
+  const bilinear = {
+    x:topLeft.x * oneU * oneV + topRight.x * u * oneV + bottomLeft.x * oneU * v + bottomRight.x * u * v,
+    y:topLeft.y * oneU * oneV + topRight.y * u * oneV + bottomLeft.y * oneU * v + bottomRight.y * u * v,
+  };
+  return {
+    x:clampV3(top.x * oneV + bottom.x * v + left.x * oneU + right.x * u - bilinear.x),
+    y:clampV3(top.y * oneV + bottom.y * v + left.y * oneU + right.y * u - bilinear.y),
+  };
+}
+
+export function rotateBoundaryClockwiseV1093(boundary = {}) {
+  const normalized = normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  const rotate = point => ({ x:clampV3(1 - point.y), y:clampV3(point.x) });
+  return syncCorners({
+    top:normalized.left.map(rotate).reverse(),
+    right:normalized.top.map(rotate),
+    bottom:normalized.right.map(rotate).reverse(),
+    left:normalized.bottom.map(rotate),
+  });
+}
+
+function luminanceAt(image, x, y) {
+  const width = image.width;
+  const height = image.height;
+  const px = Math.max(0, Math.min(width - 1, x));
+  const py = Math.max(0, Math.min(height - 1, y));
+  const x0 = Math.floor(px);
+  const y0 = Math.floor(py);
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const dx = px - x0;
+  const dy = py - y0;
+  const luma = (sx, sy) => {
+    const offset = (sy * width + sx) * 4;
+    return image.data[offset] * .299 + image.data[offset + 1] * .587 + image.data[offset + 2] * .114;
+  };
+  return luma(x0, y0) * (1 - dx) * (1 - dy)
+    + luma(x1, y0) * dx * (1 - dy)
+    + luma(x0, y1) * (1 - dx) * dy
+    + luma(x1, y1) * dx * dy;
+}
+
+function refineSide(image, points, radius) {
+  const next = points.map(clonePoint);
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const following = points[index + 1];
+    const tangentX = (following.x - previous.x) * image.width;
+    const tangentY = (following.y - previous.y) * image.height;
+    const length = Math.max(1e-6, Math.hypot(tangentX, tangentY));
+    const normalX = -tangentY / length;
+    const normalY = tangentX / length;
+    const centerX = current.x * (image.width - 1);
+    const centerY = current.y * (image.height - 1);
+    let bestScore = 7;
+    let bestOffset = 0;
+    for (let offset = -radius; offset <= radius; offset += 1) {
+      const x = centerX + normalX * offset;
+      const y = centerY + normalY * offset;
+      const before = luminanceAt(image, x - normalX * 1.6, y - normalY * 1.6);
+      const after = luminanceAt(image, x + normalX * 1.6, y + normalY * 1.6);
+      const edge = Math.abs(after - before);
+      const score = edge - Math.abs(offset) * .34;
+      if (score > bestScore) {
+        bestScore = score;
+        bestOffset = offset;
+      }
+    }
+    next[index] = {
+      x:clampV3((centerX + normalX * bestOffset) / Math.max(1, image.width - 1)),
+      y:clampV3((centerY + normalY * bestOffset) / Math.max(1, image.height - 1)),
+    };
+  }
+  const smoothed = next.map(clonePoint);
+  for (let index = 1; index < next.length - 1; index += 1) {
+    smoothed[index] = {
+      x:clampV3(next[index - 1].x * .16 + next[index].x * .68 + next[index + 1].x * .16),
+      y:clampV3(next[index - 1].y * .16 + next[index].y * .68 + next[index + 1].y * .16),
+    };
+  }
+  return smoothed;
+}
+
+export function refineBoundaryFromImageV1093(image, boundary, options = {}) {
+  if (!image?.data || !image.width || !image.height) return normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  const radius = Math.max(5, Math.min(22, Math.round(Math.min(image.width, image.height) * Number(options.radiusRatio || .018))));
+  let refined = normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  const passes = Math.max(1, Math.min(3, Number(options.passes || 2)));
+  for (let pass = 0; pass < passes; pass += 1) {
+    const next = cloneBoundaryV1093(refined);
+    for (const side of BOUNDARY_SIDES_V1093) next[side] = refineSide(image, refined[side], radius);
+    refined = syncCorners(next);
+  }
+  return refined;
+}
+
+function curveLengthPixels(points, width, height) {
+  let total = 0;
+  let previous = sampleCurveV1093(points, 0);
+  for (let index = 1; index <= 28; index += 1) {
+    const current = sampleCurveV1093(points, index / 28);
+    total += Math.hypot((current.x - previous.x) * width, (current.y - previous.y) * height);
+    previous = current;
+  }
+  return total;
+}
+
+function outputSize(boundary, image, options = {}) {
+  const width = Math.max(curveLengthPixels(boundary.top, image.width, image.height), curveLengthPixels(boundary.bottom, image.width, image.height), 1);
+  const height = Math.max(curveLengthPixels(boundary.left, image.width, image.height), curveLengthPixels(boundary.right, image.width, image.height), 1);
+  const maxDimension = Math.max(900, Number(options.maxDimension || 2200));
+  const minShortSide = Math.max(540, Number(options.minShortSide || 720));
+  const longSide = Math.max(width, height);
+  const shortSide = Math.min(width, height);
+  let scale = Math.min(1, maxDimension / longSide);
+  if (shortSide * scale < minShortSide && longSide * (minShortSide / shortSide) <= maxDimension) scale = minShortSide / shortSide;
+  return {
+    width:Math.max(320, Math.round(width * scale)),
+    height:Math.max(320, Math.round(height * scale)),
+  };
+}
+
+function drawTriangle(context, source, sourcePoints, destinationPoints) {
+  const [s0, s1, s2] = sourcePoints;
+  const [d0, d1, d2] = destinationPoints;
+  const denominator = (s0.x * (s1.y - s2.y)) + (s1.x * (s2.y - s0.y)) + (s2.x * (s0.y - s1.y));
+  if (Math.abs(denominator) < 1e-7) return;
+  const a = ((d0.x * (s1.y - s2.y)) + (d1.x * (s2.y - s0.y)) + (d2.x * (s0.y - s1.y))) / denominator;
+  const c = ((d0.x * (s2.x - s1.x)) + (d1.x * (s0.x - s2.x)) + (d2.x * (s1.x - s0.x))) / denominator;
+  const e = ((d0.x * ((s1.x * s2.y) - (s2.x * s1.y))) + (d1.x * ((s2.x * s0.y) - (s0.x * s2.y))) + (d2.x * ((s0.x * s1.y) - (s1.x * s0.y)))) / denominator;
+  const b = ((d0.y * (s1.y - s2.y)) + (d1.y * (s2.y - s0.y)) + (d2.y * (s0.y - s1.y))) / denominator;
+  const d = ((d0.y * (s2.x - s1.x)) + (d1.y * (s0.x - s2.x)) + (d2.y * (s1.x - s0.x))) / denominator;
+  const f = ((d0.y * ((s1.x * s2.y) - (s2.x * s1.y))) + (d1.y * ((s2.x * s0.y) - (s0.x * s2.y))) + (d2.y * ((s0.x * s1.y) - (s1.x * s0.y)))) / denominator;
+  context.save();
+  context.beginPath();
+  context.moveTo(d0.x, d0.y);
+  context.lineTo(d1.x, d1.y);
+  context.lineTo(d2.x, d2.y);
+  context.closePath();
+  context.clip();
+  context.setTransform(a, b, c, d, e, f);
+  context.drawImage(source, 0, 0);
+  context.restore();
+}
+
+export function extractCurvedDocumentV1093(image, boundary, options = {}) {
+  if (!image?.data || !image.width || !image.height || typeof document === 'undefined') {
+    throw new Error('curved_document_canvas_unavailable');
+  }
+  const normalized = normalizeBoundaryV1093(boundary, boundaryCornersV1093(boundary));
+  const size = outputSize(normalized, image, options);
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = image.width;
+  sourceCanvas.height = image.height;
+  const sourceContext = sourceCanvas.getContext('2d', { alpha:false });
+  const sourcePixels = sourceContext.createImageData(image.width, image.height);
+  sourcePixels.data.set(image.data);
+  sourceContext.putImageData(sourcePixels, 0, 0);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const context = canvas.getContext('2d', { alpha:false });
+  context.fillStyle = '#fff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+
+  const columns = Math.max(14, Math.min(30, Number(options.columns || 24)));
+  const rows = Math.max(14, Math.min(30, Number(options.rows || 24)));
+  const sourcePoint = (u, v) => {
+    const point = coonsPointV1093(normalized, u, v);
+    return { x:point.x * (image.width - 1), y:point.y * (image.height - 1) };
+  };
+  for (let row = 0; row < rows; row += 1) {
+    const v0 = row / rows;
+    const v1 = (row + 1) / rows;
+    for (let column = 0; column < columns; column += 1) {
+      const u0 = column / columns;
+      const u1 = (column + 1) / columns;
+      const s00 = sourcePoint(u0, v0);
+      const s10 = sourcePoint(u1, v0);
+      const s11 = sourcePoint(u1, v1);
+      const s01 = sourcePoint(u0, v1);
+      const d00 = { x:u0 * canvas.width, y:v0 * canvas.height };
+      const d10 = { x:u1 * canvas.width, y:v0 * canvas.height };
+      const d11 = { x:u1 * canvas.width, y:v1 * canvas.height };
+      const d01 = { x:u0 * canvas.width, y:v1 * canvas.height };
+      drawTriangle(context, sourceCanvas, [s00, s10, s11], [d00, d10, d11]);
+      drawTriangle(context, sourceCanvas, [s00, s11, s01], [d00, d11, d01]);
+    }
+  }
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}

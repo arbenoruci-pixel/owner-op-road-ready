@@ -1,0 +1,388 @@
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
+import CameraAdapterV3 from './CameraAdapterV3.jsx';
+import ReviewScreenV3 from './ReviewScreenV3.jsx';
+import {
+  FILE_ACCEPT_V3,
+  GALLERY_ACCEPT_V3,
+  normalizeGalleryFileV3,
+  openFilePickerV3,
+} from './GalleryAdapterV3.js';
+import { scannerEngineV3 } from './ScannerEngineV3.js';
+
+function SourceButton({ title, detail, onClick, icon }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width:'100%',
+        minHeight:104,
+        padding:16,
+        border:'1px solid #cbd5e1',
+        borderRadius:22,
+        background:'#fff',
+        color:'#172033',
+        display:'grid',
+        gridTemplateColumns:'54px 1fr 24px',
+        alignItems:'center',
+        gap:12,
+        textAlign:'left',
+        boxShadow:'0 10px 28px rgba(15,23,42,.08)',
+      }}
+    >
+      <span
+        style={{
+          width:54,
+          height:54,
+          borderRadius:17,
+          display:'grid',
+          placeItems:'center',
+          background:'#eff6ff',
+          color:'#2563eb',
+          fontSize:28,
+        }}
+      >
+        {icon}
+      </span>
+      <span>
+        <b style={{ display:'block', fontSize:18, fontWeight:1000 }}>{title}</b>
+        <em
+          style={{
+            display:'block',
+            marginTop:5,
+            color:'#64748b',
+            fontSize:12,
+            fontStyle:'normal',
+            fontWeight:750,
+            lineHeight:1.35,
+          }}
+        >
+          {detail}
+        </em>
+      </span>
+      <strong style={{ color:'#2563eb', fontSize:23 }}>›</strong>
+    </button>
+  );
+}
+
+export default function RoadReadyScannerV3({
+  initialFile = null,
+  onCancel,
+  onComplete,
+}) {
+  const galleryRef = useRef(null);
+  const fileRef = useRef(null);
+  const initialHandledRef = useRef(false);
+  const [stage, setStage] = useState('source');
+  const [session, setSession] = useState(null);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [processing, setProcessing] = useState(false);
+
+  async function acceptImage(file, source) {
+    setError('');
+    setStatus(source === 'photos' ? 'Opening imported photo…' : 'Preparing camera photo…');
+    setProcessing(true);
+    try {
+      const next = await scannerEngineV3.prepare(file, {
+        source,
+        onStatus:setStatus,
+      });
+      setSession(next);
+      setStage('review');
+    } catch (cause) {
+      setError(String(cause?.message || cause || 'The photo could not be prepared.'));
+      setStage('source');
+    } finally {
+      setProcessing(false);
+      setStatus('');
+    }
+  }
+
+  useEffect(() => {
+    if (!initialFile || initialHandledRef.current) return;
+    initialHandledRef.current = true;
+    acceptImage(initialFile, 'photos');
+  }, [initialFile]);
+
+  async function rotate() {
+    if (!session || processing) return;
+    setProcessing(true);
+    setStatus('Rotating document…');
+    try {
+      setSession(await scannerEngineV3.rotate(session, {
+        onStatus:setStatus,
+      }));
+    } catch (cause) {
+      setError(String(cause?.message || cause));
+    } finally {
+      setProcessing(false);
+      setStatus('');
+    }
+  }
+
+  async function done(boundary) {
+    if (!session || processing) return;
+    setProcessing(true);
+    setStatus('Flattening curved paper…');
+    setError('');
+    try {
+      const result = await scannerEngineV3.finalize(
+        session,
+        boundary,
+        { onStatus:setStatus },
+      );
+      onComplete?.(result.originalFile, result.metadata);
+    } catch (cause) {
+      setError(String(cause?.message || cause || 'The document could not be processed.'));
+      setProcessing(false);
+      setStatus('');
+    }
+  }
+
+  function retake() {
+    setSession(null);
+    setError('');
+    setStatus('');
+    setProcessing(false);
+    setStage('source');
+  }
+
+  function importFile(file) {
+    if (!file) return;
+    if (String(file.type || '').startsWith('image/')) {
+      acceptImage(file, 'photos');
+      return;
+    }
+    onComplete?.(file, {
+      source:'road-ready-file-import-v1093',
+      imported:true,
+      pageCount:1,
+      originalPreserved:true,
+      scannerVersion:'109.3.0',
+      originalFileName:file.name || '',
+    });
+  }
+
+  if (stage === 'camera') {
+    return (
+      <CameraAdapterV3
+        onCancel={() => setStage('source')}
+        onCapture={file => acceptImage(file, 'camera')}
+      />
+    );
+  }
+
+  if (stage === 'review' && session) {
+    return (
+      <ReviewScreenV3
+        session={session}
+        processing={processing}
+        status={status}
+        onRotate={rotate}
+        onRetake={retake}
+        onDone={done}
+      />
+    );
+  }
+
+  return (
+    <section
+      data-road-ready-scanner="lab-041-integrated"
+      style={{
+        position:'fixed',
+        inset:0,
+        zIndex:1350,
+        background:'linear-gradient(180deg,#eff6ff 0%,#f8fafc 36%,#fff 100%)',
+        color:'#172033',
+        display:'grid',
+        gridTemplateRows:'auto 1fr auto',
+        overflow:'auto',
+      }}
+    >
+      <header
+        style={{
+          display:'grid',
+          gridTemplateColumns:'44px 1fr 44px',
+          alignItems:'center',
+          padding:'calc(10px + env(safe-area-inset-top)) 12px 10px',
+          background:'rgba(255,255,255,.94)',
+          borderBottom:'1px solid #dbeafe',
+          position:'sticky',
+          top:0,
+          zIndex:2,
+        }}
+      >
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Close scanner"
+          style={{
+            width:42,
+            height:42,
+            borderRadius:999,
+            border:'1px solid #cbd5e1',
+            background:'#fff',
+            color:'#172033',
+            fontSize:25,
+          }}
+        >
+          ×
+        </button>
+        <div style={{ textAlign:'center' }}>
+          <b style={{ display:'block', fontSize:16 }}>Scan Anything</b>
+          <em
+            style={{
+              display:'block',
+              marginTop:2,
+              color:'#64748b',
+              fontSize:11,
+              fontStyle:'normal',
+            }}
+          >
+            Road Ready Scanner 0.4.1
+          </em>
+        </div>
+        <span />
+      </header>
+
+      <main style={{ width:'min(560px,100%)', margin:'0 auto', padding:'26px 16px 18px' }}>
+        <div style={{ textAlign:'center', padding:'10px 10px 24px' }}>
+          <span
+            style={{
+              width:68,
+              height:68,
+              margin:'0 auto 14px',
+              borderRadius:22,
+              display:'grid',
+              placeItems:'center',
+              background:'#2563eb',
+              color:'#fff',
+              fontSize:33,
+              boxShadow:'0 16px 36px rgba(37,99,235,.28)',
+            }}
+          >
+            ▣
+          </span>
+          <h1 style={{ margin:0, fontSize:27, letterSpacing:'-.035em' }}>
+            Professional document scan
+          </h1>
+          <p
+            style={{
+              margin:'9px auto 0',
+              maxWidth:410,
+              color:'#64748b',
+              fontSize:13,
+              fontWeight:700,
+              lineHeight:1.5,
+            }}
+          >
+            Fast paper detection, six-point curved-page correction and an automatic
+            local quality bot.
+          </p>
+        </div>
+
+        <div style={{ display:'grid', gap:12 }}>
+          <SourceButton
+            title="Camera"
+            detail="Capture the full paper, then adjust four corners and two bend points."
+            icon="◉"
+            onClick={() => setStage('camera')}
+          />
+          <SourceButton
+            title="Photos"
+            detail="Import a photo with the same curved-page review and Auto-fix."
+            icon="▧"
+            onClick={() => openFilePickerV3(galleryRef)}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => openFilePickerV3(fileRef)}
+          style={{
+            width:'100%',
+            minHeight:50,
+            marginTop:14,
+            border:'1px solid #dbeafe',
+            borderRadius:16,
+            background:'rgba(255,255,255,.72)',
+            color:'#334155',
+            fontWeight:900,
+          }}
+        >
+          Import PDF / File
+        </button>
+
+        {processing ? (
+          <div
+            style={{
+              marginTop:14,
+              padding:13,
+              borderRadius:16,
+              background:'#eff6ff',
+              color:'#1d4ed8',
+              textAlign:'center',
+              fontWeight:850,
+            }}
+          >
+            {status || 'Processing locally…'}
+          </div>
+        ) : null}
+
+        {error ? (
+          <div
+            style={{
+              marginTop:14,
+              padding:13,
+              borderRadius:16,
+              background:'#fef2f2',
+              color:'#b91c1c',
+              fontWeight:800,
+              lineHeight:1.4,
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
+
+        <input
+          ref={galleryRef}
+          type="file"
+          accept={GALLERY_ACCEPT_V3}
+          hidden
+          onChange={event => {
+            const file = event.target.files?.[0] || null;
+            event.target.value = '';
+            if (file) acceptImage(normalizeGalleryFileV3(file), 'photos');
+          }}
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept={FILE_ACCEPT_V3}
+          hidden
+          onChange={event => {
+            const file = event.target.files?.[0] || null;
+            event.target.value = '';
+            importFile(file);
+          }}
+        />
+      </main>
+
+      <footer
+        style={{
+          padding:'12px 16px calc(14px + env(safe-area-inset-bottom))',
+          textAlign:'center',
+          color:'#64748b',
+          fontSize:11,
+          fontWeight:750,
+        }}
+      >
+        Local processing · six smart points · original preserved
+      </footer>
+    </section>
+  );
+}
