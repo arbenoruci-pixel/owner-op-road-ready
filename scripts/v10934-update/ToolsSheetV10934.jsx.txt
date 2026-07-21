@@ -1,0 +1,38 @@
+import React from 'react';
+import { CURRENT_APP_BUILD, CURRENT_APP_VERSION } from '../../core/update/appUpdate.js';
+import { getHomeTerminalTimeZone, timeZoneSettingSummary } from '../../core/time/homeTerminalTime.js';
+
+export default function ToolsSheet({ state, onClose, onDot, onWallet, onMove, onBackup, onDayTransfer, onTimeZone, updateState, onCheckUpdate, onApplyUpdate, onClearTestDates }) {
+  const available = !!updateState?.available;
+  const remote = updateState?.remote || {};
+  const latest = remote.version || updateState?.latestVersion || CURRENT_APP_VERSION;
+  const checking = !!updateState?.checking;
+  const saving = updateState?.saveState === 'saving-update';
+  const logTimeZone = getHomeTerminalTimeZone(state);
+  const logTimeZoneSummary = timeZoneSettingSummary(logTimeZone);
+
+  return (
+    <div className="sheet active tools-sheet">
+      <div className="sheet-head"><button onClick={onClose}>‹</button><div>Log Tools</div><span></span></div>
+      <div className="choice-body">
+        <button className="choice-card" onClick={onDot}><b>DOT Inspection</b><span>Email officer report or open inspection-safe DOT Mode on this device.</span></button>
+        <button className="choice-card" onClick={onWallet}><b>DOT Digital Wallet</b><span>CDL, medical, registration, insurance, annual inspection, BOL, and expiration reminders.</span></button>
+        <button className="choice-card" onClick={onDayTransfer}><b>Export / import this day</b><span>{state.activeDay}. Save one log day or restore a day file into this exact date.</span></button>
+        <button className="choice-card" onClick={onBackup}><b>Backup Logs</b><span>Export or import logs, signatures, inspections, routes, wallet docs, and attachments.</span></button>
+        <button className="choice-card" onClick={onTimeZone}><b>Log Time Zone</b><span>{logTimeZoneSummary}. Used for DOT log days, rollover, Today, and current open driving time.</span></button>
+        <button className="choice-card" onClick={onMove}><b>Shift day events</b><span>Select all real events for this day and move them forward or backward together.</span></button>
+        <button className={`choice-card ${available ? 'update-ready' : ''}`} onClick={available ? onApplyUpdate : onCheckUpdate} disabled={saving}>
+          <b>{available ? 'Update ready' : 'Check app update'}</b>
+          <span>{saving ? 'Saving logs before update…' : available ? `v${latest} · ${remote.build || 'latest build'}. Saves logs first, then performs a clean reload.` : `Current v${CURRENT_APP_VERSION} · ${CURRENT_APP_BUILD}.`}</span>
+          <em>{checking ? 'Checking…' : available ? 'Reload latest' : 'Check now'}</em>
+        </button>
+        <button className="choice-card update-ready" onClick={onApplyUpdate} disabled={saving} data-force-latest-build="109.3.4">
+          <b>Force reload latest build</b>
+          <span>Use this when the version number changed but the scanner screen still looks old. Logs are saved before caches and the service worker are reset.</span>
+          <em>{saving ? 'Saving…' : 'Reload clean'}</em>
+        </button>
+        <button className="choice-card danger" onClick={onClearTestDates}><b>Clear test dates</b><span>Deletes log dates, events, signatures, inspections, route/load test data, and GPS trip data so you can start a fresh test.</span></button>
+      </div>
+    </div>
+  );
+}
