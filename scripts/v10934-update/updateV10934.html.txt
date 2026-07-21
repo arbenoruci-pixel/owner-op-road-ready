@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Updating Road Ready</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0f172a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{display:grid;place-items:center;padding:24px;box-sizing:border-box}.card{width:min(420px,100%);text-align:center}.spinner{width:54px;height:54px;margin:0 auto 18px;border:5px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}h1{font-size:23px;margin:0}p{color:#cbd5e1;line-height:1.5;margin:10px 0 18px}button{display:none;width:100%;min-height:50px;border:0;border-radius:15px;background:#2563eb;color:#fff;font-weight:900;font-size:16px}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="spinner"></div>
+    <h1>Loading the latest Road Ready</h1>
+    <p id="status">Saving your data, clearing stale app code and reopening the same app.</p>
+    <button id="continue" type="button">Continue</button>
+  </main>
+  <script>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      const version = params.get('version') || '109.3.4';
+      const build = params.get('build') || 'v10934-forced-update-bootstrap';
+      const returnPath = params.get('return') || '/';
+      const status = document.getElementById('status');
+      const button = document.getElementById('continue');
+
+      function destination() {
+        const url = new URL(returnPath, location.origin);
+        url.searchParams.set('road_ready_update', version);
+        url.searchParams.set('road_ready_build', build);
+        url.searchParams.set('fresh', String(Date.now()));
+        return url.toString();
+      }
+
+      async function clearReleaseCaches() {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
+          for (const registration of registrations) {
+            try {
+              registration.active?.postMessage?.({ type:'OWNER_OP_RELEASE_CONTROL', version, build });
+              registration.waiting?.postMessage?.({ type:'OWNER_OP_RELEASE_CONTROL', version, build });
+              registration.installing?.postMessage?.({ type:'OWNER_OP_RELEASE_CONTROL', version, build });
+              await registration.unregister();
+            } catch {}
+          }
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys().catch(() => []);
+          await Promise.all(keys.map(key => caches.delete(key).catch(() => false)));
+        }
+        try {
+          await fetch('/api/app-version?boot=' + Date.now(), {
+            cache:'reload',
+            credentials:'same-origin',
+            headers:{ 'cache-control':'no-cache, no-store, max-age=0' },
+          });
+        } catch {}
+      }
+
+      async function run() {
+        try {
+          await clearReleaseCaches();
+          status.textContent = 'Latest build verified. Reopening Road Ready…';
+          setTimeout(() => location.replace(destination()), 120);
+        } catch (error) {
+          status.textContent = 'The automatic refresh was blocked. Tap Continue to reopen the latest build.';
+          button.style.display = 'block';
+          button.onclick = () => location.replace(destination());
+        }
+      }
+
+      run();
+      setTimeout(() => {
+        button.style.display = 'block';
+        button.onclick = () => location.replace(destination());
+      }, 7000);
+    })();
+  </script>
+</body>
+</html>
