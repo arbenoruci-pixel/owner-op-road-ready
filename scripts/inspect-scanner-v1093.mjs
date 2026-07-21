@@ -9,6 +9,30 @@ function read(relative) {
   return fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : '';
 }
 
+function walk(directory, prefix = '') {
+  if (!fs.existsSync(directory)) return [];
+  const found = [];
+  for (const name of fs.readdirSync(directory).sort()) {
+    const absolute = path.join(directory, name);
+    const relative = path.join(prefix, name);
+    if (fs.statSync(absolute).isDirectory()) found.push(...walk(absolute, relative));
+    else found.push(relative.replaceAll('\\', '/'));
+  }
+  return found;
+}
+
+function printWhole(relative, maxLines = 700) {
+  const source = read(relative);
+  console.log(`\n===== WHOLE ${relative} =====`);
+  if (!source) {
+    console.log('MISSING');
+    return;
+  }
+  source.split('\n').slice(0, maxLines).forEach((line, index) => {
+    console.log(`${String(index + 1).padStart(4, '0')}: ${line}`);
+  });
+}
+
 function printMatches(relative, pattern, before = 8, after = 18) {
   const source = read(relative);
   if (!source) {
@@ -31,46 +55,33 @@ function printMatches(relative, pattern, before = 8, after = 18) {
     .forEach(index => console.log(`${String(index + 1).padStart(4, '0')}: ${lines[index]}`));
 }
 
-console.log('\n===== scan module files =====');
-if (fs.existsSync(scanDir)) {
-  fs.readdirSync(scanDir).sort().forEach(name => console.log(name));
+console.log('\n===== scan module files recursive =====');
+walk(scanDir).forEach(name => console.log(name));
+
+printWhole('source/src/modules/scan/SmartDocumentCaptureV100.jsx', 500);
+
+for (const relativeName of walk(path.join(scanDir, 'v3'), 'source/src/modules/scan/v3')) {
+  if (/\.(jsx?|mjs)$/.test(relativeName)) {
+    printMatches(
+      relativeName,
+      /export default|export function|function |onReady|onClose|onComplete|onCancel|captureAssets|captureManifest|ocrFile|displayFile|File\(|Blob\(|return \(|stage|review|boundary|handle|quality|import|camera/i,
+      10,
+      30,
+    );
+  }
 }
 
 printMatches(
-  'source/src/modules/scan/SmartDocumentCaptureV106.jsx',
-  /export default|function SmartDocument|onComplete|onCancel|scanbot|professional|OPEN_REVIEW|stage|return \(|data-professional-scanner|originals|cleaned|captureAssets/i,
-  12,
-  28,
-);
-printMatches(
-  'source/src/modules/scan/SmartDocumentCaptureV100.jsx',
-  /SmartDocumentCaptureV106|onComplete|onCancel|scanMeta|ocrFile|return \(/i,
-  12,
-  24,
-);
-printMatches(
   'source/src/modules/scan/SmartScanSheetV105.jsx',
-  /SmartDocumentCapture|onComplete|scanMeta|ocrFile|captureAssets|saveScannedDocument|persistCaptureAssets/i,
+  /SmartDocumentCapture|onReady|chooseFile|scanMeta|ocrFile|displayFile|captureAssets|captureManifest|persistCaptureAssets/i,
   12,
-  26,
-);
-printMatches(
-  'source/src/modules/scan/scanbotRtuV1076.js',
-  /export|createDocumentScanner|originals|cleaned|onStatus|loadOriginal|loadDocument|finalRawImage/i,
-  10,
-  24,
+  30,
 );
 printMatches(
   'source/src/modules/scan/scannerContractsV106.js',
-  /ROAD_READY_SCANNER_VERSION|export|capture|page|original|clean/i,
+  /ROAD_READY_SCANNER_VERSION|createScannedPacket|serializablePacketManifest|capture|page|original|clean/i,
   8,
-  22,
-);
-printMatches(
-  'source/src/modules/scan/SmartDocumentCaptureV109.jsx',
-  /export default|onComplete|onCancel|return \(|scanner/i,
-  10,
   24,
 );
 
-console.log('\nPASS — scanner integration diagnostic completed');
+console.log('\nPASS — expanded scanner integration diagnostic completed');
