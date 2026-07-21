@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '109.3.1';
+const VERSION = '109.3.2';
 const RELEASED_AT = new Date().toISOString();
 
 const file = relative => path.join(ROOT, relative);
@@ -21,21 +21,60 @@ function copyTemplate(name, destination) {
 function replaceRequired(source, pattern, replacement, label) {
   if (typeof pattern === 'string') {
     if (source.includes(replacement)) return source;
-    if (!source.includes(pattern)) throw new Error(`v109.3.1 missing ${label}`);
+    if (!source.includes(pattern)) throw new Error(`v109.3.2 missing ${label}`);
     return source.replace(pattern, replacement);
   }
   if (pattern.test(source)) return source.replace(pattern, replacement);
   if (source.includes(replacement)) return source;
-  throw new Error(`v109.3.1 missing ${label}`);
+  throw new Error(`v109.3.2 missing ${label}`);
 }
 
-// CurvedBoundary remains only as a legacy boundary reader. The active review and
-// renderer use a straight four-corner homography.
+// Keep the approved four-corner selector unchanged. Only the downstream page
+// geometry, resolution, rendering and persisted output are upgraded here.
 copyTemplate('CurvedBoundaryV1093.js', 'source/src/modules/scan/v3/CurvedBoundaryV1093.js');
-copyTemplate('AutoQualityBotV10931.js', 'source/src/modules/scan/v3/AutoQualityBotV1093.js');
+copyTemplate('PerspectiveEngineV10932.js', 'source/src/modules/scan/v3/PerspectiveEngineV10932.js');
+copyTemplate('AutoQualityBotV10932.js', 'source/src/modules/scan/v3/AutoQualityBotV1093.js');
 copyTemplate('ReviewScreenV3.jsx', 'source/src/modules/scan/v3/ReviewScreenV3.jsx');
-copyTemplate('ScannerEngineV3.js', 'source/src/modules/scan/v3/ScannerEngineV3.js');
+copyTemplate('ScannerEngineV10932.js', 'source/src/modules/scan/v3/ScannerEngineV3.js');
 copyTemplate('RoadReadyScannerV3.jsx', 'source/src/modules/scan/v3/RoadReadyScannerV3.jsx');
+
+const scannerUiPath = 'source/src/modules/scan/v3/RoadReadyScannerV3.jsx';
+let scannerUi = read(scannerUiPath);
+scannerUi = replaceRequired(scannerUi, "setStatus('Correcting four-corner perspective…');", "setStatus('Rendering the HD document…');", 'HD completion status');
+scannerUi = replaceRequired(scannerUi, "source:'road-ready-file-import-v10931'", "source:'road-ready-file-import-v10932'", 'file import source');
+scannerUi = replaceRequired(scannerUi, "scannerVersion:'109.3.1'", "scannerVersion:'109.3.2'", 'file import version');
+scannerUi = replaceRequired(scannerUi, 'data-road-ready-scanner="four-corner-042-integrated"', 'data-road-ready-scanner="four-corner-043-hd-integrated"', 'scanner UI marker');
+scannerUi = replaceRequired(scannerUi, 'Road Ready Scanner 0.4.2', 'Road Ready Scanner 0.4.3', 'visible scanner version');
+scannerUi = replaceRequired(
+  scannerUi,
+  'Fast paper detection, straight four-corner correction and a stronger automatic\n            local quality bot.',
+  'Straight four-corner correction, page-format normalization and detail-first\n            HD rendering for clear trucking documents.',
+  'scanner quality description',
+);
+scannerUi = replaceRequired(
+  scannerUi,
+  'Import a photo, correct perspective and save the rendered scan.',
+  'Import a photo, normalize the page format and save the HD rendered scan.',
+  'Photos description',
+);
+scannerUi = replaceRequired(
+  scannerUi,
+  'Local processing · four corners · rendered scan saved · original preserved',
+  'Local HD processing · four corners · final render saved · original preserved',
+  'scanner footer',
+);
+write(scannerUiPath, scannerUi);
+
+const reviewPath = 'source/src/modules/scan/v3/ReviewScreenV3.jsx';
+write(
+  reviewPath,
+  replaceRequired(
+    read(reviewPath),
+    "status || 'Correcting perspective and document quality locally…'",
+    "status || 'Rendering the HD document locally…'",
+    'review processing text',
+  ),
+);
 
 const scannerTypesPath = 'source/src/modules/scan/v3/scannerTypesV3.js';
 write(
@@ -110,45 +149,53 @@ write(
 
 write('public/app-version.json', `${JSON.stringify({
   version:VERSION,
-  build:'v10931-road-ready-scanner-four-corner-render',
+  build:'v10932-road-ready-scanner-hd-quality-format',
   releasedAt:RELEASED_AT,
-  label:'v109.3.1 Road Ready Scanner 0.4.2',
+  label:'v109.3.2 Road Ready Scanner 0.4.3',
   notes:[
-    'Replaces the curved six-point editor with a stable four-corner paper frame.',
-    'Uses straight homography perspective correction and removes bend-point distortion.',
-    'Persists the final rendered Auto-fix image as the primary Document Vault file.',
-    'Keeps the immutable source photo as a recovery asset and keeps a separate OCR asset.',
-    'Adds local illumination normalization, stronger shadow correction, paper white balance and text sharpening.',
-    'Preserves colored handwriting, stamps and signatures when useful color is detected.',
-    'Leaves Logbook, HOS, duty status and document classification logic unchanged.'
+    'Keeps the approved straight four-corner selector unchanged.',
+    'Raises the working photo limit from 2200 to 2800 pixels and the final page limit to 3000 pixels.',
+    'Uses average opposite-edge geometry and snaps likely Letter, A4 or Legal pages to the correct document ratio.',
+    'Adds a small safe edge trim to remove background slivers without cutting document content.',
+    'Replaces double whitening with a detail-first renderer that protects highlights and fine printed text.',
+    'Exports the primary rendered document at JPEG quality 0.985 and encodes variants sequentially for iPhone memory safety.',
+    'Keeps the immutable source and separate OCR assets while leaving Logbook, HOS and classification unchanged.'
   ],
   updatedAt:RELEASED_AT,
 }, null, 2)}\n`);
 
 write('public/scanner-engine.json', `${JSON.stringify({
   version:VERSION,
-  name:'Road Ready Scanner 0.4.2',
-  mode:'local-four-corner-document',
+  name:'Road Ready Scanner 0.4.3',
+  mode:'local-four-corner-hd-document',
   externalRuntime:false,
   visibleHandles:4,
   internalBoundaryPoints:4,
-  importMaxLongSide:2200,
-  outputMaxDimension:2400,
-  geometry:'homography-four-corner',
+  importMaxLongSide:2800,
+  outputMaxDimension:3000,
+  minimumOutputShortSide:1700,
+  pageFormats:['letter','a4','legal','free'],
+  geometry:'homography-four-corner-hd',
   primaryOutput:'display-final',
-  qualityBot:'road-ready-auto-quality-bot-v10931',
+  jpegQuality:.985,
+  qualityBot:'road-ready-auto-quality-bot-v10932',
+  highlightClippingProtected:true,
   originalPreserved:true,
 }, null, 2)}\n`);
 
 const required = [
-  ['source/src/modules/scan/v3/AutoQualityBotV1093.js', 'localIlluminationGrid:true'],
-  ['source/src/modules/scan/v3/AutoQualityBotV1093.js', 'primaryRenderedOutput:true'],
+  ['source/src/modules/scan/v3/PerspectiveEngineV10932.js', 'estimateOutputGeometryV10932'],
+  ['source/src/modules/scan/v3/PerspectiveEngineV10932.js', "pageFormat:standard?.id || 'free'"],
+  ['source/src/modules/scan/v3/AutoQualityBotV1093.js', "qualityProfile:'detail-first'"],
+  ['source/src/modules/scan/v3/AutoQualityBotV1093.js', 'highlightClippingProtected:true'],
+  ['source/src/modules/scan/v3/AutoQualityBotV1093.js', 'doubleNormalization:false'],
   ['source/src/modules/scan/v3/ReviewScreenV3.jsx', 'four-corner-v10931'],
   ['source/src/modules/scan/v3/ReviewScreenV3.jsx', '4 corner frame'],
-  ['source/src/modules/scan/v3/ScannerEngineV3.js', 'homography-four-corner-v10931'],
+  ['source/src/modules/scan/v3/ScannerEngineV3.js', 'warpPerspectiveV10932'],
+  ['source/src/modules/scan/v3/ScannerEngineV3.js', 'homography-four-corner-hd-v10932'],
   ['source/src/modules/scan/v3/ScannerEngineV3.js', "primaryOutput:'displayFile'"],
-  ['source/src/modules/scan/v3/ScannerEngineV3.js', "captureAsset('display-final'"],
-  ['source/src/modules/scan/v3/RoadReadyScannerV3.jsx', 'Road Ready Scanner 0.4.2'],
+  ['source/src/modules/scan/v3/ScannerEngineV3.js', "jpegQuality:.985"],
+  ['source/src/modules/scan/v3/RoadReadyScannerV3.jsx', 'Road Ready Scanner 0.4.3'],
   ['source/src/modules/scan/v3/RoadReadyScannerV3.jsx', 'onComplete?.(result.displayFile, result.metadata)'],
   [contractsPath, VERSION],
   [scanSheetPath, VERSION],
@@ -158,4 +205,4 @@ for (const [relative, marker] of required) {
   if (!read(relative).includes(marker)) throw new Error(`${relative} is missing ${marker}`);
 }
 
-console.log('PASS — v109.3.1 four-corner rendered-output scanner applied');
+console.log('PASS — v109.3.2 scanner HD quality and page-format renderer applied');
