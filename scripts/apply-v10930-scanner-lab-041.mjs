@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '109.3.0';
+const VERSION = '109.3.1';
 const RELEASED_AT = new Date().toISOString();
 
 const file = relative => path.join(ROOT, relative);
@@ -21,16 +21,18 @@ function copyTemplate(name, destination) {
 function replaceRequired(source, pattern, replacement, label) {
   if (typeof pattern === 'string') {
     if (source.includes(replacement)) return source;
-    if (!source.includes(pattern)) throw new Error(`v109.3 missing ${label}`);
+    if (!source.includes(pattern)) throw new Error(`v109.3.1 missing ${label}`);
     return source.replace(pattern, replacement);
   }
   if (pattern.test(source)) return source.replace(pattern, replacement);
   if (source.includes(replacement)) return source;
-  throw new Error(`v109.3 missing ${label}`);
+  throw new Error(`v109.3.1 missing ${label}`);
 }
 
+// CurvedBoundary remains only as a legacy boundary reader. The active review and
+// renderer use a straight four-corner homography.
 copyTemplate('CurvedBoundaryV1093.js', 'source/src/modules/scan/v3/CurvedBoundaryV1093.js');
-copyTemplate('AutoQualityBotV1093.js', 'source/src/modules/scan/v3/AutoQualityBotV1093.js');
+copyTemplate('AutoQualityBotV10931.js', 'source/src/modules/scan/v3/AutoQualityBotV1093.js');
 copyTemplate('ReviewScreenV3.jsx', 'source/src/modules/scan/v3/ReviewScreenV3.jsx');
 copyTemplate('ScannerEngineV3.js', 'source/src/modules/scan/v3/ScannerEngineV3.js');
 copyTemplate('RoadReadyScannerV3.jsx', 'source/src/modules/scan/v3/RoadReadyScannerV3.jsx');
@@ -108,16 +110,16 @@ write(
 
 write('public/app-version.json', `${JSON.stringify({
   version:VERSION,
-  build:'v1093-road-ready-scanner-lab-041',
+  build:'v10931-road-ready-scanner-four-corner-render',
   releasedAt:RELEASED_AT,
-  label:'v109.3 Road Ready Scanner 0.4.1',
+  label:'v109.3.1 Road Ready Scanner 0.4.2',
   notes:[
-    'Integrates the approved Scanner Lab 0.4.1 pipeline into Scan Anything.',
-    'Uses six visible controls: four paper corners and two smart bend points.',
-    'Keeps a 16-point internal curved boundary and locally flattens bowed pages.',
-    'Speeds up Photos import by limiting the working image to 2200 pixels on its longest side.',
-    'Runs an automatic local quality bot for shadows, paper white balance, contrast, text sharpness and color handwriting.',
-    'Preserves the immutable original and all cleaned OCR variants in the existing Document Vault capture contract.',
+    'Replaces the curved six-point editor with a stable four-corner paper frame.',
+    'Uses straight homography perspective correction and removes bend-point distortion.',
+    'Persists the final rendered Auto-fix image as the primary Document Vault file.',
+    'Keeps the immutable source photo as a recovery asset and keeps a separate OCR asset.',
+    'Adds local illumination normalization, stronger shadow correction, paper white balance and text sharpening.',
+    'Preserves colored handwriting, stamps and signatures when useful color is detected.',
     'Leaves Logbook, HOS, duty status and document classification logic unchanged.'
   ],
   updatedAt:RELEASED_AT,
@@ -125,25 +127,29 @@ write('public/app-version.json', `${JSON.stringify({
 
 write('public/scanner-engine.json', `${JSON.stringify({
   version:VERSION,
-  name:'Road Ready Scanner 0.4.1',
-  mode:'local-curved-document',
+  name:'Road Ready Scanner 0.4.2',
+  mode:'local-four-corner-document',
   externalRuntime:false,
-  visibleHandles:6,
-  internalBoundaryPoints:16,
+  visibleHandles:4,
+  internalBoundaryPoints:4,
   importMaxLongSide:2200,
-  geometry:'coons-curved-boundary-mesh',
-  qualityBot:'road-ready-auto-quality-bot-v1093',
+  outputMaxDimension:2400,
+  geometry:'homography-four-corner',
+  primaryOutput:'display-final',
+  qualityBot:'road-ready-auto-quality-bot-v10931',
   originalPreserved:true,
 }, null, 2)}\n`);
 
 const required = [
-  ['source/src/modules/scan/v3/CurvedBoundaryV1093.js', 'VISIBLE_HANDLES_V1093 = 6'],
-  ['source/src/modules/scan/v3/CurvedBoundaryV1093.js', 'extractCurvedDocumentV1093'],
-  ['source/src/modules/scan/v3/AutoQualityBotV1093.js', 'autoFixDocumentV1093'],
-  ['source/src/modules/scan/v3/ReviewScreenV3.jsx', 'Auto-fix & save'],
-  ['source/src/modules/scan/v3/ReviewScreenV3.jsx', 'six-handle-v1093'],
-  ['source/src/modules/scan/v3/ScannerEngineV3.js', 'Road Ready Scanner Lab 0.4.1 integrated'],
-  ['source/src/modules/scan/v3/RoadReadyScannerV3.jsx', 'Road Ready Scanner 0.4.1'],
+  ['source/src/modules/scan/v3/AutoQualityBotV1093.js', 'localIlluminationGrid:true'],
+  ['source/src/modules/scan/v3/AutoQualityBotV1093.js', 'primaryRenderedOutput:true'],
+  ['source/src/modules/scan/v3/ReviewScreenV3.jsx', 'four-corner-v10931'],
+  ['source/src/modules/scan/v3/ReviewScreenV3.jsx', '4 corner frame'],
+  ['source/src/modules/scan/v3/ScannerEngineV3.js', 'homography-four-corner-v10931'],
+  ['source/src/modules/scan/v3/ScannerEngineV3.js', "primaryOutput:'displayFile'"],
+  ['source/src/modules/scan/v3/ScannerEngineV3.js', "captureAsset('display-final'"],
+  ['source/src/modules/scan/v3/RoadReadyScannerV3.jsx', 'Road Ready Scanner 0.4.2'],
+  ['source/src/modules/scan/v3/RoadReadyScannerV3.jsx', 'onComplete?.(result.displayFile, result.metadata)'],
   [contractsPath, VERSION],
   [scanSheetPath, VERSION],
   ['public/app-version.json', VERSION],
@@ -152,4 +158,4 @@ for (const [relative, marker] of required) {
   if (!read(relative).includes(marker)) throw new Error(`${relative} is missing ${marker}`);
 }
 
-console.log('PASS — v109.3 Road Ready Scanner 0.4.1 integration applied');
+console.log('PASS — v109.3.1 four-corner rendered-output scanner applied');
