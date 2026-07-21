@@ -87,7 +87,6 @@ function reasonParts(value = '') {
     after = after.replace(reasonTextBlock, replacement);
   }
 
-  const oldInit = "  const [selectedReasons, setSelectedReasons] = useState([reasonList(state.currentStatus || 'OFF')[0]]);";
   const newInit = `  const [selectedReasons, setSelectedReasons] = useState(() => {
     const allowed = reasonList(state.currentStatus || 'OFF');
     const saved = Array.isArray(state.currentReasons) && state.currentReasons.length
@@ -98,10 +97,12 @@ function reasonParts(value = '') {
       .filter(item => allowed.includes(item));
     return restored.length ? [...new Set(restored)] : [allowed[0]];
   });`;
-  if (after.includes(oldInit)) {
-    after = after.replace(oldInit, newInit);
-  } else if (!after.includes('const saved = Array.isArray(state.currentReasons) && state.currentReasons.length')) {
-    throw new Error('v109.2.3 could not locate selectedReasons initializer');
+  if (!after.includes('const saved = Array.isArray(state.currentReasons) && state.currentReasons.length')) {
+    const initToken = '  const [selectedReasons, setSelectedReasons] = useState';
+    const initStart = after.indexOf(initToken);
+    const initEnd = initStart >= 0 ? after.indexOf(';\n', initStart) : -1;
+    if (initStart < 0 || initEnd < 0) throw new Error('v109.2.3 could not locate selectedReasons initializer');
+    after = `${after.slice(0, initStart)}${newInit}${after.slice(initEnd + 1)}`;
   }
 
   after = after.replace(
