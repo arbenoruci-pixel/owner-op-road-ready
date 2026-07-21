@@ -1,0 +1,169 @@
+import { applyHomographyV3, computeHomographyV3 } from './PerspectiveEngineV3.js';
+import { distanceV3, orderCornersV3, scannerErrorV3 } from './scannerTypesV3.js';
+
+export const STANDARD_PAGE_FORMATS_V10932 = Object.freeze([
+  { id:'letter', label:'US Letter', portraitRatio:8.5 / 11 },
+  { id:'a4', label:'A4', portraitRatio:210 / 297 },
+  { id:'legal', label:'US Legal', portraitRatio:8.5 / 14 },
+]);
+
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, Number(value) || 0));
+}
+
+function insetCorners(corners, ratio = 0) {
+  const safe = clamp(ratio, 0, .012);
+  if (!safe) return corners.map(point => ({ ...point }));
+  const center = corners.reduce((total, point) => ({
+    x:total.x + point.x / corners.length,
+    y:total.y + point.y / corners.length,
+  }), { x:0, y:0 });
+  return corners.map(point => ({
+    x:point.x + (center.x - point.x) * safe,
+    y:point.y + (center.y - point.y) * safe,
+  }));
+}
+
+function formatCandidate(measuredAspect, portrait, tolerance) {
+  let best = null;
+  for (const format of STANDARD_PAGE_FORMATS_V10932) {
+    const aspect = portrait ? format.portraitRatio : 1 / format.portraitRatio;
+    const score = Math.abs(Math.log(Math.max(1e-6, measuredAspect) / aspect));
+    if (!best || score < best.score) best = { ...format, aspect, score };
+  }
+  return best && best.score <= tolerance ? best : null;
+}
+
+export function estimateOutputGeometryV10932(width, height, normalizedCorners, options = {}) {
+  const ordered = orderCornersV3(normalizedCorners);
+  const [tl, tr, br, bl] = ordered.map(point => ({ x:point.x * width, y:point.y * height }));
+  const top = distanceV3(tl, tr);
+  const bottom = distanceV3(bl, br);
+  const left = distanceV3(tl, bl);
+  const right = distanceV3(tr, br);
+  const measuredWidth = Math.max(1, (top + bottom) / 2);
+  const measuredHeight = Math.max(1, (left + right) / 2);
+  const measuredAspect = measuredWidth / measuredHeight;
+  const portrait = measuredHeight >= measuredWidth;
+  const tolerance = clamp(options.snapTolerance ?? .065, .02, .14);
+  const standard = options.snapToStandard === false ? null : formatCandidate(measuredAspect, portrait, tolerance);
+  const outputAspect = standard?.aspect || measuredAspect;
+  const maxDimension = Math.max(1400, Number(options.maxDimension || 3000));
+  const minShortSide = Math.max(900, Number(options.minShortSide || 1700));
+  const maxUpscale = clamp(options.maxUpscale ?? 1.22, 1, 1.5);
+  const measuredLong = Math.max(measuredWidth, measuredHeight);
+  const measuredShort = Math.min(measuredWidth, measuredHeight);
+
+  let scale = Math.min(1, maxDimension / measuredLong);
+  const requiredForShort = minShortSide / measuredShort;
+  if (requiredForShort > scale && measuredLong * requiredForShort <= maxDimension) {
+    scale = Math.min(maxUpscale, requiredForShort);
+  }
+  scale = Math.min(scale, maxDimension / measuredLong, maxUpscale);
+
+  let outputWidth;
+  let outputHeight;
+  if (portrait) {
+    outputHeight = Math.max(900, Math.round(measuredHeight * scale));
+    outputWidth = Math.max(700, Math.round(outputHeight * outputAspect));
+    if (outputWidth > maxDimension) {
+      outputWidth = maxDimension;
+      outputHeight = Math.round(outputWidth / outputAspect);
+    }
+  } else {
+    outputWidth = Math.max(900, Math.round(measuredWidth * scale));
+    outputHeight = Math.max(700, Math.round(outputWidth / outputAspect));
+    if (outputHeight > maxDimension) {
+      outputHeight = maxDimension;
+      outputWidth = Math.round(outputHeight * outputAspect);
+    }
+  }
+
+  return {
+    width:Math.max(640, outputWidth),
+    height:Math.max(640, outputHeight),
+    measuredWidth,
+    measuredHeight,
+    measuredAspect,
+    outputAspect,
+    pageFormat:standard?.id || 'free',
+    pageFormatLabel:standard?.label || 'Original ratio',
+    formatConfidence:standard ? Math.max(0, 1 - standard.score / tolerance) : 0,
+    scale,
+  };
+}
+
+function bilinear(data, width, height, x, y, channel) {
+  const x0 = Math.max(0, Math.min(width - 1, Math.floor(x)));
+  const y0 = Math.max(0, Math.min(height - 1, Math.floor(y)));
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const dx = x - x0;
+  const dy = y - y0;
+  const p00 = data[(y0 * width + x0) * 4 + channel];
+  const p10 = data[(y0 * width + x1) * 4 + channel];
+  const p01 = data[(y1 * width + x0) * 4 + channel];
+  const p11 = data[(y1 * width + x1) * 4 + channel];
+  return p00 * (1 - dx) * (1 - dy)
+    + p10 * dx * (1 - dy)
+    + p01 * (1 - dx) * dy
+    + p11 * dx * dy;
+}
+
+export function warpPerspectiveV10932(image, normalizedCorners, options = {}) {
+  if (!image?.data || !image.width || !image.height) {
+    throw scannerErrorV3('image_missing', 'The document image is unavailable.');
+  }
+  const ordered = orderCornersV3(normalizedCorners);
+  const trimmed = insetCorners(ordered, options.trimRatio ?? .0015);
+  const source = trimmed.map(point => ({
+    x:point.x * (image.width - 1),
+    y:point.y * (image.height - 1),
+  }));
+  const geometry = estimateOutputGeometryV10932(
+    image.width,
+    image.height,
+    trimmed,
+    options,
+  );
+  const destination = [
+    { x:0, y:0 },
+    { x:geometry.width - 1, y:0 },
+    { x:geometry.width - 1, y:geometry.height - 1 },
+    { x:0, y:geometry.height - 1 },
+  ];
+  const inverse = computeHomographyV3(destination, source);
+  const out = new Uint8ClampedArray(geometry.width * geometry.height * 4);
+
+  for (let y = 0; y < geometry.height; y += 1) {
+    for (let x = 0; x < geometry.width; x += 1) {
+      const sourcePoint = applyHomographyV3(inverse, { x, y });
+      const offset = (y * geometry.width + x) * 4;
+      if (sourcePoint.x < 0 || sourcePoint.y < 0 || sourcePoint.x >= image.width || sourcePoint.y >= image.height) {
+        out[offset] = 255;
+        out[offset + 1] = 255;
+        out[offset + 2] = 255;
+        out[offset + 3] = 255;
+        continue;
+      }
+      out[offset] = bilinear(image.data, image.width, image.height, sourcePoint.x, sourcePoint.y, 0);
+      out[offset + 1] = bilinear(image.data, image.width, image.height, sourcePoint.x, sourcePoint.y, 1);
+      out[offset + 2] = bilinear(image.data, image.width, image.height, sourcePoint.x, sourcePoint.y, 2);
+      out[offset + 3] = 255;
+    }
+  }
+
+  return {
+    width:geometry.width,
+    height:geometry.height,
+    data:out,
+    homography:inverse,
+    sourceCorners:source,
+    pageFormat:geometry.pageFormat,
+    pageFormatLabel:geometry.pageFormatLabel,
+    formatConfidence:geometry.formatConfidence,
+    measuredAspect:geometry.measuredAspect,
+    outputAspect:geometry.outputAspect,
+    renderScale:geometry.scale,
+  };
+}
