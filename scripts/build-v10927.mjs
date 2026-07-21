@@ -166,6 +166,13 @@ run(process.execPath, ['--input-type=module', '-e', `
   update = update.replace(/const FALLBACK_APP_BUILD = '[^']+';/, "const FALLBACK_APP_BUILD = 'v10945-recertification-sign-loop';");
   fs.writeFileSync(updatePath, update);
 
+  const verifyPath = 'scripts/verify-v10943-auto-upright.mjs';
+  let verify = fs.readFileSync(verifyPath, 'utf8');
+  verify = verify.replace("assert.equal(release.version, '109.4.4');", "assert.equal(release.version, '109.4.5');");
+  verify = verify.replace("assert.equal(release.build, 'v10944-load-guide-closeout');", "assert.equal(release.build, 'v10945-recertification-sign-loop');");
+  verify = verify.replace("assert.equal(packageJson.version, '109.4.4');", "assert.equal(packageJson.version, '109.4.5');");
+  fs.writeFileSync(verifyPath, verify);
+
   if (!app.includes('needsRecertification,') || !app.includes('changedAfterSignAt,')) throw new Error('v109.4.5 signing cleanup not installed');
   console.log('PASS — v109.4.5 recertification flags clear after successful signing');
 `]);
