@@ -28,5 +28,22 @@ run(process.execPath, ['scripts/verify-v10940-layered-render.mjs']);
 run(process.execPath, ['scripts/apply-v10941-single-fidelity-pass.mjs']);
 run(process.execPath, ['scripts/apply-v10942-neutral-safe-render.mjs']);
 run(process.execPath, ['scripts/apply-v10943-auto-upright.mjs']);
+run(process.execPath, ['--input-type=module', '-e', `
+  import fs from 'node:fs';
+  const target = 'source/src/modules/loads/loadGuideV103.js';
+  let source = fs.readFileSync(target, 'utf8');
+  const start = source.indexOf("  const characters = Object.keys(value)");
+  const end = source.indexOf("  return text(characters);", start);
+  if (start < 0 || end < 0) throw new Error('v109.4.4 checklist fallback patch target missing');
+  const replacement = [
+    "  const characters = Object.values(value)",
+    "    .filter(item => typeof item === 'string' || typeof item === 'number')",
+    "    .map(item => String(item))",
+    "    .join('');",
+  ].join('\\n');
+  source = source.slice(0, start) + replacement + '\\n' + source.slice(end);
+  fs.writeFileSync(target, source);
+  console.log('PASS — v109.4.4 legacy checklist value fallback applied');
+`]);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
