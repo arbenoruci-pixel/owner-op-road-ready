@@ -15,4 +15,6 @@ run(process.execPath, ['scripts/apply-v10930-scanner-lab-041.mjs']);
 run(process.execPath, ['scripts/verify-v10930-scanner-lab-041.mjs']);
 run(process.execPath, ['scripts/apply-v10935-reliable-update.mjs']);
 run(process.execPath, ['scripts/verify-v10935-reliable-update.mjs']);
+run(process.execPath, ['scripts/apply-v10936-reference-quality.mjs']);
+run(process.execPath, ['scripts/verify-v10936-reference-quality.mjs']);
 run('npx', ['next', 'build']);
