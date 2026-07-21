@@ -54,28 +54,22 @@ const inspectionDeleteAfter = [
 ].join('\n');
 app = replaceOnce(app, inspectionDeleteBefore, inspectionDeleteAfter, 'completed inspection persistence');
 
-const persistenceBefore = [
-  "  React.useEffect(() => {",
-  "    if (!offlineHydrated) return;",
-  "    const previousEventsByDay = lastEventsByDayRef.current;",
-  "    const previousInspectionByDay = lastInspectionByDayRef.current;",
-  "    saveAppSnapshot(APP_STATE_KEY, state).catch(() => {});",
-].join('\n');
-const persistenceAfter = [
-  "  React.useEffect(() => {",
-  "    if (!offlineHydrated) return;",
-  "    // A late route/document repair may run after initial hydration. Remove only",
-  "    // metadata-only recertification flags before they can be saved or displayed.",
-  "    const cleanedState = clearMetadataOnlyRecertification(state);",
-  "    if (cleanedState !== state) {",
-  "      setState(cleanedState);",
-  "      return;",
-  "    }",
-  "    const previousEventsByDay = lastEventsByDayRef.current;",
-  "    const previousInspectionByDay = lastInspectionByDayRef.current;",
-  "    saveAppSnapshot(APP_STATE_KEY, state).catch(() => {});",
-].join('\n');
-app = replaceOnce(app, persistenceBefore, persistenceAfter, 'late runtime recertification cleanup');
+if (!app.includes('const cleanedState = clearMetadataOnlyRecertification(state)')) {
+  const saveNeedle = "    saveAppSnapshot(APP_STATE_KEY, state).catch(() => {});";
+  const saveIndex = app.indexOf(saveNeedle);
+  if (saveIndex < 0) throw new Error('v109.4.7 save snapshot marker missing');
+  const runtimeCleanup = [
+    "    // A late route/document repair may run after initial hydration. Remove only",
+    "    // metadata-only recertification flags before they can be saved or displayed.",
+    "    const cleanedState = clearMetadataOnlyRecertification(state);",
+    "    if (cleanedState !== state) {",
+    "      setState(cleanedState);",
+    "      return;",
+    "    }",
+    "",
+  ].join('\n');
+  app = `${app.slice(0, saveIndex)}${runtimeCleanup}${app.slice(saveIndex)}`;
+}
 write(appTarget, app);
 
 const homeTarget = 'source/src/modules/home/HomeScreen.jsx';
