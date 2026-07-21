@@ -1,0 +1,361 @@
+import { clampV3 } from './scannerTypesV3.js';
+
+function luminance(r, g, b) {
+  return r * .2126 + g * .7152 + b * .0722;
+}
+
+function byte(value) {
+  return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+}
+
+function range(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, Number(value) || 0));
+}
+
+function percentile(values = [], ratio = .5) {
+  if (!values.length) return 0;
+  const ordered = [...values].sort((a, b) => a - b);
+  return ordered[Math.max(0, Math.min(ordered.length - 1, Math.round((ordered.length - 1) * ratio)))];
+}
+
+export function analyzeDocumentColorV1093(image) {
+  if (!image?.data || !image.width || !image.height) {
+    return {
+      mean:0,
+      contrast:0,
+      colorRatio:0,
+      redInkRatio:0,
+      blueInkRatio:0,
+      glareRatio:0,
+      shadowRatio:0,
+      preserveColor:false,
+    };
+  }
+  const values = [];
+  let total = 0;
+  let totalSquared = 0;
+  let color = 0;
+  let redInk = 0;
+  let blueInk = 0;
+  let glare = 0;
+  let shadow = 0;
+  let count = 0;
+  const pixelCount = image.width * image.height;
+  const step = Math.max(1, Math.floor(pixelCount / 180000));
+  for (let pixel = 0; pixel < pixelCount; pixel += step) {
+    const offset = pixel * 4;
+    const r = image.data[offset];
+    const g = image.data[offset + 1];
+    const b = image.data[offset + 2];
+    const y = luminance(r, g, b);
+    const maximum = Math.max(r, g, b);
+    const minimum = Math.min(r, g, b);
+    const chroma = maximum - minimum;
+    total += y;
+    totalSquared += y * y;
+    if ((pixel + count) % 7 === 0) values.push(y);
+    if (chroma > 26 && y > 38 && y < 247) color += 1;
+    if (r > g * 1.16 && r > b * 1.1 && r - Math.max(g, b) > 22 && y > 38) redInk += 1;
+    if (b > r * 1.1 && b > g * 1.06 && b - Math.max(r, g) > 18 && y > 32) blueInk += 1;
+    if (y > 248) glare += 1;
+    if (y < 66) shadow += 1;
+    count += 1;
+  }
+  const mean = count ? total / count : 0;
+  const contrast = count ? Math.sqrt(Math.max(0, totalSquared / count - mean * mean)) : 0;
+  const colorRatio = count ? color / count : 0;
+  const redInkRatio = count ? redInk / count : 0;
+  const blueInkRatio = count ? blueInk / count : 0;
+  const glareRatio = count ? glare / count : 0;
+  const shadowRatio = count ? shadow / count : 0;
+  return {
+    mean,
+    contrast,
+    low:percentile(values, .028),
+    high:percentile(values, .982),
+    colorRatio,
+    redInkRatio,
+    blueInkRatio,
+    glareRatio,
+    shadowRatio,
+    preserveColor:colorRatio >= .01 || redInkRatio >= .0009 || blueInkRatio >= .0012,
+  };
+}
+
+function buildIlluminationGrid(image, metrics) {
+  const width = image.width;
+  const height = image.height;
+  const columns = Math.max(6, Math.min(24, Math.ceil(width / 96)));
+  const rows = Math.max(6, Math.min(24, Math.ceil(height / 96)));
+  const bins = 32;
+  const histograms = new Uint32Array(columns * rows * bins);
+  const counts = new Uint32Array(columns * rows);
+  const pixelCount = width * height;
+  const step = Math.max(1, Math.floor(pixelCount / 1300000));
+
+  for (let pixel = 0; pixel < pixelCount; pixel += step) {
+    const x = pixel % width;
+    const y = Math.floor(pixel / width);
+    const offset = pixel * 4;
+    const value = luminance(image.data[offset], image.data[offset + 1], image.data[offset + 2]);
+    const column = Math.min(columns - 1, Math.floor(x * columns / width));
+    const row = Math.min(rows - 1, Math.floor(y * rows / height));
+    const cell = row * columns + column;
+    const bin = Math.max(0, Math.min(bins - 1, Math.floor(value * bins / 256)));
+    histograms[cell * bins + bin] += 1;
+    counts[cell] += 1;
+  }
+
+  let values = new Float32Array(columns * rows);
+  for (let cell = 0; cell < values.length; cell += 1) {
+    const total = counts[cell];
+    if (!total) {
+      values[cell] = Math.max(150, Number(metrics.high || metrics.mean || 220));
+      continue;
+    }
+    const target = total * .84;
+    let cumulative = 0;
+    let selected = bins - 1;
+    for (let bin = 0; bin < bins; bin += 1) {
+      cumulative += histograms[cell * bins + bin];
+      if (cumulative >= target) {
+        selected = bin;
+        break;
+      }
+    }
+    values[cell] = (selected + .5) * 256 / bins;
+  }
+
+  for (let pass = 0; pass < 2; pass += 1) {
+    const smoothed = new Float32Array(values.length);
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        let total = 0;
+        let weight = 0;
+        for (let oy = -1; oy <= 1; oy += 1) {
+          const sampleRow = Math.max(0, Math.min(rows - 1, row + oy));
+          for (let ox = -1; ox <= 1; ox += 1) {
+            const sampleColumn = Math.max(0, Math.min(columns - 1, column + ox));
+            const sampleWeight = ox === 0 && oy === 0 ? 4 : ox === 0 || oy === 0 ? 2 : 1;
+            total += values[sampleRow * columns + sampleColumn] * sampleWeight;
+            weight += sampleWeight;
+          }
+        }
+        smoothed[row * columns + column] = total / Math.max(1, weight);
+      }
+    }
+    values = smoothed;
+  }
+
+  return { columns, rows, values };
+}
+
+function sampleGrid(grid, x, y, width, height) {
+  const gx = range((x / Math.max(1, width - 1)) * (grid.columns - 1), 0, grid.columns - 1);
+  const gy = range((y / Math.max(1, height - 1)) * (grid.rows - 1), 0, grid.rows - 1);
+  const x0 = Math.floor(gx);
+  const y0 = Math.floor(gy);
+  const x1 = Math.min(grid.columns - 1, x0 + 1);
+  const y1 = Math.min(grid.rows - 1, y0 + 1);
+  const dx = gx - x0;
+  const dy = gy - y0;
+  const at = (column, row) => grid.values[row * grid.columns + column];
+  return at(x0, y0) * (1 - dx) * (1 - dy)
+    + at(x1, y0) * dx * (1 - dy)
+    + at(x0, y1) * (1 - dx) * dy
+    + at(x1, y1) * dx * dy;
+}
+
+function paperWhiteBalance(image, metrics) {
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  let count = 0;
+  const pixelCount = image.width * image.height;
+  const step = Math.max(1, Math.floor(pixelCount / 220000));
+  const threshold = Math.max(138, Number(metrics.high || 225) * .72);
+  for (let pixel = 0; pixel < pixelCount; pixel += step) {
+    const offset = pixel * 4;
+    const r = image.data[offset];
+    const g = image.data[offset + 1];
+    const b = image.data[offset + 2];
+    const y = luminance(r, g, b);
+    const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+    if (y >= threshold && chroma <= 52) {
+      red += r;
+      green += g;
+      blue += b;
+      count += 1;
+    }
+  }
+  if (!count) return { red:1, green:1, blue:1 };
+  const averageRed = red / count;
+  const averageGreen = green / count;
+  const averageBlue = blue / count;
+  const neutral = (averageRed + averageGreen + averageBlue) / 3;
+  return {
+    red:range(neutral / Math.max(1, averageRed), .84, 1.18),
+    green:range(neutral / Math.max(1, averageGreen), .84, 1.18),
+    blue:range(neutral / Math.max(1, averageBlue), .84, 1.18),
+  };
+}
+
+function readLumaRow(image, y) {
+  const row = new Float32Array(image.width);
+  const safeY = Math.max(0, Math.min(image.height - 1, y));
+  for (let x = 0; x < image.width; x += 1) {
+    const offset = (safeY * image.width + x) * 4;
+    row[x] = luminance(image.data[offset], image.data[offset + 1], image.data[offset + 2]);
+  }
+  return row;
+}
+
+function sharpenInPlace(image, amount = .55, colorMode = false) {
+  if (!image?.data || image.width < 3 || image.height < 3) return image;
+  let previous = readLumaRow(image, 0);
+  let current = readLumaRow(image, 1);
+  for (let y = 1; y < image.height - 1; y += 1) {
+    const next = readLumaRow(image, y + 1);
+    for (let x = 1; x < image.width - 1; x += 1) {
+      const center = current[x];
+      const blur = (current[x] * 4 + current[x - 1] + current[x + 1] + previous[x] + next[x]) / 8;
+      const detail = center - blur;
+      const strength = center > 232 ? amount * .16 : center > 190 ? amount * .48 : amount;
+      const target = byte(center + detail * strength);
+      const offset = (y * image.width + x) * 4;
+      if (colorMode) {
+        const ratio = target / Math.max(1, center);
+        image.data[offset] = byte(image.data[offset] * ratio);
+        image.data[offset + 1] = byte(image.data[offset + 1] * ratio);
+        image.data[offset + 2] = byte(image.data[offset + 2] * ratio);
+      } else {
+        image.data[offset] = target;
+        image.data[offset + 1] = target;
+        image.data[offset + 2] = target;
+      }
+      image.data[offset + 3] = 255;
+    }
+    previous = current;
+    current = next;
+  }
+  return image;
+}
+
+function normalizeColorDocument(image, metrics) {
+  const grid = buildIlluminationGrid(image, metrics);
+  const balance = paperWhiteBalance(image, metrics);
+  const data = new Uint8ClampedArray(image.data.length);
+  const targetPaper = range(Math.max(226, Number(metrics.high || 230)), 226, 244);
+
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const offset = (y * image.width + x) * 4;
+      const background = Math.max(54, sampleGrid(grid, x, y, image.width, image.height));
+      const illuminationGain = range(targetPaper / background, .74, 2.18);
+      let r = image.data[offset] * illuminationGain * balance.red;
+      let g = image.data[offset + 1] * illuminationGain * balance.green;
+      let b = image.data[offset + 2] * illuminationGain * balance.blue;
+      const yValue = luminance(r, g, b);
+      let target = yValue;
+      if (yValue >= 172) target += (255 - yValue) * .34;
+      else if (yValue < 88) target *= .9;
+      const toneRatio = target / Math.max(1, yValue);
+      r *= toneRatio;
+      g *= toneRatio;
+      b *= toneRatio;
+      const average = (r + g + b) / 3;
+      const saturation = 1.045;
+      r = average + (r - average) * saturation;
+      g = average + (g - average) * saturation;
+      b = average + (b - average) * saturation;
+      data[offset] = byte(r);
+      data[offset + 1] = byte(g);
+      data[offset + 2] = byte(b);
+      data[offset + 3] = 255;
+    }
+  }
+  return sharpenInPlace({ width:image.width, height:image.height, data }, .52, true);
+}
+
+function normalizeCleanDocument(image, metrics) {
+  const grid = buildIlluminationGrid(image, metrics);
+  const data = new Uint8ClampedArray(image.data.length);
+  const low = range(Number(metrics.low || 22) * .72, 4, 118);
+  const high = range(Math.max(low + 68, Number(metrics.high || 238)), low + 68, 252);
+  const span = Math.max(68, high - low);
+
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const offset = (y * image.width + x) * 4;
+      const source = luminance(image.data[offset], image.data[offset + 1], image.data[offset + 2]);
+      const background = Math.max(50, sampleGrid(grid, x, y, image.width, image.height));
+      const illuminationGain = range(240 / background, .72, 2.3);
+      const illuminated = range(source * illuminationGain, 0, 255);
+      let normalized = clampV3((illuminated - low) / span);
+      normalized = Math.pow(normalized, .88);
+      let value = normalized * 255;
+      if (value >= 178) value += (255 - value) * .62;
+      else if (value <= 164) value *= .8;
+      if (value <= 82) value *= .88;
+      const output = byte(value);
+      data[offset] = output;
+      data[offset + 1] = output;
+      data[offset + 2] = output;
+      data[offset + 3] = 255;
+    }
+  }
+  return sharpenInPlace({ width:image.width, height:image.height, data }, .78, false);
+}
+
+function adaptiveHighContrast(clean) {
+  const data = new Uint8ClampedArray(clean.data.length);
+  for (let pixel = 0; pixel < clean.width * clean.height; pixel += 1) {
+    const offset = pixel * 4;
+    const value = clean.data[offset];
+    const output = value < 142 ? byte(value * .42) : value > 198 ? 255 : byte((value - 142) * 2.55);
+    data[offset] = output;
+    data[offset + 1] = output;
+    data[offset + 2] = output;
+    data[offset + 3] = 255;
+  }
+  return { width:clean.width, height:clean.height, data };
+}
+
+export function autoFixDocumentV1093(source, restored = {}) {
+  const metrics = analyzeDocumentColorV1093(source);
+  const grayscaleSource = restored.grayscale || source;
+  const colorSource = restored.color || source;
+  const enhancedColor = normalizeColorDocument(colorSource, metrics);
+  const cleanMetrics = { ...metrics, ...analyzeDocumentColorV1093(grayscaleSource) };
+  const clean = normalizeCleanDocument(grayscaleSource, cleanMetrics);
+  const grayscale = clean;
+  const highContrast = restored.highContrast || adaptiveHighContrast(clean);
+  const displayMode = metrics.preserveColor ? 'color-preserve-pro' : 'clean-document-pro';
+  const display = metrics.preserveColor ? enhancedColor : clean;
+  const ocr = metrics.shadowRatio > .16 || metrics.contrast < 40 ? highContrast : clean;
+  return {
+    display,
+    ocr,
+    enhancedColor,
+    clean,
+    grayscale,
+    highContrast,
+    metadata:{
+      engine:'road-ready-auto-quality-bot-v10931',
+      mode:displayMode,
+      preserveColor:metrics.preserveColor,
+      colorRatio:Number(metrics.colorRatio.toFixed(6)),
+      redInkRatio:Number(metrics.redInkRatio.toFixed(6)),
+      blueInkRatio:Number(metrics.blueInkRatio.toFixed(6)),
+      glareRatio:Number(metrics.glareRatio.toFixed(6)),
+      shadowRatio:Number(metrics.shadowRatio.toFixed(6)),
+      contrast:Number(metrics.contrast.toFixed(3)),
+      illuminationNormalized:true,
+      localIlluminationGrid:true,
+      paperWhiteBalanced:true,
+      localContrast:true,
+      textSharpened:true,
+      primaryRenderedOutput:true,
+    },
+  };
+}
