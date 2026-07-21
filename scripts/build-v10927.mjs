@@ -12,5 +12,6 @@ run(process.execPath, ['scripts/prepare-v10926-runtime.mjs']);
 run(process.execPath, ['scripts/apply-v10926-event-reasons-source-of-truth.mjs']);
 run(process.execPath, ['scripts/apply-v10927-reset-pretrip-reasons.mjs']);
 run(process.execPath, ['scripts/apply-v10930-scanner-lab-041.mjs']);
+run(process.execPath, ['scripts/inspect-v10931-quality.mjs']);
 run(process.execPath, ['scripts/verify-v10930-scanner-lab-041.mjs']);
 run('npx', ['next', 'build']);
