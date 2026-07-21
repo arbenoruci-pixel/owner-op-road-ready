@@ -10,5 +10,5 @@ run('npm', ['run', 'prebuild']);
 run(process.execPath, ['scripts/apply-v10925-edit-duty-multitask-save.mjs']);
 run(process.execPath, ['scripts/prepare-v10926-runtime.mjs']);
 run(process.execPath, ['scripts/apply-v10926-event-reasons-source-of-truth.mjs']);
-run(process.execPath, ['scripts/diagnose-v10927-dot-pretrip-after-reset.mjs']);
+run(process.execPath, ['scripts/apply-v10927-reset-pretrip-reasons.mjs']);
 run('npx', ['next', 'build']);
