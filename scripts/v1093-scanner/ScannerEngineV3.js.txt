@@ -1,0 +1,257 @@
+import { detectDocumentEdgesV3 } from './EdgeDetectorV3.js';
+import { warpPerspectiveV3 } from './PerspectiveEngineV3.js';
+import { restoreDocumentV3 } from './RestoreEngineV3.js';
+import { selectBestOCRVariantV3 } from './OCRPipelineV3.js';
+import {
+  decodeImageFileV3,
+  imageDataToFileV3,
+  rotateImageDataClockwiseV3,
+} from './imageUtilsV3.js';
+import {
+  ROAD_READY_SCANNER_V3_VERSION,
+  rotateCornersClockwiseV3,
+  uidV3,
+} from './scannerTypesV3.js';
+import {
+  boundaryCornersV1093,
+  boundaryFromCornersV1093,
+  extractCurvedDocumentV1093,
+  normalizeBoundaryV1093,
+  refineBoundaryFromImageV1093,
+  rotateBoundaryClockwiseV1093,
+} from './CurvedBoundaryV1093.js';
+import { autoFixDocumentV1093 } from './AutoQualityBotV1093.js';
+
+function captureAsset(kind, file, metadata = {}) {
+  return {
+    kind,
+    file,
+    pageIndex:0,
+    immutable:kind === 'original',
+    geometryMode:metadata.geometryMode || '',
+    filter:metadata.filter || '',
+    createdAt:new Date().toISOString(),
+  };
+}
+
+function boundaryInputV1093(input, fallbackCorners) {
+  if (Array.isArray(input)) return boundaryFromCornersV1093(input);
+  return normalizeBoundaryV1093(input, fallbackCorners);
+}
+
+export class ScannerEngineV3 {
+  constructor(options = {}) {
+    this.maxInputDimension = options.maxInputDimension || 2200;
+    this.maxOutputDimension = options.maxOutputDimension || 2200;
+  }
+
+  async prepare(file, options = {}) {
+    options.onStatus?.('Opening photo…');
+    const workingImage = await decodeImageFileV3(file, {
+      maxDimension:this.maxInputDimension,
+    });
+    options.onStatus?.('Finding the outer paper…');
+    const detection = detectDocumentEdgesV3(workingImage);
+    const detectedBoundary = boundaryFromCornersV1093(detection.corners);
+    options.onStatus?.('Following curved edges…');
+    const boundary = refineBoundaryFromImageV1093(
+      workingImage,
+      detectedBoundary,
+      { passes:2 },
+    );
+    const reviewFile = await imageDataToFileV3(
+      workingImage,
+      'road-ready-review-v1093.jpg',
+      .92,
+    );
+    return {
+      id:uidV3('scanner_v1093'),
+      source:options.source || 'camera',
+      originalFile:file,
+      reviewFile,
+      workingImage,
+      corners:detection.corners,
+      detectedBoundary,
+      boundary,
+      detection,
+      rotation:0,
+      createdAt:new Date().toISOString(),
+    };
+  }
+
+  async rotate(session, options = {}) {
+    options.onStatus?.('Rotating document…');
+    const workingImage = rotateImageDataClockwiseV3(session.workingImage);
+    const reviewFile = await imageDataToFileV3(
+      workingImage,
+      'road-ready-review-v1093-rotated.jpg',
+      .92,
+    );
+    const corners = rotateCornersClockwiseV3(session.corners);
+    const detectedBoundary = session.detectedBoundary
+      ? rotateBoundaryClockwiseV1093(session.detectedBoundary)
+      : boundaryFromCornersV1093(corners);
+    const boundary = session.boundary
+      ? rotateBoundaryClockwiseV1093(session.boundary)
+      : detectedBoundary;
+    return {
+      ...session,
+      workingImage,
+      reviewFile,
+      corners,
+      detectedBoundary,
+      boundary,
+      detection:{
+        ...(session.detection || {}),
+        corners,
+      },
+      rotation:(Number(session.rotation || 0) + 90) % 360,
+    };
+  }
+
+  async finalize(session, boundaryOrCorners, options = {}) {
+    options.onStatus?.('Flattening curved paper…');
+    const boundary = boundaryInputV1093(
+      boundaryOrCorners || session.boundary,
+      session.corners,
+    );
+
+    let corrected = null;
+    let geometryMode = 'coons-curved-mesh-v1093';
+    try {
+      corrected = extractCurvedDocumentV1093(
+        session.workingImage,
+        boundary,
+        {
+          maxDimension:this.maxOutputDimension,
+          minShortSide:720,
+          columns:24,
+          rows:24,
+        },
+      );
+    } catch {
+      geometryMode = 'homography-fallback-v1093';
+      corrected = warpPerspectiveV3(
+        session.workingImage,
+        boundaryCornersV1093(boundary),
+        { maxDimension:this.maxOutputDimension },
+      );
+    }
+
+    options.onStatus?.('Balancing shadows and paper color…');
+    const restored = restoreDocumentV3(corrected);
+    options.onStatus?.('Strengthening text and handwriting…');
+    const autoFixed = autoFixDocumentV1093(corrected, restored);
+    options.onStatus?.('Choosing the clearest OCR image…');
+    const ocr = selectBestOCRVariantV3({
+      restoredColor:autoFixed.enhancedColor,
+      grayscale:autoFixed.clean,
+      highContrast:autoFixed.highContrast,
+    });
+
+    const [
+      correctedFile,
+      enhancedColorFile,
+      cleanFile,
+      grayscaleFile,
+      highContrastFile,
+    ] = await Promise.all([
+      imageDataToFileV3(corrected, 'road-ready-curved-corrected.jpg', .94),
+      imageDataToFileV3(autoFixed.enhancedColor, 'road-ready-enhanced-color.jpg', .94),
+      imageDataToFileV3(autoFixed.clean, 'road-ready-auto-clean.jpg', .94),
+      imageDataToFileV3(autoFixed.grayscale, 'road-ready-ocr-grayscale.jpg', .93),
+      imageDataToFileV3(autoFixed.highContrast, 'road-ready-ocr-high-contrast.jpg', .93),
+    ]);
+
+    const displayFile = autoFixed.metadata.preserveColor
+      ? enhancedColorFile
+      : cleanFile;
+    const byName = {
+      restoredColor:enhancedColorFile,
+      grayscale:cleanFile,
+      highContrast:highContrastFile,
+    };
+    const ocrFile = byName[ocr.selected?.name]
+      || (autoFixed.ocr === autoFixed.highContrast ? highContrastFile : cleanFile);
+
+    const captureAssets = [
+      captureAsset('original', session.originalFile, {
+        geometryMode:'immutable-source',
+      }),
+      captureAsset('curved-perspective-corrected', correctedFile, {
+        geometryMode,
+      }),
+      captureAsset('enhanced-color', enhancedColorFile, {
+        geometryMode,
+        filter:'auto-quality-color-v1093',
+      }),
+      captureAsset('auto-clean', cleanFile, {
+        geometryMode,
+        filter:'auto-quality-clean-v1093',
+      }),
+      captureAsset('grayscale-ocr', grayscaleFile, {
+        filter:'grayscale-local-contrast-v1093',
+      }),
+      captureAsset('high-contrast-ocr', highContrastFile, {
+        filter:'high-contrast-v1093',
+      }),
+      captureAsset('ocr-selected', ocrFile, {
+        filter:`selected-${ocr.selected?.name || 'clean'}-v1093`,
+      }),
+    ];
+
+    return {
+      originalFile:session.originalFile,
+      displayFile,
+      ocrFile,
+      metadata:{
+        source:`road-ready-scanner-v1093-${session.source}`,
+        scannerVersion:ROAD_READY_SCANNER_V3_VERSION,
+        pageCount:1,
+        originalPreserved:true,
+        captureAssets,
+        captureManifest:{
+          version:ROAD_READY_SCANNER_V3_VERSION,
+          engine:'Road Ready Scanner Lab 0.4.1 integrated',
+          localOnly:true,
+          source:session.source,
+          rotation:session.rotation,
+          boundary:{
+            model:'coons-curved-boundary',
+            visibleHandles:6,
+            internalBoundaryPoints:16,
+            geometryMode,
+          },
+          detection:{
+            confidence:session.detection?.confidence || 0,
+            method:session.detection?.method || '',
+            metrics:session.detection?.metrics || {},
+          },
+          perspective:{
+            method:geometryMode,
+            operation:'curved-page-flatten',
+            width:corrected.width,
+            height:corrected.height,
+          },
+          restore:{
+            ...(restored.metadata || {}),
+            autoQuality:autoFixed.metadata,
+          },
+          ocrSelection:{
+            selected:ocr.selected?.name || 'clean',
+            scores:ocr.ranked.map(item => ({
+              name:item.name,
+              score:item.score,
+              metrics:item.metrics,
+            })),
+          },
+          completedAt:new Date().toISOString(),
+        },
+        displayFile,
+        ocrFile,
+      },
+    };
+  }
+}
+
+export const scannerEngineV3 = new ScannerEngineV3();
