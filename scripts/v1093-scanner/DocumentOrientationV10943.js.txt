@@ -1,0 +1,398 @@
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, Number(value) || 0));
+}
+
+function luminance(r, g, b) {
+  return r * .2126 + g * .7152 + b * .0722;
+}
+
+function copyMetadata(source, image, metadata = {}) {
+  return {
+    ...source,
+    width:image.width,
+    height:image.height,
+    data:image.data,
+    outputAspect:image.width / Math.max(1, image.height),
+    portraitRatio:Math.min(image.width, image.height) / Math.max(1, Math.max(image.width, image.height)),
+    ...metadata,
+  };
+}
+
+function rotateClockwise(image) {
+  const width = image.width;
+  const height = image.height;
+  const outputWidth = height;
+  const outputHeight = width;
+  const data = new Uint8ClampedArray(outputWidth * outputHeight * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const sourceOffset = (y * width + x) * 4;
+      const outputX = height - 1 - y;
+      const outputY = x;
+      const outputOffset = (outputY * outputWidth + outputX) * 4;
+      data[outputOffset] = image.data[sourceOffset];
+      data[outputOffset + 1] = image.data[sourceOffset + 1];
+      data[outputOffset + 2] = image.data[sourceOffset + 2];
+      data[outputOffset + 3] = image.data[sourceOffset + 3] ?? 255;
+    }
+  }
+  return { width:outputWidth, height:outputHeight, data };
+}
+
+export function rotateQuarterTurnsV10943(image, turns = 0) {
+  let output = {
+    width:image.width,
+    height:image.height,
+    data:new Uint8ClampedArray(image.data),
+  };
+  const count = ((Math.round(turns) % 4) + 4) % 4;
+  for (let index = 0; index < count; index += 1) output = rotateClockwise(output);
+  return copyMetadata(image, output);
+}
+
+function downsampleLuma(image, maxSide = 360) {
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+  const width = Math.max(24, Math.round(image.width * scale));
+  const height = Math.max(24, Math.round(image.height * scale));
+  const data = new Float32Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = Math.min(image.height - 1, Math.round((y + .5) / scale - .5));
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = Math.min(image.width - 1, Math.round((x + .5) / scale - .5));
+      const offset = (sourceY * image.width + sourceX) * 4;
+      data[y * width + x] = luminance(
+        image.data[offset],
+        image.data[offset + 1],
+        image.data[offset + 2],
+      );
+    }
+  }
+  return { width, height, data };
+}
+
+function buildIntegral(values, width, height) {
+  const stride = width + 1;
+  const integral = new Float64Array((width + 1) * (height + 1));
+  for (let y = 0; y < height; y += 1) {
+    let row = 0;
+    for (let x = 0; x < width; x += 1) {
+      row += values[y * width + x];
+      integral[(y + 1) * stride + (x + 1)] = integral[y * stride + (x + 1)] + row;
+    }
+  }
+  return integral;
+}
+
+function regionMean(integral, width, height, x, y, radius) {
+  const stride = width + 1;
+  const x0 = Math.max(0, x - radius);
+  const x1 = Math.min(width - 1, x + radius);
+  const y0 = Math.max(0, y - radius);
+  const y1 = Math.min(height - 1, y + radius);
+  const sum = integral[(y1 + 1) * stride + (x1 + 1)]
+    - integral[y0 * stride + (x1 + 1)]
+    - integral[(y1 + 1) * stride + x0]
+    + integral[y0 * stride + x0];
+  return sum / Math.max(1, (x1 - x0 + 1) * (y1 - y0 + 1));
+}
+
+function projectionScore(values) {
+  if (!values?.length) return 0;
+  const smooth = new Float64Array(values.length);
+  for (let index = 0; index < values.length; index += 1) {
+    let total = values[index] * 3;
+    let weight = 3;
+    if (index > 0) {
+      total += values[index - 1] * 2;
+      weight += 2;
+    }
+    if (index + 1 < values.length) {
+      total += values[index + 1] * 2;
+      weight += 2;
+    }
+    if (index > 1) {
+      total += values[index - 2];
+      weight += 1;
+    }
+    if (index + 2 < values.length) {
+      total += values[index + 2];
+      weight += 1;
+    }
+    smooth[index] = total / weight;
+  }
+
+  const mean = smooth.reduce((sum, value) => sum + value, 0) / smooth.length;
+  if (mean < .01) return 0;
+  let variance = 0;
+  let derivative = 0;
+  for (let index = 0; index < smooth.length; index += 1) {
+    variance += (smooth[index] - mean) ** 2;
+    if (index) derivative += Math.abs(smooth[index] - smooth[index - 1]);
+  }
+  variance /= smooth.length;
+  derivative /= Math.max(1, smooth.length - 1);
+  return variance / (mean * mean + 1) + derivative / (mean + 1) * .18;
+}
+
+function analyzeOrientation(image) {
+  const sampled = downsampleLuma(image);
+  const { width, height, data:luma } = sampled;
+  const integral = buildIntegral(luma, width, height);
+  const radius = Math.max(2, Math.round(Math.min(width, height) / 70));
+  const row = new Float64Array(height);
+  const column = new Float64Array(width);
+  const ink = new Float32Array(width * height);
+  let totalInk = 0;
+
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const pixel = y * width + x;
+      const local = regionMean(integral, width, height, x, y, radius);
+      const neighbor = (
+        luma[pixel - 1]
+        + luma[pixel + 1]
+        + luma[pixel - width]
+        + luma[pixel + width]
+      ) / 4;
+      const depth = Math.max(0, local - luma[pixel]);
+      const micro = Math.max(0, neighbor - luma[pixel]);
+      const value = Math.max(depth, micro * 1.25);
+      if (value < 2.4) continue;
+      const weight = Math.min(42, value - 2.4);
+      ink[pixel] = weight;
+      row[y] += weight;
+      column[x] += weight;
+      totalInk += weight;
+    }
+  }
+
+  const horizontalScore = projectionScore(row);
+  const verticalScore = projectionScore(column);
+  const rowThreshold = Math.max(1, totalInk / Math.max(1, height) * .12);
+  let first = 0;
+  while (first < height && row[first] < rowThreshold) first += 1;
+  let last = height - 1;
+  while (last >= 0 && row[last] < rowThreshold) last -= 1;
+  const topMargin = first / Math.max(1, height);
+  const bottomMargin = (height - 1 - last) / Math.max(1, height);
+  let topInk = 0;
+  let bottomInk = 0;
+  const band = Math.max(1, Math.floor(height * .28));
+  for (let y = 0; y < band; y += 1) topInk += row[y];
+  for (let y = height - band; y < height; y += 1) bottomInk += row[y];
+  const uprightScore = (bottomMargin - topMargin) * 1.8
+    + (topInk - bottomInk) / Math.max(1, topInk + bottomInk) * .38;
+
+  return {
+    ...sampled,
+    ink,
+    row,
+    column,
+    horizontalScore,
+    verticalScore,
+    totalInk,
+    topMargin,
+    bottomMargin,
+    uprightScore,
+  };
+}
+
+function estimateDeskew(image) {
+  const metrics = analyzeOrientation(image);
+  if (metrics.totalInk < 40 || metrics.horizontalScore < metrics.verticalScore * .92) {
+    return {
+      angle:0,
+      confidence:0,
+      baseScore:metrics.horizontalScore,
+      bestScore:metrics.horizontalScore,
+    };
+  }
+
+  const points = [];
+  const stride = Math.max(1, Math.round(Math.sqrt((metrics.width * metrics.height) / 36000)));
+  for (let y = 1; y < metrics.height - 1; y += stride) {
+    for (let x = 1; x < metrics.width - 1; x += stride) {
+      const weight = metrics.ink[y * metrics.width + x];
+      if (weight > 3.5) points.push([x, y, weight]);
+    }
+  }
+  if (points.length < 40) {
+    return {
+      angle:0,
+      confidence:0,
+      baseScore:metrics.horizontalScore,
+      bestScore:metrics.horizontalScore,
+    };
+  }
+
+  const cx = (metrics.width - 1) / 2;
+  const cy = (metrics.height - 1) / 2;
+  let bestAngle = 0;
+  let bestScore = metrics.horizontalScore;
+  const baseScore = Math.max(.0001, metrics.horizontalScore);
+
+  for (let angle = -4; angle <= 4.001; angle += .5) {
+    if (Math.abs(angle) < .01) continue;
+    const radians = angle * Math.PI / 180;
+    const sine = Math.sin(radians);
+    const cosine = Math.cos(radians);
+    const projection = new Float64Array(metrics.height + 16);
+    for (const [x, y, weight] of points) {
+      const rotatedY = -(x - cx) * sine + (y - cy) * cosine + cy + 8;
+      const bin = Math.round(rotatedY);
+      if (bin >= 0 && bin < projection.length) projection[bin] += weight;
+    }
+    const score = projectionScore(projection);
+    if (score > bestScore) {
+      bestScore = score;
+      bestAngle = angle;
+    }
+  }
+
+  const improvement = bestScore / baseScore;
+  if (Math.abs(bestAngle) < .5 || improvement < 1.055) {
+    return { angle:0, confidence:0, baseScore, bestScore };
+  }
+  return {
+    angle:-bestAngle,
+    confidence:clamp((improvement - 1.03) / .18, 0, 1),
+    baseScore,
+    bestScore,
+  };
+}
+
+function bilinearSample(image, x, y, output, offset) {
+  if (x < 0 || y < 0 || x > image.width - 1 || y > image.height - 1) {
+    output[offset] = 255;
+    output[offset + 1] = 255;
+    output[offset + 2] = 255;
+    output[offset + 3] = 255;
+    return;
+  }
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(image.width - 1, x0 + 1);
+  const y1 = Math.min(image.height - 1, y0 + 1);
+  const dx = x - x0;
+  const dy = y - y0;
+  const weights = [
+    (1 - dx) * (1 - dy),
+    dx * (1 - dy),
+    (1 - dx) * dy,
+    dx * dy,
+  ];
+  const offsets = [
+    (y0 * image.width + x0) * 4,
+    (y0 * image.width + x1) * 4,
+    (y1 * image.width + x0) * 4,
+    (y1 * image.width + x1) * 4,
+  ];
+  for (let channel = 0; channel < 3; channel += 1) {
+    output[offset + channel] = offsets.reduce(
+      (sum, sourceOffset, index) => sum + image.data[sourceOffset + channel] * weights[index],
+      0,
+    );
+  }
+  output[offset + 3] = 255;
+}
+
+export function rotateImageDataV10943(image, degrees = 0) {
+  const angle = Number(degrees) || 0;
+  if (Math.abs(angle) < .01) {
+    return copyMetadata(image, {
+      width:image.width,
+      height:image.height,
+      data:new Uint8ClampedArray(image.data),
+    });
+  }
+  const radians = angle * Math.PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const cx = (image.width - 1) / 2;
+  const cy = (image.height - 1) / 2;
+  const data = new Uint8ClampedArray(image.width * image.height * 4);
+
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const sourceX = cosine * dx + sine * dy + cx;
+      const sourceY = -sine * dx + cosine * dy + cy;
+      bilinearSample(image, sourceX, sourceY, data, (y * image.width + x) * 4);
+    }
+  }
+  return copyMetadata(image, { width:image.width, height:image.height, data });
+}
+
+export function autoOrientDocumentV10943(image, options = {}) {
+  if (!image?.data || !image.width || !image.height) {
+    return {
+      image,
+      rotationDegrees:0,
+      deskewDegrees:0,
+      confidence:0,
+      reason:'image-missing',
+    };
+  }
+
+  const initial = analyzeOrientation(image);
+  const standardPage = options.pageFormat && options.pageFormat !== 'free';
+  const axisRatio = initial.verticalScore / Math.max(.0001, initial.horizontalScore);
+  const sidewaysByText = axisRatio > 1.10;
+  const sidewaysByPage = standardPage
+    && image.width > image.height * 1.08
+    && axisRatio > .90;
+
+  let turns = 0;
+  let oriented = image;
+  let reason = 'already-upright';
+  let orientationConfidence = clamp(
+    Math.abs(Math.log(Math.max(.001, axisRatio))) / .65,
+    0,
+    1,
+  );
+
+  if (sidewaysByText || sidewaysByPage) {
+    const clockwise = rotateQuarterTurnsV10943(image, 1);
+    const counterClockwise = rotateQuarterTurnsV10943(image, 3);
+    const clockwiseMetrics = analyzeOrientation(clockwise);
+    const counterMetrics = analyzeOrientation(counterClockwise);
+    if (counterMetrics.uprightScore > clockwiseMetrics.uprightScore + .025) {
+      turns = 3;
+      oriented = counterClockwise;
+    } else {
+      turns = 1;
+      oriented = clockwise;
+    }
+    reason = sidewaysByText ? 'vertical-text-axis' : 'standard-page-sideways';
+    orientationConfidence = clamp(
+      Math.max(
+        orientationConfidence,
+        Math.abs(clockwiseMetrics.uprightScore - counterMetrics.uprightScore) * 2.5,
+      ),
+      0,
+      1,
+    );
+  }
+
+  const deskew = estimateDeskew(oriented);
+  const deskewed = deskew.angle
+    ? rotateImageDataV10943(oriented, deskew.angle)
+    : oriented;
+  const rotationDegrees = turns === 3 ? 270 : turns * 90;
+
+  return {
+    image:copyMetadata(image, deskewed, {
+      autoRotationDegrees:rotationDegrees,
+      autoDeskewDegrees:deskew.angle,
+      autoOrientationReason:reason,
+      autoOrientationConfidence:orientationConfidence,
+    }),
+    rotationDegrees,
+    deskewDegrees:deskew.angle,
+    confidence:Math.max(orientationConfidence, deskew.confidence),
+    reason,
+    horizontalScore:initial.horizontalScore,
+    verticalScore:initial.verticalScore,
+  };
+}
