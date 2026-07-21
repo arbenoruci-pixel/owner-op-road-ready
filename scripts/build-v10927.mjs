@@ -19,4 +19,6 @@ run(process.execPath, ['scripts/apply-v10936-reference-quality.mjs']);
 run(process.execPath, ['scripts/verify-v10936-reference-quality.mjs']);
 run(process.execPath, ['scripts/apply-v10937-update-reload-loop.mjs']);
 run(process.execPath, ['scripts/verify-v10937-update-reload-loop.mjs']);
+run(process.execPath, ['scripts/apply-v10938-hybrid-clean-quality.mjs']);
+run(process.execPath, ['scripts/verify-v10938-hybrid-clean-quality.mjs']);
 run('npx', ['next', 'build']);
