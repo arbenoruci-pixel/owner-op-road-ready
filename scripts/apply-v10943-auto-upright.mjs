@@ -3,8 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '109.4.3';
-const BUILD = 'v10943-auto-upright-deskew';
+const VERSION = '109.4.4';
+const BUILD = 'v10944-load-guide-closeout';
 const RELEASED_AT = new Date().toISOString();
 const file = relative => path.join(ROOT, relative);
 const read = relative => fs.readFileSync(file(relative), 'utf8');
@@ -17,12 +17,12 @@ const write = (relative, content) => {
 function replaceRequired(source, pattern, replacement, label) {
   if (typeof pattern === 'string') {
     if (source.includes(replacement)) return source;
-    if (!source.includes(pattern)) throw new Error(`v109.4.3 missing ${label}`);
+    if (!source.includes(pattern)) throw new Error(`v109.4.4 missing ${label}`);
     return source.replace(pattern, replacement);
   }
   if (pattern.test(source)) return source.replace(pattern, replacement);
   if (source.includes(replacement)) return source;
-  throw new Error(`v109.4.3 missing ${label}`);
+  throw new Error(`v109.4.4 missing ${label}`);
 }
 
 write(
@@ -81,6 +81,227 @@ engine = replaceRequired(
 );
 write(enginePath, engine);
 
+// A completed Driver Load Guide must leave Active Load immediately. Also repair
+// legacy checklist entries that were serialized as character-index objects.
+const guidePath = 'source/src/modules/loads/loadGuideV103.js';
+let guide = read(guidePath);
+guide = replaceRequired(
+  guide,
+  `function unique(values = []) {
+  return [...new Set(values.map(value => text(value)).filter(Boolean))];
+}`,
+  `function unique(values = []) {
+  return [...new Set(values.map(value => text(value)).filter(Boolean))];
+}
+
+function checklistItemText(value = '') {
+  if (typeof value === 'string' || typeof value === 'number') return text(value);
+  if (!value || typeof value !== 'object') return '';
+  if (typeof value.text === 'string') return text(value.text);
+  if (typeof value.label === 'string') return text(value.label);
+  const characters = Object.keys(value)
+    .filter(key => /^\\d+$/.test(key))
+    .sort((a, b) => Number(a) - Number(b))
+    .map(key => String(value[key] ?? ''))
+    .join('');
+  return text(characters);
+}
+
+function normalizeChecklist(values = []) {
+  return unique((Array.isArray(values) ? values : []).map(checklistItemText));
+}`,
+  'legacy checklist normalization',
+);
+guide = replaceRequired(
+  guide,
+  '    checklist:Array.isArray(options.checklist) ? options.checklist : [],',
+  '    checklist:normalizeChecklist(options.checklist),',
+  'guide checklist normalization',
+);
+guide = replaceRequired(
+  guide,
+  `    status:previous?.status === 'completed' ? 'active' : (previous?.status || 'active'),`,
+  `    status:previous?.status || 'active',
+    excludedFromActiveLoad:previous?.status === 'completed' || !!previous?.excludedFromActiveLoad,
+    completedAt:previous?.completedAt || null,`,
+  'completed Rate Con preservation',
+);
+guide = replaceRequired(
+  guide,
+  `  const routeLegsByDay = mergePlannedRouteLegs(state.routeLegsByDay || {}, mergedGuide, eventId);`,
+  `  const routeLegsByDay = mergedGuide.status === 'active' && !mergedGuide.excludedFromActiveLoad
+    ? mergePlannedRouteLegs(state.routeLegsByDay || {}, mergedGuide, eventId)
+    : markAllGuideRoutesComplete(state.routeLegsByDay || {}, mergedGuide.id);`,
+  'completed Rate Con route preservation',
+);
+guide = replaceRequired(
+  guide,
+  '    activeLoadGuideId:mergedGuide.id,',
+  `    activeLoadGuideId:mergedGuide.status === 'active' && !mergedGuide.excludedFromActiveLoad
+      ? mergedGuide.id
+      : (state.activeLoadGuideId === mergedGuide.id ? '' : state.activeLoadGuideId),`,
+  'Rate Con active pointer guard',
+);
+guide = replaceRequired(
+  guide,
+  `  const nextGuide = { ...guide, documents, updatedAt:Date.now() };
+  return {
+    ...state,
+    loadGuidesById:{ ...(state.loadGuidesById || {}), [guide.id]:nextGuide },
+    activeLoadGuideId:guide.id,
+  };`,
+  `  const closesGuide = typeId === 'pod';
+  const now = Date.now();
+  const nextGuide = {
+    ...guide,
+    documents,
+    manualDone:closesGuide ? { ...(guide.manualDone || {}), final_pod:guide.manualDone?.final_pod || now } : (guide.manualDone || {}),
+    status:closesGuide ? 'completed' : guide.status,
+    completedAt:closesGuide ? (guide.completedAt || now) : (guide.completedAt || null),
+    excludedFromActiveLoad:closesGuide ? true : !!guide.excludedFromActiveLoad,
+    lastAction:closesGuide ? { action:'complete_guide', stepId:'final_pod', at:now } : guide.lastAction,
+    updatedAt:now,
+  };
+  return {
+    ...state,
+    routeLegsByDay:closesGuide ? markAllGuideRoutesComplete(state.routeLegsByDay || {}, guide.id) : (state.routeLegsByDay || {}),
+    loadGuidesById:{ ...(state.loadGuidesById || {}), [guide.id]:nextGuide },
+    activeLoadGuideId:closesGuide || nextGuide.status !== 'active' || nextGuide.excludedFromActiveLoad
+      ? (state.activeLoadGuideId === guide.id ? '' : state.activeLoadGuideId)
+      : guide.id,
+  };`,
+  'POD closes guide and clears pointer',
+);
+guide = replaceRequired(
+  guide,
+  `function markRouteStopComplete(routeLegsByDay = {}, guideId = '', stopSequence = 0, done = true) {`,
+  `function markAllGuideRoutesComplete(routeLegsByDay = {}, guideId = '') {
+  const now = Date.now();
+  const next = {};
+  Object.entries(routeLegsByDay || {}).forEach(([day, legs]) => {
+    next[day] = (Array.isArray(legs) ? legs : []).map(leg => {
+      if (leg?.loadGroupId !== guideId) return leg;
+      return {
+        ...leg,
+        status:'delivered',
+        stopStatus:'done',
+        guideCompleted:true,
+        guideCompletedAt:leg.guideCompletedAt || now,
+        excludedFromActiveLoad:true,
+        updatedAt:now,
+      };
+    });
+  });
+  return next;
+}
+
+function markRouteStopComplete(routeLegsByDay = {}, guideId = '', stopSequence = 0, done = true) {`,
+  'complete all guide routes helper',
+);
+guide = replaceRequired(
+  guide,
+  `  const status = action === 'complete_guide' ? 'completed' : action === 'reopen_guide' ? 'active' : guide.status;
+  const nextGuide = {
+    ...guide,
+    manualDone,
+    completedStopIds,
+    status,
+    lastAction:{ action, stepId, at:Date.now() },
+    updatedAt:Date.now(),
+  };
+  return {
+    ...state,
+    routeLegsByDay,
+    loadGuidesById:{ ...(state.loadGuidesById || {}), [guideId]:nextGuide },
+    activeLoadGuideId:status === 'completed' ? state.activeLoadGuideId : guideId,
+    lastLoadGuideUpdate:{ guideId, action, stepId, at:Date.now() },
+  };`,
+  `  const now = Date.now();
+  const status = action === 'complete_guide' ? 'completed' : action === 'reopen_guide' ? 'active' : guide.status;
+  if (action === 'complete_guide') routeLegsByDay = markAllGuideRoutesComplete(routeLegsByDay, guideId);
+  const nextGuide = {
+    ...guide,
+    manualDone,
+    completedStopIds,
+    status,
+    excludedFromActiveLoad:status === 'completed' ? true : action === 'reopen_guide' ? false : !!guide.excludedFromActiveLoad,
+    completedAt:status === 'completed' ? (guide.completedAt || now) : action === 'reopen_guide' ? null : (guide.completedAt || null),
+    lastAction:{ action, stepId, at:now },
+    updatedAt:now,
+  };
+  return {
+    ...state,
+    routeLegsByDay,
+    loadGuidesById:{ ...(state.loadGuidesById || {}), [guideId]:nextGuide },
+    activeLoadGuideId:status === 'completed'
+      ? (state.activeLoadGuideId === guideId ? '' : state.activeLoadGuideId)
+      : guideId,
+    lastLoadGuideUpdate:{ guideId, action, stepId, at:now },
+  };`,
+  'guide completion lifecycle',
+);
+guide = replaceRequired(
+  guide,
+  `export function getActiveLoadGuideV103(state = {}) {
+  const exact = state.loadGuidesById?.[state.activeLoadGuideId];
+  if (exact && exact.status !== 'dismissed') return exact;
+  return Object.values(state.loadGuidesById || {})
+    .filter(guide => guide && guide.status !== 'dismissed')
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))[0] || null;
+}`,
+  `export function getActiveLoadGuideV103(state = {}) {
+  const isOpen = candidate => {
+    if (!candidate || candidate.status !== 'active' || candidate.excludedFromActiveLoad) return false;
+    return !resolveDriverGuideV103(state, candidate).complete;
+  };
+  const exact = state.loadGuidesById?.[state.activeLoadGuideId];
+  if (isOpen(exact)) return exact;
+  return Object.values(state.loadGuidesById || {})
+    .filter(isOpen)
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))[0] || null;
+}`,
+  'active guide selector',
+);
+guide = replaceRequired(
+  guide,
+  `    return { ...step, complete, completedAt:guide.manualDone?.[step.id] || null };`,
+  `    return { ...step, checklist:normalizeChecklist(step.checklist), complete, completedAt:guide.manualDone?.[step.id] || null };`,
+  'resolved checklist normalization',
+);
+write(guidePath, guide);
+
+const guideUiPath = 'source/src/modules/loads/DriverLoadGuideV103.jsx';
+let guideUi = read(guideUiPath);
+guideUi = replaceRequired(
+  guideUi,
+  '<section className="driver-guide-hero-v103"><span>ACTIVE LOAD</span>',
+  `<section className="driver-guide-hero-v103"><span>{progress.complete || g.status === 'completed' ? 'COMPLETED LOAD' : 'ACTIVE LOAD'}</span>`,
+  'completed guide hero label',
+);
+write(guideUiPath, guideUi);
+
+const homePath = 'source/src/modules/home/HomeScreen.jsx';
+let home = read(homePath);
+home = replaceRequired(
+  home,
+  `  const routeLegs = flattenRouteLegs(state).filter(leg => String(leg.status || '').toLowerCase() !== 'cancelled');`,
+  `  const routeLegs = flattenRouteLegs(state).filter(leg => !['cancelled', 'dismissed', 'superseded', 'archived'].includes(String(leg.status || '').toLowerCase()));`,
+  'closed route exclusion',
+);
+home = replaceRequired(
+  home,
+  `    const pending = ordered.filter(leg => String(leg.status || '').toLowerCase() !== 'delivered');`,
+  `    const pending = ordered.filter(leg => {
+      const status = String(leg.status || '').toLowerCase();
+      return !['delivered', 'completed'].includes(status)
+        && String(leg.stopStatus || '').toLowerCase() !== 'done'
+        && leg.guideCompleted !== true
+        && leg.excludedFromActiveLoad !== true;
+    });`,
+  'active route pending selector',
+);
+write(homePath, home);
+
 for (const [target, pattern, replacement] of [
   [
     'source/src/modules/scan/v3/scannerTypesV3.js',
@@ -128,7 +349,7 @@ write(
   reviewPath,
   replaceRequired(
     read(reviewPath),
-    /Neutral safe · build 109\.[0-9]+\.[0-9]+/,
+    /Auto upright · build 109\.[0-9]+\.[0-9]+|Neutral safe · build 109\.[0-9]+\.[0-9]+/,
     `Auto upright · build ${VERSION}`,
     'review marker',
   ),
@@ -214,14 +435,15 @@ write('public/app-version.json', `${JSON.stringify({
   build:BUILD,
   releasedAt:RELEASED_AT,
   updatedAt:RELEASED_AT,
-  label:'v109.4.3 Auto Upright Scanner 0.5.3',
+  label:'v109.4.4 Load Guide Closeout',
   force:true,
   notes:[
-    'Automatically rotates a sideways corrected page so printed text is horizontal and the document opens upright.',
-    'Uses source-pixel text-line projections and standard-page geometry; it does not use OCR rewriting or generative reconstruction.',
-    'Applies a bounded residual deskew of at most four degrees only when projection sharpness improves measurably.',
-    'Keeps manual Rotate available, the four-corner selector unchanged, and the immutable original, OCR and display-final assets separate.',
-    'Keeps the neutral-safe layered quality renderer and Content Fidelity Lock active after orientation correction.',
+    'Removes a Driver Load Guide from Active Load as soon as every step is complete or the final POD closes the load.',
+    'Clears stale active-guide pointers and closes the guide route legs without changing duty-status events, times or GPS locations.',
+    'Prevents a later Rate Confirmation, BOL or POD link from silently reopening a completed guide.',
+    'Repairs legacy checklist character objects at render time so Collect signed POD and other instructions display as normal text.',
+    'Excludes superseded, archived, dismissed and completed guide routes from the Home active-load selector.',
+    'Keeps Scanner 0.5.3 auto-upright, bounded deskew, neutral-safe rendering and Content Fidelity Lock unchanged.',
   ],
 }, null, 2)}\n`);
 
@@ -242,4 +464,81 @@ Object.assign(manifest, {
 });
 write('public/scanner-engine.json', `${JSON.stringify(manifest, null, 2)}\n`);
 
-console.log('PASS — v109.4.3 auto upright and residual deskew scanner applied');
+// The existing build runs this verifier immediately after this materializer.
+// Update its release expectations and add lifecycle regressions in the same
+// single production commit, avoiding a second Vercel deployment.
+const verifyPath = 'scripts/verify-v10943-auto-upright.mjs';
+let verify = read(verifyPath);
+verify = replaceRequired(verify, /Auto upright · build 109\.[0-9]+\.[0-9]+/, `Auto upright · build ${VERSION}`, 'verify review marker');
+verify = replaceRequired(verify, /assert\.equal\(release\.version, '[^']+'\);/, `assert.equal(release.version, '${VERSION}');`, 'verify release version');
+verify = replaceRequired(verify, /assert\.equal\(release\.build, '[^']+'\);/, `assert.equal(release.build, '${BUILD}');`, 'verify release build');
+verify = replaceRequired(verify, /assert\.equal\(manifest\.version, '[^']+'\);/, `assert.equal(manifest.version, '${VERSION}');`, 'verify manifest version');
+verify = replaceRequired(verify, /assert\.equal\(packageJson\.version, '[^']+'\);/, `assert.equal(packageJson.version, '${VERSION}');`, 'verify package version');
+verify = replaceRequired(
+  verify,
+  `const packageJson = JSON.parse(read('package.json'));
+assert.equal(packageJson.version, '${VERSION}');`,
+  `const packageJson = JSON.parse(read('package.json'));
+assert.equal(packageJson.version, '${VERSION}');
+
+const guideModule = await import(moduleUrl('source/src/modules/loads/loadGuideV103.js'));
+const guideFixture = guideModule.buildDriverLoadGuideV103({
+  loadNo:'98306',
+  orderNo:'98306',
+  origin:'Lakeville, MN',
+  destination:'Mount Sterling, IL',
+  pickupDate:'2026-07-17',
+  deliveryDate:'2026-07-18',
+  stops:[
+    { id:'pickup_1', type:'pickup', city:'Lakeville', state:'MN', date:'2026-07-17' },
+    { id:'delivery_1', type:'delivery', city:'Mount Sterling', state:'IL', date:'2026-07-18' },
+  ],
+});
+const activeState = {
+  activeLoadGuideId:guideFixture.id,
+  loadGuidesById:{ [guideFixture.id]:guideFixture },
+  routeLegsByDay:{},
+  eventsByDay:{},
+  documentsByDay:{},
+};
+assert.equal(guideModule.getActiveLoadGuideV103(activeState)?.id, guideFixture.id, 'an unfinished active guide must remain visible');
+const completedGuide = {
+  ...guideFixture,
+  manualDone:Object.fromEntries(guideFixture.steps.map(step => [step.id, 1])),
+};
+assert.equal(
+  guideModule.getActiveLoadGuideV103({ ...activeState, loadGuidesById:{ [guideFixture.id]:completedGuide } }),
+  null,
+  'a 100% complete guide must not fall back into Active Load',
+);
+const characterObject = Object.fromEntries([...('Collect signed POD')].map((character, index) => [String(index), character]));
+const legacyGuide = {
+  ...guideFixture,
+  steps:guideFixture.steps.map(step => step.id === 'delivery_docs_1' ? { ...step, checklist:[characterObject] } : step),
+};
+const resolvedLegacy = guideModule.resolveDriverGuideV103(activeState, legacyGuide);
+assert.deepEqual(
+  resolvedLegacy.steps.find(step => step.id === 'delivery_docs_1')?.checklist,
+  ['Collect signed POD'],
+  'legacy checklist objects must render as normal text',
+);
+const closedState = guideModule.applyLoadGuideActionV103(activeState, {
+  action:'complete_guide',
+  guideId:guideFixture.id,
+  stepId:'final_pod',
+});
+assert.equal(closedState.activeLoadGuideId, '', 'closing the guide must clear its active pointer');
+assert.equal(closedState.loadGuidesById[guideFixture.id].status, 'completed');
+assert.equal(closedState.loadGuidesById[guideFixture.id].excludedFromActiveLoad, true);`,
+  'load guide runtime regressions',
+);
+verify = replaceRequired(
+  verify,
+  `console.log('PASS — v109.4.3 auto upright and deskew scanner regression suite');`,
+  `console.log('PASS — v109.4.4 completed load guides leave Active Load and legacy checklist text is repaired');
+console.log('PASS — v109.4.4 load guide closeout regression suite');`,
+  'verify completion output',
+);
+write(verifyPath, verify);
+
+console.log('PASS — v109.4.4 load guide closeout and checklist repair applied');
