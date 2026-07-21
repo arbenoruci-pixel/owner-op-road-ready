@@ -1,0 +1,336 @@
+import { applyHomographyV3, computeHomographyV3 } from './PerspectiveEngineV3.js';
+import { distanceV3, orderCornersV3, scannerErrorV3 } from './scannerTypesV3.js';
+
+export const STANDARD_PAGE_FORMATS_V10933 = Object.freeze([
+  { id:'letter', label:'US Letter', portraitRatio:8.5 / 11, preference:0 },
+  { id:'a4', label:'A4', portraitRatio:210 / 297, preference:.004 },
+  { id:'legal', label:'US Legal', portraitRatio:8.5 / 14, preference:.002 },
+]);
+
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, Number(value) || 0));
+}
+
+function insetCorners(corners, ratio = 0) {
+  const safe = clamp(ratio, 0, .006);
+  if (!safe) return corners.map(point => ({ ...point }));
+  const center = corners.reduce((total, point) => ({
+    x:total.x + point.x / corners.length,
+    y:total.y + point.y / corners.length,
+  }), { x:0, y:0 });
+  return corners.map(point => ({
+    x:point.x + (center.x - point.x) * safe,
+    y:point.y + (center.y - point.y) * safe,
+  }));
+}
+
+function formatCandidate(measuredAspect, portrait, tolerance) {
+  let best = null;
+  for (const format of STANDARD_PAGE_FORMATS_V10933) {
+    const aspect = portrait ? format.portraitRatio : 1 / format.portraitRatio;
+    const rawScore = Math.abs(Math.log(Math.max(1e-6, measuredAspect) / aspect));
+    const weightedScore = rawScore + Number(format.preference || 0);
+    if (!best || weightedScore < best.weightedScore) {
+      best = { ...format, aspect, score:rawScore, weightedScore };
+    }
+  }
+  return best && best.score <= tolerance ? best : null;
+}
+
+function edgeMeasurements(width, height, normalizedCorners) {
+  const ordered = orderCornersV3(normalizedCorners);
+  const [tl, tr, br, bl] = ordered.map(point => ({
+    x:point.x * width,
+    y:point.y * height,
+  }));
+  const top = distanceV3(tl, tr);
+  const bottom = distanceV3(bl, br);
+  const left = distanceV3(tl, bl);
+  const right = distanceV3(tr, br);
+  const measuredWidth = Math.max(1, (top + bottom) / 2);
+  const measuredHeight = Math.max(1, (left + right) / 2);
+  const perspectiveStrength = Math.max(
+    Math.abs(top - bottom) / Math.max(1, Math.max(top, bottom)),
+    Math.abs(left - right) / Math.max(1, Math.max(left, right)),
+  );
+  return {
+    ordered,
+    pixelCorners:[tl, tr, br, bl],
+    top,
+    bottom,
+    left,
+    right,
+    measuredWidth,
+    measuredHeight,
+    edgeAspect:measuredWidth / measuredHeight,
+    perspectiveStrength,
+  };
+}
+
+export function estimateProjectiveAspectV10933(width, height, normalizedCorners) {
+  const measurements = edgeMeasurements(width, height, normalizedCorners);
+  const unitSquare = [
+    { x:0, y:0 },
+    { x:1, y:0 },
+    { x:1, y:1 },
+    { x:0, y:1 },
+  ];
+  let matrix;
+  try {
+    matrix = computeHomographyV3(unitSquare, measurements.pixelCorners);
+  } catch {
+    return {
+      aspect:null,
+      focalLength:null,
+      confidence:0,
+      method:'edge-fallback',
+      ...measurements,
+    };
+  }
+
+  const cx = (width - 1) / 2;
+  const cy = (height - 1) / 2;
+  const h1x = matrix[0];
+  const h1y = matrix[3];
+  const h1z = matrix[6];
+  const h2x = matrix[1];
+  const h2y = matrix[4];
+  const h2z = matrix[7];
+  const a = h1x - cx * h1z;
+  const d = h1y - cy * h1z;
+  const b = h2x - cx * h2z;
+  const e = h2y - cy * h2z;
+  const denominator = h1z * h2z;
+  const numerator = (a * b) + (d * e);
+  const focalSquared = Math.abs(denominator) > 1e-12 ? -numerator / denominator : NaN;
+  const focalLength = Math.sqrt(focalSquared);
+  const maxDimension = Math.max(width, height);
+  const focalPlausible = Number.isFinite(focalLength)
+    && focalSquared > 0
+    && focalLength >= maxDimension * .12
+    && focalLength <= maxDimension * 18;
+
+  if (!focalPlausible) {
+    return {
+      aspect:null,
+      focalLength:null,
+      confidence:0,
+      method:'edge-fallback',
+      matrix,
+      ...measurements,
+    };
+  }
+
+  const firstNorm = ((a * a) + (d * d)) / focalSquared + (h1z * h1z);
+  const secondNorm = ((b * b) + (e * e)) / focalSquared + (h2z * h2z);
+  const aspect = Math.sqrt(firstNorm / Math.max(1e-12, secondNorm));
+  if (!Number.isFinite(aspect) || aspect < .16 || aspect > 6.2) {
+    return {
+      aspect:null,
+      focalLength,
+      confidence:0,
+      method:'edge-fallback',
+      matrix,
+      ...measurements,
+    };
+  }
+
+  const disagreement = Math.abs(Math.log(aspect / Math.max(1e-6, measurements.edgeAspect)));
+  const strength = clamp(measurements.perspectiveStrength / .18, 0, 1);
+  const agreement = clamp(1 - disagreement / .55, 0, 1);
+  const confidence = clamp(.48 + strength * .34 + agreement * .18, 0, 1);
+
+  return {
+    aspect,
+    focalLength,
+    confidence,
+    method:'projective-rectangle',
+    matrix,
+    ...measurements,
+  };
+}
+
+export function estimateOutputGeometryV10933(width, height, normalizedCorners, options = {}) {
+  const recovered = estimateProjectiveAspectV10933(width, height, normalizedCorners);
+  const projectiveAspect = recovered.aspect;
+  const edgeAspect = recovered.edgeAspect;
+  const aspectForFormat = projectiveAspect || edgeAspect;
+  const portrait = aspectForFormat <= 1;
+  const tolerance = clamp(options.snapTolerance ?? .085, .025, .12);
+  const standard = options.snapToStandard === false
+    ? null
+    : formatCandidate(aspectForFormat, portrait, tolerance);
+  const outputAspect = standard?.aspect || aspectForFormat;
+  const maxDimension = Math.max(1600, Number(options.maxDimension || 3200));
+  const maxUpscale = clamp(options.maxUpscale ?? 1.035, 1, 1.08);
+  const nativeLong = portrait
+    ? Math.max(recovered.left, recovered.right)
+    : Math.max(recovered.top, recovered.bottom);
+  const nativeShort = portrait
+    ? Math.max(recovered.top, recovered.bottom)
+    : Math.max(recovered.left, recovered.right);
+  const longFromShort = portrait
+    ? nativeShort / Math.max(.1, outputAspect)
+    : nativeShort * Math.max(.1, outputAspect);
+  const nativeLongEstimate = Math.max(nativeLong, longFromShort * .985);
+  const scale = Math.min(maxUpscale, maxDimension / Math.max(1, nativeLongEstimate));
+  const outputLong = Math.max(480, Math.round(nativeLongEstimate * scale));
+
+  let outputWidth;
+  let outputHeight;
+  if (portrait) {
+    outputHeight = outputLong;
+    outputWidth = Math.max(320, Math.round(outputHeight * outputAspect));
+  } else {
+    outputWidth = outputLong;
+    outputHeight = Math.max(320, Math.round(outputWidth / outputAspect));
+  }
+  if (Math.max(outputWidth, outputHeight) > maxDimension) {
+    const fit = maxDimension / Math.max(outputWidth, outputHeight);
+    outputWidth = Math.round(outputWidth * fit);
+    outputHeight = Math.round(outputHeight * fit);
+  }
+
+  return {
+    width:Math.max(320, outputWidth),
+    height:Math.max(320, outputHeight),
+    measuredWidth:recovered.measuredWidth,
+    measuredHeight:recovered.measuredHeight,
+    measuredAspect:edgeAspect,
+    projectiveAspect:projectiveAspect || null,
+    outputAspect,
+    pageFormat:standard?.id || 'free',
+    pageFormatLabel:standard?.label || (projectiveAspect ? 'Projective original ratio' : 'Original ratio'),
+    formatConfidence:standard
+      ? Math.max(0, 1 - standard.score / tolerance) * Math.max(.65, recovered.confidence)
+      : recovered.confidence,
+    perspectiveStrength:recovered.perspectiveStrength,
+    aspectMethod:standard
+      ? `${recovered.method}+standard-snap`
+      : recovered.method,
+    focalLength:recovered.focalLength,
+    scale,
+  };
+}
+
+function bilinearRgb(data, width, height, x, y, output, offset) {
+  const x0 = Math.max(0, Math.min(width - 1, Math.floor(x)));
+  const y0 = Math.max(0, Math.min(height - 1, Math.floor(y)));
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const dx = x - x0;
+  const dy = y - y0;
+  const w00 = (1 - dx) * (1 - dy);
+  const w10 = dx * (1 - dy);
+  const w01 = (1 - dx) * dy;
+  const w11 = dx * dy;
+  const p00 = (y0 * width + x0) * 4;
+  const p10 = (y0 * width + x1) * 4;
+  const p01 = (y1 * width + x0) * 4;
+  const p11 = (y1 * width + x1) * 4;
+  output[offset] = data[p00] * w00 + data[p10] * w10 + data[p01] * w01 + data[p11] * w11;
+  output[offset + 1] = data[p00 + 1] * w00 + data[p10 + 1] * w10 + data[p01 + 1] * w01 + data[p11 + 1] * w11;
+  output[offset + 2] = data[p00 + 2] * w00 + data[p10 + 2] * w10 + data[p01 + 2] * w01 + data[p11 + 2] * w11;
+  output[offset + 3] = 255;
+}
+
+function cubicWeight(value) {
+  const x = Math.abs(value);
+  if (x <= 1) return ((1.5 * x - 2.5) * x * x) + 1;
+  if (x < 2) return (((-.5 * x + 2.5) * x - 4) * x) + 2;
+  return 0;
+}
+
+function bicubicRgb(data, width, height, x, y, output, offset) {
+  const baseX = Math.floor(x);
+  const baseY = Math.floor(y);
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  let total = 0;
+  for (let oy = -1; oy <= 2; oy += 1) {
+    const sampleY = Math.max(0, Math.min(height - 1, baseY + oy));
+    const wy = cubicWeight(y - (baseY + oy));
+    for (let ox = -1; ox <= 2; ox += 1) {
+      const sampleX = Math.max(0, Math.min(width - 1, baseX + ox));
+      const weight = cubicWeight(x - (baseX + ox)) * wy;
+      if (!weight) continue;
+      const source = (sampleY * width + sampleX) * 4;
+      red += data[source] * weight;
+      green += data[source + 1] * weight;
+      blue += data[source + 2] * weight;
+      total += weight;
+    }
+  }
+  const divisor = Math.abs(total) > 1e-8 ? total : 1;
+  output[offset] = clamp(red / divisor, 0, 255);
+  output[offset + 1] = clamp(green / divisor, 0, 255);
+  output[offset + 2] = clamp(blue / divisor, 0, 255);
+  output[offset + 3] = 255;
+}
+
+export function warpPerspectiveV10933(image, normalizedCorners, options = {}) {
+  if (!image?.data || !image.width || !image.height) {
+    throw scannerErrorV3('image_missing', 'The document image is unavailable.');
+  }
+  const ordered = orderCornersV3(normalizedCorners);
+  const trimmed = insetCorners(ordered, options.trimRatio ?? 0);
+  const source = trimmed.map(point => ({
+    x:point.x * (image.width - 1),
+    y:point.y * (image.height - 1),
+  }));
+  const geometry = estimateOutputGeometryV10933(
+    image.width,
+    image.height,
+    trimmed,
+    options,
+  );
+  const destination = [
+    { x:0, y:0 },
+    { x:geometry.width - 1, y:0 },
+    { x:geometry.width - 1, y:geometry.height - 1 },
+    { x:0, y:geometry.height - 1 },
+  ];
+  const inverse = computeHomographyV3(destination, source);
+  const out = new Uint8ClampedArray(geometry.width * geometry.height * 4);
+  const useBicubic = options.interpolation !== 'bilinear'
+    && geometry.width * geometry.height <= Number(options.bicubicMaxPixels || 5600000);
+
+  for (let y = 0; y < geometry.height; y += 1) {
+    for (let x = 0; x < geometry.width; x += 1) {
+      const sourcePoint = applyHomographyV3(inverse, { x, y });
+      const offset = (y * geometry.width + x) * 4;
+      if (sourcePoint.x < 0 || sourcePoint.y < 0 || sourcePoint.x >= image.width || sourcePoint.y >= image.height) {
+        out[offset] = 255;
+        out[offset + 1] = 255;
+        out[offset + 2] = 255;
+        out[offset + 3] = 255;
+        continue;
+      }
+      if (useBicubic) {
+        bicubicRgb(image.data, image.width, image.height, sourcePoint.x, sourcePoint.y, out, offset);
+      } else {
+        bilinearRgb(image.data, image.width, image.height, sourcePoint.x, sourcePoint.y, out, offset);
+      }
+    }
+  }
+
+  return {
+    width:geometry.width,
+    height:geometry.height,
+    data:out,
+    homography:inverse,
+    sourceCorners:source,
+    pageFormat:geometry.pageFormat,
+    pageFormatLabel:geometry.pageFormatLabel,
+    formatConfidence:geometry.formatConfidence,
+    measuredAspect:geometry.measuredAspect,
+    projectiveAspect:geometry.projectiveAspect,
+    outputAspect:geometry.outputAspect,
+    aspectMethod:geometry.aspectMethod,
+    perspectiveStrength:geometry.perspectiveStrength,
+    focalLength:geometry.focalLength,
+    renderScale:geometry.scale,
+    interpolation:useBicubic ? 'bicubic-catmull-rom' : 'bilinear',
+  };
+}
