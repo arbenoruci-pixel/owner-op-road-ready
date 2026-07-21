@@ -123,18 +123,18 @@ export default function RoadReadyScannerV3({
     }
   }
 
-  async function done(boundary) {
+  async function done(corners) {
     if (!session || processing) return;
     setProcessing(true);
-    setStatus('Flattening curved paper…');
+    setStatus('Correcting four-corner perspective…');
     setError('');
     try {
       const result = await scannerEngineV3.finalize(
         session,
-        boundary,
+        corners,
         { onStatus:setStatus },
       );
-      onComplete?.(result.originalFile, result.metadata);
+      onComplete?.(result.displayFile, result.metadata);
     } catch (cause) {
       setError(String(cause?.message || cause || 'The document could not be processed.'));
       setProcessing(false);
@@ -157,11 +157,11 @@ export default function RoadReadyScannerV3({
       return;
     }
     onComplete?.(file, {
-      source:'road-ready-file-import-v1093',
+      source:'road-ready-file-import-v10931',
       imported:true,
       pageCount:1,
       originalPreserved:true,
-      scannerVersion:'109.3.0',
+      scannerVersion:'109.3.1',
       originalFileName:file.name || '',
     });
   }
@@ -190,7 +190,7 @@ export default function RoadReadyScannerV3({
 
   return (
     <section
-      data-road-ready-scanner="lab-041-integrated"
+      data-road-ready-scanner="four-corner-042-integrated"
       style={{
         position:'fixed',
         inset:0,
@@ -242,7 +242,7 @@ export default function RoadReadyScannerV3({
               fontStyle:'normal',
             }}
           >
-            Road Ready Scanner 0.4.1
+            Road Ready Scanner 0.4.2
           </em>
         </div>
         <span />
@@ -279,7 +279,7 @@ export default function RoadReadyScannerV3({
               lineHeight:1.5,
             }}
           >
-            Fast paper detection, six-point curved-page correction and an automatic
+            Fast paper detection, straight four-corner correction and a stronger automatic
             local quality bot.
           </p>
         </div>
@@ -287,13 +287,13 @@ export default function RoadReadyScannerV3({
         <div style={{ display:'grid', gap:12 }}>
           <SourceButton
             title="Camera"
-            detail="Capture the full paper, then adjust four corners and two bend points."
+            detail="Capture the full paper, then adjust the four real corners."
             icon="◉"
             onClick={() => setStage('camera')}
           />
           <SourceButton
             title="Photos"
-            detail="Import a photo with the same curved-page review and Auto-fix."
+            detail="Import a photo, correct perspective and save the rendered scan."
             icon="▧"
             onClick={() => openFilePickerV3(galleryRef)}
           />
@@ -381,7 +381,7 @@ export default function RoadReadyScannerV3({
           fontWeight:750,
         }}
       >
-        Local processing · six smart points · original preserved
+        Local processing · four corners · rendered scan saved · original preserved
       </footer>
     </section>
   );
