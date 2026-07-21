@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
-  "buildCommand": "npm run prebuild && node scripts/apply-v10925-edit-duty-multitask-save.mjs && npx next build",
+  "buildCommand": "npm run prebuild && node scripts/apply-v10925-edit-duty-multitask-save.mjs && node scripts/apply-v10926-event-reasons-source-of-truth.mjs && npx next build",
   "outputDirectory": ".next"
 }
