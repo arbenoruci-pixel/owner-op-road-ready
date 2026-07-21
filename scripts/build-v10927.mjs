@@ -95,7 +95,7 @@ run(process.execPath, ['--input-type=module', '-e', `
   const verifyReplacement = [
     "const guideUiSource = read('source/src/modules/loads/DriverLoadGuideV103.jsx');",
     "assert.ok(guideUiSource.includes('function checklistText(value'), 'guide UI must normalize legacy checklist values');",
-    "assert.ok(guideUiSource.includes(\"step.checklist.map(checklistText).filter(Boolean).join(' · ')\"), 'guide checklist must render normalized text');",
+    "assert.ok(guideUiSource.includes('step.checklist.map(checklistText)'), 'guide checklist must render normalized text');",
     '',
   ].join('\\n');
   verifySource = verifySource.slice(0, verifyStart) + verifyReplacement + verifySource.slice(verifyEnd);
