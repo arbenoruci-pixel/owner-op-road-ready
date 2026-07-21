@@ -26,4 +26,5 @@ run(process.execPath, ['scripts/verify-v10939-fidelity-lock.mjs']);
 run(process.execPath, ['scripts/apply-v10940-layered-render.mjs']);
 run(process.execPath, ['scripts/verify-v10940-layered-render.mjs']);
 run(process.execPath, ['scripts/apply-v10941-single-fidelity-pass.mjs']);
+run(process.execPath, ['scripts/apply-v10942-neutral-safe-render.mjs']);
 run('npx', ['next', 'build']);
