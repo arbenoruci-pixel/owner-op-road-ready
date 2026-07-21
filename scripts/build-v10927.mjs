@@ -13,4 +13,6 @@ run(process.execPath, ['scripts/apply-v10926-event-reasons-source-of-truth.mjs']
 run(process.execPath, ['scripts/apply-v10927-reset-pretrip-reasons.mjs']);
 run(process.execPath, ['scripts/apply-v10930-scanner-lab-041.mjs']);
 run(process.execPath, ['scripts/verify-v10930-scanner-lab-041.mjs']);
+run(process.execPath, ['scripts/apply-v10934-text-clarity.mjs']);
+run(process.execPath, ['scripts/verify-v10934-text-clarity.mjs']);
 run('npx', ['next', 'build']);
