@@ -1,0 +1,50 @@
+import React from 'react';
+import { CURRENT_APP_BUILD, CURRENT_APP_VERSION } from '../../core/update/appUpdate.js';
+
+export default function UpdateBanner({ updateState, onApply, onDismiss }) {
+  if (!updateState?.available && updateState?.saveState !== 'saving-update') return null;
+  const busy = updateState?.saveState === 'saving-update';
+  const remote = updateState?.remote || {};
+  const latest = remote.version || updateState?.latestVersion || '';
+  const forced = remote.force === true;
+  return (
+    <div
+      className="update-safe-banner"
+      data-owner-op-update-banner="109.3.5"
+      role="status"
+      aria-live="assertive"
+      style={{
+        position:'fixed',
+        left:10,
+        right:10,
+        bottom:'calc(10px + env(safe-area-inset-bottom))',
+        zIndex:2147483000,
+        border:'1px solid #bfdbfe',
+        borderRadius:18,
+        background:'#0f172a',
+        color:'#fff',
+        padding:12,
+        boxShadow:'0 22px 70px rgba(15,23,42,.48)',
+        display:'grid',
+        gridTemplateColumns:'minmax(0,1fr) auto',
+        gap:10,
+        alignItems:'center',
+      }}
+    >
+      <div className="update-safe-copy" style={{ minWidth:0 }}>
+        <b style={{ display:'block', fontSize:14 }}>{busy ? 'Saving before update' : forced ? 'Required app refresh' : 'Update ready'}</b>
+        <span style={{ display:'block', marginTop:3, fontSize:11, lineHeight:1.35, color:'#cbd5e1' }}>
+          {busy
+            ? 'Logs are being saved on this phone first.'
+            : `v${latest || 'new'} · ${remote.build || 'latest build'} · current v${CURRENT_APP_VERSION} / ${CURRENT_APP_BUILD}`}
+        </span>
+      </div>
+      <div className="update-safe-actions" style={{ display:'flex', gap:7, alignItems:'center' }}>
+        <button type="button" className="update-safe-primary" onClick={onApply} disabled={busy} style={{ minHeight:42, border:0, borderRadius:13, padding:'0 13px', background:'#2563eb', color:'#fff', fontWeight:950 }}>
+          {busy ? 'Saving…' : 'Reload latest'}
+        </button>
+        {!busy && !forced ? <button type="button" className="update-safe-secondary" onClick={onDismiss} style={{ minHeight:42, border:'1px solid #475569', borderRadius:13, padding:'0 10px', background:'#1e293b', color:'#fff', fontWeight:850 }}>Later</button> : null}
+      </div>
+    </div>
+  );
+}
