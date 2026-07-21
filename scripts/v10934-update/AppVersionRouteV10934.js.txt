@@ -1,0 +1,28 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const RELEASE = Object.freeze({
+  version:'109.3.4',
+  build:'v10934-forced-update-bootstrap',
+  releasedAt:'__RELEASED_AT__',
+  updatedAt:'__RELEASED_AT__',
+  label:'v109.3.4 Reliable Update Bootstrap',
+  force:true,
+  notes:[
+    'Forces stale iPhone app shells to offer the latest build even when the visible version previously matched.',
+    'Uses a no-store API version endpoint and a dedicated cache-clearing update bootstrap page.',
+    'Keeps all driver logs and Document Vault data on the same origin while replacing stale app code.',
+  ],
+});
+
+export async function GET() {
+  return Response.json(RELEASE, {
+    headers:{
+      'Cache-Control':'no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate',
+      Pragma:'no-cache',
+      Expires:'0',
+      'Surrogate-Control':'no-store',
+      'CDN-Cache-Control':'no-store',
+    },
+  });
+}
