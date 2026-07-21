@@ -101,5 +101,73 @@ run(process.execPath, ['--input-type=module', '-e', `
 
   console.log('PASS — v109.4.4 checklist objects are normalized before every guide render');
 `]);
+run(process.execPath, ['--input-type=module', '-e', `
+  import fs from 'node:fs';
+  const VERSION = '109.4.5';
+  const BUILD = 'v10945-recertification-sign-loop';
+
+  const appTarget = 'source/src/app/App.jsx';
+  let app = fs.readFileSync(appTarget, 'utf8');
+  const before = "        const { signatureDataUrl, ...compactDaySignature } = existingDaySignature;";
+  const after = [
+    "        const {",
+    "          signatureDataUrl,",
+    "          needsRecertification,",
+    "          changedAfterSignAt,",
+    "          integrityRepairReason,",
+    "          repairReason,",
+    "          ...compactDaySignature",
+    "        } = existingDaySignature;",
+  ].join('\\n');
+  if (!app.includes(before) && !app.includes(after)) throw new Error('v109.4.5 signing cleanup target missing');
+  if (app.includes(before)) app = app.replace(before, after);
+  fs.writeFileSync(appTarget, app);
+
+  const pkgPath = 'package.json';
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  pkg.version = VERSION;
+  pkg.engines = { ...(pkg.engines || {}), node:'24.x' };
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');
+
+  const lockPath = 'package-lock.json';
+  const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  lock.version = VERSION;
+  if (lock.packages?.['']) {
+    lock.packages[''].version = VERSION;
+    lock.packages[''].engines = { ...(lock.packages[''].engines || {}), node:'24.x' };
+  }
+  fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\\n');
+
+  const releasedAt = new Date().toISOString();
+  fs.writeFileSync('public/app-version.json', JSON.stringify({
+    version:VERSION,
+    build:BUILD,
+    releasedAt,
+    updatedAt:releasedAt,
+    label:'v109.4.5 Certification Loop Fix',
+    force:true,
+    notes:[
+      'Clears stale needs-recertification metadata when the driver signs a reviewed log day again.',
+      'Prevents July 15, July 16, July 17 and similar repaired days from returning to Review immediately after signing.',
+      'Keeps the signed log events, duty times, locations, inspection records and prior audit history unchanged.',
+      'Retains v109.4.4 Driver Load Guide closeout and Scanner 0.5.3 behavior.'
+    ]
+  }, null, 2) + '\\n');
+
+  const swPath = 'public/sw.js';
+  let sw = fs.readFileSync(swPath, 'utf8');
+  sw = sw.replace(/const OWNER_OP_SW_VERSION = '[^']+';/, "const OWNER_OP_SW_VERSION = '109.4.5';");
+  sw = sw.replace(/const OWNER_OP_SW_BUILD = '[^']+';/, "const OWNER_OP_SW_BUILD = 'v10945-recertification-sign-loop';");
+  fs.writeFileSync(swPath, sw);
+
+  const updatePath = 'source/src/core/update/appUpdate.js';
+  let update = fs.readFileSync(updatePath, 'utf8');
+  update = update.replace(/const FALLBACK_APP_VERSION = '[^']+';/, "const FALLBACK_APP_VERSION = '109.4.5';");
+  update = update.replace(/const FALLBACK_APP_BUILD = '[^']+';/, "const FALLBACK_APP_BUILD = 'v10945-recertification-sign-loop';");
+  fs.writeFileSync(updatePath, update);
+
+  if (!app.includes('needsRecertification,') || !app.includes('changedAfterSignAt,')) throw new Error('v109.4.5 signing cleanup not installed');
+  console.log('PASS — v109.4.5 recertification flags clear after successful signing');
+`]);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
