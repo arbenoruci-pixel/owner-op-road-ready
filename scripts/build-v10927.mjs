@@ -73,18 +73,16 @@ run(process.execPath, ['--input-type=module', '-e', `
       "  return Object.values(value).filter(item => typeof item === 'string' || typeof item === 'number').map(item => String(item)).join('').trim();",
       '}',
       '',
+      'function normalizeChecklistUi(values = []) {',
+      '  return (Array.isArray(values) ? values : []).map(checklistText).filter(Boolean);',
+      '}',
+      '',
     ].join('\\n');
     if (!uiSource.includes(whenMarker)) throw new Error('v109.4.4 UI checklist helper target missing');
     uiSource = uiSource.replace(whenMarker, helper + 'function when(step = {}) {');
   }
-  uiSource = uiSource.replace(
-    "step.checklist.map(item => <i key={item}>{item}</i>)",
-    "step.checklist.map((item, index) => { const value = checklistText(item); return value ? <i key={value + '_' + index}>{value}</i> : null; })",
-  );
-  uiSource = uiSource.replace(
-    "step.checklist.join(' · ')",
-    "step.checklist.map(checklistText).filter(Boolean).join(' · ')",
-  );
+  if (!uiSource.includes('step.checklist')) throw new Error('v109.4.4 UI checklist references missing');
+  uiSource = uiSource.split('step.checklist').join('normalizeChecklistUi(step.checklist)');
   fs.writeFileSync(uiTarget, uiSource);
 
   const verifyTarget = 'scripts/verify-v10943-auto-upright.mjs';
@@ -95,13 +93,13 @@ run(process.execPath, ['--input-type=module', '-e', `
   const verifyReplacement = [
     "const guideUiSource = read('source/src/modules/loads/DriverLoadGuideV103.jsx');",
     "assert.ok(guideUiSource.includes('function checklistText(value'), 'guide UI must normalize legacy checklist values');",
-    "assert.ok(guideUiSource.includes('step.checklist.map(checklistText)'), 'guide checklist must render normalized text');",
+    "assert.ok(guideUiSource.includes('normalizeChecklistUi(step.checklist)'), 'guide checklist references must use normalized text');",
     '',
   ].join('\\n');
   verifySource = verifySource.slice(0, verifyStart) + verifyReplacement + verifySource.slice(verifyEnd);
   fs.writeFileSync(verifyTarget, verifySource);
 
-  console.log('PASS — v109.4.4 checklist objects are normalized in the guide UI');
+  console.log('PASS — v109.4.4 checklist objects are normalized before every guide render');
 `]);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
