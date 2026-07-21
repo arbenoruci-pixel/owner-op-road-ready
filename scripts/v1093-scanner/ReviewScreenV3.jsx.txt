@@ -1,13 +1,33 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  boundaryFromCornersV1093,
-  boundaryHandlesV1093,
-  boundaryOutlinePointsV1093,
-  normalizeBoundaryV1093,
-  updateBoundaryPointV1093,
-} from './CurvedBoundaryV1093.js';
+import { clampV3, orderCornersV3 } from './scannerTypesV3.js';
+
+const DEFAULT_CORNERS = Object.freeze([
+  { x:.08, y:.08 },
+  { x:.92, y:.08 },
+  { x:.92, y:.92 },
+  { x:.08, y:.92 },
+]);
+
+const CORNER_LABELS = Object.freeze([
+  'Top left',
+  'Top right',
+  'Bottom right',
+  'Bottom left',
+]);
+
+function normalizedCorners(value) {
+  const input = Array.isArray(value) && value.length >= 4 ? value : DEFAULT_CORNERS;
+  return orderCornersV3(input).map(point => ({
+    x:clampV3(point?.x),
+    y:clampV3(point?.y),
+  }));
+}
+
+function sessionCorners(session) {
+  return normalizedCorners(session?.corners || session?.detection?.corners || DEFAULT_CORNERS);
+}
 
 function calculateFit(container, naturalWidth, naturalHeight) {
   if (!container || !naturalWidth || !naturalHeight) {
@@ -52,11 +72,6 @@ function ToolButton({ label, primary = false, disabled = false, onClick }) {
   );
 }
 
-function sessionBoundary(session) {
-  const fallback = boundaryFromCornersV1093(session?.corners || session?.detection?.corners || []);
-  return normalizeBoundaryV1093(session?.boundary || fallback, session?.corners || []);
-}
-
 export default function ReviewScreenV3({
   session,
   onRotate,
@@ -67,13 +82,13 @@ export default function ReviewScreenV3({
 }) {
   const containerRef = useRef(null);
   const imageRef = useRef(null);
-  const [boundary, setBoundary] = useState(() => sessionBoundary(session));
+  const [corners, setCorners] = useState(() => sessionCorners(session));
   const [fit, setFit] = useState({ x:0, y:0, width:0, height:0, frameWidth:0, frameHeight:0 });
-  const [activeHandle, setActiveHandle] = useState(null);
+  const [activeCorner, setActiveCorner] = useState(null);
   const previewUrl = useMemo(() => URL.createObjectURL(session.reviewFile), [session.reviewFile]);
 
   useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
-  useEffect(() => setBoundary(sessionBoundary(session)), [session.id, session.rotation, session.boundary, session.corners]);
+  useEffect(() => setCorners(sessionCorners(session)), [session.id, session.rotation, session.corners]);
 
   useEffect(() => {
     function update() {
@@ -95,15 +110,15 @@ export default function ReviewScreenV3({
   }, [session]);
 
   useEffect(() => {
-    if (!activeHandle) return undefined;
-    const stop = () => setActiveHandle(null);
+    if (activeCorner == null) return undefined;
+    const stop = () => setActiveCorner(null);
     window.addEventListener('pointerup', stop, { once:true });
     window.addEventListener('pointercancel', stop, { once:true });
     return () => {
       window.removeEventListener('pointerup', stop);
       window.removeEventListener('pointercancel', stop);
     };
-  }, [activeHandle]);
+  }, [activeCorner]);
 
   function screenPoint(point) {
     return {
@@ -112,33 +127,26 @@ export default function ReviewScreenV3({
     };
   }
 
-  function updateHandle(event) {
-    if (!activeHandle || !fit.width || !fit.height || !containerRef.current) return;
+  function updateCorner(event) {
+    if (activeCorner == null || !fit.width || !fit.height || !containerRef.current) return;
     event.preventDefault();
     const bounds = containerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left - fit.x) / fit.width));
-    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top - fit.y) / fit.height));
-    setBoundary(current => updateBoundaryPointV1093(
-      current,
-      activeHandle.side,
-      activeHandle.index,
-      { x, y },
-    ));
+    const point = {
+      x:clampV3((event.clientX - bounds.left - fit.x) / fit.width),
+      y:clampV3((event.clientY - bounds.top - fit.y) / fit.height),
+    };
+    setCorners(current => current.map((value, index) => index === activeCorner ? point : value));
   }
 
-  const outline = boundaryOutlinePointsV1093(boundary, 20).map(screenPoint);
-  const polygon = outline.map(point => `${point.x},${point.y}`).join(' ');
-  const handles = boundaryHandlesV1093(boundary).map(handle => ({
-    ...handle,
-    screen:screenPoint(handle.point),
-  }));
+  const screenCorners = corners.map(screenPoint);
+  const polygon = screenCorners.map(point => `${point.x},${point.y}`).join(' ');
   const confidence = Math.round(Number(session.detection?.confidence || 0) * 100);
   const viewWidth = Math.max(1, fit.frameWidth || fit.width + fit.x * 2);
   const viewHeight = Math.max(1, fit.frameHeight || fit.height + fit.y * 2);
 
   return (
     <section
-      data-road-ready-scanner-review="six-handle-v1093"
+      data-road-ready-scanner-review="four-corner-v10931"
       style={{
         position:'fixed',
         inset:0,
@@ -148,9 +156,9 @@ export default function ReviewScreenV3({
         display:'grid',
         gridTemplateRows:'auto 1fr auto',
       }}
-      onPointerMove={updateHandle}
-      onPointerUp={() => setActiveHandle(null)}
-      onPointerCancel={() => setActiveHandle(null)}
+      onPointerMove={updateCorner}
+      onPointerUp={() => setActiveCorner(null)}
+      onPointerCancel={() => setActiveCorner(null)}
     >
       <header
         style={{
@@ -190,7 +198,7 @@ export default function ReviewScreenV3({
               fontStyle:'normal',
             }}
           >
-            Detection {confidence}% · 4 corners + 2 bend points
+            Detection {confidence}% · 4 corner frame
           </em>
         </div>
         <span />
@@ -239,51 +247,43 @@ export default function ReviewScreenV3({
           >
             <polygon
               points={polygon}
-              fill="rgba(45,212,191,.08)"
+              fill="rgba(45,212,191,.06)"
               stroke="#5eead4"
-              strokeWidth="1.5"
+              strokeWidth="1.15"
               vectorEffect="non-scaling-stroke"
             />
-            {handles.map(handle => {
-              const radius = handle.isCorner ? 5.7 : 4.6;
-              return (
-                <g
-                  key={`${handle.side}:${handle.index}`}
-                  onPointerDown={event => {
-                    event.preventDefault();
-                    event.currentTarget.setPointerCapture?.(event.pointerId);
-                    setActiveHandle({ side:handle.side, index:handle.index });
-                  }}
-                  style={{ cursor:'grab' }}
-                  aria-label={handle.label}
-                >
-                  <circle
-                    cx={handle.screen.x}
-                    cy={handle.screen.y}
-                    r="22"
-                    fill="transparent"
-                  />
-                  <circle
-                    cx={handle.screen.x}
-                    cy={handle.screen.y}
-                    r={radius + 3}
-                    fill="rgba(15,23,42,.62)"
-                    stroke="rgba(255,255,255,.8)"
-                    strokeWidth="1"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <circle
-                    cx={handle.screen.x}
-                    cy={handle.screen.y}
-                    r={radius}
-                    fill={handle.isCorner ? '#14b8a6' : '#38bdf8'}
-                    stroke="#fff"
-                    strokeWidth="1.5"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </g>
-              );
-            })}
+            {screenCorners.map((point, index) => (
+              <g
+                key={CORNER_LABELS[index]}
+                onPointerDown={event => {
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture?.(event.pointerId);
+                  setActiveCorner(index);
+                }}
+                style={{ cursor:'grab' }}
+                aria-label={CORNER_LABELS[index]}
+              >
+                <circle cx={point.x} cy={point.y} r="22" fill="transparent" />
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r="8"
+                  fill="rgba(15,23,42,.62)"
+                  stroke="rgba(255,255,255,.82)"
+                  strokeWidth=".9"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r="5.2"
+                  fill="#14b8a6"
+                  stroke="#fff"
+                  strokeWidth="1.2"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </g>
+            ))}
           </svg>
         ) : null}
 
@@ -311,7 +311,7 @@ export default function ReviewScreenV3({
             >
               <b style={{ display:'block', fontSize:16 }}>Auto Quality Bot</b>
               <p style={{ margin:'8px 0 0', color:'#475569', lineHeight:1.4 }}>
-                {status || 'Correcting the page locally…'}
+                {status || 'Correcting perspective and document quality locally…'}
               </p>
             </div>
           </div>
@@ -331,11 +331,10 @@ export default function ReviewScreenV3({
         <ToolButton
           label="Reset"
           disabled={processing}
-          onClick={() => setBoundary(normalizeBoundaryV1093(
-            session.detectedBoundary
-              || boundaryFromCornersV1093(session.detection?.corners || session.corners),
-            session.corners,
-          ))}
+          onClick={() => setCorners(sessionCorners({
+            ...session,
+            corners:session.detection?.corners || session.corners,
+          }))}
         />
         <ToolButton label="Rotate" disabled={processing} onClick={onRotate} />
         <ToolButton label="Retake" disabled={processing} onClick={onRetake} />
@@ -343,7 +342,7 @@ export default function ReviewScreenV3({
           label="Auto-fix & save"
           primary
           disabled={processing}
-          onClick={() => onDone?.(boundary)}
+          onClick={() => onDone?.(corners)}
         />
       </footer>
     </section>
