@@ -21,4 +21,6 @@ run(process.execPath, ['scripts/apply-v10937-update-reload-loop.mjs']);
 run(process.execPath, ['scripts/verify-v10937-update-reload-loop.mjs']);
 run(process.execPath, ['scripts/apply-v10938-hybrid-clean-quality.mjs']);
 run(process.execPath, ['scripts/verify-v10938-hybrid-clean-quality.mjs']);
+run(process.execPath, ['scripts/apply-v10939-fidelity-lock.mjs']);
+run(process.execPath, ['scripts/verify-v10939-fidelity-lock.mjs']);
 run('npx', ['next', 'build']);
