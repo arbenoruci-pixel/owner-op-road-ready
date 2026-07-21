@@ -46,9 +46,7 @@ if (!app.includes('function clearMetadataOnlyRecertification(state = {})')) {
 
 const routeNeedle = '  const routeNormalized = normalizeRoadReadyState(normalized);';
 const routePatched = '  const routeNormalized = clearMetadataOnlyRecertification(normalizeRoadReadyState(normalized));';
-if (!app.includes(routeNeedle) && !app.includes(routePatched)) {
-  throw new Error('v109.4.6 route normalization line missing');
-}
+if (!app.includes(routeNeedle) && !app.includes(routePatched)) throw new Error('v109.4.6 route normalization line missing');
 if (app.includes(routeNeedle)) app = app.replace(routeNeedle, routePatched);
 fs.writeFileSync(appTarget, app);
 
@@ -97,13 +95,10 @@ fs.writeFileSync(updatePath, update);
 
 const verifyTarget = 'scripts/verify-v10943-auto-upright.mjs';
 let verifySource = fs.readFileSync(verifyTarget, 'utf8');
-verifySource = verifySource.replaceAll("'109.4.5'", "'109.4.6'");
-verifySource = verifySource.replaceAll("'109.4.4'", "'109.4.6'");
-verifySource = verifySource.replaceAll('v10945-recertification-sign-loop', BUILD);
-verifySource = verifySource.replaceAll('v10944-load-guide-closeout', BUILD);
+verifySource = verifySource.replace(/assert\.equal\(release\.version, '[^']+'\);/, "assert.equal(release.version, '109.4.6');");
+verifySource = verifySource.replace(/assert\.equal\(release\.build, '[^']+'\);/, "assert.equal(release.build, 'v10946-metadata-recertification-loop');");
+verifySource = verifySource.replace(/assert\.equal\(packageJson\.version, '[^']+'\);/, "assert.equal(packageJson.version, '109.4.6');");
 fs.writeFileSync(verifyTarget, verifySource);
 
-if (!app.includes('clearMetadataOnlyRecertification') || !app.includes(routePatched)) {
-  throw new Error('v109.4.6 metadata cleanup not installed');
-}
+if (!app.includes('clearMetadataOnlyRecertification') || !app.includes(routePatched)) throw new Error('v109.4.6 metadata cleanup not installed');
 console.log('PASS — v109.4.6 metadata-only repairs cannot reopen signed days');
