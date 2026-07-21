@@ -42,8 +42,23 @@ run(process.execPath, ['--input-type=module', '-e', `
     "    .join('');",
   ].join('\\n');
   source = source.slice(0, start) + replacement + '\\n' + source.slice(end);
+
+  const resolveBefore = "    return { ...step, checklist:normalizeChecklist(step.checklist), complete, completedAt:guide.manualDone?.[step.id] || null };";
+  const resolveAfter = [
+    "    const checklist = (Array.isArray(step.checklist) ? step.checklist : []).map(item => {",
+    "      if (typeof item === 'string' || typeof item === 'number') return String(item).trim();",
+    "      if (!item || typeof item !== 'object') return '';",
+    "      if (typeof item.text === 'string') return item.text.trim();",
+    "      if (typeof item.label === 'string') return item.label.trim();",
+    "      return Object.values(item).filter(value => typeof value === 'string' || typeof value === 'number').map(value => String(value)).join('').trim();",
+    "    }).filter(Boolean);",
+    "    return { ...step, checklist, complete, completedAt:guide.manualDone?.[step.id] || null };",
+  ].join('\\n');
+  if (!source.includes(resolveBefore)) throw new Error('v109.4.4 resolve checklist patch target missing');
+  source = source.replace(resolveBefore, resolveAfter);
+
   fs.writeFileSync(target, source);
-  console.log('PASS — v109.4.4 legacy checklist value fallback applied');
+  console.log('PASS — v109.4.4 legacy checklist value fallback applied at guide resolution');
 `]);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
