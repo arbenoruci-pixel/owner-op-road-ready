@@ -3,5 +3,31 @@
   "framework": "nextjs",
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
   "buildCommand": "node scripts/build-v10927.mjs",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "headers": [
+    {
+      "source": "/app-version.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate" },
+        { "key": "CDN-Cache-Control", "value": "no-store" },
+        { "key": "Surrogate-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/update.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate" },
+        { "key": "CDN-Cache-Control", "value": "no-store" },
+        { "key": "Surrogate-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" },
+        { "key": "CDN-Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
 }
