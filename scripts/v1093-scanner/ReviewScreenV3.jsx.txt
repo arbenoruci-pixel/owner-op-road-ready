@@ -1,0 +1,351 @@
+'use client';
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  boundaryFromCornersV1093,
+  boundaryHandlesV1093,
+  boundaryOutlinePointsV1093,
+  normalizeBoundaryV1093,
+  updateBoundaryPointV1093,
+} from './CurvedBoundaryV1093.js';
+
+function calculateFit(container, naturalWidth, naturalHeight) {
+  if (!container || !naturalWidth || !naturalHeight) {
+    return { x:0, y:0, width:0, height:0, frameWidth:0, frameHeight:0 };
+  }
+  const frameWidth = container.clientWidth;
+  const frameHeight = container.clientHeight;
+  const scale = Math.min(frameWidth / naturalWidth, frameHeight / naturalHeight);
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
+  return {
+    x:(frameWidth - width) / 2,
+    y:(frameHeight - height) / 2,
+    width,
+    height,
+    frameWidth,
+    frameHeight,
+  };
+}
+
+function ToolButton({ label, primary = false, disabled = false, onClick }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        minHeight:48,
+        padding:'0 8px',
+        borderRadius:15,
+        border:primary ? '1px solid #2563eb' : '1px solid #cbd5e1',
+        background:primary ? '#2563eb' : '#fff',
+        color:primary ? '#fff' : '#172033',
+        fontWeight:950,
+        fontSize:primary ? 11 : 12,
+        lineHeight:1.1,
+        opacity:disabled ? .55 : 1,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function sessionBoundary(session) {
+  const fallback = boundaryFromCornersV1093(session?.corners || session?.detection?.corners || []);
+  return normalizeBoundaryV1093(session?.boundary || fallback, session?.corners || []);
+}
+
+export default function ReviewScreenV3({
+  session,
+  onRotate,
+  onRetake,
+  onDone,
+  processing = false,
+  status = '',
+}) {
+  const containerRef = useRef(null);
+  const imageRef = useRef(null);
+  const [boundary, setBoundary] = useState(() => sessionBoundary(session));
+  const [fit, setFit] = useState({ x:0, y:0, width:0, height:0, frameWidth:0, frameHeight:0 });
+  const [activeHandle, setActiveHandle] = useState(null);
+  const previewUrl = useMemo(() => URL.createObjectURL(session.reviewFile), [session.reviewFile]);
+
+  useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
+  useEffect(() => setBoundary(sessionBoundary(session)), [session.id, session.rotation, session.boundary, session.corners]);
+
+  useEffect(() => {
+    function update() {
+      const image = imageRef.current;
+      setFit(calculateFit(
+        containerRef.current,
+        image?.naturalWidth || session.workingImage.width,
+        image?.naturalHeight || session.workingImage.height,
+      ));
+    }
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    if (containerRef.current && observer) observer.observe(containerRef.current);
+    window.addEventListener('resize', update);
+    update();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!activeHandle) return undefined;
+    const stop = () => setActiveHandle(null);
+    window.addEventListener('pointerup', stop, { once:true });
+    window.addEventListener('pointercancel', stop, { once:true });
+    return () => {
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+    };
+  }, [activeHandle]);
+
+  function screenPoint(point) {
+    return {
+      x:fit.x + Number(point?.x || 0) * fit.width,
+      y:fit.y + Number(point?.y || 0) * fit.height,
+    };
+  }
+
+  function updateHandle(event) {
+    if (!activeHandle || !fit.width || !fit.height || !containerRef.current) return;
+    event.preventDefault();
+    const bounds = containerRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left - fit.x) / fit.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top - fit.y) / fit.height));
+    setBoundary(current => updateBoundaryPointV1093(
+      current,
+      activeHandle.side,
+      activeHandle.index,
+      { x, y },
+    ));
+  }
+
+  const outline = boundaryOutlinePointsV1093(boundary, 20).map(screenPoint);
+  const polygon = outline.map(point => `${point.x},${point.y}`).join(' ');
+  const handles = boundaryHandlesV1093(boundary).map(handle => ({
+    ...handle,
+    screen:screenPoint(handle.point),
+  }));
+  const confidence = Math.round(Number(session.detection?.confidence || 0) * 100);
+  const viewWidth = Math.max(1, fit.frameWidth || fit.width + fit.x * 2);
+  const viewHeight = Math.max(1, fit.frameHeight || fit.height + fit.y * 2);
+
+  return (
+    <section
+      data-road-ready-scanner-review="six-handle-v1093"
+      style={{
+        position:'fixed',
+        inset:0,
+        zIndex:1400,
+        background:'#0f172a',
+        color:'#fff',
+        display:'grid',
+        gridTemplateRows:'auto 1fr auto',
+      }}
+      onPointerMove={updateHandle}
+      onPointerUp={() => setActiveHandle(null)}
+      onPointerCancel={() => setActiveHandle(null)}
+    >
+      <header
+        style={{
+          display:'grid',
+          gridTemplateColumns:'44px 1fr 44px',
+          alignItems:'center',
+          padding:'calc(10px + env(safe-area-inset-top)) 12px 10px',
+          borderBottom:'1px solid rgba(148,163,184,.25)',
+          background:'rgba(15,23,42,.96)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onRetake}
+          aria-label="Back"
+          disabled={processing}
+          style={{
+            width:42,
+            height:42,
+            borderRadius:999,
+            border:'1px solid rgba(255,255,255,.2)',
+            background:'rgba(30,41,59,.9)',
+            color:'#fff',
+            fontSize:24,
+          }}
+        >
+          ‹
+        </button>
+        <div style={{ textAlign:'center' }}>
+          <b style={{ display:'block', fontSize:16 }}>Adjust paper</b>
+          <em
+            style={{
+              display:'block',
+              marginTop:2,
+              color:'#cbd5e1',
+              fontSize:11,
+              fontStyle:'normal',
+            }}
+          >
+            Detection {confidence}% · 4 corners + 2 bend points
+          </em>
+        </div>
+        <span />
+      </header>
+
+      <div
+        ref={containerRef}
+        style={{
+          position:'relative',
+          minHeight:0,
+          overflow:'hidden',
+          touchAction:'none',
+          background:'#020617',
+        }}
+      >
+        <img
+          ref={imageRef}
+          src={previewUrl}
+          alt="Document review"
+          onLoad={() => setFit(calculateFit(
+            containerRef.current,
+            imageRef.current?.naturalWidth,
+            imageRef.current?.naturalHeight,
+          ))}
+          style={{
+            width:'100%',
+            height:'100%',
+            objectFit:'contain',
+            display:'block',
+            userSelect:'none',
+          }}
+          draggable={false}
+        />
+
+        {fit.width ? (
+          <svg
+            viewBox={`0 0 ${viewWidth} ${viewHeight}`}
+            preserveAspectRatio="none"
+            style={{
+              position:'absolute',
+              inset:0,
+              width:'100%',
+              height:'100%',
+              overflow:'visible',
+            }}
+          >
+            <polygon
+              points={polygon}
+              fill="rgba(45,212,191,.08)"
+              stroke="#5eead4"
+              strokeWidth="1.5"
+              vectorEffect="non-scaling-stroke"
+            />
+            {handles.map(handle => {
+              const radius = handle.isCorner ? 5.7 : 4.6;
+              return (
+                <g
+                  key={`${handle.side}:${handle.index}`}
+                  onPointerDown={event => {
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture?.(event.pointerId);
+                    setActiveHandle({ side:handle.side, index:handle.index });
+                  }}
+                  style={{ cursor:'grab' }}
+                  aria-label={handle.label}
+                >
+                  <circle
+                    cx={handle.screen.x}
+                    cy={handle.screen.y}
+                    r="22"
+                    fill="transparent"
+                  />
+                  <circle
+                    cx={handle.screen.x}
+                    cy={handle.screen.y}
+                    r={radius + 3}
+                    fill="rgba(15,23,42,.62)"
+                    stroke="rgba(255,255,255,.8)"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle
+                    cx={handle.screen.x}
+                    cy={handle.screen.y}
+                    r={radius}
+                    fill={handle.isCorner ? '#14b8a6' : '#38bdf8'}
+                    stroke="#fff"
+                    strokeWidth="1.5"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              );
+            })}
+          </svg>
+        ) : null}
+
+        {processing ? (
+          <div
+            style={{
+              position:'absolute',
+              inset:0,
+              display:'grid',
+              placeItems:'center',
+              background:'rgba(2,6,23,.72)',
+              backdropFilter:'blur(4px)',
+            }}
+          >
+            <div
+              style={{
+                width:'min(330px,86vw)',
+                padding:18,
+                borderRadius:20,
+                background:'#fff',
+                color:'#172033',
+                textAlign:'center',
+                boxShadow:'0 24px 80px rgba(0,0,0,.35)',
+              }}
+            >
+              <b style={{ display:'block', fontSize:16 }}>Auto Quality Bot</b>
+              <p style={{ margin:'8px 0 0', color:'#475569', lineHeight:1.4 }}>
+                {status || 'Correcting the page locally…'}
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <footer
+        style={{
+          padding:'12px 12px calc(14px + env(safe-area-inset-bottom))',
+          display:'grid',
+          gridTemplateColumns:'repeat(4,minmax(0,1fr))',
+          gap:8,
+          background:'#f8fafc',
+          borderTop:'1px solid #cbd5e1',
+        }}
+      >
+        <ToolButton
+          label="Reset"
+          disabled={processing}
+          onClick={() => setBoundary(normalizeBoundaryV1093(
+            session.detectedBoundary
+              || boundaryFromCornersV1093(session.detection?.corners || session.corners),
+            session.corners,
+          ))}
+        />
+        <ToolButton label="Rotate" disabled={processing} onClick={onRotate} />
+        <ToolButton label="Retake" disabled={processing} onClick={onRetake} />
+        <ToolButton
+          label="Auto-fix & save"
+          primary
+          disabled={processing}
+          onClick={() => onDone?.(boundary)}
+        />
+      </footer>
+    </section>
+  );
+}
