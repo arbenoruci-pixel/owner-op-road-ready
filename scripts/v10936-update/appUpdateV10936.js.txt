@@ -1,0 +1,216 @@
+const FALLBACK_APP_VERSION = '109.3.6';
+const FALLBACK_APP_BUILD = 'v10936-reliable-update-bootstrap';
+
+export const CURRENT_APP_VERSION = String(
+  process.env.NEXT_PUBLIC_OWNER_OP_APP_VERSION || FALLBACK_APP_VERSION,
+).trim() || FALLBACK_APP_VERSION;
+
+export const CURRENT_APP_BUILD = String(
+  process.env.NEXT_PUBLIC_OWNER_OP_APP_BUILD || FALLBACK_APP_BUILD,
+).trim() || FALLBACK_APP_BUILD;
+
+export const APP_VERSION_URL = '/app-version.json';
+export const SERVICE_WORKER_URL = '/sw.js';
+export const UPDATE_BOOT_URL = '/update.html';
+export const UPDATE_CHECK_INTERVAL_MS = 60 * 1000;
+export const UPDATE_WORKER_TIMEOUT_MS = 8_000;
+
+function versionParts(version = '') {
+  return String(version || '')
+    .split(/[.+-]/)
+    .map(part => Number.parseInt(part, 10))
+    .filter(num => Number.isFinite(num));
+}
+
+export function compareVersions(a = '', b = '') {
+  const left = versionParts(a);
+  const right = versionParts(b);
+  const len = Math.max(left.length, right.length, 3);
+  for (let i = 0; i < len; i += 1) {
+    const av = left[i] || 0;
+    const bv = right[i] || 0;
+    if (av > bv) return 1;
+    if (av < bv) return -1;
+  }
+  return 0;
+}
+
+export function isNewerVersion(a = '', b = CURRENT_APP_VERSION) {
+  return compareVersions(a, b) > 0;
+}
+
+export function normalizeRemoteVersionPayload(payload = {}) {
+  const version = String(payload.version || payload.appVersion || '').trim();
+  return {
+    version,
+    build:String(payload.build || payload.buildId || '').trim(),
+    label:String(payload.label || '').trim(),
+    releasedAt:String(payload.releasedAt || payload.updatedAt || '').trim(),
+    notes:Array.isArray(payload.notes) ? payload.notes.map(String).filter(Boolean) : [],
+    force:payload.force === true,
+  };
+}
+
+export function shouldOfferAppUpdate(
+  remote = {},
+  currentVersion = CURRENT_APP_VERSION,
+  currentBuild = CURRENT_APP_BUILD,
+) {
+  const normalized = normalizeRemoteVersionPayload(remote);
+  if (!normalized.version) return false;
+  if (compareVersions(normalized.version, currentVersion) > 0) return true;
+  if (normalized.version !== String(currentVersion || '').trim()) return false;
+  if (normalized.build && currentBuild && normalized.build !== currentBuild) return true;
+  return normalized.force === true && normalized.build !== currentBuild;
+}
+
+export async function fetchRemoteAppVersion(fetchImpl = fetch) {
+  const separator = APP_VERSION_URL.includes('?') ? '&' : '?';
+  const url = `${APP_VERSION_URL}${separator}ts=${Date.now()}&nonce=${Math.random().toString(36).slice(2)}`;
+  const response = await fetchImpl(url, {
+    cache:'no-store',
+    credentials:'same-origin',
+    headers:{
+      'cache-control':'no-cache, no-store, max-age=0, must-revalidate',
+      pragma:'no-cache',
+      expires:'0',
+    },
+  });
+  if (!response.ok) throw new Error(`Version check failed: ${response.status}`);
+  return normalizeRemoteVersionPayload(await response.json());
+}
+
+export function buildUpdateMeta(remote = {}, reason = 'manual') {
+  return {
+    reason,
+    currentVersion:CURRENT_APP_VERSION,
+    currentBuild:CURRENT_APP_BUILD,
+    nextVersion:String(remote.version || ''),
+    remoteBuild:String(remote.build || ''),
+    createdAt:new Date().toISOString(),
+  };
+}
+
+export function updateReloadUrl(remote = {}) {
+  if (typeof window === 'undefined') return '';
+  const current = new URL(window.location.href);
+  current.searchParams.delete('road_ready_update');
+  current.searchParams.delete('road_ready_build');
+  current.searchParams.delete('fresh');
+  current.searchParams.delete('t');
+  const returnPath = `${current.pathname}${current.search}${current.hash}` || '/';
+  const boot = new URL(UPDATE_BOOT_URL, current.origin);
+  boot.searchParams.set('version', remote.version || CURRENT_APP_VERSION);
+  boot.searchParams.set('build', remote.build || CURRENT_APP_BUILD);
+  boot.searchParams.set('return', returnPath);
+  boot.searchParams.set('t', String(Date.now()));
+  return boot.toString();
+}
+
+export function versionedServiceWorkerUrl(
+  version = CURRENT_APP_VERSION,
+  build = CURRENT_APP_BUILD,
+  baseUrl = SERVICE_WORKER_URL,
+) {
+  const source = String(baseUrl || SERVICE_WORKER_URL);
+  const separator = source.includes('?') ? '&' : '?';
+  return `${source}${separator}owner_op_v=${encodeURIComponent(version || CURRENT_APP_VERSION)}&owner_op_build=${encodeURIComponent(build || CURRENT_APP_BUILD)}&t=${Date.now()}`;
+}
+
+export async function clearBrowserCaches() {
+  if (typeof caches === 'undefined' || typeof caches.keys !== 'function') return;
+  const keys = await caches.keys();
+  await Promise.all(keys.map(key => caches.delete(key)));
+}
+
+function workerTargetsRelease(worker, version, build = '') {
+  if (!worker?.scriptURL || !version) return false;
+  try {
+    const url = new URL(worker.scriptURL);
+    const workerVersion = url.searchParams.get('owner_op_v');
+    const workerBuild = url.searchParams.get('owner_op_build') || '';
+    return workerVersion === String(version) && (!build || workerBuild === String(build));
+  } catch {
+    return String(worker.scriptURL).includes(`owner_op_v=${encodeURIComponent(version)}`);
+  }
+}
+
+export function waitForServiceWorkerVersion(
+  registration,
+  version,
+  build = '',
+  timeoutMs = UPDATE_WORKER_TIMEOUT_MS,
+) {
+  if (typeof navigator === 'undefined' || !navigator.serviceWorker || !registration) return Promise.resolve(false);
+  return new Promise(resolve => {
+    let finished = false;
+    let timer = null;
+    const watchedWorkers = new Set();
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      registration.removeEventListener?.('updatefound', onUpdateFound);
+      for (const worker of watchedWorkers) worker.removeEventListener?.('statechange', onWorkerStateChange);
+    };
+    const finish = value => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      resolve(value);
+    };
+    const check = () => {
+      const candidates = [navigator.serviceWorker.controller, registration.active, registration.waiting, registration.installing].filter(Boolean);
+      const target = candidates.find(worker => workerTargetsRelease(worker, version, build));
+      if (!target) return false;
+      if (target === registration.waiting || target === registration.installing) target.postMessage?.({ type:'OWNER_OP_SKIP_WAITING', version, build });
+      if (target.state === 'activated' || target === navigator.serviceWorker.controller) {
+        finish(true);
+        return true;
+      }
+      return false;
+    };
+    function onControllerChange() { check(); }
+    function onWorkerStateChange() { check(); }
+    const watchWorker = worker => {
+      if (!worker || watchedWorkers.has(worker)) return;
+      watchedWorkers.add(worker);
+      worker.addEventListener?.('statechange', onWorkerStateChange);
+      if (worker.state === 'installed' || worker.state === 'waiting') worker.postMessage?.({ type:'OWNER_OP_SKIP_WAITING', version, build });
+    };
+    function onUpdateFound() { watchWorker(registration.installing); check(); }
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    registration.addEventListener?.('updatefound', onUpdateFound);
+    watchWorker(registration.installing);
+    watchWorker(registration.waiting);
+    watchWorker(registration.active);
+    timer = setTimeout(() => finish(false), Math.max(500, Number(timeoutMs) || UPDATE_WORKER_TIMEOUT_MS));
+    check();
+  });
+}
+
+export async function requestServiceWorkerUpdate(remote = {}, meta = {}) {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return { supported:false, activated:false, registration:null };
+  }
+  const version = String(remote.version || CURRENT_APP_VERSION).trim() || CURRENT_APP_VERSION;
+  const build = String(remote.build || CURRENT_APP_BUILD).trim() || CURRENT_APP_BUILD;
+  const swUrl = versionedServiceWorkerUrl(version, build);
+  await clearBrowserCaches().catch(() => {});
+  let registration;
+  try {
+    registration = await navigator.serviceWorker.register(swUrl, { scope:'/', updateViaCache:'none' });
+  } catch (registerError) {
+    registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) throw registerError;
+  }
+  const payload = { type:'OWNER_OP_APPLY_UPDATE', version, build, meta };
+  registration.active?.postMessage?.(payload);
+  registration.waiting?.postMessage?.(payload);
+  registration.installing?.postMessage?.(payload);
+  try { await registration.update?.(); } catch {}
+  registration.active?.postMessage?.(payload);
+  registration.waiting?.postMessage?.(payload);
+  registration.installing?.postMessage?.(payload);
+  const activated = await waitForServiceWorkerVersion(registration, version, build);
+  return { supported:true, activated, registration };
+}
