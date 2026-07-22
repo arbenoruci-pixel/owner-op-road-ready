@@ -6,6 +6,16 @@ fs.mkdirSync = (target, options) => {
   return originalMkdirSync(target, options);
 };
 
+const guidePath = 'source/src/modules/loads/loadGuideV103.js';
+let guide = fs.readFileSync(guidePath, 'utf8');
+const resolvePattern = /export function resolveDriverGuideV103\(state = \{\}, guideInput = null\) \{[\s\S]*?(?=  const steps = \(guide\.steps \|\| \[\]\)\.map)/;
+if (!resolvePattern.test(guide)) throw new Error('v109.5.8 could not normalize resolveDriverGuideV103 prelude');
+guide = guide.replace(resolvePattern, `export function resolveDriverGuideV103(state = {}, guideInput = null) {
+  const guide = guideInput || getActiveLoadGuideV103(state);
+  if (!guide) return { guide:null, steps:[], completed:0, total:0, percent:0, currentStep:null, complete:false };
+`);
+fs.writeFileSync(guidePath, guide);
+
 await import('./apply-v10958-completed-load-command-closeout.mjs');
 
 const helperPath = 'source/src/modules/loads/completedLoadCloseoutV10958.js';
