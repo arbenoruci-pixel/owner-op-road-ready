@@ -13,6 +13,31 @@ const lines = source.split('\n').map(line => {
   return line;
 });
 source = lines.join('\n');
+
+const automaticLabel = "'automatic route and arrival progression'";
+const automaticLabelIndex = source.indexOf(automaticLabel);
+if (automaticLabelIndex >= 0) {
+  const automaticStart = source.lastIndexOf('guide = replaceRequired(', automaticLabelIndex);
+  const automaticEndMarker = source.indexOf('\n);', automaticLabelIndex);
+  if (automaticStart < 0 || automaticEndMarker < 0) throw new Error('v109.6.5 automatic progression block boundaries missing');
+  const automaticEnd = automaticEndMarker + 3;
+  const structuralPatch = [
+    "if (!guide.includes(\"step.kind === 'route' ? routeStepCompleteV10965\")) {",
+    "  const completionPatternV10965 = /    const complete = manual[\\s\\S]*?;\\n(?=\\s*return \\{ \\.\\.\\.step, complete,)/;",
+    "  if (!completionPatternV10965.test(guide)) throw new Error('v109.6.5 missing automatic route and arrival progression');",
+    "  const completionReplacementV10965 = [",
+    "    \"    const complete = manual\",",
+    "    \"      || (step.kind === 'status' ? statusStepComplete(state, guide, step)\",",
+    "    \"        : step.kind === 'document' ? documentStepComplete(state, guide, step)\",",
+    "    \"          : step.kind === 'route' ? routeStepCompleteV10965(state, guide, step)\",",
+    "    \"            : false);\",",
+    "  ].join('\\n');",
+    "  guide = guide.replace(completionPatternV10965, completionReplacementV10965);",
+    "}",
+  ].join('\n');
+  source = `${source.slice(0, automaticStart)}${structuralPatch}${source.slice(automaticEnd)}`;
+}
+
 fs.writeFileSync(applyPath, source);
 
 const guidePath = 'source/src/modules/loads/loadGuideV103.js';
@@ -68,9 +93,5 @@ replaceFunction('documentStepComplete', 'resolveDriverGuideV103', `function docu
   });
 }`);
 
-const resolverPattern = /(const steps = \(guide\.steps \|\| \[\]\)\.map\(step => \{\n\s*const manual = !!guide\.manualDone\?\.\[step\.id\];\n)\s*const complete =[\s\S]*?;\n(\s*return \{ \.\.\.step, complete, completedAt:guide\.manualDone\?\.\[step\.id\] \|\| null \};)/;
-if (!resolverPattern.test(guide)) throw new Error('v109.6.5 prepare could not locate resolver completion expression');
-guide = guide.replace(resolverPattern, `$1    const complete = manual || (step.kind === 'status' ? statusStepComplete(state, step) : step.kind === 'document' ? documentStepComplete(state, guide, step) : false);\n$2`);
-
 fs.writeFileSync(guidePath, guide);
-console.log('PASS — v109.6.5 generated strings, mission functions and resolver anchor prepared');
+console.log('PASS — v109.6.5 generated strings and structural mission anchors prepared');
