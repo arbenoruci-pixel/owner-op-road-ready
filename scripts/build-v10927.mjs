@@ -35,5 +35,6 @@ run(process.execPath, ['scripts/apply-v10948-inspection-persistence.mjs']);
 run(process.execPath, ['scripts/apply-v10949-inspection-write-order.mjs']);
 run(process.execPath, ['scripts/apply-v10951-multireason-inspection-root-fix.mjs']);
 run(process.execPath, ['scripts/verify-v10951-multireason-inspection-root-fix.mjs']);
+run(process.execPath, ['scripts/apply-v10952-visible-app-version.mjs']);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
