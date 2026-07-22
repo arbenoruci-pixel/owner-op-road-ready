@@ -49,9 +49,8 @@ assert.equal(
 );
 assert.ok(classification.score >= 200, `Expected strong Rate Confirmation score, received ${classification.score}`);
 assert.ok(
-  classification.alternatives.find(item => item.id === 'rate_confirmation')?.score
-    > classification.alternatives.find(item => item.id === 'pod')?.score,
-  'Rate Confirmation must outrank POD when POD appears only in contract submission terms',
+  classification.evidence.some(item => item.source === 'contract-structure-v10957'),
+  'Rate Confirmation decision must include contract-structure evidence',
 );
 
 const packet = classifyPacketPagesV1040(redLightningRateCon, {
