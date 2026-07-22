@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.6.2: saved Rate Confirmations activate Home and Driver Mission.
+// v109.6.3: quota-safe document saving on iPhone.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -57,4 +57,6 @@ run(process.execPath, ['scripts/apply-v10961-production-v105-router.mjs']);
 run(process.execPath, ['scripts/verify-v10961-ratecon-engine-v11.mjs']);
 run(process.execPath, ['scripts/apply-v10962-ratecon-board-activation.mjs']);
 run(process.execPath, ['scripts/verify-v10962-ratecon-board-activation.mjs']);
+run(process.execPath, ['scripts/apply-v10963-quota-safe-document-save.mjs']);
+run(process.execPath, ['scripts/verify-v10963-quota-safe-document-save.mjs']);
 run('npx', ['next', 'build']);
