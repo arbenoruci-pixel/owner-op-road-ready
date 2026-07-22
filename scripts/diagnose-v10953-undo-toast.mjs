@@ -26,16 +26,15 @@ function walk(dir, out = []) {
   return out;
 }
 
+const allFiles = ROOTS.flatMap(root => walk(root));
 const matches = [];
-for (const root of ROOTS) {
-  for (const file of walk(root)) {
-    const text = fs.readFileSync(file, 'utf8');
-    const lines = text.split(/\r?\n/);
-    lines.forEach((line, index) => {
-      const found = NEEDLES.filter(needle => line.includes(needle));
-      if (found.length) matches.push({ file, line:index + 1, found, text:line.trim().slice(0, 500) });
-    });
-  }
+for (const file of allFiles) {
+  const text = fs.readFileSync(file, 'utf8');
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    const found = NEEDLES.filter(needle => line.includes(needle));
+    if (found.length) matches.push({ file, line:index + 1, found, text:line.trim().slice(0, 500) });
+  });
 }
 
 console.log('UNDO_DIAGNOSTIC_BEGIN');
@@ -70,15 +69,15 @@ for (let i = 0; i < appLines.length; i += 1) {
 }
 console.log('STARTUP_EFFECT_DIAGNOSTIC_END');
 
-function functionBlock(name, nextName = '') {
-  const start = appText.indexOf(`function ${name}`);
-  if (start < 0) return `FUNCTION_MISSING ${name}`;
-  let end = nextName ? appText.indexOf(`\n\nfunction ${nextName}`, start) : -1;
+function functionBlockFromText(text, name, nextName = '') {
+  const start = text.indexOf(`function ${name}`);
+  if (start < 0) return '';
+  let end = nextName ? text.indexOf(`\n\nfunction ${nextName}`, start) : -1;
   if (end < 0) {
     let depth = 0;
     let opened = false;
-    for (let i = start; i < appText.length; i += 1) {
-      const ch = appText[i];
+    for (let i = start; i < text.length; i += 1) {
+      const ch = text[i];
       if (ch === '{') { depth += 1; opened = true; }
       else if (ch === '}') {
         depth -= 1;
@@ -86,7 +85,11 @@ function functionBlock(name, nextName = '') {
       }
     }
   }
-  return appText.slice(start, end > start ? end : Math.min(appText.length, start + 5000));
+  return text.slice(start, end > start ? end : Math.min(text.length, start + 12000));
+}
+
+function functionBlock(name, nextName = '') {
+  return functionBlockFromText(appText, name, nextName) || `FUNCTION_MISSING ${name}`;
 }
 
 console.log('INSPECTION_FUNCTIONS_BEGIN');
@@ -97,6 +100,7 @@ const functions = [
   ['reconcilePreTripInspections','isReasonOnlyInspectionChange'],
   ['inspectionFromPreTripEvent','isAutoPreTripInspection'],
   ['isAutoPreTripInspection','normalizeState'],
+  ['normalizeState','defaultInitialState'],
   ['mergeDurableInspectionSnapshots','loadInitial'],
   ['loadInitial','App'],
   ['saveInspection','saveManualMilesForDay'],
@@ -104,7 +108,7 @@ const functions = [
 for (const [name,next] of functions) {
   const block = functionBlock(name,next);
   console.log(`FUNCTION_${name}_BEGIN`);
-  console.log(block.slice(0, 12000));
+  console.log(block.slice(0, 20000));
   console.log(`FUNCTION_${name}_END`);
 }
 console.log('INSPECTION_FUNCTIONS_END');
@@ -117,3 +121,43 @@ for (let i = 0; i < appLines.length; i += 1) {
   }
 }
 console.log('INSPECTION_OCCURRENCES_END');
+
+const deletionPatterns = [
+  /false auto inspection/i,
+  /repairLogIntegrityV1051/,
+  /repairRoadReadyFoundationV105/,
+  /inspectionByDay/,
+  /delete\s+[^;\n]*(?:inspection|\[day\])/i,
+  /inspectionConfirmed/,
+  /auto_on_duty_pretrip/i,
+  /isAutoPreTripInspection/,
+];
+console.log('INSPECTION_REPAIR_SOURCE_SCAN_BEGIN');
+for (const file of allFiles) {
+  const text = fs.readFileSync(file, 'utf8');
+  const lines = text.split(/\r?\n/);
+  const hits = [];
+  lines.forEach((line, index) => {
+    if (deletionPatterns.some(pattern => pattern.test(line))) {
+      hits.push({ line:index + 1, text:line.trim().slice(0, 1500) });
+    }
+  });
+  if (!hits.length) continue;
+  console.log(`FILE_BEGIN ${file}`);
+  for (const hit of hits.slice(0, 250)) console.log(`${hit.line}: ${hit.text}`);
+  console.log(`FILE_END ${file}`);
+}
+console.log('INSPECTION_REPAIR_SOURCE_SCAN_END');
+
+console.log('NAMED_REPAIR_FUNCTIONS_BEGIN');
+for (const file of allFiles) {
+  const text = fs.readFileSync(file, 'utf8');
+  for (const name of ['repairLogIntegrityV1051','repairRoadReadyFoundationV105','normalizeRoadReadyState','repairRoadReadyStateV107']) {
+    const block = functionBlockFromText(text, name);
+    if (!block) continue;
+    console.log(`FUNCTION_SOURCE ${name} ${file}`);
+    console.log(block.slice(0, 30000));
+    console.log(`FUNCTION_SOURCE_END ${name} ${file}`);
+  }
+}
+console.log('NAMED_REPAIR_FUNCTIONS_END');
