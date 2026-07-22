@@ -51,16 +51,9 @@ if (stopPlanStart < 0 || stopPlanReturn < 0) {
 }
 guideUi = `${guideUi.slice(0, stopPlanStart)}function StopPlan({ progress }) {
   const g = progress.guide;${guideUi.slice(stopPlanReturn)}`;
-
-const componentStart = guideUi.indexOf('export default function DriverLoadGuideV103');
-const progressStart = componentStart >= 0 ? guideUi.indexOf('  const progress = useMemo', componentStart) : -1;
-const progressEnd = progressStart >= 0 ? guideUi.indexOf('\n', progressStart) + 1 : -1;
-const modeReturn = progressEnd > 0 ? guideUi.indexOf('  return mode ===', progressEnd) : -1;
-if (componentStart < 0 || progressStart < 0 || progressEnd <= 0 || modeReturn < 0) {
-  const nearby = componentStart >= 0 ? guideUi.slice(componentStart, componentStart + 1100) : 'DriverLoadGuide component not found';
-  throw new Error(`v109.5.8 could not normalize mission render guard: ${nearby}`);
+if (!guideUi.includes('  if (!guide) return null;')) {
+  throw new Error('v109.5.8 mission render guard anchor missing');
 }
-guideUi = `${guideUi.slice(0, progressEnd)}  if (!guide) return null;\n${guideUi.slice(modeReturn)}`;
 fs.writeFileSync(guideUiPath, guideUi);
 
 await import('./apply-v10958-completed-load-command-closeout.mjs');
