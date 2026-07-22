@@ -17,47 +17,15 @@ function writeJson(path, transform) {
   write(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function replaceFunction(source, name, nextName, replacement) {
+  const start = source.indexOf(`function ${name}`);
+  const end = source.indexOf(`\n\nfunction ${nextName}`, start);
+  if (start < 0 || end < 0) throw new Error(`v109.5.5 function boundary missing: ${name} -> ${nextName}`);
+  return `${source.slice(0, start)}${replacement}${source.slice(end)}`;
+}
+
 const foundationPath = 'source/src/modules/documents/documentFoundationV105.js';
 let foundation = read(foundationPath);
-
-const oldRepair = `function repairDeliveryPretripContaminationV105(state = {}) {
-  let changed = false;
-  const changedDays = [];
-  const eventsByDay = {};
-  const inspectionByDay = { ...(state.inspectionByDay || {}) };
-  const certifyStatus = { ...(state.certifyStatus || {}) };
-  const signatureByDay = { ...(state.signatureByDay || {}) };
-  const now = Date.now();
-
-  for (const [day, rows] of Object.entries(state.eventsByDay || {})) {
-    eventsByDay[day] = (Array.isArray(rows) ? rows : []).map(event => {
-      const cleaned = cleanDeliveryPretripNoteV105(event?.note || '');
-      if (cleaned === textV105(event?.note || '')) return event;
-      changed = true;
-      if (!changedDays.includes(day)) changedDays.push(day);
-      const inspection = inspectionByDay[day] || {};
-      if (/^auto_on_duty_pretrip/i.test(textV105(inspection.source)) && textV105(inspection.sourceEventId) === textV105(event.id)) {
-        delete inspectionByDay[day];
-      }
-      if (certifyStatus[day] === 'Certified' || signatureByDay[day]?.signed) {
-        certifyStatus[day] = 'Needs Recertification';
-        signatureByDay[day] = {
-          ...(signatureByDay[day] || {}),
-          needsRecertification:true,
-          changedAfterSignAt:now,
-          integrityRepairReason:'Removed a hidden Pre-trip label from a Delivery / Unloading event. Duty time, status and location were preserved.',
-        };
-      }
-      return {
-        ...event,
-        note:cleaned,
-        logTextRepairVersion:ROAD_READY_OS_FOUNDATION_VERSION_V105,
-        logTextRepairedAt:now,
-      };
-    });
-  }
-  return { changed, changedDays, eventsByDay, inspectionByDay, certifyStatus, signatureByDay };
-}`;
 
 const newRepair = `function structuredPretripReasonV105(event = {}) {
   const reasons = Array.isArray(event?.reasons) ? event.reasons : [];
@@ -119,15 +87,16 @@ function repairDeliveryPretripContaminationV105(state = {}) {
   return { changed, changedDays, eventsByDay, inspectionByDay, certifyStatus, signatureByDay };
 }`;
 
-if (!foundation.includes(oldRepair)) throw new Error('v109.5.5 foundation repair target missing');
-foundation = foundation.replace(oldRepair, newRepair);
+foundation = replaceFunction(
+  foundation,
+  'repairDeliveryPretripContaminationV105',
+  'latestOpenRouteV105',
+  newRepair,
+);
 write(foundationPath, foundation);
 
 const integrityPath = 'source/src/core/integrity/logbookIntegrityV107.js';
 let integrity = read(integrityPath);
-const oldEventText = `function eventText(event = {}) {
-  return \`${'${event.note || \'\'} ${event.description || \'\'}'}\`.toLowerCase();
-}`;
 const newEventText = `function eventText(event = {}) {
   const reasons = Array.isArray(event?.reasons) ? event.reasons : [];
   return [...reasons, event?.note || '', event?.description || '']
@@ -136,8 +105,7 @@ const newEventText = `function eventText(event = {}) {
     .join(' ')
     .toLowerCase();
 }`;
-if (!integrity.includes(oldEventText)) throw new Error('v109.5.5 V107 eventText target missing');
-integrity = integrity.replace(oldEventText, newEventText);
+integrity = replaceFunction(integrity, 'eventText', 'isDeliveryEvent', newEventText);
 write(integrityPath, integrity);
 
 writeJson('package.json', pkg => {
