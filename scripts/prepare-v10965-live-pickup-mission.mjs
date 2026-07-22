@@ -23,16 +23,19 @@ if (automaticLabelIndex >= 0) {
   const automaticEnd = automaticEndMarker + 3;
   const structuralPatch = [
     "if (!guide.includes(\"step.kind === 'route' ? routeStepCompleteV10965\")) {",
-    "  const completionPatternV10965 = /    const complete = manual[\\s\\S]*?;\\n(?=\\s*return \\{ \\.\\.\\.step, complete,)/;",
-    "  if (!completionPatternV10965.test(guide)) throw new Error('v109.6.5 missing automatic route and arrival progression');",
+    "  const stepsBoundaryV10965 = guide.indexOf('const steps = (guide.steps');",
+    "  const completedBoundaryV10965 = stepsBoundaryV10965 >= 0 ? guide.indexOf('const completed = steps.filter', stepsBoundaryV10965) : -1;",
+    "  const completeStartV10965 = stepsBoundaryV10965 >= 0 ? guide.indexOf('const complete =', stepsBoundaryV10965) : -1;",
+    "  const completeEndV10965 = completeStartV10965 >= 0 ? guide.indexOf(';', completeStartV10965) : -1;",
+    "  if (stepsBoundaryV10965 < 0 || completedBoundaryV10965 < 0 || completeStartV10965 < 0 || completeEndV10965 < 0 || completeEndV10965 > completedBoundaryV10965) throw new Error('v109.6.5 missing automatic route and arrival progression');",
     "  const completionReplacementV10965 = [",
-    "    \"    const complete = manual\",",
+    "    \"const complete = manual\",",
     "    \"      || (step.kind === 'status' ? statusStepComplete(state, guide, step)\",",
     "    \"        : step.kind === 'document' ? documentStepComplete(state, guide, step)\",",
     "    \"          : step.kind === 'route' ? routeStepCompleteV10965(state, guide, step)\",",
     "    \"            : false);\",",
-    "  ].join('\\n');",
-    "  guide = guide.replace(completionPatternV10965, completionReplacementV10965);",
+    "  ].join('\\n    ');",
+    "  guide = guide.slice(0, completeStartV10965) + completionReplacementV10965 + guide.slice(completeEndV10965 + 1);",
     "}",
   ].join('\n');
   source = `${source.slice(0, automaticStart)}${structuralPatch}${source.slice(automaticEnd)}`;
@@ -94,4 +97,4 @@ replaceFunction('documentStepComplete', 'resolveDriverGuideV103', `function docu
 }`);
 
 fs.writeFileSync(guidePath, guide);
-console.log('PASS — v109.6.5 generated strings and structural mission anchors prepared');
+console.log('PASS — v109.6.5 generated strings and resolver-boundary mission anchors prepared');
