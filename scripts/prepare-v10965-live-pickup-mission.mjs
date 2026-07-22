@@ -93,7 +93,9 @@ if (fullMissionLabelIndex >= 0) {
 if (!source.includes("replaceAll('routeStepCompleteV108', 'routeStepCompleteV10965')")) {
   const guideWriteAnchor = 'write(GUIDE_PATH, guide);';
   if (!source.includes(guideWriteAnchor)) throw new Error('v109.6.5 guide write anchor missing');
-  source = source.replace(guideWriteAnchor, "guide = guide.replaceAll('routeStepCompleteV108', 'routeStepCompleteV10965');\nwrite(GUIDE_PATH, guide);");
+  source = source.replace(guideWriteAnchor, "guide = guide.replaceAll('routeStepCompleteV108', 'routeStepCompleteV10965');\nguide = guide.replaceAll('statusStepCompleteV108', 'statusStepComplete');\nwrite(GUIDE_PATH, guide);");
+} else if (!source.includes("replaceAll('statusStepCompleteV108', 'statusStepComplete')")) {
+  source = source.replace("guide = guide.replaceAll('routeStepCompleteV108', 'routeStepCompleteV10965');", "guide = guide.replaceAll('routeStepCompleteV108', 'routeStepCompleteV10965');\nguide = guide.replaceAll('statusStepCompleteV108', 'statusStepComplete');");
 }
 
 fs.writeFileSync(applyPath, source);
@@ -152,4 +154,4 @@ replaceFunction('documentStepComplete', 'resolveDriverGuideV103', `function docu
 }`);
 
 fs.writeFileSync(guidePath, guide);
-console.log('PASS — v109.6.5 generated strings, resolver, Full mission and V108 route alias prepared');
+console.log('PASS — v109.6.5 generated strings, resolver, Full mission and V108 aliases prepared');
