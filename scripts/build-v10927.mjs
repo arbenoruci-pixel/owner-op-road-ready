@@ -41,5 +41,7 @@ run(process.execPath, ['scripts/apply-v10955-inspection-foundation-root-fix.mjs'
 run(process.execPath, ['scripts/verify-v10955-inspection-foundation-root-fix.mjs']);
 run(process.execPath, ['scripts/apply-v10956-fast-quality-strategy.mjs']);
 run(process.execPath, ['scripts/verify-v10956-fast-quality-strategy.mjs']);
+run(process.execPath, ['scripts/apply-v10957-ratecon-classifier.mjs']);
+run(process.execPath, ['scripts/verify-v10957-ratecon-classifier.mjs']);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
