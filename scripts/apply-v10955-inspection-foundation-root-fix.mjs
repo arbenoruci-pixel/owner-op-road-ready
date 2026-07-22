@@ -27,7 +27,19 @@ function replaceFunction(source, name, nextName, replacement) {
 const foundationPath = 'source/src/modules/documents/documentFoundationV105.js';
 let foundation = read(foundationPath);
 
-const newRepair = `function structuredPretripReasonV105(event = {}) {
+const newRepair = `function cleanDeliveryPretripNoteV10955(note = '') {
+  const parts = textV105(note)
+    .split(/\\s*[·•|]\\s*/g)
+    .map(textV105)
+    .filter(Boolean);
+  const hasDelivery = parts.some(part => /delivery|unloading/i.test(part));
+  const hasPretrip = parts.some(part => /pre[- ]?trip|inspection/i.test(part));
+  if (!hasDelivery || !hasPretrip) return textV105(note);
+  const kept = parts.filter(part => !/pre[- ]?trip|inspection/i.test(part));
+  return kept.join(' · ') || 'Delivery / Unloading';
+}
+
+function structuredPretripReasonV105(event = {}) {
   const reasons = Array.isArray(event?.reasons) ? event.reasons : [];
   return reasons.some(reason => /pre[- ]?trip|inspection/i.test(textV105(reason)));
 }
@@ -44,7 +56,7 @@ function repairDeliveryPretripContaminationV105(state = {}) {
   for (const [day, rows] of Object.entries(state.eventsByDay || {})) {
     eventsByDay[day] = (Array.isArray(rows) ? rows : []).map(event => {
       const originalNote = textV105(event?.note || '');
-      const cleaned = cleanDeliveryPretripNoteV105(originalNote);
+      const cleaned = cleanDeliveryPretripNoteV10955(originalNote);
       if (cleaned === originalNote) return event;
 
       changed = true;
@@ -157,6 +169,7 @@ write(legacyVerifier, verify);
 
 if (!foundation.includes('const confirmedPretrip = structuredPretripReasonV105(event)')) throw new Error('v109.5.5 structured PTI guard missing');
 if (!foundation.includes('linkedAutoInspection && !confirmedPretrip')) throw new Error('v109.5.5 delete guard missing');
+if (!foundation.includes('cleanDeliveryPretripNoteV10955')) throw new Error('v109.5.5 self-contained cleanup missing');
 if (!integrity.includes('const reasons = Array.isArray(event?.reasons)')) throw new Error('v109.5.5 V107 reasons support missing');
 
 console.log('PASS — v109.5.5 protects real multi-reason inspection audit records at the v105 deletion source');
