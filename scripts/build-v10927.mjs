@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.6.4: stable iPhone save completion and Rate Con load identity.
+// v109.6.5: live pickup mission progression, BOL linking and Full mission safety.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -62,4 +62,6 @@ run(process.execPath, ['scripts/verify-v10963-quota-safe-document-save.mjs']);
 run(process.execPath, ['scripts/prepare-v10964-save-completion-stability.mjs']);
 run(process.execPath, ['scripts/apply-v10964-save-completion-stability.mjs']);
 run(process.execPath, ['scripts/verify-v10964-save-completion-stability.mjs']);
+run(process.execPath, ['scripts/apply-v10965-live-pickup-mission.mjs']);
+run(process.execPath, ['scripts/verify-v10965-live-pickup-mission.mjs']);
 run('npx', ['next', 'build']);
