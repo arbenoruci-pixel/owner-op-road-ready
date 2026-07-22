@@ -33,6 +33,7 @@ run(process.execPath, ['scripts/apply-v10946-metadata-recertification.mjs']);
 run(process.execPath, ['scripts/apply-v10947-signed-log-stability.mjs']);
 run(process.execPath, ['scripts/apply-v10948-inspection-persistence.mjs']);
 run(process.execPath, ['scripts/apply-v10949-inspection-write-order.mjs']);
-run(process.execPath, ['scripts/apply-v10950-user-confirmed-inspection-repair.mjs']);
+run(process.execPath, ['scripts/apply-v10951-multireason-inspection-root-fix.mjs']);
+run(process.execPath, ['scripts/verify-v10951-multireason-inspection-root-fix.mjs']);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
