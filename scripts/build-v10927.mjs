@@ -37,5 +37,6 @@ run(process.execPath, ['scripts/apply-v10951-multireason-inspection-root-fix.mjs
 run(process.execPath, ['scripts/verify-v10951-multireason-inspection-root-fix.mjs']);
 run(process.execPath, ['scripts/apply-v10952-visible-app-version.mjs']);
 run(process.execPath, ['scripts/apply-v10953-undo-startup-isolation.mjs']);
+run(process.execPath, ['scripts/diagnose-v10953-undo-toast.mjs']);
 run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run('npx', ['next', 'build']);
