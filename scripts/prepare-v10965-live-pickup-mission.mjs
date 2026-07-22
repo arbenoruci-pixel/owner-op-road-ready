@@ -22,30 +22,30 @@ if (automaticLabelIndex >= 0) {
   if (automaticStart < 0 || automaticEndMarker < 0) throw new Error('v109.6.5 automatic progression block boundaries missing');
   const automaticEnd = automaticEndMarker + 3;
   const wrapperPatch = [
-    "if (!guide.includes('resolveDriverGuideV103PreviousV10965')) {",
+    "if (!guide.includes('resolveDriverGuideV103LegacyV10965')) {",
     "  const resolverTokenV10965 = 'export function resolveDriverGuideV103(';",
     "  const resolverIndexV10965 = guide.lastIndexOf(resolverTokenV10965);",
     "  if (resolverIndexV10965 < 0) throw new Error('v109.6.5 missing exported mission resolver');",
-    "  guide = guide.slice(0, resolverIndexV10965) + 'function resolveDriverGuideV103PreviousV10965(' + guide.slice(resolverIndexV10965 + resolverTokenV10965.length);",
+    "  guide = guide.slice(0, resolverIndexV10965) + 'function resolveDriverGuideV103LegacyV10965(' + guide.slice(resolverIndexV10965 + resolverTokenV10965.length);",
     "  guide = guide.trimEnd() + [",
     "    '',",
     "    'export function resolveDriverGuideV103(state = {}, guideInput = null) {',",
-    "    '  const base = resolveDriverGuideV103PreviousV10965(state, guideInput);',",
-    "    '  const guideValue = base?.guide || guideInput || getActiveLoadGuideV103(state);',",
-    "    '  if (!guideValue || !Array.isArray(base?.steps)) return base;',",
-    "    '  const steps = base.steps.map(step => {',",
-    "    '    const complete = Boolean(step.complete)',",
+    "    '  const guideValue = guideInput || getActiveLoadGuideV103(state);',",
+    "    '  if (!guideValue) return { guide:null, steps:[], completed:0, total:0, percent:0, currentStep:null, complete:false };',",
+    "    '  const sourceSteps = arrayV10965(guideValue.steps);',",
+    "    '  const steps = sourceSteps.map(step => {',",
+    "    '    const manual = Boolean(guideValue.manualDone?.[step.id]);',",
+    "    '    const complete = manual',",
     "    \"      || (step.kind === 'status' ? statusStepComplete(state, guideValue, step)\",",
     "    \"        : step.kind === 'document' ? documentStepComplete(state, guideValue, step)\",",
     "    \"          : step.kind === 'route' ? routeStepCompleteV10965(state, guideValue, step)\",",
     "    '            : false);',",
-    "    '    return { ...step, complete };',",
+    "    '    return { ...step, complete, completedAt:guideValue.manualDone?.[step.id] || null };',",
     "    '  });',",
     "    '  const completed = steps.filter(step => step.complete).length;',",
     "    '  const total = steps.length;',",
     "    '  const currentStep = steps.find(step => !step.complete) || null;',",
     "    '  return {',",
-    "    '    ...base,',",
     "    '    guide:guideValue,',",
     "    '    steps,',",
     "    '    completed,',",
@@ -154,4 +154,4 @@ replaceFunction('documentStepComplete', 'resolveDriverGuideV103', `function docu
 }`);
 
 fs.writeFileSync(guidePath, guide);
-console.log('PASS — v109.6.5 generated strings, resolver, Full mission and V108 aliases prepared');
+console.log('PASS — v109.6.5 independent resolver, Full mission and live pickup anchors prepared');
