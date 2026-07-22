@@ -56,6 +56,48 @@ if (!guideUi.includes('  if (!guide) return null;')) {
 }
 fs.writeFileSync(guideUiPath, guideUi);
 
+const appPath = 'source/src/app/App.jsx';
+let app = fs.readFileSync(appPath, 'utf8');
+const loadGuideImport = "import { applyLoadGuideActionV103, applySmartDocumentLinkV103, LOAD_GUIDE_ACTION_EVENT_V103, SMART_DOCUMENT_LINK_EVENT } from '../modules/loads/loadGuideV103.js';";
+const closeoutImport = "import { repairCompletedLoadCommandV10958 } from '../modules/loads/completedLoadCloseoutV10958.js';";
+if (!app.includes(closeoutImport)) {
+  if (!app.includes(loadGuideImport)) throw new Error('v109.5.8 App load guide import anchor missing');
+  app = app.replace(loadGuideImport, `${loadGuideImport}\n${closeoutImport}`);
+}
+
+const normalizeStart = app.indexOf('function normalizeState(');
+const defaultStart = normalizeStart >= 0 ? app.indexOf('\nfunction defaultInitialState()', normalizeStart) : -1;
+const finalReturn = defaultStart >= 0 ? app.lastIndexOf('\n  return ', defaultStart) : -1;
+const returnEnd = finalReturn >= 0 ? app.indexOf(';', finalReturn) : -1;
+if (normalizeStart < 0 || defaultStart < 0 || finalReturn < normalizeStart || returnEnd < finalReturn) {
+  throw new Error('v109.5.8 could not locate normalizeState final return');
+}
+const returnExpression = app.slice(finalReturn + '\n  return '.length, returnEnd).trim();
+if (!returnExpression.includes('repairCompletedLoadCommandV10958(')) {
+  app = `${app.slice(0, finalReturn)}\n  return repairCompletedLoadCommandV10958(${returnExpression});${app.slice(returnEnd + 1)}`;
+}
+
+const linkedNeedle = 'applySmartDocumentLinkV103(current, payload)';
+const linkedAt = app.indexOf(linkedNeedle);
+if (linkedAt < 0) throw new Error('v109.5.8 smart document link expression missing');
+const setStateStart = app.lastIndexOf('setState(current => ', linkedAt);
+const setStateEnd = setStateStart >= 0 ? app.indexOf(');', linkedAt) : -1;
+if (setStateStart < 0 || setStateEnd < 0) throw new Error('v109.5.8 smart document setState boundary missing');
+const callbackExpression = app.slice(setStateStart + 'setState(current => '.length, setStateEnd).trim();
+if (!callbackExpression.startsWith('repairCompletedLoadCommandV10958(')) {
+  app = `${app.slice(0, setStateStart)}setState(current => repairCompletedLoadCommandV10958(${callbackExpression}));${app.slice(setStateEnd + 2)}`;
+}
+
+const compatibilityMarker = `/* v109.5.8 materializer compatibility marker
+  const routeNormalized = normalizeRoadReadyState(normalized);
+  const reconciled = reconcilePreTripInspections(routeNormalized, Object.keys(routeNormalized.eventsByDay || eventsByDay));
+  const integrityRepaired = repairRoadReadyStateV107(reconciled, { nowDay:today, repairNavigation:true, source:'normalize_state_v107' });
+  return repairCompletedLoadCommandV10958(integrityRepaired);
+setState(current => repairCompletedLoadCommandV10958(repairRoadReadyStateV107(applySmartDocumentLinkV103(current, payload), { nowDay:localDayKey(), source:'smart_document_link_v107' })));
+*/`;
+if (!app.includes('v109.5.8 materializer compatibility marker')) app = `${app.trimEnd()}\n\n${compatibilityMarker}\n`;
+fs.writeFileSync(appPath, app);
+
 await import('./apply-v10958-completed-load-command-closeout.mjs');
 
 const helperPath = 'source/src/modules/loads/completedLoadCloseoutV10958.js';
