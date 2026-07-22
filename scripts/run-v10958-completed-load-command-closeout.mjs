@@ -41,6 +41,28 @@ if (activeStart < 0 || roadsideStart < 0) {
 home = `${home.slice(0, activeStart)}  const activeLoad = useMemo(() => activeGuideLoadSummaryV105(state, businessStore) || activeLoadSummary(state, businessStore), [state, businessStore]);\n${home.slice(roadsideStart)}`;
 fs.writeFileSync(homePath, home);
 
+const guideUiPath = 'source/src/modules/loads/DriverLoadGuideV103.jsx';
+let guideUi = fs.readFileSync(guideUiPath, 'utf8');
+const stopPlanStart = guideUi.indexOf('function StopPlan');
+const stopPlanReturn = stopPlanStart >= 0 ? guideUi.indexOf('\n  return (', stopPlanStart) : -1;
+if (stopPlanStart < 0 || stopPlanReturn < 0) {
+  const nearby = stopPlanStart >= 0 ? guideUi.slice(stopPlanStart, stopPlanStart + 900) : 'StopPlan function not found';
+  throw new Error(`v109.5.8 could not normalize mission StopPlan: ${nearby}`);
+}
+guideUi = `${guideUi.slice(0, stopPlanStart)}function StopPlan({ progress }) {
+  const g = progress.guide;${guideUi.slice(stopPlanReturn)}`;
+
+const componentStart = guideUi.indexOf('export default function DriverLoadGuideV103');
+const progressStart = componentStart >= 0 ? guideUi.indexOf('  const progress = useMemo', componentStart) : -1;
+const progressEnd = progressStart >= 0 ? guideUi.indexOf('\n', progressStart) + 1 : -1;
+const modeReturn = progressEnd > 0 ? guideUi.indexOf('  return mode ===', progressEnd) : -1;
+if (componentStart < 0 || progressStart < 0 || progressEnd <= 0 || modeReturn < 0) {
+  const nearby = componentStart >= 0 ? guideUi.slice(componentStart, componentStart + 1100) : 'DriverLoadGuide component not found';
+  throw new Error(`v109.5.8 could not normalize mission render guard: ${nearby}`);
+}
+guideUi = `${guideUi.slice(0, progressEnd)}  if (!guide) return null;\n${guideUi.slice(modeReturn)}`;
+fs.writeFileSync(guideUiPath, guideUi);
+
 await import('./apply-v10958-completed-load-command-closeout.mjs');
 
 const helperPath = 'source/src/modules/loads/completedLoadCloseoutV10958.js';
