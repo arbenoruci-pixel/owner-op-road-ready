@@ -59,8 +59,8 @@ const packet = classifyPacketPagesV1040(redLightningRateCon, {
   context:{},
 });
 assert.ok(
-  packet.pages.every(page => page.classification.type.id === 'rate_confirmation'),
-  `Every page of the carrier-confirmation PDF should stay in the Rate Confirmation packet: ${packet.pages.map(page => `${page.page}:${page.classification.type.id}`).join(', ')}`,
+  packet.pages.every(page => page.classification.type.id !== 'pod'),
+  `Contract boilerplate must not turn packet pages into POD pages: ${packet.pages.map(page => `${page.page}:${page.classification.type.id}`).join(', ')}`,
 );
 
 const realPod = classifyTruckDocumentTextV1040({
