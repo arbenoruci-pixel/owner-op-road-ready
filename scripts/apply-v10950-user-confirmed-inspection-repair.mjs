@@ -11,12 +11,6 @@ function write(path, content) {
   fs.writeFileSync(path, content);
 }
 
-function replaceOnce(source, before, after, label) {
-  if (source.includes(after)) return source;
-  if (!source.includes(before)) throw new Error(`v109.5.0 patch target missing: ${label}`);
-  return source.replace(before, after);
-}
-
 const appTarget = 'source/src/app/App.jsx';
 let app = read(appTarget);
 
@@ -61,15 +55,20 @@ function restoreUserConfirmedHistoricalInspections(state = {}) {
       inspectionChanged = true;
     }
 
-    const nextDayEvents = dayEvents.map(item => item?.id === event.id
-      ? {
-          ...item,
-          inspectionConfirmed:true,
-          inspectionConfirmedAt:item.inspectionConfirmedAt || confirmedAt,
-          inspectionSourceEventId:event.id,
-          userConfirmedHistoricalInspection:true,
-        }
-      : item);
+    const nextDayEvents = dayEvents.map(item => {
+      if (item?.id !== event.id) return item;
+      const markerComplete = item.inspectionConfirmed === true
+        && item.inspectionSourceEventId === event.id
+        && item.userConfirmedHistoricalInspection === true;
+      if (markerComplete) return item;
+      return {
+        ...item,
+        inspectionConfirmed:true,
+        inspectionConfirmedAt:item.inspectionConfirmedAt || confirmedAt,
+        inspectionSourceEventId:event.id,
+        userConfirmedHistoricalInspection:true,
+      };
+    });
     if (nextDayEvents.some((item, index) => item !== dayEvents[index])) {
       if (eventsByDay === state.eventsByDay) eventsByDay = { ...eventsByDay };
       eventsByDay[day] = nextDayEvents;
@@ -96,17 +95,29 @@ if (!app.includes('function restoreUserConfirmedHistoricalInspections')) {
   app = app.replace(loadMarker, repairHelper + loadMarker);
 }
 
-const loadReturnBefore = `      const corrected = applyUserConfirmedHubbardSleeperStopRepair(continuous);
-      return normalizeState(corrected);`;
-const loadReturnAfter = `      const corrected = applyUserConfirmedHubbardSleeperStopRepair(continuous);
-      const withConfirmedHistoricalInspections = restoreUserConfirmedHistoricalInspections(corrected);
-      const normalized = normalizeState(withConfirmedHistoricalInspections);
-      for (const day of USER_CONFIRMED_INSPECTION_DAYS) {
-        const inspection = normalized.inspectionByDay?.[day];
-        if (inspection?.complete) saveInspectionDaySnapshot(day, inspection).catch(() => {});
-      }
-      return normalized;`;
-app = replaceOnce(app, loadReturnBefore, loadReturnAfter, 'startup historical inspection repair');
+if (!app.includes('restoreUserConfirmedHistoricalInspections(corrected)')) {
+  const correctedText = 'const corrected = applyUserConfirmedHubbardSleeperStopRepair(continuous);';
+  const correctedIndex = app.indexOf(correctedText);
+  if (correctedIndex < 0) throw new Error('v109.5.0 corrected-state marker missing');
+  const returnText = 'return normalizeState(corrected);';
+  const returnIndex = app.indexOf(returnText, correctedIndex);
+  if (returnIndex < 0 || returnIndex - correctedIndex > 1200) {
+    throw new Error('v109.5.0 normalize return marker missing');
+  }
+  const lineStart = app.lastIndexOf('\n', correctedIndex) + 1;
+  const indent = app.slice(lineStart, correctedIndex);
+  const replacement = [
+    correctedText,
+    `${indent}const withConfirmedHistoricalInspections = restoreUserConfirmedHistoricalInspections(corrected);`,
+    `${indent}const normalized = normalizeState(withConfirmedHistoricalInspections);`,
+    `${indent}for (const day of USER_CONFIRMED_INSPECTION_DAYS) {`,
+    `${indent}  const inspection = normalized.inspectionByDay?.[day];`,
+    `${indent}  if (inspection?.complete) saveInspectionDaySnapshot(day, inspection).catch(() => {});`,
+    `${indent}}`,
+    `${indent}return normalized;`,
+  ].join('\n');
+  app = `${app.slice(0, correctedIndex)}${replacement}${app.slice(returnIndex + returnText.length)}`;
+}
 write(appTarget, app);
 
 const pkgPath = 'package.json';
