@@ -30,6 +30,17 @@ if (wrapperPattern.test(guide)) {
 }
 fs.writeFileSync(guidePath, guide);
 
+const homePath = 'source/src/modules/home/HomeScreen.jsx';
+let home = fs.readFileSync(homePath, 'utf8');
+const activeStart = home.indexOf('  const activeLoad = useMemo');
+const roadsideStart = activeStart >= 0 ? home.indexOf('  const roadsideDays', activeStart) : -1;
+if (activeStart < 0 || roadsideStart < 0) {
+  const nearby = activeStart >= 0 ? home.slice(activeStart, activeStart + 1000) : 'activeLoad declaration not found';
+  throw new Error(`v109.5.8 could not normalize Home activeLoad declaration: ${nearby}`);
+}
+home = `${home.slice(0, activeStart)}  const activeLoad = useMemo(() => activeGuideLoadSummaryV105(state, businessStore) || activeLoadSummary(state, businessStore), [state, businessStore]);\n${home.slice(roadsideStart)}`;
+fs.writeFileSync(homePath, home);
+
 await import('./apply-v10958-completed-load-command-closeout.mjs');
 
 const helperPath = 'source/src/modules/loads/completedLoadCloseoutV10958.js';
