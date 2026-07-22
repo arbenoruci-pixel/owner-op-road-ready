@@ -62,6 +62,7 @@ run(process.execPath, ['scripts/verify-v10963-quota-safe-document-save.mjs']);
 run(process.execPath, ['scripts/prepare-v10964-save-completion-stability.mjs']);
 run(process.execPath, ['scripts/apply-v10964-save-completion-stability.mjs']);
 run(process.execPath, ['scripts/verify-v10964-save-completion-stability.mjs']);
+run(process.execPath, ['scripts/prepare-v10965-live-pickup-mission.mjs']);
 run(process.execPath, ['scripts/apply-v10965-live-pickup-mission.mjs']);
 run(process.execPath, ['scripts/verify-v10965-live-pickup-mission.mjs']);
 run('npx', ['next', 'build']);
