@@ -62,6 +62,34 @@ if (automaticLabelIndex >= 0) {
   source = `${source.slice(0, automaticStart)}${wrapperPatch}${source.slice(automaticEnd)}`;
 }
 
+const fullMissionLabel = "'Full mission normalized render'";
+const fullMissionLabelIndex = source.indexOf(fullMissionLabel);
+if (fullMissionLabelIndex >= 0) {
+  const fullMissionStart = source.lastIndexOf('guideUi = replaceRequired(', fullMissionLabelIndex);
+  const fullMissionEndMarker = source.indexOf('\n);', fullMissionLabelIndex);
+  if (fullMissionStart < 0 || fullMissionEndMarker < 0) throw new Error('v109.6.5 Full mission block boundaries missing');
+  const fullMissionEnd = fullMissionEndMarker + 3;
+  const fullMissionPatch = [
+    "if (!guideUi.includes('rawGuide = useMemo(() => getActiveLoadGuideV103')) {",
+    "  const exportTokenV10965 = 'export default function DriverLoadGuideV103(';",
+    "  const exportIndexV10965 = guideUi.lastIndexOf(exportTokenV10965);",
+    "  if (exportIndexV10965 < 0) throw new Error('v109.6.5 missing DriverLoadGuide export');",
+    "  const safeExportV10965 = [",
+    "    \"export default function DriverLoadGuideV103({ state, mode = 'compact', onOpen, onBack, onOpenScan }) {\",",
+    "    '  const rawGuide = useMemo(() => getActiveLoadGuideV103(state), [state]);',",
+    "    '  const guide = useMemo(() => normalizeGuideForRenderV10965(rawGuide), [rawGuide]);',",
+    "    '  const progress = useMemo(() => resolveDriverGuideV103(state, guide), [state, guide]);',",
+    "    '  if (!guide || !guide.steps.length) return null;',",
+    "    \"  return mode === 'screen' ? <Full progress={progress} onBack={onBack} onOpenScan={onOpenScan}/> : <Compact progress={progress} onOpen={onOpen} onOpenScan={onOpenScan}/>;\",",
+    "    '}',",
+    "    '',",
+    "  ].join('\\n');",
+    "  guideUi = guideUi.slice(0, exportIndexV10965) + safeExportV10965;",
+    "}",
+  ].join('\n');
+  source = `${source.slice(0, fullMissionStart)}${fullMissionPatch}${source.slice(fullMissionEnd)}`;
+}
+
 fs.writeFileSync(applyPath, source);
 
 const guidePath = 'source/src/modules/loads/loadGuideV103.js';
@@ -118,4 +146,4 @@ replaceFunction('documentStepComplete', 'resolveDriverGuideV103', `function docu
 }`);
 
 fs.writeFileSync(guidePath, guide);
-console.log('PASS — v109.6.5 generated strings and resolver wrapper anchors prepared');
+console.log('PASS — v109.6.5 generated strings, resolver and Full mission anchors prepared');
