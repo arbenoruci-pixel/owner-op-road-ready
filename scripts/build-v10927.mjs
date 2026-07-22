@@ -51,4 +51,6 @@ run(process.execPath, ['scripts/apply-v10959-isolated-document-engines.mjs']);
 run(process.execPath, ['scripts/verify-v10959-isolated-document-engines.mjs']);
 run(process.execPath, ['scripts/apply-v10960-iphone-force-update.mjs']);
 run(process.execPath, ['scripts/verify-v10960-iphone-force-update.mjs']);
+run(process.execPath, ['scripts/apply-v10961-ratecon-engine-v11.mjs']);
+run(process.execPath, ['scripts/verify-v10961-ratecon-engine-v11.mjs']);
 run('npx', ['next', 'build']);
