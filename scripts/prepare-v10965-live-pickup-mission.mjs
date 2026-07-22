@@ -68,5 +68,9 @@ replaceFunction('documentStepComplete', 'resolveDriverGuideV103', `function docu
   });
 }`);
 
+const resolverPattern = /(const steps = \(guide\.steps \|\| \[\]\)\.map\(step => \{\n\s*const manual = !!guide\.manualDone\?\.\[step\.id\];\n)\s*const complete =[\s\S]*?;\n(\s*return \{ \.\.\.step, complete, completedAt:guide\.manualDone\?\.\[step\.id\] \|\| null \};)/;
+if (!resolverPattern.test(guide)) throw new Error('v109.6.5 prepare could not locate resolver completion expression');
+guide = guide.replace(resolverPattern, `$1    const complete = manual || (step.kind === 'status' ? statusStepComplete(state, step) : step.kind === 'document' ? documentStepComplete(state, guide, step) : false);\n$2`);
+
 fs.writeFileSync(guidePath, guide);
-console.log('PASS — v109.6.5 generated strings and mission function anchors prepared');
+console.log('PASS — v109.6.5 generated strings, mission functions and resolver anchor prepared');
