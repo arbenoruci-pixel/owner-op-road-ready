@@ -25,11 +25,18 @@ if (!home.includes(versionImport)) {
   if (!home.includes(businessImport)) throw new Error('v109.5.2 HomeScreen import marker missing');
   home = home.replace(businessImport, `${businessImport}\n${versionImport}`);
 }
-const oldBrand = '<div><b>Road Ready</b><em>Owner-Op Command Center</em></div>';
-const newBrand = '<div><b>Road Ready</b><em>Owner-Op Command Center · App v{CURRENT_APP_VERSION}</em></div>';
-if (!home.includes(newBrand)) {
-  if (!home.includes(oldBrand)) throw new Error('v109.5.2 HomeScreen brand marker missing');
-  home = home.replace(oldBrand, newBrand);
+
+const visibleBrand = '<div><b>Road Ready</b><em>{modeLabel(operatorProfile.mode)} · App v{CURRENT_APP_VERSION}</em></div>';
+if (!home.includes('App v{CURRENT_APP_VERSION}')) {
+  const modularBrand = '<div><b>Road Ready</b><em>{modeLabel(operatorProfile.mode)}</em></div>';
+  const baseBrand = '<div><b>Road Ready</b><em>Owner-Op Command Center</em></div>';
+  if (home.includes(modularBrand)) {
+    home = home.replace(modularBrand, visibleBrand);
+  } else if (home.includes(baseBrand)) {
+    home = home.replace(baseBrand, '<div><b>Road Ready</b><em>Owner-Op Command Center · App v{CURRENT_APP_VERSION}</em></div>');
+  } else {
+    throw new Error('v109.5.2 HomeScreen brand marker missing');
+  }
 }
 write(homePath, home);
 
@@ -92,7 +99,7 @@ verify = verify.replace(/assert\.equal\(release\.build, '[^']+'\);/, `assert.equ
 verify = verify.replace(/assert\.equal\(packageJson\.version, '[^']+'\);/, `assert.equal(packageJson.version, '${VERSION}');`);
 write(verifyPath, verify);
 
-if (!home.includes('Owner-Op Command Center · App v{CURRENT_APP_VERSION}')) throw new Error('v109.5.2 Home version label missing');
+if (!home.includes('App v{CURRENT_APP_VERSION}')) throw new Error('v109.5.2 Home version label missing');
 if (!tools.includes('Log Tools · v{CURRENT_APP_VERSION}')) throw new Error('v109.5.2 Tools version label missing');
 
 console.log('PASS — v109.5.2 app version is visible on Home and Log Tools');
