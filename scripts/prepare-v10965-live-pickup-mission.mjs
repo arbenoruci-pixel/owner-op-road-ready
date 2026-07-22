@@ -21,24 +21,45 @@ if (automaticLabelIndex >= 0) {
   const automaticEndMarker = source.indexOf('\n);', automaticLabelIndex);
   if (automaticStart < 0 || automaticEndMarker < 0) throw new Error('v109.6.5 automatic progression block boundaries missing');
   const automaticEnd = automaticEndMarker + 3;
-  const structuralPatch = [
-    "if (!guide.includes(\"step.kind === 'route' ? routeStepCompleteV10965\")) {",
-    "  const stepsBoundaryV10965 = guide.indexOf('const steps = (guide.steps');",
-    "  const completedBoundaryV10965 = stepsBoundaryV10965 >= 0 ? guide.indexOf('const completed = steps.filter', stepsBoundaryV10965) : -1;",
-    "  const completeStartV10965 = stepsBoundaryV10965 >= 0 ? guide.indexOf('const complete =', stepsBoundaryV10965) : -1;",
-    "  const completeEndV10965 = completeStartV10965 >= 0 ? guide.indexOf(';', completeStartV10965) : -1;",
-    "  if (stepsBoundaryV10965 < 0 || completedBoundaryV10965 < 0 || completeStartV10965 < 0 || completeEndV10965 < 0 || completeEndV10965 > completedBoundaryV10965) throw new Error('v109.6.5 missing automatic route and arrival progression');",
-    "  const completionReplacementV10965 = [",
-    "    \"const complete = manual\",",
-    "    \"      || (step.kind === 'status' ? statusStepComplete(state, guide, step)\",",
-    "    \"        : step.kind === 'document' ? documentStepComplete(state, guide, step)\",",
-    "    \"          : step.kind === 'route' ? routeStepCompleteV10965(state, guide, step)\",",
-    "    \"            : false);\",",
-    "  ].join('\\n    ');",
-    "  guide = guide.slice(0, completeStartV10965) + completionReplacementV10965 + guide.slice(completeEndV10965 + 1);",
+  const wrapperPatch = [
+    "if (!guide.includes('resolveDriverGuideV103PreviousV10965')) {",
+    "  const resolverTokenV10965 = 'export function resolveDriverGuideV103(';",
+    "  const resolverIndexV10965 = guide.lastIndexOf(resolverTokenV10965);",
+    "  if (resolverIndexV10965 < 0) throw new Error('v109.6.5 missing exported mission resolver');",
+    "  guide = guide.slice(0, resolverIndexV10965) + 'function resolveDriverGuideV103PreviousV10965(' + guide.slice(resolverIndexV10965 + resolverTokenV10965.length);",
+    "  guide = guide.trimEnd() + [",
+    "    '',",
+    "    'export function resolveDriverGuideV103(state = {}, guideInput = null) {',",
+    "    '  const base = resolveDriverGuideV103PreviousV10965(state, guideInput);',",
+    "    '  const guideValue = base?.guide || guideInput || getActiveLoadGuideV103(state);',",
+    "    '  if (!guideValue || !Array.isArray(base?.steps)) return base;',",
+    "    '  const steps = base.steps.map(step => {',",
+    "    '    const complete = Boolean(step.complete)',",
+    "    \"      || (step.kind === 'status' ? statusStepComplete(state, guideValue, step)\",",
+    "    \"        : step.kind === 'document' ? documentStepComplete(state, guideValue, step)\",",
+    "    \"          : step.kind === 'route' ? routeStepCompleteV10965(state, guideValue, step)\",",
+    "    '            : false);',",
+    "    '    return { ...step, complete };',",
+    "    '  });',",
+    "    '  const completed = steps.filter(step => step.complete).length;',",
+    "    '  const total = steps.length;',",
+    "    '  const currentStep = steps.find(step => !step.complete) || null;',",
+    "    '  return {',",
+    "    '    ...base,',",
+    "    '    guide:guideValue,',",
+    "    '    steps,',",
+    "    '    completed,',",
+    "    '    total,',",
+    "    '    percent:total ? Math.round((completed / total) * 100) : 0,',",
+    "    '    currentStep,',",
+    "    '    complete:total > 0 && completed === total,',",
+    "    '  };',",
+    "    '}',",
+    "    '',",
+    "  ].join('\\n');",
     "}",
   ].join('\n');
-  source = `${source.slice(0, automaticStart)}${structuralPatch}${source.slice(automaticEnd)}`;
+  source = `${source.slice(0, automaticStart)}${wrapperPatch}${source.slice(automaticEnd)}`;
 }
 
 fs.writeFileSync(applyPath, source);
@@ -97,4 +118,4 @@ replaceFunction('documentStepComplete', 'resolveDriverGuideV103', `function docu
 }`);
 
 fs.writeFileSync(guidePath, guide);
-console.log('PASS — v109.6.5 generated strings and resolver-boundary mission anchors prepared');
+console.log('PASS — v109.6.5 generated strings and resolver wrapper anchors prepared');
