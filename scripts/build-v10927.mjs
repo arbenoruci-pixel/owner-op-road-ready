@@ -47,4 +47,6 @@ run(process.execPath, ['scripts/apply-v10957-ratecon-classifier.mjs']);
 run(process.execPath, ['scripts/verify-v10957-ratecon-classifier.mjs']);
 run(process.execPath, ['scripts/run-v10958-completed-load-command-closeout.mjs']);
 run(process.execPath, ['scripts/verify-v10958-completed-load-command-closeout.mjs']);
+run(process.execPath, ['scripts/apply-v10959-isolated-document-engines.mjs']);
+run(process.execPath, ['scripts/verify-v10959-isolated-document-engines.mjs']);
 run('npx', ['next', 'build']);
