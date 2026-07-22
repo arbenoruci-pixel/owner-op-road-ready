@@ -45,4 +45,6 @@ run(process.execPath, ['scripts/verify-v10943-auto-upright.mjs']);
 run(process.execPath, ['scripts/prepare-v10957-pod-anchor.mjs']);
 run(process.execPath, ['scripts/apply-v10957-ratecon-classifier.mjs']);
 run(process.execPath, ['scripts/verify-v10957-ratecon-classifier.mjs']);
+run(process.execPath, ['scripts/run-v10958-completed-load-command-closeout.mjs']);
+run(process.execPath, ['scripts/verify-v10958-completed-load-command-closeout.mjs']);
 run('npx', ['next', 'build']);
