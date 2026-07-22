@@ -46,7 +46,8 @@ console.log(`UNDO_DIAGNOSTIC_COUNT=${matches.length}`);
 console.log('UNDO_DIAGNOSTIC_END');
 
 const appPath = 'source/src/app/App.jsx';
-const appLines = fs.readFileSync(appPath, 'utf8').split(/\r?\n/);
+const appText = fs.readFileSync(appPath, 'utf8');
+const appLines = appText.split(/\r?\n/);
 console.log('STARTUP_EFFECT_DIAGNOSTIC_BEGIN');
 for (let i = 0; i < appLines.length; i += 1) {
   if (!/\b(?:React\.)?useEffect\s*\(\s*\(\)\s*=>\s*\{/.test(appLines[i])) continue;
@@ -68,3 +69,51 @@ for (let i = 0; i < appLines.length; i += 1) {
   }
 }
 console.log('STARTUP_EFFECT_DIAGNOSTIC_END');
+
+function functionBlock(name, nextName = '') {
+  const start = appText.indexOf(`function ${name}`);
+  if (start < 0) return `FUNCTION_MISSING ${name}`;
+  let end = nextName ? appText.indexOf(`\n\nfunction ${nextName}`, start) : -1;
+  if (end < 0) {
+    let depth = 0;
+    let opened = false;
+    for (let i = start; i < appText.length; i += 1) {
+      const ch = appText[i];
+      if (ch === '{') { depth += 1; opened = true; }
+      else if (ch === '}') {
+        depth -= 1;
+        if (opened && depth === 0) { end = i + 1; break; }
+      }
+    }
+  }
+  return appText.slice(start, end > start ? end : Math.min(appText.length, start + 5000));
+}
+
+console.log('INSPECTION_FUNCTIONS_BEGIN');
+const functions = [
+  ['inspectionActivityText','preTripEventForDay'],
+  ['preTripEventForDay','reconcilePreTripInspectionForDay'],
+  ['reconcilePreTripInspectionForDay','reconcilePreTripInspections'],
+  ['reconcilePreTripInspections','isReasonOnlyInspectionChange'],
+  ['inspectionFromPreTripEvent','isAutoPreTripInspection'],
+  ['isAutoPreTripInspection','normalizeState'],
+  ['mergeDurableInspectionSnapshots','loadInitial'],
+  ['loadInitial','App'],
+  ['saveInspection','saveManualMilesForDay'],
+];
+for (const [name,next] of functions) {
+  const block = functionBlock(name,next);
+  console.log(`FUNCTION_${name}_BEGIN`);
+  console.log(block.slice(0, 12000));
+  console.log(`FUNCTION_${name}_END`);
+}
+console.log('INSPECTION_FUNCTIONS_END');
+
+console.log('INSPECTION_OCCURRENCES_BEGIN');
+for (let i = 0; i < appLines.length; i += 1) {
+  const line = appLines[i];
+  if (/inspectionByDay|saveInspectionDaySnapshot|loadInspectionDaySnapshots|inspectionConfirmed|reconcilePreTripInspections/.test(line)) {
+    console.log(`${i + 1}: ${line.trim().slice(0, 1000)}`);
+  }
+}
+console.log('INSPECTION_OCCURRENCES_END');
