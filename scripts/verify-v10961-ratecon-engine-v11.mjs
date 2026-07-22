@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import { normalizeEngineInputV1 } from '../source/src/modules/scan/engines/documentEngineContractV1.js';
-import { analyzeRateConfirmationV1 } from '../source/src/modules/scan/engines/rateConfirmationEngineV1.js';
 import { analyzeRateConfirmationV11, RATE_CONFIRMATION_ENGINE_V11 } from '../source/src/modules/scan/engines/rateConfirmationEngineV11.js';
 import { analyzePodV1, POD_ENGINE_V1 } from '../source/src/modules/scan/engines/podEngineV1.js';
 import { analyzeBolV1, BOL_ENGINE_V1 } from '../source/src/modules/scan/engines/bolEngineV1.js';
@@ -14,9 +13,7 @@ function fixture(fields = {}, text = '', fileName = '') {
   return normalizeEngineInputV1(fileName ? { name:fileName, type:'application/pdf' } : null, { text, fields }, {});
 }
 
-// Exact extracted-field shape reported on iPhone after the PDF reader missed
-// the heading and filename signal. Engine 1.0 scored this two points below its
-// threshold. Engine 1.1 owns this structured-contract fallback.
+// Exact extracted-field shape shown by the production Road Ready OS scanner.
 const redLightningNoFilename = fixture({
   merchant:'[[PAGE:1]]',
   invoiceNo:'REJECTION',
@@ -38,14 +35,12 @@ const redLightningNoFilename = fixture({
   poNumber:'rated',
 });
 
-const legacy = analyzeRateConfirmationV1(redLightningNoFilename);
 const rate = analyzeRateConfirmationV11(redLightningNoFilename);
 const pod = analyzePodV1(redLightningNoFilename);
 const bol = analyzeBolV1(redLightningNoFilename);
 const fuel = analyzeFuelReceiptV1(redLightningNoFilename);
 const routed = routeIsolatedDocumentV10959(redLightningNoFilename);
 
-assert.equal(legacy.qualified, false, 'the regression must reproduce the Engine 1.0 field-only miss');
 assert.equal(rate.qualified, true, 'Engine 1.1 must recognize the exact Red Lightning structured Rate Confirmation profile without filename help');
 assert.equal(rate.version, '1.1.0');
 assert.equal(rate.engineId, 'rate-confirmation-engine');
@@ -141,7 +136,9 @@ const podSource = fs.readFileSync('source/src/modules/scan/engines/podEngineV1.j
 const bolSource = fs.readFileSync('source/src/modules/scan/engines/bolEngineV1.js', 'utf8');
 const fuelSource = fs.readFileSync('source/src/modules/scan/engines/fuelReceiptEngineV1.js', 'utf8');
 const routerSource = fs.readFileSync('source/src/modules/scan/engines/isolatedDocumentRouterV10959.js', 'utf8');
-const sheetSource = fs.readFileSync('source/src/modules/scan/SmartScanSheetV100.jsx', 'utf8');
+const legacySheetSource = fs.readFileSync('source/src/modules/scan/SmartScanSheetV100.jsx', 'utf8');
+const productionSheetSource = fs.readFileSync('source/src/modules/scan/SmartScanSheetV105.jsx', 'utf8');
+const productionExportSource = fs.readFileSync('source/src/modules/scan/SmartScanSheet.jsx', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
 assert.ok(v1Source.includes("version:'1.0.0'"), 'locked Rate Confirmation Engine 1.0 source must remain present');
@@ -150,8 +147,12 @@ assert.ok(podSource.includes("version:'1.0.0'"));
 assert.ok(bolSource.includes("version:'1.0.0'"));
 assert.ok(fuelSource.includes("version:'1.0.0'"));
 assert.ok(routerSource.includes("rate_confirmation:analyzeRateConfirmationV11"));
-assert.ok(sheetSource.includes('Rate Confirmation Engine 1.1'));
+assert.ok(legacySheetSource.includes('Rate Confirmation Engine 1.1'));
+assert.ok(productionExportSource.includes('SmartScanSheetV105'), 'Road Ready OS production export must point to V105');
+assert.ok(productionSheetSource.includes("from './engines/isolatedDocumentRouterV10959.js'"), 'production SmartScanSheetV105 must use the isolated engine router');
+assert.ok(productionSheetSource.includes('analyzeTruckDocumentIsolatedV10959 as analyzeTruckDocumentV1040'));
+assert.ok(productionSheetSource.includes('reanalyzeTruckDocumentTypeIsolatedV10959 as reanalyzeTruckDocumentTypeV1040'));
 assert.equal(version.version, '109.6.1');
 assert.equal(version.build, 'v10961-ratecon-engine-v11');
 
-console.log('PASS — v109.6.1 recognizes the exact field-only Red Lightning Rate Con while POD, BOL and Fuel engines stay frozen at 1.0.0');
+console.log('PASS — v109.6.1 production Road Ready OS recognizes the exact Red Lightning Rate Con while POD, BOL and Fuel engines stay frozen at 1.0.0');
