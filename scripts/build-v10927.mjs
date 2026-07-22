@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
+// v109.6.1: production SmartScanSheetV105 uses the isolated document router.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
