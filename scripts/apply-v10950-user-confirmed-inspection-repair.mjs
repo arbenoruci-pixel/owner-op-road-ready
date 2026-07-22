@@ -14,7 +14,7 @@ function write(path, content) {
 const appTarget = 'source/src/app/App.jsx';
 let app = read(appTarget);
 
-const loadMarker = 'async function loadInitial() {';
+const normalizeMarker = 'function normalizeState(s) {';
 const repairHelper = `const USER_CONFIRMED_INSPECTION_DAYS = ['2026-07-15', '2026-07-16', '2026-07-17', '2026-07-18'];
 
 function restoreUserConfirmedHistoricalInspections(state = {}) {
@@ -53,6 +53,7 @@ function restoreUserConfirmedHistoricalInspections(state = {}) {
     if (JSON.stringify(previous) !== JSON.stringify(repaired)) {
       inspectionByDay[day] = repaired;
       inspectionChanged = true;
+      if (typeof window !== 'undefined') saveInspectionDaySnapshot(day, repaired).catch(() => {});
     }
 
     const nextDayEvents = dayEvents.map(item => {
@@ -91,32 +92,15 @@ function restoreUserConfirmedHistoricalInspections(state = {}) {
 
 `;
 if (!app.includes('function restoreUserConfirmedHistoricalInspections')) {
-  if (!app.includes(loadMarker)) throw new Error('v109.5.0 loadInitial marker missing');
-  app = app.replace(loadMarker, repairHelper + loadMarker);
+  if (!app.includes(normalizeMarker)) throw new Error('v109.5.0 normalizeState marker missing');
+  app = app.replace(normalizeMarker, repairHelper + normalizeMarker);
 }
 
-if (!app.includes('restoreUserConfirmedHistoricalInspections(corrected)')) {
-  const correctedText = 'const corrected = applyUserConfirmedHubbardSleeperStopRepair(continuous);';
-  const correctedIndex = app.indexOf(correctedText);
-  if (correctedIndex < 0) throw new Error('v109.5.0 corrected-state marker missing');
-  const returnText = 'return normalizeState(corrected);';
-  const returnIndex = app.indexOf(returnText, correctedIndex);
-  if (returnIndex < 0 || returnIndex - correctedIndex > 1200) {
-    throw new Error('v109.5.0 normalize return marker missing');
-  }
-  const lineStart = app.lastIndexOf('\n', correctedIndex) + 1;
-  const indent = app.slice(lineStart, correctedIndex);
-  const replacement = [
-    correctedText,
-    `${indent}const withConfirmedHistoricalInspections = restoreUserConfirmedHistoricalInspections(corrected);`,
-    `${indent}const normalized = normalizeState(withConfirmedHistoricalInspections);`,
-    `${indent}for (const day of USER_CONFIRMED_INSPECTION_DAYS) {`,
-    `${indent}  const inspection = normalized.inspectionByDay?.[day];`,
-    `${indent}  if (inspection?.complete) saveInspectionDaySnapshot(day, inspection).catch(() => {});`,
-    `${indent}}`,
-    `${indent}return normalized;`,
-  ].join('\n');
-  app = `${app.slice(0, correctedIndex)}${replacement}${app.slice(returnIndex + returnText.length)}`;
+const normalizePatched = `function normalizeState(s) {
+  s = restoreUserConfirmedHistoricalInspections(s);`;
+if (!app.includes(normalizePatched)) {
+  if (!app.includes(normalizeMarker)) throw new Error('v109.5.0 normalizeState patch target missing');
+  app = app.replace(normalizeMarker, normalizePatched);
 }
 write(appTarget, app);
 
@@ -145,7 +129,7 @@ write('public/app-version.json', JSON.stringify({
   force:true,
   notes:[
     'Restores completed inspection records for July 15–18 from the signed log and exact ON DUTY Pre-trip event.',
-    'Applies the repair on every startup so those four confirmed sheets cannot return blank.',
+    'Runs during every state normalization so those four confirmed sheets cannot return blank after app close or reload.',
     'Writes each restored inspection to the independent per-day durable snapshot store.',
     'Does not change duty times, duty statuses, GPS, signatures, routes, BOLs or PODs.'
   ]
@@ -173,7 +157,7 @@ write(verifyTarget, verify);
 for (const day of ['2026-07-15', '2026-07-16', '2026-07-17', '2026-07-18']) {
   if (!app.includes(`'${day}'`)) throw new Error(`v109.5.0 missing repair day ${day}`);
 }
-if (!app.includes('restoreUserConfirmedHistoricalInspections(corrected)')) throw new Error('v109.5.0 startup repair missing');
-if (!app.includes('saveInspectionDaySnapshot(day, inspection)')) throw new Error('v109.5.0 durable inspection write missing');
+if (!app.includes('s = restoreUserConfirmedHistoricalInspections(s);')) throw new Error('v109.5.0 normalize repair hook missing');
+if (!app.includes('saveInspectionDaySnapshot(day, repaired)')) throw new Error('v109.5.0 durable inspection write missing');
 
-console.log('PASS — v109.5.0 user-confirmed July 15–18 inspections are restored on every startup');
+console.log('PASS — v109.5.0 user-confirmed July 15–18 inspections are restored on every normalization');
