@@ -90,6 +90,12 @@ if (fullMissionLabelIndex >= 0) {
   source = `${source.slice(0, fullMissionStart)}${fullMissionPatch}${source.slice(fullMissionEnd)}`;
 }
 
+if (!source.includes("replaceAll('routeStepCompleteV108', 'routeStepCompleteV10965')")) {
+  const guideWriteAnchor = 'write(GUIDE_PATH, guide);';
+  if (!source.includes(guideWriteAnchor)) throw new Error('v109.6.5 guide write anchor missing');
+  source = source.replace(guideWriteAnchor, "guide = guide.replaceAll('routeStepCompleteV108', 'routeStepCompleteV10965');\nwrite(GUIDE_PATH, guide);");
+}
+
 fs.writeFileSync(applyPath, source);
 
 const guidePath = 'source/src/modules/loads/loadGuideV103.js';
@@ -146,4 +152,4 @@ replaceFunction('documentStepComplete', 'resolveDriverGuideV103', `function docu
 }`);
 
 fs.writeFileSync(guidePath, guide);
-console.log('PASS — v109.6.5 generated strings, resolver and Full mission anchors prepared');
+console.log('PASS — v109.6.5 generated strings, resolver, Full mission and V108 route alias prepared');
