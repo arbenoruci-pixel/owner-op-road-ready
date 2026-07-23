@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.6.5: live pickup mission progression, BOL linking and Full mission safety.
+// v109.6.6: no-reload Full Mission shell and network-authoritative app chunks.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -65,4 +65,6 @@ run(process.execPath, ['scripts/verify-v10964-save-completion-stability.mjs']);
 run(process.execPath, ['scripts/prepare-v10965-live-pickup-mission.mjs']);
 run(process.execPath, ['scripts/apply-v10965-live-pickup-mission.mjs']);
 run(process.execPath, ['scripts/verify-v10965-live-pickup-mission.mjs']);
+run(process.execPath, ['scripts/apply-v10966-mission-no-reload.mjs']);
+run(process.execPath, ['scripts/verify-v10966-mission-no-reload.mjs']);
 run('npx', ['next', 'build']);
