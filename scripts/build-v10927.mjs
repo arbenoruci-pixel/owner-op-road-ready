@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.6.6: no-reload Full Mission shell and network-authoritative app chunks.
+// v109.6.7: editable daily mileage route segments.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -67,4 +67,6 @@ run(process.execPath, ['scripts/apply-v10965-live-pickup-mission.mjs']);
 run(process.execPath, ['scripts/verify-v10965-live-pickup-mission.mjs']);
 run(process.execPath, ['scripts/apply-v10966-mission-no-reload.mjs']);
 run(process.execPath, ['scripts/verify-v10966-mission-no-reload.mjs']);
+run(process.execPath, ['scripts/apply-v10967-mileage-segment-editor.mjs']);
+run(process.execPath, ['scripts/verify-v10967-mileage-segment-editor.mjs']);
 run('npx', ['next', 'build']);
