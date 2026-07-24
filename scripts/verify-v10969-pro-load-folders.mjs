@@ -4,10 +4,12 @@ import { buildLoadFoldersV10969 } from '../source/src/modules/owneros/loadFolder
 
 const screen=fs.readFileSync('source/src/modules/owneros/OwnerOperatorOSV102.jsx','utf8');
 const component=fs.readFileSync('source/src/modules/owneros/LoadFoldersV10969.jsx','utf8');
+const engine=fs.readFileSync('source/src/modules/owneros/loadFolderEngineV10969.js','utf8');
 const css=fs.readFileSync('source/src/modules/owneros/loadFoldersV10969.css','utf8');
 assert.ok(screen.includes("import LoadFoldersV10969 from './LoadFoldersV10969.jsx'"));
 assert.ok(screen.includes('<LoadFoldersV10969 loads={loads}'));
-for(const token of ['LOAD FOLDER','DELIVERY PROOF','Supporting Logbook','Daily Driving Miles','Continue to billing','Add POD']) assert.ok(component.includes(token),`missing ${token}`);
+for(const token of ['LOAD FOLDER','DELIVERY PROOF','Continue to billing','Add POD','Open supporting logbook']) assert.ok(component.includes(token),`missing ${token}`);
+for(const token of ['Supporting Logbook','Daily Driving Miles','Fuel Receipt','Proof of Delivery']) assert.ok(engine.includes(token),`missing engine ${token}`);
 for(const token of ['.load-folder-grid-v10969','.load-folder-alert-v10969','.load-folder-stops-v10969','.load-folder-actions-v10969']) assert.ok(css.includes(token),`missing css ${token}`);
 
 const state={
