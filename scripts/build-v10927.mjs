@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.6.7: editable daily mileage route segments.
+// v109.6.8: POD save crash isolation.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -69,4 +69,6 @@ run(process.execPath, ['scripts/apply-v10966-mission-no-reload.mjs']);
 run(process.execPath, ['scripts/verify-v10966-mission-no-reload.mjs']);
 run(process.execPath, ['scripts/apply-v10967-mileage-segment-editor.mjs']);
 run(process.execPath, ['scripts/verify-v10967-mileage-segment-editor.mjs']);
+run(process.execPath, ['scripts/apply-v10968-pod-save-crash-fix.mjs']);
+run(process.execPath, ['scripts/verify-v10968-pod-save-crash-fix.mjs']);
 run('npx', ['next', 'build']);
