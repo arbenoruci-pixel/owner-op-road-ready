@@ -10,6 +10,16 @@ Each imported document follows one stable contract:
 
 Readers receive a document input and return data. They do not save files or change application state.
 
+## Example
+
+A Rate Confirmation import uses:
+
+```text
+scanner-core -> document-pipeline -> rate-confirmation-reader -> records-vault
+```
+
+Improving rate extraction changes only `document-readers/rate-confirmation/**`. The POD, BOL, Scanner, Logbook and Vault implementations remain unchanged.
+
 ## Adding a new reader
 
 Create:
