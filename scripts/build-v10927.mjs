@@ -71,5 +71,6 @@ run(process.execPath, ['scripts/apply-v10967-mileage-segment-editor.mjs']);
 run(process.execPath, ['scripts/verify-v10967-mileage-segment-editor.mjs']);
 run(process.execPath, ['scripts/apply-v10968-pod-save-crash-fix.mjs']);
 run(process.execPath, ['scripts/verify-v10968-pod-save-crash-fix.mjs']);
-run(process.execPath, ['scripts/inspect-v10969-load-folder-target.mjs']);
+run(process.execPath, ['scripts/apply-v10969-pro-load-folders.mjs']);
+run(process.execPath, ['scripts/verify-v10969-pro-load-folders.mjs']);
 run('npx', ['next', 'build']);
