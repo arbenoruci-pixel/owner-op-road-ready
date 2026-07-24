@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "modules": {
+    "scanner-core": {
+      "owns": ["capture", "crop", "perspective", "image-enhancement"],
+      "cannotOwn": ["classification", "OCR-fields", "storage", "logbook"]
+    },
+    "document-pipeline": {
+      "owns": ["document-contracts", "reader-registry", "routing"],
+      "cannotOwn": ["reader-specific-fields", "storage", "logbook"]
+    },
+    "rate-confirmation-reader": {
+      "owns": ["rate-confirmation-fields"],
+      "cannotOwn": ["POD-fields", "BOL-fields", "scanner", "storage", "logbook"]
+    },
+    "bol-reader": {
+      "owns": ["BOL-fields"],
+      "cannotOwn": ["POD-fields", "rate-confirmation-fields", "scanner", "storage", "logbook"]
+    },
+    "pod-reader": {
+      "owns": ["POD-fields"],
+      "cannotOwn": ["BOL-fields", "rate-confirmation-fields", "scanner", "storage", "logbook"]
+    },
+    "fuel-receipt-reader": {
+      "owns": ["fuel-receipt-fields"],
+      "cannotOwn": ["load-document-fields", "scanner", "storage", "logbook"]
+    },
+    "records-vault": {
+      "owns": ["files", "metadata", "weekly-records", "exports", "imports"],
+      "cannotOwn": ["OCR", "scanner", "logbook-events"]
+    },
+    "logbook": {
+      "owns": ["duty-events", "certifications", "HOS-source-data"],
+      "cannotOwn": ["document-bytes", "OCR", "scanner"]
+    }
+  }
+}
