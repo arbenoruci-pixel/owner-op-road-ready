@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.6.8: POD save crash isolation.
+// v109.6.9: professional load folders.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -71,4 +71,7 @@ run(process.execPath, ['scripts/apply-v10967-mileage-segment-editor.mjs']);
 run(process.execPath, ['scripts/verify-v10967-mileage-segment-editor.mjs']);
 run(process.execPath, ['scripts/apply-v10968-pod-save-crash-fix.mjs']);
 run(process.execPath, ['scripts/verify-v10968-pod-save-crash-fix.mjs']);
+run(process.execPath, ['scripts/apply-v10969-pro-load-folders.mjs']);
+run(process.execPath, ['scripts/inspect-v10969-generated-ui.mjs']);
+run(process.execPath, ['scripts/verify-v10969-pro-load-folders.mjs']);
 run('npx', ['next', 'build']);
