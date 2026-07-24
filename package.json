@@ -92,7 +92,8 @@
     "verify:module-boundaries": "node scripts/verify-module-boundaries.mjs",
     "verify:document-reader-isolation": "node scripts/verify-document-reader-isolation.mjs",
     "verify:records-vault": "node scripts/verify-records-vault-foundation.mjs",
-    "verify:architecture": "npm run verify:module-boundaries && npm run verify:document-reader-isolation && npm run verify:records-vault"
+    "verify:redesign": "node scripts/verify-road-ready-redesign.mjs",
+    "verify:architecture": "npm run verify:module-boundaries && npm run verify:document-reader-isolation && npm run verify:records-vault && npm run verify:redesign"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

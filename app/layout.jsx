@@ -2,11 +2,12 @@ import '../source/src/styles.css';
 import '../source/src/command-center.css';
 import '../source/src/setup-scan.css';
 import '../source/src/business-extensions.css';
+import '../source/src/road-ready-2026.css';
 
 export const metadata = {
   title: 'Road Ready Owner-Op Hub',
   applicationName: 'Road Ready',
-  description: 'A modular owner-operator business hub for loads, documents, fuel, settlements, expenses, maintenance, wallet, performance, and optional Road Ready Logbook.',
+  description: 'A modular owner-operator command center for logs, loads, documents, fuel, settlements, maintenance, compliance, and weekly records.',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
@@ -33,7 +34,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: 'cover',
-  themeColor: '#111827'
+  themeColor: '#071019'
 };
 
 export default function RootLayout({ children }) {
