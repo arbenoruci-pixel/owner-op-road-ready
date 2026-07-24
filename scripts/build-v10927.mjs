@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.7.0: mandatory Rate Confirmation risk and deduction review.
+// v109.7.1: iPhone cache and JavaScript chunk handshake recovery.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -76,4 +76,5 @@ run(process.execPath, ['scripts/inspect-v10969-generated-ui.mjs']);
 run(process.execPath, ['scripts/verify-v10969-pro-load-folders.mjs']);
 run(process.execPath, ['scripts/apply-v10970-mandatory-ratecon-risk-review.mjs']);
 run(process.execPath, ['scripts/verify-v10970-mandatory-ratecon-risk-review.mjs']);
+run(process.execPath, ['scripts/apply-v10971-iphone-cache-handshake.mjs']);
 run('npx', ['next', 'build']);
