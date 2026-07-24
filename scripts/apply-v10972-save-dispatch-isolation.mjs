@@ -8,27 +8,6 @@ function read(path){ return fs.readFileSync(path,'utf8'); }
 function write(path,value){ fs.writeFileSync(path,value); }
 
 let sheet=read(SHEET);
-const before=`      setTimeout(() => {
-        // Rate Confirmations intentionally refresh the active load board immediately.
-        // POD/BOL/supporting documents are already durable in the Vault/business store;
-        // do not broadcast a full-app commit while the iPhone save sheet is painting.
-        // The Documents screen reads the persisted store when it opens, so no document
-        // is lost and the save confirmation remains stable on memory-constrained devices.
-        if (activeRateConFieldsV10964) {
-          try { dispatchVaultDocumentCommitV105({ record }); } catch {}
-          try {
-            dispatchSmartDocumentLinkV100({
-              type:meta,
-              typeId:'rate_confirmation',
-              fields:activeRateConFieldsV10964,
-              localDocument:stored.localDocument,
-              analysis:activeRateConAnalysisV10964,
-              record,
-              source:'road_ready_os_v105_ratecon_board_v10964',
-            });
-          } catch {}
-        }
-      }, 30);`;
 const after=`      // The document and load are already durable in the local Vault/business store.
       // Do not dispatch global app-refresh events while the iPhone save confirmation
       // is mounting. The parent shell reloads persisted state after the scanner closes.
@@ -40,8 +19,9 @@ const after=`      // The document and load are already durable in the local Vau
         };
       } catch {}`;
 if(!sheet.includes(after)){
-  if(!sheet.includes(before)) throw new Error('v109.7.2 global save-dispatch block missing');
-  sheet=sheet.replace(before,after);
+  const pattern=/      setTimeout\(\(\) => \{[\s\S]*?dispatchSmartDocumentLinkV100\([\s\S]*?\n\s*\}\n\s*\}, 30\);/;
+  if(!pattern.test(sheet)) throw new Error('v109.7.2 global save-dispatch block missing');
+  sheet=sheet.replace(pattern,after);
 }
 write(SHEET,sheet);
 
