@@ -25,9 +25,7 @@ function docKey(d={}){
   if(hash) return `hash:${hash}`;
   const type=typeOf(d),load=loadOf(d),stop=stopOf(d),ref=referenceOf(d),name=fileNameOf(d),size=Number(d.file_size_bytes||d.fileSizeBytes||0);
   if(type==='rate_confirmation') return `core:${load}|rate_confirmation`;
-  // Professional folder rule: one pickup BOL when no stop is assigned; otherwise one BOL per stop.
   if(type==='bol') return `core:${load}|bol|stop:${stop||0}`;
-  // POD is one logical proof per delivery stop. Use a verified reference only when no stop exists.
   if(type==='pod') return stop?`core:${load}|pod|stop:${stop}`:ref?`core:${load}|pod|${ref}`:`core:${load}|pod|${name}|${size}`;
   if(type==='supporting_packet') return `support:${load}|${name}|${size}`;
   return `other:${load}|${type}|${ref||name}|${size}`;
@@ -50,7 +48,6 @@ function mergeLoad(base={},incoming={}){
 export function reconcileLoadFoldersV10974({loads=[],documents=[],state={},businessStore={}}={}){
   const overlay=readRepairOverlayV10975();
   const aliases=new Map((overlay.loadCorrections||[]).filter(x=>x.aliasFrom&&x.loadNo).map(x=>[upper(x.aliasFrom),upper(x.loadNo)]));
-  // Safe migration for the verified invoice-packet relationship, even when an older local overlay omitted aliasFrom.
   aliases.set('178564','424590-1');
   const assignments=new Map((overlay.documentAssignments||[]).map(x=>[x.documentId,x]));
   const mergedDocs=new Map();
@@ -85,7 +82,6 @@ export function reconcileLoadFoldersV10974({loads=[],documents=[],state={},busin
     const n=upper(load.loadNo),docs=accepted.filter(d=>loadOf(d)===n),explicitMax=Math.max(0,...docs.map(stopOf));
     const deliveries=(load.stops||[]).filter(s=>s.type==='delivery'),existing=deliveries.length;
     const uniquePods=new Set(docs.filter(d=>typeOf(d)==='pod').map(d=>stopOf(d)?`stop:${stopOf(d)}`:referenceOf(d)||fileNameOf(d))).size;
-    // An approved repair stop count is authoritative and must not be inflated by duplicate historical POD records.
     const repairedCount=Number(load.repairDeliveryStops||0);
     const requiredStops=repairedCount>0?repairedCount:Math.max(existing,explicitMax,uniquePods&&existing?uniquePods:0);
     const existingTrimmed=repairedCount>0?[...(load.stops||[]).filter(s=>s.type!=='delivery'),...deliveries.slice(0,repairedCount)]:[...(load.stops||[])];
@@ -93,6 +89,7 @@ export function reconcileLoadFoldersV10974({loads=[],documents=[],state={},busin
     const extra=[];for(let i=currentDeliveries+1;i<=requiredStops;i++)extra.push({type:'delivery',sequence:i,stopSequence:i,company:`Delivery stop ${i}`,source:'reconciled_evidence'});
     return {...load,origin:instruction(load.origin)?'':load.origin,destination:instruction(load.destination)?'':load.destination,stops:[...existingTrimmed,...extra]};
   });
-  const folders=buildLoadFoldersV10969({loads:enrichedLoads,documents:accepted,state,businessStore:{...businessStore,documents:accepted}}).map(folder=>{const source=enrichedLoads.find(l=>upper(l.loadNo)===folder.loadNo);return source?.repairLegacy?{...folder,status:folder.status==='complete'?'complete':'legacy_review',legacy:true}:folder;});
+  // Pass the reconciled document set exactly once. Passing it through both arguments doubled counts.
+  const folders=buildLoadFoldersV10969({loads:enrichedLoads,documents:accepted,state,businessStore:{...businessStore,documents:[]}}).map(folder=>{const source=enrichedLoads.find(l=>upper(l.loadNo)===folder.loadNo);return source?.repairLegacy?{...folder,status:folder.status==='complete'?'complete':'legacy_review',legacy:true}:folder;});
   return {folders,reviewItems,allDocuments:allDocs,repairOverlay:overlay};
 }
