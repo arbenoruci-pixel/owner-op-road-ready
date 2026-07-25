@@ -1,13 +1,12 @@
 import { mileageEvidenceForLoadV10976, trailerReturnEvidenceV10976 } from './loadEvidenceV10976.js';
-import { supportingDocumentCountsV10977 } from './supportingDocumentsV10977.js';
+import { supportingDocumentCountsV10977, logicalDeduplicateDocumentsV10977, normalizedDocumentTypeV10977 } from './supportingDocumentsV10977.js';
 
-export const LOAD_FOLDER_ENGINE_VERSION_V10969 = '109.7.7';
+export const LOAD_FOLDER_ENGINE_VERSION_V10969 = '109.7.8';
 function text(v=''){return String(v??'').replace(/\s+/g,' ').trim();}
 function upper(v=''){return text(v).toUpperCase();}
 function num(v=0){const n=Number(v);return Number.isFinite(n)?n:0;}
 function date(v=''){const s=text(v);const raw=s.slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(raw)?raw:'';}
 function unique(v=[]){return [...new Set(v.filter(Boolean))];}
-function docType(d={}){return text(d.document_type||d.type||d.classification?.selectedType||d.extracted?.type||d.metadata?.relationType).toLowerCase();}
 function docLoad(d={}){return upper(d.load_no||d.loadNo||d.canonicalLoadNo||d.extracted?.canonicalLoadNo||d.extracted?.loadNo||d.metadata?.loadNo);}
 function docDay(d={}){return date(d.vaultDate||d.document_date||d.documentDate||d.extracted?.documentDate||d.extracted?.date||d.created_at);}
 function docStop(d={}){return num(d.stopSequence||d.stop_sequence||d.extracted?.stopSequence||d.metadata?.stopSequence);}
@@ -22,7 +21,7 @@ function trailerIdOf(load={},events=[]){return text(load.trailerId||load.trailer
 
 export function buildLoadFoldersV10969({loads=[],documents=[],state={},businessStore={}}={}){
  const map=new Map();for(const l of loads||[]){const n=upper(l.loadNo||l.canonicalLoadNo);if(n)map.set(n,{...l,loadNo:n});}for(const d of documents||[]){const n=docLoad(d);if(n&&!map.has(n))map.set(n,{id:`load_${n}`,loadNo:n,status:'needs_review'});}for(const legs of Object.values(state.routeLegsByDay||{}))for(const l of legs||[]){const n=upper(l.loadNo||l.orderNo||l.shippingDocs);if(n&&!map.has(n))map.set(n,{id:`load_${n}`,loadNo:n,status:'tracked'});}
- return [...map.values()].map(load=>{const loadNo=upper(load.loadNo),docs=(documents||[]).filter(d=>docLoad(d)===loadNo),events=loadEvents(state,loadNo),legs=loadRouteLegs(state,loadNo),stops=deliveryStops(load,legs);const operationalDays=unique([...events.map(e=>e.day),...legs.map(l=>l.day)]).sort(),days=unique([...operationalDays,...docs.map(docDay)]).sort();const rateCons=docs.filter(d=>['rate_confirmation','load_tender'].includes(docType(d))),bols=docs.filter(d=>docType(d)==='bol'),pods=docs.filter(d=>['pod','delivery_receipt'].includes(docType(d))),fuelDocs=docs.filter(d=>docType(d)==='fuel_receipt');
+ return [...map.values()].map(load=>{const loadNo=upper(load.loadNo),docs=logicalDeduplicateDocumentsV10977((documents||[]).filter(d=>docLoad(d)===loadNo)),events=loadEvents(state,loadNo),legs=loadRouteLegs(state,loadNo),stops=deliveryStops(load,legs);const operationalDays=unique([...events.map(e=>e.day),...legs.map(l=>l.day)]).sort(),days=unique([...operationalDays,...docs.map(docDay)]).sort();const rateCons=docs.filter(d=>normalizedDocumentTypeV10977(d)==='rate_confirmation'),bols=docs.filter(d=>normalizedDocumentTypeV10977(d)==='bol'),pods=docs.filter(d=>normalizedDocumentTypeV10977(d)==='pod'),fuelDocs=docs.filter(d=>normalizedDocumentTypeV10977(d)==='fuel_receipt');
   const supporting=supportingDocumentCountsV10977(docs);
   const assigned=new Map(),unassigned=[];for(const d of pods){const s=docStop(d);if(s&&!assigned.has(s))assigned.set(s,d);else unassigned.push(d);}for(const stop of stops){if(!assigned.has(stop.sequence)&&unassigned.length)assigned.set(stop.sequence,unassigned.shift());}const missingStops=stops.filter(s=>!assigned.has(s.sequence)),podComplete=stops.length?missingStops.length===0:pods.length>0;
   const mileage=mileageEvidenceForLoadV10976(state,loadNo),logbookComplete=events.length>0;const fuelRows=fuelRowsForLoad(businessStore,loadNo,days),expenses=expenseRowsForLoad(businessStore,loadNo,days),fuelActivity=fuelRows.length>0,fuelComplete=!fuelActivity||fuelDocs.length>0||fuelRows.every(r=>r.receiptAttached===true);
