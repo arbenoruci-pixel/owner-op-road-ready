@@ -4,6 +4,10 @@ function text(v=''){return String(v??'').replace(/\s+/g,' ').trim();}
 function compact(v=''){return text(v).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');}
 function rawType(d={}){return text(d.document_type||d.type||d.classification?.selectedType||d.extracted?.type||d.metadata?.relationType);}
 function haystack(d={}){return [rawType(d),d.title,d.original_file_name,d.fileName,d.extracted?.title,d.extracted?.merchant,d.extracted?.description,d.metadata?.relationType].map(text).join(' ').toLowerCase();}
+function upper(v=''){return text(v).toUpperCase();}
+function loadOf(d={}){return upper(d.load_no||d.loadNo||d.canonicalLoadNo||d.extracted?.canonicalLoadNo||d.extracted?.loadNo||d.metadata?.loadNo);}
+function stopOf(d={}){const n=Number(d.stopSequence||d.stop_sequence||d.extracted?.stopSequence||d.metadata?.stopSequence||0);return Number.isFinite(n)?n:0;}
+function referenceOf(d={}){return upper(d.extracted?.bolNo||d.extracted?.billOfLading||d.extracted?.podNo||d.extracted?.shipmentId||d.metadata?.referenceNo||'');}
 
 export function normalizedDocumentTypeV10977(d={}){
  const raw=compact(rawType(d)),h=haystack(d);
@@ -11,23 +15,33 @@ export function normalizedDocumentTypeV10977(d={}){
  if(['pod','proof_of_delivery','delivery_receipt','signed_bol'].includes(raw)||/proof of delivery|delivery receipt|signed\s+bol/.test(h))return 'pod';
  if(['bol','bill_of_lading'].includes(raw)||/bill of lading|\bbol\b/.test(h))return 'bol';
  if(['fuel_receipt','fuel'].includes(raw))return 'fuel_receipt';
+ if(/supporting.*packet|billing.*packet|factoring.*packet|invoice.*packet/.test(raw+' '+h))return 'supporting_packet';
  return raw;
 }
 
 function fingerprint(d={}){
  const hash=text(d.sha256||d.hash||d.fileHash||d.content_hash||d.metadata?.sha256).toLowerCase();if(hash)return `hash:${hash}`;
  const name=text(d.original_file_name||d.fileName||d.name).toLowerCase();
- const size=Number(d.size_bytes||d.size||d.fileSize||d.metadata?.size_bytes||0);
+ const size=Number(d.size_bytes||d.size||d.fileSize||d.file_size_bytes||d.metadata?.size_bytes||0);
  if(name&&size>0)return `file:${name}:${size}`;
  const blob=text(d.blob_id||d.storage_key||d.storageKey||d.object_key||d.local_uri||d.localUri);if(blob)return `blob:${blob}`;
  const id=text(d.original_id||d.source_document_id||d.metadata?.sourceDocumentId);if(id)return `source:${id}`;
  return '';
 }
-function richness(d={}){return Object.values(d||{}).filter(v=>v!==null&&v!==undefined&&v!=='').length+Object.values(d.extracted||{}).filter(v=>v!==null&&v!==undefined&&v!=='').length*2;}
+function logicalKey(d={}){
+ const type=normalizedDocumentTypeV10977(d),load=loadOf(d),stop=stopOf(d),ref=referenceOf(d);
+ if(type==='rate_confirmation'&&load)return `core:${load}|rate_confirmation`;
+ if(type==='bol'&&load)return `core:${load}|bol|stop:${stop||0}`;
+ if(type==='pod'&&load)return stop?`core:${load}|pod|stop:${stop}`:ref?`core:${load}|pod|${ref}`:'';
+ return '';
+}
+function richness(d={}){return Object.values(d||{}).filter(v=>v!==null&&v!==undefined&&v!=='').length+Object.values(d.extracted||{}).filter(v=>v!==null&&v!==undefined&&v!=='').length*2+(text(d.sha256||d.content_hash)?5:0);}
 export function logicalDeduplicateDocumentsV10977(documents=[]){
- const keyed=new Map(),unkeyed=[];
- for(const doc of documents||[]){const key=fingerprint(doc);if(!key){unkeyed.push(doc);continue;}const prior=keyed.get(key);if(!prior||richness(doc)>richness(prior))keyed.set(key,doc);}
- return [...keyed.values(),...unkeyed];
+ const physical=new Map(),unkeyed=[];
+ for(const doc of documents||[]){const key=fingerprint(doc);if(!key){unkeyed.push(doc);continue;}const prior=physical.get(key);if(!prior||richness(doc)>richness(prior))physical.set(key,doc);}
+ const logical=new Map(),other=[];
+ for(const doc of [...physical.values(),...unkeyed]){const key=logicalKey(doc);if(!key){other.push(doc);continue;}const prior=logical.get(key);if(!prior||richness(doc)>richness(prior))logical.set(key,doc);}
+ return [...logical.values(),...other];
 }
 
 export const SUPPORTING_DOCUMENT_GROUPS_V10977=[
