@@ -1,74 +1,43 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { reconcileLoadFoldersV10974 } from './loadFolderReconciliationV10974.js';
 import { openVaultDocumentV102, vaultDocumentLabelV102, vaultDocumentTypeV102 } from './documentVaultV102.js';
 import { exportRoadReadyAuditPackageV10973 } from './auditExportV10973.js';
 import RepairImportPanelV10975 from './RepairImportPanelV10975.jsx';
+import { markTrailerReturnedV10976, undoTrailerReturnedV10976 } from './loadEvidenceV10976.js';
 import './loadFoldersV10969.css';
 import './loadFolderReviewV10974.css';
 
-function text(value=''){ return String(value ?? '').replace(/\s+/g,' ').trim(); }
-function dateLabel(value=''){
-  const raw=text(value).slice(0,10);
-  const d=new Date(`${raw}T12:00:00`);
-  return Number.isNaN(d.getTime())?raw:d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-}
+function text(value=''){return String(value??'').replace(/\s+/g,' ').trim();}
+function dateLabel(value=''){const raw=text(value);if(!/^\d{4}-\d{2}-\d{2}/.test(raw))return 'Date not confirmed';const iso=raw.slice(0,10),d=new Date(`${iso}T12:00:00`);return Number.isNaN(d.getTime())?'Date not confirmed':d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});}
 
-export default function LoadFoldersV10969({ loads=[],documents=[],state={},businessStore={},loading=false,onScan,onOpenLog,onContinueBilling }){
-  const [query,setQuery]=useState('');
-  const [openLoadNo,setOpenLoadNo]=useState('');
-  const [showReview,setShowReview]=useState(false);
-  const [auditBusy,setAuditBusy]=useState(false);
-  const [auditMessage,setAuditMessage]=useState('');
-  const [repairRevision,setRepairRevision]=useState(0);
-  const model=useMemo(()=>reconcileLoadFoldersV10974({loads,documents,state,businessStore}),[loads,documents,state,businessStore,repairRevision]);
-  const {folders,reviewItems,allDocuments}=model;
-  const filtered=useMemo(()=>{
-    const q=text(query).toLowerCase();
-    if(!q) return folders;
-    return folders.filter(folder=>[folder.loadNo,folder.title,folder.broker,...folder.days].join(' ').toLowerCase().includes(q));
-  },[folders,query]);
-  const open=folders.find(folder=>folder.loadNo===openLoadNo)||null;
-  async function exportAudit(){
-    if(auditBusy) return;
-    setAuditBusy(true); setAuditMessage('Building complete audit package…');
-    try{
-      const result=await exportRoadReadyAuditPackageV10973({folders,documents:allDocuments,state,businessStore});
-      setAuditMessage(`Exported ${result.originals} originals. ${result.report.summary.errors} errors and ${result.report.summary.warnings} warnings included.`);
-    }catch(error){ setAuditMessage(`Audit export failed: ${String(error?.message||error)}`); }
-    finally{ setAuditBusy(false); }
-  }
+export default function LoadFoldersV10969({loads=[],documents=[],state={},businessStore={},loading=false,onScan,onOpenLog,onContinueBilling}){
+ const [query,setQuery]=useState(''),[openLoadNo,setOpenLoadNo]=useState(''),[showReview,setShowReview]=useState(false),[auditBusy,setAuditBusy]=useState(false),[auditMessage,setAuditMessage]=useState(''),[revision,setRevision]=useState(0);
+ useEffect(()=>{const refresh=()=>setRevision(v=>v+1);window.addEventListener('road-ready-trailer-return-changed',refresh);return()=>window.removeEventListener('road-ready-trailer-return-changed',refresh);},[]);
+ const model=useMemo(()=>reconcileLoadFoldersV10974({loads,documents,state,businessStore}),[loads,documents,state,businessStore,revision]);
+ const {folders,reviewItems,allDocuments}=model;
+ const filtered=useMemo(()=>{const q=text(query).toLowerCase();return q?folders.filter(f=>[f.loadNo,f.title,f.broker,...f.days].join(' ').toLowerCase().includes(q)):folders;},[folders,query]);
+ const open=folders.find(f=>f.loadNo===openLoadNo)||null;
+ async function exportAudit(){if(auditBusy)return;setAuditBusy(true);setAuditMessage('Building complete audit package…');try{const result=await exportRoadReadyAuditPackageV10973({folders,documents:allDocuments,state,businessStore});setAuditMessage(`Exported ${result.originals} originals. ${result.report.summary.errors} errors and ${result.report.summary.warnings} warnings included.`);}catch(error){setAuditMessage(`Audit export failed: ${String(error?.message||error)}`);}finally{setAuditBusy(false);}}
+ function itemAction(item){if(item.id==='logbook'||item.id==='miles')return onOpenLog;if(item.id==='trailer_return')return()=>markTrailerReturnedV10976(open.loadNo,open.trailerId);return onScan;}
+ function actionLabel(item){if(item.id==='logbook')return'Open';if(item.id==='miles')return'Open Logbook';if(item.id==='trailer_return')return'Mark returned';return'Add';}
 
-  if(open){
-    return <section className="load-folder-detail-v10969">
-      <button type="button" className="load-folder-back-v10969" onClick={()=>setOpenLoadNo('')}>‹ All load folders</button>
-      <header className={`load-folder-detail-head-v10969 ${open.status}`}>
-        <div><span>LOAD {open.loadNo}</span><h2>{open.title}</h2><p>{open.broker||'Broker not confirmed'}</p></div>
-        <strong>{open.percent}%<small>{open.status==='complete'?'COMPLETE':open.status==='legacy_review'?'LEGACY REVIEW':'READY SCORE'}</small></strong>
-      </header>
-      {open.missing.length?<div className="load-folder-alert-v10969"><i>!</i><div><b>{open.missing.length} item{open.missing.length===1?'':'s'} need attention</b><span>{open.missing.map(item=>item.label).join(' · ')}</span></div><button type="button" onClick={onScan}>Add</button></div>:<div className="load-folder-complete-v10969"><i>✓</i><div><b>This load is complete</b><span>Required documents, logbook evidence and mileage are present.</span></div></div>}
-      <div className="load-folder-checklist-v10969">{open.checklist.map(item=><article key={item.id} className={item.complete?'done':item.required?'missing':'optional'}><i>{item.complete?'✓':item.required?'!':'○'}</i><div><b>{item.label}</b><span>{item.detail}</span></div>{!item.complete&&item.required?<button type="button" onClick={item.id==='logbook'?onOpenLog:onScan}>{item.id==='logbook'?'Open':'Add'}</button>:null}</article>)}</div>
-      {open.stops.length?<><div className="load-folder-section-title-v10969"><span>DELIVERY PROOF</span><b>{open.pods.length} of {open.stops.length} PODs matched</b></div><div className="load-folder-stops-v10969">{open.stops.map(stop=>{ const matched=open.pods.find(doc=>Number(doc.stopSequence||doc.stop_sequence||doc.extracted?.stopSequence||0)===Number(stop.sequence)); return <article key={stop.sequence} className={matched?'done':'missing'}><i>{matched?'✓':'!'}</i><div><span>STOP {stop.sequence}</span><b>{stop.company||[stop.city,stop.state].filter(Boolean).join(', ')||`Delivery stop ${stop.sequence}`}</b><em>{[stop.city,stop.state].filter(Boolean).join(', ')}{stop.appointment?` · ${stop.appointment}`:''}</em></div>{matched?<button type="button" onClick={()=>openVaultDocumentV102(matched)}>Open POD</button>:<button type="button" onClick={onScan}>Add POD</button>}</article>; })}</div></>:null}
-      <div className="load-folder-section-title-v10969"><span>FOLDER DOCUMENTS</span><b>{open.documents.length} original file{open.documents.length===1?'':'s'}</b></div>
-      <div className="load-folder-docs-v10969">{open.documents.map(document=><article key={document.local_id||document.id}><div className="owner-os-doc-icon-v102">{vaultDocumentTypeV102(document).slice(0,3).toUpperCase()}</div><div><span>{vaultDocumentLabelV102(document)}</span><b>{document.title||document.original_file_name}</b><em>{dateLabel(document.vaultDate||document.documentDate||document.created_at)}</em></div><button type="button" onClick={()=>openVaultDocumentV102(document)}>Open</button></article>)}</div>
-      <div className="load-folder-actions-v10969"><button type="button" onClick={onOpenLog}>Open supporting logbook</button><button type="button" onClick={onScan}>Scan / add document</button><button type="button" className="primary" disabled={open.status!=='complete'} onClick={()=>onContinueBilling?.(open.loadNo)}>Continue to billing</button></div>
-    </section>;
-  }
+ if(open)return <section className="load-folder-detail-v10969">
+  <button type="button" className="load-folder-back-v10969" onClick={()=>setOpenLoadNo('')}>‹ All load folders</button>
+  <header className={`load-folder-detail-head-v10969 ${open.status}`}><div><span>LOAD {open.loadNo}</span><h2>{open.title}</h2><p>{open.broker||'Broker not confirmed'}</p></div><strong>{open.percent}%<small>{open.status==='complete'?'COMPLETE':open.status==='in_progress'?'IN PROGRESS':open.status==='legacy_review'?'LEGACY REVIEW':'READY SCORE'}</small></strong></header>
+  {open.missing.length?<div className="load-folder-alert-v10969"><i>!</i><div><b>{open.missing.length} item{open.missing.length===1?'':'s'} need attention</b><span>{open.missing.map(i=>i.label).join(' · ')}</span></div><button type="button" onClick={itemAction(open.missing[0])}>{actionLabel(open.missing[0])}</button></div>:<div className="load-folder-complete-v10969"><i>✓</i><div><b>This load is complete</b><span>Required documents, Logbook evidence, mileage and equipment closeout are present.</span></div></div>}
+  <div className="load-folder-checklist-v10969">{open.checklist.map(item=><article key={item.id} className={item.complete?'done':item.required?'missing':'optional'}><i>{item.complete?'✓':item.required?'!':'○'}</i><div><b>{item.label}</b><span>{item.detail}</span></div>{!item.complete&&item.required?<button type="button" onClick={itemAction(item)}>{actionLabel(item)}</button>:item.id==='trailer_return'&&item.complete&&open.trailerReturn?.required?<button type="button" onClick={()=>undoTrailerReturnedV10976(open.loadNo)}>Undo</button>:null}</article>)}</div>
+  {open.stops.length?<><div className="load-folder-section-title-v10969"><span>DELIVERY PROOF</span><b>{open.stops.length-open.missingStops.length} of {open.stops.length} PODs matched</b></div><div className="load-folder-stops-v10969">{open.stops.map(stop=>{const matched=open.podAssignments?.get?.(Number(stop.sequence))||null;return <article key={stop.sequence} className={matched?'done':'missing'}><i>{matched?'✓':'!'}</i><div><span>STOP {stop.sequence}</span><b>{stop.company||[stop.city,stop.state].filter(Boolean).join(', ')||`Delivery stop ${stop.sequence}`}</b><em>{[stop.city,stop.state].filter(Boolean).join(', ')}{stop.appointment?` · ${stop.appointment}`:''}</em></div>{matched?<button type="button" onClick={()=>openVaultDocumentV102(matched)}>Open POD</button>:<button type="button" onClick={onScan}>Add POD</button>}</article>;})}</div></>:null}
+  <div className="load-folder-section-title-v10969"><span>FOLDER DOCUMENTS</span><b>{open.documents.length} original file{open.documents.length===1?'':'s'}</b></div>
+  <div className="load-folder-docs-v10969">{open.documents.map(document=><article key={document.local_id||document.id}><div className="owner-os-doc-icon-v102">{vaultDocumentTypeV102(document).slice(0,3).toUpperCase()}</div><div><span>{vaultDocumentLabelV102(document)}</span><b>{document.title||document.original_file_name}</b><em>{dateLabel(document.vaultDate||document.documentDate||document.document_date||document.created_at)}</em></div><button type="button" onClick={()=>openVaultDocumentV102(document)}>Open</button></article>)}</div>
+  <div className="load-folder-actions-v10969"><button type="button" onClick={onOpenLog}>Open supporting logbook</button><button type="button" onClick={onScan}>Scan / add document</button><button type="button" className="primary" disabled={open.status!=='complete'} onClick={()=>onContinueBilling?.(open.loadNo)}>Continue to billing</button></div>
+ </section>;
 
-  return <>
-    <div className="owner-os-section-head-v102"><div><span>LOAD FOLDERS</span><b>{folders.length} verified load folder{folders.length===1?'':'s'}</b></div><div className="load-folder-head-actions-v10973"><RepairImportPanelV10975 onApplied={()=>setRepairRevision(v=>v+1)}/><button type="button" disabled={auditBusy} onClick={exportAudit}>{auditBusy?'Exporting…':'Export audit'}</button><button type="button" onClick={onScan}>+ Add document</button></div></div>
-    {auditMessage?<div className="load-folder-audit-message-v10973">{auditMessage}</div>:null}
-    {reviewItems.length?<div className="load-folder-review-v10974"><button type="button" onClick={()=>setShowReview(v=>!v)}><b>{reviewItems.length} documents need identity review</b><span>{showReview?'Hide':'Review'}</span></button>{showReview?<div>{reviewItems.map((doc,index)=><article key={doc.local_id||doc.id||index}><div><b>{vaultDocumentLabelV102(doc)}</b><span>{doc.original_file_name||doc.fileName||'Unnamed document'} · detected reference {doc.load_no||doc.loadNo||doc.canonicalLoadNo||'none'}</span></div><button type="button" onClick={()=>openVaultDocumentV102(doc)}>Open</button></article>)}</div>:null}</div>:null}
-    <div className="load-folder-summary-v10969"><div><b>{folders.filter(folder=>folder.status==='complete').length}</b><span>Complete</span></div><div className="attention"><b>{folders.filter(folder=>folder.status==='needs_attention').length}</b><span>Need attention</span></div><div><b>{allDocuments.length}</b><span>Original records</span></div></div>
-    <div className="load-folder-search-v10969"><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search load, route, broker or date…"/></div>
-    {loading?<div className="owner-os-loading-v102">Reconciling load folders…</div>:filtered.length?<div className="load-folder-grid-v10969">{filtered.map(folder=><button type="button" className={`load-folder-card-v10969 ${folder.status}`} key={folder.loadNo} onClick={()=>setOpenLoadNo(folder.loadNo)}>
-      <header><div><span>LOAD FOLDER</span><b>Load {folder.loadNo}</b></div><i>{folder.status==='complete'?'✓':folder.status==='legacy_review'?'R':'!'}</i></header>
-      <h3>{folder.title}</h3>
-      <p>{folder.broker||'Broker not confirmed'}{folder.days.length?` · ${folder.days[0]}${folder.days.length>1?`–${folder.days.at(-1)}`:''}`:''}</p>
-      <div className="load-folder-progress-v10969"><span><i style={{width:`${folder.percent}%`}}/></span><b>{folder.percent}%</b></div>
-      <div className="load-folder-counts-v10969"><span>{folder.counts.stops} stops</span><span>{folder.counts.bols} BOL</span><span className={folder.counts.pods!==folder.counts.stops?'missing':''}>{folder.counts.pods}/{folder.counts.stops||0} POD</span><span>{folder.counts.documents} files</span></div>
-      {folder.status==='legacy_review'?<footer><b>Legacy load — review, not a new failure</b><em>{folder.missing.slice(0,2).map(item=>item.label).join(' · ')||'Historical data needs confirmation'}</em></footer>:folder.missing.length?<footer><b>{folder.missing.length} item{folder.missing.length===1?'':'s'} missing</b><em>{folder.missing.slice(0,2).map(item=>item.label).join(' · ')}</em></footer>:<footer className="ready"><b>Load complete</b><em>Documents and evidence are organized</em></footer>}
-    </button>)}</div>:<div className="owner-os-empty-v102"><i>+</i><b>No verified load folders yet</b><p>Scan a Rate Confirmation to create a verified load folder. Suspicious document references are kept in Needs Review instead of becoming fake loads.</p><button type="button" onClick={onScan}>Scan Rate Confirmation</button></div>}
-  </>;
+ return <><div className="owner-os-section-head-v102"><div><span>LOAD FOLDERS</span><b>{folders.length} verified load folder{folders.length===1?'':'s'}</b></div><div className="load-folder-head-actions-v10973"><RepairImportPanelV10975 onApplied={()=>setRevision(v=>v+1)}/><button type="button" disabled={auditBusy} onClick={exportAudit}>{auditBusy?'Exporting…':'Export audit'}</button><button type="button" onClick={onScan}>+ Add document</button></div></div>
+ {auditMessage?<div className="load-folder-audit-message-v10973">{auditMessage}</div>:null}
+ {reviewItems.length?<div className="load-folder-review-v10974"><button type="button" onClick={()=>setShowReview(v=>!v)}><b>{reviewItems.length} documents need identity review</b><span>{showReview?'Hide':'Review'}</span></button>{showReview?<div>{reviewItems.map((doc,index)=><article key={doc.local_id||doc.id||index}><div><b>{vaultDocumentLabelV102(doc)}</b><span>{doc.original_file_name||doc.fileName||'Unnamed document'} · detected reference {doc.load_no||doc.loadNo||doc.canonicalLoadNo||'none'}</span></div><button type="button" onClick={()=>openVaultDocumentV102(doc)}>Open</button></article>)}</div>:null}</div>:null}
+ <div className="load-folder-summary-v10969"><div><b>{folders.filter(f=>f.status==='complete').length}</b><span>Complete</span></div><div className="attention"><b>{folders.filter(f=>['needs_attention','in_progress'].includes(f.status)).length}</b><span>Need attention</span></div><div><b>{allDocuments.length}</b><span>Original records</span></div></div>
+ <div className="load-folder-search-v10969"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search load, route, broker or date…"/></div>
+ {loading?<div className="owner-os-loading-v102">Reconciling load folders…</div>:filtered.length?<div className="load-folder-grid-v10969">{filtered.map(folder=><button type="button" className={`load-folder-card-v10969 ${folder.status}`} key={folder.loadNo} onClick={()=>setOpenLoadNo(folder.loadNo)}><header><div><span>LOAD FOLDER</span><b>Load {folder.loadNo}</b></div><i>{folder.status==='complete'?'✓':folder.status==='legacy_review'?'R':folder.status==='in_progress'?'↻':'!'}</i></header><h3>{folder.title}</h3><p>{folder.broker||'Broker not confirmed'}{folder.days.length?` · ${folder.days[0]}${folder.days.length>1?`–${folder.days.at(-1)}`:''}`:''}</p><div className="load-folder-progress-v10969"><span><i style={{width:`${folder.percent}%`}}/></span><b>{folder.percent}%</b></div><div className="load-folder-counts-v10969"><span>{folder.counts.stops} stops</span><span>{folder.counts.bols} BOL</span><span className={folder.missingStops.length?'missing':''}>{folder.counts.stops-folder.missingStops.length}/{folder.counts.stops||0} POD</span><span>{folder.counts.documents} files</span></div>{folder.status==='legacy_review'?<footer><b>Legacy load — review, not a new failure</b><em>{folder.missing.slice(0,2).map(i=>i.label).join(' · ')||'Historical data needs confirmation'}</em></footer>:folder.status==='in_progress'?<footer><b>Delivery complete — equipment return pending</b><em>{folder.missing.map(i=>i.label).join(' · ')}</em></footer>:folder.missing.length?<footer><b>{folder.missing.length} item{folder.missing.length===1?'':'s'} missing</b><em>{folder.missing.slice(0,2).map(i=>i.label).join(' · ')}</em></footer>:<footer className="ready"><b>Load complete</b><em>Documents and evidence are organized</em></footer>}</button>)}</div>:<div className="owner-os-empty-v102"><i>+</i><b>No verified load folders yet</b><p>Scan a Rate Confirmation to create a verified load folder.</p><button type="button" onClick={onScan}>Scan Rate Confirmation</button></div>}</>;
 }
