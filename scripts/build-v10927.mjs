@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.7.2: isolate global refresh events from scanner save confirmation.
+// v109.7.3: complete audit package export and anomaly report.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -78,4 +78,5 @@ run(process.execPath, ['scripts/apply-v10970-mandatory-ratecon-risk-review.mjs']
 run(process.execPath, ['scripts/verify-v10970-mandatory-ratecon-risk-review.mjs']);
 run(process.execPath, ['scripts/apply-v10971-iphone-cache-handshake.mjs']);
 run(process.execPath, ['scripts/apply-v10972-save-dispatch-isolation.mjs']);
+run(process.execPath, ['scripts/apply-v10973-complete-audit-export.mjs']);
 run('npx', ['next', 'build']);
