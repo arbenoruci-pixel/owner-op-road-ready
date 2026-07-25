@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.7.4: reconcile audit stores and quarantine false load identities.
+// v109.7.5: safe repair import with preview, rollback and non-destructive overlays.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -80,4 +80,5 @@ run(process.execPath, ['scripts/apply-v10971-iphone-cache-handshake.mjs']);
 run(process.execPath, ['scripts/apply-v10972-save-dispatch-isolation.mjs']);
 run(process.execPath, ['scripts/apply-v10973-complete-audit-export.mjs']);
 run(process.execPath, ['scripts/apply-v10974-audit-reconciliation.mjs']);
+run(process.execPath, ['scripts/apply-v10975-repair-import.mjs']);
 run('npx', ['next', 'build']);
