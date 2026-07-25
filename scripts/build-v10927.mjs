@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-// v109.7.3: complete audit package export and anomaly report.
+// v109.7.4: reconcile audit stores and quarantine false load identities.
 function run(command, args = []) {
   const result = spawnSync(command, args, { stdio:'inherit', shell:false });
   if (result.error) throw result.error;
@@ -79,4 +79,5 @@ run(process.execPath, ['scripts/verify-v10970-mandatory-ratecon-risk-review.mjs'
 run(process.execPath, ['scripts/apply-v10971-iphone-cache-handshake.mjs']);
 run(process.execPath, ['scripts/apply-v10972-save-dispatch-isolation.mjs']);
 run(process.execPath, ['scripts/apply-v10973-complete-audit-export.mjs']);
+run(process.execPath, ['scripts/apply-v10974-audit-reconciliation.mjs']);
 run('npx', ['next', 'build']);
