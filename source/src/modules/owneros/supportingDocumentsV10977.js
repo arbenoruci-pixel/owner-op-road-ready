@@ -11,21 +11,25 @@ function referenceOf(d={}){return upper(d.extracted?.bolNo||d.extracted?.billOfL
 
 export function normalizedDocumentTypeV10977(d={}){
  const raw=compact(rawType(d)),h=haystack(d);
+ if(/supporting.*packet|billing.*packet|factoring.*packet|invoice.*packet/.test(raw+' '+h))return 'supporting_packet';
  if(['rate_confirmation','rate_con','ratecon','carrier_confirmation','load_confirmation','load_tender','rat'].includes(raw)||/\brate\s*(confirmation|con)\b|carrier confirmation|load tender/.test(h))return 'rate_confirmation';
  if(['pod','proof_of_delivery','delivery_receipt','signed_bol'].includes(raw)||/proof of delivery|delivery receipt|signed\s+bol/.test(h))return 'pod';
  if(['bol','bill_of_lading'].includes(raw)||/bill of lading|\bbol\b/.test(h))return 'bol';
  if(['fuel_receipt','fuel'].includes(raw))return 'fuel_receipt';
- if(/supporting.*packet|billing.*packet|factoring.*packet|invoice.*packet/.test(raw+' '+h))return 'supporting_packet';
- return raw;
+ if(/lumper/.test(raw+' '+h))return 'lumper_receipt';
+ if(/scale|cat[_ -]?scale|weight ticket/.test(raw+' '+h))return 'scale_ticket';
+ if(/invoice/.test(raw+' '+h))return 'invoice';
+ return raw||'other';
 }
 
 function fingerprint(d={}){
- const hash=text(d.sha256||d.hash||d.fileHash||d.content_hash||d.metadata?.sha256).toLowerCase();if(hash)return `hash:${hash}`;
- const name=text(d.original_file_name||d.fileName||d.name).toLowerCase();
- const size=Number(d.size_bytes||d.size||d.fileSize||d.file_size_bytes||d.metadata?.size_bytes||0);
+ const hash=text(d.sha256||d.hash||d.fileHash||d.content_hash||d.contentHash||d.captureManifest?.sha256||d.metadata?.sha256).toLowerCase();if(hash)return `hash:${hash}`;
+ const source=text(d.original_id||d.originalId||d.source_document_id||d.sourceDocumentId||d.metadata?.sourceDocumentId);if(source)return `source:${source}`;
+ const outlook=text(d.outlook_attachment_id||d.outlookAttachmentId||d.attachment_id||d.attachmentId||d.metadata?.outlookAttachmentId);if(outlook)return `outlook:${outlook}`;
+ const blob=text(d.blob_id||d.blobId||d.storage_key||d.storageKey||d.object_key||d.objectKey||d.local_uri||d.localUri);if(blob)return `blob:${blob}`;
+ const name=text(d.original_file_name||d.fileName||d.name).toLowerCase().replace(/\(\d+\)(?=\.[a-z0-9]+$)/,'');
+ const size=Number(d.size_bytes||d.size||d.fileSize||d.file_size_bytes||d.fileSizeBytes||d.metadata?.size_bytes||0);
  if(name&&size>0)return `file:${name}:${size}`;
- const blob=text(d.blob_id||d.storage_key||d.storageKey||d.object_key||d.local_uri||d.localUri);if(blob)return `blob:${blob}`;
- const id=text(d.original_id||d.source_document_id||d.metadata?.sourceDocumentId);if(id)return `source:${id}`;
  return '';
 }
 function logicalKey(d={}){
@@ -33,6 +37,7 @@ function logicalKey(d={}){
  if(type==='rate_confirmation'&&load)return `core:${load}|rate_confirmation`;
  if(type==='bol'&&load)return `core:${load}|bol|stop:${stop||0}`;
  if(type==='pod'&&load)return stop?`core:${load}|pod|stop:${stop}`:ref?`core:${load}|pod|${ref}`:'';
+ if(type==='supporting_packet'&&load){const physical=fingerprint(d);return physical?`support:${load}|${physical}`:'';}
  return '';
 }
 function richness(d={}){return Object.values(d||{}).filter(v=>v!==null&&v!==undefined&&v!=='').length+Object.values(d.extracted||{}).filter(v=>v!==null&&v!==undefined&&v!=='').length*2+(text(d.sha256||d.content_hash)?5:0);}
@@ -47,11 +52,12 @@ export function logicalDeduplicateDocumentsV10977(documents=[]){
 export const SUPPORTING_DOCUMENT_GROUPS_V10977=[
  {id:'lumper',label:'Lumper receipts',icon:'LMP',test:(t,h)=>/lumper/.test(t+' '+h)},
  {id:'scale',label:'Scale tickets',icon:'SCL',test:(t,h)=>/(scale|cat[_ -]?scale|weight ticket)/.test(t+' '+h)},
- {id:'inspection',label:'Inspection records',icon:'INS',test:(t,h)=>/(inspection|pre[_ -]?trip|post[_ -]?trip|vehicle inspection|trailer inspection)/.test(t+' '+h)},
- {id:'toll',label:'Toll records',icon:'TOL',test:(t,h)=>/(toll|i-pass|ipass|ezpass|e-zpass)/.test(t+' '+h)},
+ {id:'inspection',label:'Inspections',icon:'INS',test:(t,h)=>/(inspection|pre[_ -]?trip|post[_ -]?trip|vehicle inspection|trailer inspection)/.test(t+' '+h)},
+ {id:'toll',label:'Toll documents',icon:'TOL',test:(t,h)=>/(toll|i-pass|ipass|ezpass|e-zpass)/.test(t+' '+h)},
  {id:'fuel',label:'Fuel receipts',icon:'FUL',test:(t,h)=>/(fuel|diesel|def receipt|gas station)/.test(t+' '+h)},
- {id:'trailer',label:'Trailer & equipment',icon:'TRL',test:(t,h)=>/(trailer|equipment|gate pass|interchange|return receipt|chassis)/.test(t+' '+h)},
+ {id:'trailer',label:'Trailer & equipment documents',icon:'TRL',test:(t,h)=>/(trailer|equipment|gate pass|interchange|return receipt|chassis)/.test(t+' '+h)},
  {id:'tracking',label:'Tracking & compliance',icon:'TRK',test:(t,h)=>/(fourkites|macro ?point|tracking|dhl mobile|compliance|check call)/.test(t+' '+h)},
+ {id:'billing',label:'Billing, factoring & original packets',icon:'BIL',test:(t,h)=>/(supporting_packet|factoring|billing packet|original packet|invoice packet)/.test(t+' '+h)},
  {id:'payment',label:'Payment & accessorials',icon:'PAY',test:(t,h)=>/(detention|layover|tonu|truck ordered not used|accessorial|invoice|quick pay|payment|receipt)/.test(t+' '+h)},
  {id:'other',label:'Other supporting documents',icon:'OTH',test:()=>true},
 ];
