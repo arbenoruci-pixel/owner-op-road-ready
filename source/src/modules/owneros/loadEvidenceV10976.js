@@ -4,7 +4,7 @@ function upper(v=''){return text(v).toUpperCase();}
 function num(v=0){const n=Number(v);return Number.isFinite(n)?n:0;}
 function day(v=''){const s=text(v);return /^\d{4}-\d{2}-\d{2}$/.test(s.slice(0,10))?s.slice(0,10):'';}
 function refs(obj={}){return [obj.loadNo,obj.load_no,obj.shippingDocs,obj.shipping_documents,obj.orderNo,obj.order_no,obj.pickedUpLoadNo,obj.deliveredLoadNo,obj.canonicalLoadNo].map(upper).filter(Boolean);}
-function milesOf(obj={}){const direct=num(obj)||num(obj?.totalMiles||obj?.total_miles||obj?.dailyMiles||obj?.daily_miles||obj?.manualMiles||obj?.manual_miles||obj?.distance||obj?.distanceMiles||obj?.distance_miles||obj?.form?.distance||obj?.form?.distanceMiles);if(direct>0)return direct;const segments=obj?.segments||obj?.routeSegments||[];return (segments||[]).reduce((sum,s)=>sum+num(s?.miles||s?.distance||s?.distanceMiles),0);}
+function milesOf(obj={}){const direct=num(obj)||num(obj?.total||obj?.miles||obj?.totalMiles||obj?.total_miles||obj?.dailyMiles||obj?.daily_miles||obj?.manualMiles||obj?.manual_miles||obj?.distance||obj?.distanceMiles||obj?.distance_miles||obj?.form?.distance||obj?.form?.distanceMiles);if(direct>0)return direct;const segments=obj?.segments||obj?.routeSegments||[];return (segments||[]).reduce((sum,s)=>sum+num(s?.miles||s?.distance||s?.distanceMiles),0);}
 function linkedDaysForLoad(state={},target=''){
  const linked=new Set();
  for(const [d,events] of Object.entries(state.eventsByDay||{}))if((events||[]).some(e=>refs(e).includes(target)))linked.add(day(d));
