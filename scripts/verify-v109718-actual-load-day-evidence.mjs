@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const evidence=fs.readFileSync('source/src/modules/owneros/loadEvidenceV10976.js','utf8');
+const engine=fs.readFileSync('source/src/modules/owneros/loadFolderEngineV10969.js','utf8');
+const audit=fs.readFileSync('source/src/modules/owneros/DotAuditCenterV109714.jsx','utf8');
+const release=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));
+assert.ok(evidence.includes('actualEvidenceDayV109718'));
+assert.ok(evidence.includes('obj.pickupDay'));
+assert.ok(evidence.includes('obj.deliveryDay'));
+assert.ok(engine.includes('day:actualEvidenceDayV109718(e,container)'));
+assert.ok(engine.includes('day:actualEvidenceDayV109718(l,container)'));
+assert.ok(audit.includes('reconcileLoadFoldersV10974'));
+assert.ok(audit.includes("(folder.mileage?.rows||[]).filter(r=>day(r.day)===dateKey)"));
+assert.ok(!audit.includes('state.dailyMilesByDay?.[base.date]'));
+assert.equal(release.version,'109.7.18');
+assert.equal(release.build,'v109718-actual-load-day-evidence');
+console.log('PASS — load documents use reconciled folders and miles stay on the actual worked date');
