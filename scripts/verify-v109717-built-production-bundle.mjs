@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 
-const VERSION = '109.7.18';
-const BUILD = 'v109718-actual-load-day-evidence';
+const VERSION = '109.7.19';
+const BUILD = 'v109719-open-exact-load-evidence';
 const NEXT_DIR = '.next';
 
 function walk(dir) {
@@ -26,9 +26,9 @@ assert.ok(chunkFiles.length > 0, 'No compiled JavaScript chunks were produced');
 const chunkRows = chunkFiles.map(file => ({ file, text:fs.readFileSync(file, 'utf8') }));
 const visible = chunkRows.find(row => row.text.includes(`App v${VERSION}`));
 assert.ok(visible, `Compiled Home bundle does not contain App v${VERSION}`);
-const runtime = chunkRows.find(row => row.text.includes(VERSION));
-assert.ok(runtime, `Compiled JavaScript does not contain ${VERSION}`);
-for (const stale of ['App v109.7.13','App v109.7.14','App v109.7.15','App v109.7.16','App v109.7.17']) {
+assert.ok(chunkRows.some(row=>row.text.includes('Open Rate Con')),'Compiled bundle lacks completed evidence Open actions');
+assert.ok(chunkRows.some(row=>row.text.includes('Open Miles')),'Compiled bundle lacks Open Miles action');
+for (const stale of ['App v109.7.13','App v109.7.14','App v109.7.15','App v109.7.16','App v109.7.17','App v109.7.18']) {
   assert.ok(!chunkRows.some(row => row.text.includes(stale)), `Compiled bundle still contains stale visible label ${stale}`);
 }
 
@@ -43,5 +43,6 @@ assert.equal(versionHeader?.value, VERSION);
 assert.equal(buildHeader?.value, BUILD);
 
 console.log(`PASS — compiled Home chunk ${path.basename(visible.file)} contains App v${VERSION}`);
+console.log('PASS — compiled load folders include exact-day evidence Open actions');
 console.log(`PASS — Next BUILD_ID is ${buildId}`);
 console.log(`PASS — production route headers compile to ${VERSION} / ${BUILD}`);
