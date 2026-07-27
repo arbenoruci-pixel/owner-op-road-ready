@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const src=fs.readFileSync('source/src/core/update/appUpdate.js','utf8');
+const manifest=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));
+assert.ok(src.includes("const FALLBACK_APP_VERSION = '109.7.16';"));
+assert.ok(src.includes('export const CURRENT_APP_VERSION = FALLBACK_APP_VERSION;'));
+assert.ok(!src.includes('process.env.NEXT_PUBLIC_OWNER_OP_APP_VERSION'));
+assert.equal(manifest.version,'109.7.16');
+assert.equal(manifest.build,'v109716-bundle-version-source-of-truth');
+console.log('PASS — compiled app and release manifest both use v109.7.16');
