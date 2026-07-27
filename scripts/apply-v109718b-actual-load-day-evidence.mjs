@@ -7,7 +7,7 @@ const writeJson=(p,v)=>write(p,JSON.stringify(v,null,2)+'\n');
 
 const evidencePath='source/src/modules/owneros/loadEvidenceV10976.js';
 let evidence=read(evidencePath);
-evidence=evidence.replace("function explicitDay(obj={}){for(const value of [obj.logDate,obj.log_date,obj.eventDate,obj.event_date,obj.dutyDate,obj.duty_date,obj.day,obj.date,obj.serviceDate,obj.service_date]){const d=day(value);if(d)return d;}return '';}","export function actualEvidenceDayV109718(obj={},containerDay=''){for(const value of [obj.logDate,obj.log_date,obj.eventDate,obj.event_date,obj.dutyDate,obj.duty_date,obj.serviceDate,obj.service_date,obj.pickupDay,obj.pickupDate,obj.deliveryDay,obj.deliveryDate,obj.completedDate,obj.deliveredAt,obj.completedAt,obj.transactionDate,obj.postedAt,obj.date,obj.day]){const d=day(value);if(d)return d;}return day(containerDay);}");
+evidence=evidence.replace("function explicitDay(obj={}){for(const value of [obj.logDate,obj.log_date,obj.eventDate,obj.event_date,obj.dutyDate,obj.duty_date,obj.day,obj.date,obj.serviceDate,obj.service_date]){const d=day(value);if(d)return d;}return '';} ".trim(),"export function actualEvidenceDayV109718(obj={},containerDay=''){for(const value of [obj.logDate,obj.log_date,obj.eventDate,obj.event_date,obj.dutyDate,obj.duty_date,obj.serviceDate,obj.service_date,obj.pickupDay,obj.pickupDate,obj.deliveryDay,obj.deliveryDate,obj.completedDate,obj.deliveredAt,obj.completedAt,obj.transactionDate,obj.postedAt,obj.date,obj.day]){const d=day(value);if(d)return d;}return day(containerDay);}");
 evidence=evidence.replaceAll('explicitDay(record)||day(containerDay)','actualEvidenceDayV109718(record,containerDay)');
 evidence=evidence.replaceAll('explicitDay(value)||day(containerDay)','actualEvidenceDayV109718(value,containerDay)');
 evidence=evidence.replaceAll('explicitDay(value)||day(key)','actualEvidenceDayV109718(value,key)');
@@ -57,6 +57,13 @@ audit=audit.slice(0,start)+builder+audit.slice(end);
 audit=audit.replace("const mileage=state.dailyMilesByDay?.[base.date]||state.manualMilesByDay?.[base.date]||{};",'');
 if(!audit.includes('reconcileLoadFoldersV10974'))throw new Error('audit reconciliation patch failed');
 write(auditPath,audit);
+
+for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx']){
+ if(!fs.existsSync(path))continue;
+ let source=read(path);
+ source=source.replace(/App v109\.7\.1[3-7]/g,'App v109.7.18').replace(/APP V109\.7\.1[3-7]/g,'APP V109.7.18').replace(/v109\.7\.1[3-7]/g,'v109.7.18');
+ write(path,source);
+}
 
 for(const p of ['package.json','package-lock.json'])if(fs.existsSync(p)){const data=JSON.parse(read(p));data.version=VERSION;data.engines={...(data.engines||{}),node:'24.x'};if(data.packages?.['']){data.packages[''].version=VERSION;data.packages[''].engines={...(data.packages[''].engines||{}),node:'24.x'};}writeJson(p,data);}
 const now=new Date().toISOString();
