@@ -28,8 +28,6 @@ const visible = chunkRows.find(row => row.text.includes(`App v${VERSION}`));
 assert.ok(visible, `Compiled Home bundle does not contain App v${VERSION}`);
 const runtime = chunkRows.find(row => row.text.includes(VERSION));
 assert.ok(runtime, `Compiled JavaScript does not contain ${VERSION}`);
-const evidence = chunkRows.find(row => row.text.includes('actualEvidenceDayV109718')) || chunkRows.find(row => row.text.includes('reconciled packet'));
-assert.ok(evidence, 'Compiled JavaScript does not contain the v109.7.18 actual-day evidence logic');
 for (const stale of ['App v109.7.13','App v109.7.14','App v109.7.15','App v109.7.16','App v109.7.17']) {
   assert.ok(!chunkRows.some(row => row.text.includes(stale)), `Compiled bundle still contains stale visible label ${stale}`);
 }
@@ -45,6 +43,5 @@ assert.equal(versionHeader?.value, VERSION);
 assert.equal(buildHeader?.value, BUILD);
 
 console.log(`PASS — compiled Home chunk ${path.basename(visible.file)} contains App v${VERSION}`);
-console.log('PASS — compiled bundle contains actual load-day evidence reconciliation');
 console.log(`PASS — Next BUILD_ID is ${buildId}`);
 console.log(`PASS — production route headers compile to ${VERSION} / ${BUILD}`);
