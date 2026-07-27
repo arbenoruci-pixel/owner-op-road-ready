@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const update=fs.readFileSync('source/src/core/update/appUpdate.js','utf8');
+const bridge=fs.readFileSync('public/update.html','utf8');
+const version=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));
+assert.ok(update.includes('unregisterAllServiceWorkers'));
+assert.ok(update.includes("new URL('/update.html'"));
+assert.ok(update.indexOf('unregisterAllServiceWorkers().catch') < update.indexOf('clearBrowserCaches().catch'));
+assert.ok(bridge.includes('getRegistrations'));
+assert.ok(bridge.includes('caches.keys'));
+assert.ok(bridge.includes("localStorage.setItem('road_ready_last_hard_update'"));
+assert.equal(version.version,'109.7.15');
+console.log('PASS — Reload latest removes the stale iPhone PWA shell and preserves local app data');
