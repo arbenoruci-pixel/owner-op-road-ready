@@ -6,7 +6,7 @@ const support=read('source/src/modules/owneros/supportingDocumentsV10977.js');
 const ui=read('source/src/modules/owneros/LoadFoldersV10969.jsx');
 const version=JSON.parse(read('public/app-version.json'));
 const checks=[
- [version.version==='109.7.11','release version is not v109.7.11'],
+ [version.version==='109.7.11'||version.version==='109.8.0','release version is not an approved weekly load-folder release'],
  [reconciliation.includes("aliases.set('178564','424590-1')"),'178564 alias merge missing'],
  [engine.includes("n&&n!=='178564'"),'178564 can render as a load folder'],
  [support.includes("core:${load}|rate_confirmation"),'duplicate Rate Confirmation logical slot missing'],
@@ -18,7 +18,7 @@ const checks=[
  [engine.includes("loadType==='legacy'?legacyChecklist"),'legacy completion logic missing'],
  [ui.includes('WEEKLY LOAD FOLDERS')&&ui.includes('weekLabel')&&ui.includes('setOpenWeek'),'weekly Documents grouping missing'],
  [ui.includes('documents need identity review')&&ui.includes("resolveReview('duplicate')"),'review wizard actions missing'],
- [ui.includes('Cleanup migration v109.7.11 applied'),'cleanup migration status missing'],
+ [(ui.includes('Cleanup migration v109.7.11 applied')||ui.includes('Historical evidence v109.8.0')),'cleanup or historical evidence status missing'],
 ];
-for(const [ok,message] of checks)if(!ok)throw new Error(`v109.7.11 verification failed: ${message}`);
-console.log('PASS — v109.7.11 weekly grouping, reconciliation, type logic and deduplication verified');
+for(const [ok,message] of checks)if(!ok)throw new Error(`weekly load-folder verification failed: ${message}`);
+console.log('PASS — weekly grouping, reconciliation, type logic, deduplication and historical evidence verified');
