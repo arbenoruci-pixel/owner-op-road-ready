@@ -4,7 +4,7 @@ const BUILD='v109719-open-exact-load-evidence';
 const path='source/src/modules/owneros/LoadFoldersV10969.jsx';
 let src=fs.readFileSync(path,'utf8');
 
-src=src.replace("const VERSION='109.7.11';",`const VERSION='${VERSION}';`);
+src=src.replace(/const VERSION='[^']+';/,`const VERSION='${VERSION}';`);
 
 src=src.replace(
 " function itemAction(item){if(item.id==='logbook'||item.id==='miles')return onOpenLog;if(item.id==='trailer_return')return()=>markTrailerReturnedV10976(open.loadNo,open.trailerId);return onScan;}\n function actionLabel(item){if(item.id==='logbook')return'Open Logbook';if(item.id==='miles')return'Open Miles';if(item.id==='trailer_return')return'Mark returned';return'Add';}",
@@ -21,10 +21,12 @@ src=src.replace("<button type=\"button\" onClick={onOpenLog}>Open Logbook</butto
 if(!src.includes('openExactLog(open,true)')||!src.includes('Open Rate Con'))throw new Error('v109.7.19 exact evidence action patch failed');
 fs.writeFileSync(path,src);
 
+for(const p of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx'])if(fs.existsSync(p)){let s=fs.readFileSync(p,'utf8');s=s.replace(/App v109\.7\.1[3-8]/g,`App v${VERSION}`).replace(/APP V109\.7\.1[3-8]/g,`APP V${VERSION}`).replaceAll('App v{CURRENT_APP_VERSION}',`App v${VERSION}`).replaceAll('APP V{CURRENT_APP_VERSION}',`APP V${VERSION}`);fs.writeFileSync(p,s);}
+
 for(const p of ['package.json','package-lock.json'])if(fs.existsSync(p)){const data=JSON.parse(fs.readFileSync(p,'utf8'));data.version=VERSION;if(data.packages?.[''])data.packages[''].version=VERSION;fs.writeFileSync(p,JSON.stringify(data,null,2)+'\n');}
 const now=new Date().toISOString();
 fs.writeFileSync('release-version.json',JSON.stringify({version:VERSION,build:BUILD,label:'v109.7.19 Exact Load Evidence Actions'},null,2)+'\n');
 fs.writeFileSync('public/app-version.json',JSON.stringify({version:VERSION,build:BUILD,releasedAt:now,updatedAt:now,label:'v109.7.19 Exact Load Evidence Actions',force:true,notes:['Open Logbook and Open Miles pass the exact historical load date.','Completed Rate Con, BOL, POD, Logbook, Miles and Fuel checklist rows have Open buttons.','No completed-load evidence action defaults to today.']},null,2)+'\n');
-let update=fs.readFileSync('source/src/core/update/appUpdate.js','utf8');update=update.replace(/const FALLBACK_APP_VERSION\s*=\s*['\"][^'\"]+['\"];?/,`const FALLBACK_APP_VERSION = '${VERSION}';`).replace(/const FALLBACK_APP_BUILD\s*=\s*['\"][^'\"]+['\"];?/,`const FALLBACK_APP_BUILD = '${BUILD}';`);fs.writeFileSync('source/src/core/update/appUpdate.js',update);
+let update=fs.readFileSync('source/src/core/update/appUpdate.js','utf8');update=update.replace(/const FALLBACK_APP_VERSION\s*=\s*['\"][^'\"]+['\"];?/,`const FALLBACK_APP_VERSION = '${VERSION}';`).replace(/const FALLBACK_APP_BUILD\s*=\s*['\"][^'\"]+['\"];?/,`const FALLBACK_APP_BUILD = '${BUILD}';`).replace(/export const CURRENT_APP_VERSION\s*=\s*[^;]+;/,'export const CURRENT_APP_VERSION = FALLBACK_APP_VERSION;').replace(/export const CURRENT_APP_BUILD\s*=\s*[^;]+;/,'export const CURRENT_APP_BUILD = FALLBACK_APP_BUILD;');fs.writeFileSync('source/src/core/update/appUpdate.js',update);
 let sw=fs.readFileSync('public/sw.js','utf8');sw=sw.replace(/const OWNER_OP_SW_VERSION\s*=\s*['\"][^'\"]+['\"];?/,`const OWNER_OP_SW_VERSION = '${VERSION}';`).replace(/const OWNER_OP_SW_BUILD\s*=\s*['\"][^'\"]+['\"];?/,`const OWNER_OP_SW_BUILD = '${BUILD}';`);fs.writeFileSync('public/sw.js',sw);
 console.log('PASS — v109.7.19 exact load evidence actions applied last');
