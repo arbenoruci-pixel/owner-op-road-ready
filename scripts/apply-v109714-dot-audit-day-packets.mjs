@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+const path='source/src/modules/owneros/OwnerOperatorOSV102.jsx';
+let src=fs.readFileSync(path,'utf8');
+if(!src.includes("import DotAuditCenterV109714"))src=src.replace("import { buildAuditPacketPdfV102, buildBillingPacketPdfV102, buildInvoicePdfV102 } from './ownerOpsPdfV102.js';", "import { buildAuditPacketPdfV102, buildBillingPacketPdfV102, buildInvoicePdfV102 } from './ownerOpsPdfV102.js';\nimport DotAuditCenterV109714 from './DotAuditCenterV109714.jsx';\nimport './dotAuditCenterV109714.css';");
+const start=src.indexOf("        {tab==='audit' && <>");
+const end=start>=0?src.indexOf("        {tab==='connections'",start):-1;
+if(start<0||end<0)throw new Error('Audit block anchors not found');
+const block="        {tab==='audit' && <DotAuditCenterV109714 state={state} loads={loads} documents={documents} businessStore={businessStore} ownerStore={ownerStore} onOpenLog={onOpenLog} />}\n\n";
+src=src.slice(0,start)+block+src.slice(end);
+fs.writeFileSync(path,src);
+const versionPath='public/app-version.json';
+fs.writeFileSync(versionPath,JSON.stringify({version:'109.7.14',build:'v109714-dot-audit-day-packets',releasedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),label:'v109.7.14 DOT Audit Day Packets',force:true,notes:['DOT Audit opens by week and exact requested day.','Each active load day includes the complete load packet regardless of when individual documents were saved.','Shows Logbook, miles, Rate Confirmation, BOL, POD, fuel, inspections and billing together.']},null,2)+'\n');
+console.log('PASS — v109.7.14 DOT audit day packets applied last');
