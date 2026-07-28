@@ -13,12 +13,14 @@ const filtered=scripts.filter(name=>![
  'apply-v109719-open-exact-load-evidence.mjs',
  'verify-v109719-open-exact-load-evidence.mjs',
  'finalize-v109800-historical-evidence.mjs',
+ 'apply-v109802-logbook-form-miles.mjs',
  'verify-v109801-full-historical-logbooks.mjs'
 ].includes(name));
 filtered.push(
  'apply-v109718b-actual-load-day-evidence.mjs',
  'verify-v109718-actual-load-day-evidence.mjs',
  'finalize-v109800-historical-evidence.mjs',
+ 'apply-v109802-logbook-form-miles.mjs',
  'verify-v109801-full-historical-logbooks.mjs'
 );
 for(const script of filtered)run(process.execPath,[`scripts/${script}`]);
