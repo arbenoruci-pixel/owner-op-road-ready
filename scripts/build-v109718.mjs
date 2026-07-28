@@ -15,6 +15,7 @@ const filtered=scripts.filter(name=>![
  'finalize-v109800-historical-evidence.mjs',
  'apply-v109802-logbook-form-miles.mjs',
  'apply-v109803-force-rebuild-and-deep-logbook-miles.mjs',
+ 'apply-v109804-event-mileage-source.mjs',
  'verify-v109801-full-historical-logbooks.mjs'
 ].includes(name));
 filtered.push(
@@ -23,6 +24,7 @@ filtered.push(
  'finalize-v109800-historical-evidence.mjs',
  'apply-v109802-logbook-form-miles.mjs',
  'apply-v109803-force-rebuild-and-deep-logbook-miles.mjs',
+ 'apply-v109804-event-mileage-source.mjs',
  'verify-v109801-full-historical-logbooks.mjs'
 );
 for(const script of filtered)run(process.execPath,[`scripts/${script}`]);
