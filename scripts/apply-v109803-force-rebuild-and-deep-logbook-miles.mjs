@@ -37,6 +37,6 @@ src=src.replace(oldMiles,deepMiles);
 src=src.replace("export function ensureHistoricalLogbookSnapshotV10981({state={},folder={},day=''}){","export function ensureHistoricalLogbookSnapshotV10981({state={},folder={},day='',force=false}){");
 src=src.replace("const existing=versions.find(snapshot=>snapshot.checksum===hash);if(existing)return existing;","const existing=versions.find(snapshot=>snapshot.checksum===hash);if(existing&&!force)return existing;");
 src=src.replace("snapshot=ensureHistoricalLogbookSnapshotV10981({state,folder,day});results.push", "snapshot=ensureHistoricalLogbookSnapshotV10981({state,folder,day,force:true});results.push");
-if(!src.includes('force=true')||!src.includes('deepDailyRecords'))throw new Error('Force rebuild/deep miles patch failed');
+if(!src.includes("force=false")||!src.includes("force:true")||!src.includes('deepDailyRecords'))throw new Error('Force rebuild/deep miles patch failed');
 fs.writeFileSync(path,src);
 console.log('PASS — v109.8.3 force rebuild creates a new snapshot and reads deep daily Logbook Distance');
