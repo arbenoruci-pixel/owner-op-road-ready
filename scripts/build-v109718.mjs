@@ -14,6 +14,7 @@ const filtered=scripts.filter(name=>![
  'verify-v109719-open-exact-load-evidence.mjs',
  'finalize-v109800-historical-evidence.mjs',
  'apply-v109802-logbook-form-miles.mjs',
+ 'apply-v109803-force-rebuild-and-deep-logbook-miles.mjs',
  'verify-v109801-full-historical-logbooks.mjs'
 ].includes(name));
 filtered.push(
@@ -21,6 +22,7 @@ filtered.push(
  'verify-v109718-actual-load-day-evidence.mjs',
  'finalize-v109800-historical-evidence.mjs',
  'apply-v109802-logbook-form-miles.mjs',
+ 'apply-v109803-force-rebuild-and-deep-logbook-miles.mjs',
  'verify-v109801-full-historical-logbooks.mjs'
 );
 for(const script of filtered)run(process.execPath,[`scripts/${script}`]);
