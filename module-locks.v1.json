@@ -1,10 +1,10 @@
 {
   "contractVersion": 1,
-  "release": "110.1.0",
+  "release": "110.2.0",
   "policy": "Intentional stable-module edits require review, regression tests, and an explicit lock revision. Legacy read imports are frozen; new consumers use the public API.",
   "files": {
     "source/src/modules/logbook/certificationV110.js": "20ad778bf03c8fd70ebdf48ef290ae4170e3f88a326055ac79f51aa18bd21821",
-    "source/src/modules/logbook/public-api.js": "62edb2a242de37903232c11f39fbad66f708a8bb05502ff2b9caa1b8ae1238ca",
+    "source/src/modules/logbook/public-api.js": "8735cbd932c6e43f93ca8ca12ce59b11253e485a2d8148c6c20b9cff203e21e0",
     "source/src/modules/logbook/certificationFingerprintV1032.js": "7392a44c4ed77ee117eea2dfbdd93878e982ffdd4fad20dced7cc5fc649d3f83",
     "source/src/modules/logbook/signing.js": "87d5aaa95556ca432193393ebf703d2f0ed8cbe3c070ac850047f262acee680b",
     "source/src/core/timeline/timelineEngine.js": "051fb11760778953447adaa2439d2f660f8f1adb48ed5c6c74d60601dd99c0e6",
@@ -13,7 +13,7 @@
     "source/src/core/backup/dayTransfer.js": "4d1417372c7e32dcc88e50073994533590391ea992439700cf707e0fb59d448b",
     "source/src/modules/scanner-core/public-api.js": "d24494314b52789ba20705c3d7900a5eade0daef79ab62e4cea7deab897cbc26",
     "source/src/modules/logbook/dayFormV110.js": "352b948a6839bf501fccf26f69c6ac6a521c73877f57b69cb6cbc00907dae79d",
-    "source/src/modules/logbook/DayLogScreen.jsx": "60f8ec428c03c4131888774443e41db63f75b54f757944f7afa19cde7618a9a8"
+    "source/src/modules/logbook/DayLogScreen.jsx": "d20d6a459ae286a22e315d13f7724c6dd99e58a9092f5327201ab544451e1167"
   },
   "legacyReadImports": [
     "source/src/modules/dot/DotMode.jsx -> ../logbook/signing.js",
