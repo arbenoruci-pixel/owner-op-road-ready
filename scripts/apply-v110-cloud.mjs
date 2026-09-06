@@ -11,27 +11,29 @@ if(!src.includes('<CloudLaunchBar state={state} />')){
 fs.writeFileSync(wallet,src);
 fs.writeFileSync('app/road-ready-client.jsx',"'use client';\nimport App from '../source/src/App.jsx';\nimport AuthGate from '../source/src/modules/auth/AuthGate.jsx';\nimport CloudBackupAgent from '../source/src/modules/cloud/CloudBackupAgent.jsx';\nexport default function RoadReadyClient(){return <AuthGate><App/><CloudBackupAgent/></AuthGate>;}\n");
 
-// Data-safety lock: the legacy sync engine remains disabled unless a future
-// migration explicitly opts in. This prevents an old cloud pull/push path from
-// touching the authoritative local history while the new prototype cloud is
-// being verified. A one-time raw snapshot is saved before normalization.
+// Data-safety lock: legacy cloud pull/push remains disabled unless a future
+// migration explicitly opts in. A one-time raw snapshot is preserved before
+// startup normalization so old logs remain recoverable during prototype work.
 const appPath='source/src/app/App.jsx';
 let app=fs.readFileSync(appPath,'utf8');
-const demoAnchor="const DEMO_CERTIFY_STATUS = ENABLE_DEMO_DATA ? initialCertifyStatus : {};";
 if(!app.includes('const ENABLE_LEGACY_SYNC =')){
- if(!app.includes(demoAnchor))throw new Error('Legacy sync safety constant anchor missing');
- app=app.replace(demoAnchor,`${demoAnchor}\nconst ENABLE_LEGACY_SYNC = process.env.NEXT_PUBLIC_OWNER_OP_LEGACY_SYNC_ENABLED === 'true';`);
+ const demo=/const DEMO_CERTIFY_STATUS\s*=\s*ENABLE_DEMO_DATA\s*\?\s*initialCertifyStatus\s*:\s*\{\}\s*;?/;
+ if(!demo.test(app))throw new Error('Legacy sync safety constant anchor missing');
+ app=app.replace(demo,match=>`${match}\nconst ENABLE_LEGACY_SYNC = process.env.NEXT_PUBLIC_OWNER_OP_LEGACY_SYNC_ENABLED === 'true';`);
 }
-const savedAnchor="    if (saved) {\n      const recovered = await recoverSuspiciousTodayState(saved);";
 if(!app.includes("owner-op-road-ready-pre-cloud-raw-v1")){
- if(!app.includes(savedAnchor))throw new Error('Pre-cloud snapshot anchor missing');
- app=app.replace(savedAnchor,`    if (saved) {\n      try {\n        if (typeof window !== 'undefined' && !window.localStorage.getItem('owner-op-pre-cloud-safety-lock-v1')) {\n          await savePreUpdateSnapshot(saved, { kind:'pre_cloud_safety_lock', sourceVersion:CURRENT_APP_VERSION, createdAt:new Date().toISOString() });\n          try { window.localStorage.setItem('owner-op-road-ready-pre-cloud-raw-v1', JSON.stringify(saved)); } catch {}\n          window.localStorage.setItem('owner-op-pre-cloud-safety-lock-v1', 'saved');\n        }\n      } catch {}\n      const recovered = await recoverSuspiciousTodayState(saved);`);
+ const saved=/if\s*\(\s*saved\s*\)\s*\{\s*const\s+recovered\s*=\s*await\s+recoverSuspiciousTodayState\(saved\)\s*;?/;
+ if(!saved.test(app))throw new Error('Pre-cloud snapshot anchor missing');
+ app=app.replace(saved,match=>{
+   const recoveredPart=match.match(/const\s+recovered[\s\S]*$/)?.[0] || 'const recovered = await recoverSuspiciousTodayState(saved);';
+   return `if (saved) {\n      try {\n        if (typeof window !== 'undefined' && !window.localStorage.getItem('owner-op-pre-cloud-safety-lock-v1')) {\n          await savePreUpdateSnapshot(saved, { kind:'pre_cloud_safety_lock', sourceVersion:CURRENT_APP_VERSION, createdAt:new Date().toISOString() });\n          try { window.localStorage.setItem('owner-op-road-ready-pre-cloud-raw-v1', JSON.stringify(saved)); } catch {}\n          window.localStorage.setItem('owner-op-pre-cloud-safety-lock-v1', 'saved');\n        }\n      } catch {}\n      ${recoveredPart}`;
+ });
 }
-app=app.replace('      installOwnerOpAuthBridge();','      if (ENABLE_LEGACY_SYNC) installOwnerOpAuthBridge();');
-app=app.replace('      startSyncEngine();','      if (ENABLE_LEGACY_SYNC) startSyncEngine();');
-app=app.replace("    if (previousEventsByDay) {\n      queueDutyEventDiffs(previousEventsByDay, state.eventsByDay || {}).catch(() => {});\n    }","    if (ENABLE_LEGACY_SYNC && previousEventsByDay) {\n      queueDutyEventDiffs(previousEventsByDay, state.eventsByDay || {}).catch(() => {});\n    }");
-app=app.replace("    if (previousInspectionByDay) {\n      queueInspectionDiffs(previousInspectionByDay, state.inspectionByDay || {}).catch(() => {});\n    }","    if (ENABLE_LEGACY_SYNC && previousInspectionByDay) {\n      queueInspectionDiffs(previousInspectionByDay, state.inspectionByDay || {}).catch(() => {});\n    }");
-if(!app.includes('if (ENABLE_LEGACY_SYNC) startSyncEngine();')||!app.includes('owner-op-road-ready-pre-cloud-raw-v1'))throw new Error('Pre-cloud data safety lock failed');
+app=app.replace(/installOwnerOpAuthBridge\(\);/g,'if (ENABLE_LEGACY_SYNC) installOwnerOpAuthBridge();');
+app=app.replace(/startSyncEngine\(\);/g,'if (ENABLE_LEGACY_SYNC) startSyncEngine();');
+app=app.replace(/if\s*\(previousEventsByDay\)\s*\{\s*queueDutyEventDiffs\(previousEventsByDay,\s*state\.eventsByDay\s*\|\|\s*\{\}\)\.catch\(\(\)\s*=>\s*\{\}\);\s*\}/g,"if (ENABLE_LEGACY_SYNC && previousEventsByDay) { queueDutyEventDiffs(previousEventsByDay, state.eventsByDay || {}).catch(() => {}); }");
+app=app.replace(/if\s*\(previousInspectionByDay\)\s*\{\s*queueInspectionDiffs\(previousInspectionByDay,\s*state\.inspectionByDay\s*\|\|\s*\{\}\)\.catch\(\(\)\s*=>\s*\{\}\);\s*\}/g,"if (ENABLE_LEGACY_SYNC && previousInspectionByDay) { queueInspectionDiffs(previousInspectionByDay, state.inspectionByDay || {}).catch(() => {}); }");
+if(!app.includes('if (ENABLE_LEGACY_SYNC) startSyncEngine();')||!app.includes('owner-op-road-ready-pre-cloud-raw-v1')||!app.includes('ENABLE_LEGACY_SYNC && previousEventsByDay'))throw new Error('Pre-cloud data safety lock failed');
 fs.writeFileSync(appPath,app);
 
 fs.writeFileSync('release-version.json',JSON.stringify({version:VERSION,build:BUILD,label:'Pre-cloud data safety lock'},null,2)+'\n');
