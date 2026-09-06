@@ -9,15 +9,23 @@ export function traceGeometry(events = []) {
     const previous = rows[i-1];
     const adjacent = !!previous && previous.endMin === event.startMin;
     const x1=graphX(event.startMin), x2=graphX(event.endMin), y=graphY(event.status);
-    // The arriving vertical and horizontal share a single miter-joined SVG path.
-    // Butt caps leave true gaps exposed, including gaps between equal statuses.
     const path = adjacent && previous.status !== event.status
       ? `M ${x1} ${graphY(previous.status)} V ${y} H ${x2}`
       : `M ${x1} ${y} H ${x2}`;
     segments.push({ event,adjacent,path,x1,x2,y });
-    if (previous && !adjacent) discontinuities.push({ type:previous.endMin < event.startMin ? 'Gap' : 'Overlap',start:Math.min(previous.endMin,event.startMin),end:Math.max(previous.endMin,event.startMin) });
   });
-  if (rows.length && rows[0].startMin > 0) discontinuities.unshift({type:'Gap',start:0,end:rows[0].startMin});
+  // Coverage sweep handles nested overlaps without inventing a gap while another
+  // stored event still covers that time. No stored endpoint is moved.
+  const boundaries = [...new Set([0,...rows.flatMap(e => [e.startMin,e.endMin])])].sort((a,b)=>a-b);
+  for (let i=1;i<boundaries.length;i++) {
+    const start=boundaries[i-1],end=boundaries[i];
+    const count=rows.filter(e=>e.startMin<end && e.endMin>start).length;
+    const type=count===0?'Gap':count>1?'Overlap':null;
+    if (!type || end<=start) continue;
+    const last=discontinuities[discontinuities.length-1];
+    if (last?.type===type && last.end===start) last.end=end;
+    else discontinuities.push({type,start,end});
+  }
   const chains = [];
   for (const s of segments) {
     if (s.adjacent) chains[chains.length-1] += ` V ${s.y} H ${s.x2}`;
