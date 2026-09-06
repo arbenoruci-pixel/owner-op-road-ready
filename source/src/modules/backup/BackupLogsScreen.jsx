@@ -40,7 +40,9 @@ function validSafetyMeta(value) {
   const sha256 = String(value?.sha256 || '').toLowerCase();
   const bytes = Number(value?.bytes || 0);
   if (!createdAt || Number.isNaN(new Date(createdAt).getTime())) return null;
-  if (!/^road-ready-device-safety-.*\.roadready\.json$/i.test(filename)) return null;
+  // iOS Files may rename a saved file (for example by adding "(1)").
+  // The content verification below is authoritative, so only require a non-empty name here.
+  if (!filename) return null;
   if (!/^[a-f0-9]{64}$/.test(sha256)) return null;
   if (!Number.isFinite(bytes) || bytes <= 0) return null;
   return {
@@ -82,7 +84,7 @@ function downloadJson(payload, filename) {
 
 async function shareOrDownloadJson(payload, filename) {
   const json = JSON.stringify(payload, null, 2);
-  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof File === 'function') {
+  if (typeof navigator !== 'undefined' && typeof File === 'function' && typeof navigator.share === 'function') {
     try {
       const file = new File([json], filename, { type:'application/json' });
       const supported = typeof navigator.canShare !== 'function' || navigator.canShare({ files:[file] });
@@ -193,17 +195,13 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
     setSafetyError('');
     setStatus('Checking the saved Device Safety Backup from iPhone Files…');
     try {
-      if (!/^road-ready-device-safety-.*\.roadready\.json$/i.test(file.name || '')) {
-        throw new Error('Choose the road-ready-device-safety-…roadready.json file.');
-      }
       if (!Number.isFinite(file.size) || file.size <= 0) throw new Error('The selected backup file is empty.');
 
-      // The safety archive header is intentionally before the large payload. Reading only
-      // the first 256 KB proves this is a saved Road Ready safety archive without loading
-      // 100+ MB of document blobs into iPhone memory a second time.
-      const head = await file.slice(0, 256 * 1024).text();
-      if (!new RegExp(`\\"kind\\"\\s*:\\s*\\"${SAFETY_KIND}\\"`).test(head)) {
-        throw new Error('This is not a Road Ready Device Safety Backup.');
+      // iOS may rename a file when saving a duplicate. Do not trust the filename.
+      // Verify the Road Ready safety header inside the saved file instead.
+      const head = await file.slice(0, 1024 * 1024).text();
+      if (!new RegExp(`\\\"kind\\\"\\s*:\\s*\\\"${SAFETY_KIND}\\\"`).test(head)) {
+        throw new Error('Wrong file. Choose the Device Safety Backup, not the readable all-data JSON.');
       }
       if (!/\"schemaVersion\"\s*:\s*1/.test(head)) throw new Error('Unsupported safety backup schema.');
       const sha = head.match(/\"payloadSha256\"\s*:\s*\"([a-f0-9]{64})\"/i)?.[1]?.toLowerCase();
@@ -213,16 +211,17 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
 
       const meta = saveSafetyMeta({
         createdAt,
-        filename:file.name,
+        filename:String(file.name || 'road-ready-device-safety-backup.json'),
         sha256:sha,
         bytes:file.size,
         inventory:safetyInventory,
       });
       setLastSafetyExport(meta);
-      setStatus(`SAVED BACKUP VERIFIED FROM FILES: ${file.name}`);
+      setStatus(`SAVED BACKUP VERIFIED FROM FILES: ${file.name || 'Device Safety Backup'}`);
     } catch (error) {
-      setSafetyError(error?.message || 'Could not verify the saved Device Safety Backup.');
-      setStatus('Restore remains locked. No local data was changed.');
+      const message = error?.message || 'Could not verify the saved Device Safety Backup.';
+      setSafetyError(message);
+      setStatus(`Restore remains locked: ${message}`);
     } finally {
       if (safetyFileInputRef.current) safetyFileInputRef.current.value = '';
       setBusy(false);
