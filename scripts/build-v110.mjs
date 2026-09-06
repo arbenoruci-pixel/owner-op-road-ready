@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
+const path='scripts/build-v109718.mjs';
+const original=fs.readFileSync(path,'utf8');
+const anchor="run('npx',['next','build']);";
+if(original.split(anchor).length!==2)throw new Error('Legacy build anchor changed; refusing an ambiguous build');
+const program=original.replace(anchor,"run(process.execPath,['scripts/apply-v110-cloud.mjs']);\nrun(process.execPath,['scripts/test-owner-op-cloud-v110.mjs']);\n"+anchor);
+fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
+const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
+if(result.error)throw result.error;process.exit(result.status??1);
