@@ -1,4 +1,5 @@
 import { certificationPayloadV1032 as legacyPayload, certificationFingerprintV1032 as legacyFingerprint, certificationStatusV1032 as legacyStatus } from './certificationFingerprintV1032.js';
+import { readLogbookDayState } from './dayFormV110.js';
 import { getHomeTerminalTimeZone } from '../../core/time/homeTerminalTime.js';
 
 // v1 contract: certification concerns this day's recorded facts. Current fleet,
@@ -11,7 +12,7 @@ function digest(value) { let h = 2166136261; for (const c of value) h = Math.imu
 function contextFor(state, day) {
   const old = state.signatureByDay?.[day]?.certificationContext;
   if (old?.version === 1) return clone(old);
-  const form = legacyPayload(state, day).form;
+  const form = legacyPayload(readLogbookDayState(state, day), day).form;
   return { version:1, form:clone(form), homeTimezone:getHomeTerminalTimeZone(state), profileAtBackup:{
     driverName:form.driver, carrierName:form.carrier, mainOffice:form.mainOffice,
     unit:form.truck, trailer:form.trailer, usdot:state.dotNumber || state.usdot || state.driverProfile?.usdotNumber || '',
@@ -42,7 +43,10 @@ export function certificationFingerprintV1032(state = {}, day = '') {
 }
 export function certificationStatusV1032(state = {}, day = '') {
   const sig = state.signatureByDay?.[day] || {};
-  if (!sig.certificationContext) return legacyStatus(state, day);
+  if (!sig.certificationContext) {
+    const result = legacyStatus(state, day);
+    return sig.signed && sig.needsRecertification ? { ...result, changed:true, status:'Needs Recertification' } : result;
+  }
   const content = certificationContent(state, day);
   // The full canonical payload comparison is authoritative; the short digest
   // is an index only and can never hide a digest collision.
@@ -52,13 +56,14 @@ export function certificationStatusV1032(state = {}, day = '') {
     status:sig.signed !== true ? 'Needs signature' : changed ? 'Needs Recertification' : 'Certified',
     storedFingerprint:sig.certifiedFingerprint || '', currentFingerprint:fingerprint(content), signature:sig };
 }
-export function createCertificationRecord(state, day, { driverName = 'Driver', now = Date.now() } = {}) {
+export function createCertificationRecord(state, day, { driverName = 'Driver', signatureDataUrl, now = Date.now() } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('A valid log day is required.');
   const prev = state.signatureByDay?.[day] || {};
   const context = contextFor(state, day), content = certificationContent(state, day, context);
   const { certificationHistory = [], ...prior } = clone(prev);
   const { needsRecertification, changedAfterSignAt, integrityRepairReason, repairReason, ...cleanPrior } = prior;
   return { ...cleanPrior, signed:true, driverName, signatureRef:'driverSignature', signedAt:now,
+    signatureDataUrl:signatureDataUrl || state.driverSignature?.dataUrl || prev.signatureDataUrl || '',
     certifiedSnapshotAt:now, certifiedFingerprintVersion:CERTIFICATION_FINGERPRINT_VERSION_V1032,
     certifiedFingerprint:fingerprint(content), certificationContext:context, certifiedContent:content,
     // Prior attestations stay available; no back-dating or automatic re-signing.
