@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { traceGeometry } from '../source/src/modules/graph/graphGeometryV110.js';
+const rows=[{id:'cover',status:'OFF',startMin:0,endMin:100},{id:'a',status:'ON',startMin:10,endMin:20},{id:'b',status:'D',startMin:20,endMin:40}];
+const before=structuredClone(rows),g=traceGeometry(rows);
+assert.equal(g.segments[2].adjacent,false);assert.doesNotMatch(g.segments[2].path,/ V /);assert.equal(g.chains.length,3);assert.deepEqual(g.discontinuities,[{type:'Overlap',start:10,end:40}]);
+console.log('PASS — a third overlapping event cannot create a misleading joined bend');
+assert.deepEqual(rows,before);assert.equal(g.segments[2].event.startMin,20);
+console.log('PASS — overlap rendering preserves every raw minute and ID');
+const normal=traceGeometry(rows.slice(1));assert.equal(normal.segments[1].adjacent,true);assert.match(normal.segments[1].path,/ V /);
+console.log('PASS — normal exact adjacency remains joined');
+const fields=fs.readFileSync('source/src/modules/editor/components/EditorLocationFields.jsx','utf8');
+assert.match(fields,/if \(parsed.city !== city \|\| parsed.state !== state\) onLocationChange\(parsed.city, parsed.state\)/);
+assert.match(fields,/onLocationDraftChange\?\.\(e.target.value\)/);
+console.log('PASS — final materialized location field guards blur and retains explicit typing');
+const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.1');assert.equal(meta.build,'v110201-logbook-followup');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.1'/);
+console.log('PASS — release manifest and worker agree without forcing a reload');

@@ -1,7 +1,7 @@
 name: Module isolation regression
 on:
   push:
-    branches: [main, fix/module-isolation-20260906, fix/logbook-editor-20260906]
+    branches: [main, fix/module-isolation-20260906, fix/logbook-editor-20260906, fix/logbook-followup-v11021-20260906]
   pull_request:
     branches: [main]
 permissions:
@@ -54,6 +54,12 @@ jobs:
           node scripts/browser-isolation-v110.mjs
           node scripts/browser-logbook-editor-v110.mjs
           node scripts/browser-service-worker-v110.mjs
+          node scripts/browser-logbook-followup-v11021.mjs
+      - name: Verify exact production deployment and isolated hosted editor
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          node scripts/verify-production-v11021.mjs
+          TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-logbook-followup-v11021.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

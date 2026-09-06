@@ -8,12 +8,12 @@ assert.deepEqual(traceGeometry([{id:'a',status:'OFF',startMin:0,endMin:60},{id:'
 console.log('PASS — nested overlaps never invent coverage gaps');
 const current = fs.readFileSync('public/sw.js','utf8');
 const manifest = JSON.parse(fs.readFileSync('public/app-version.json','utf8'));
-assert.equal(manifest.version,'110.2.0'); assert.equal(manifest.force,false);
-assert.match(current,/OWNER_OP_SW_VERSION = '110\.2\.0'/);
-// The reviewed 110.1 -> 110.2 worker diff changes these two constants only.
-const prior = current.replace("'110.2.0'","'110.1.0'").replace("'v110200-logbook-editor'","'v110100-module-isolation'");
+assert.equal(manifest.version,'110.2.1'); assert.equal(manifest.force,false);
+assert.match(current,/OWNER_OP_SW_VERSION = '110\.2\.1'/);
 const results=[];
-for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
+for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [priorVersion,priorBuild] of [['110.1.0','v110100-module-isolation'],['110.2.0','v110200-logbook-editor']]) {
+  // Worker behavior is unchanged; only these release constants differ.
+  const prior=current.replace("'110.2.1'",`'${priorVersion}'`).replace("'v110201-logbook-followup'",`'${priorBuild}'`);
   let worker=prior;
   const server=http.createServer((req,res)=>{
     res.setHeader('Cache-Control','no-store');
@@ -41,10 +41,10 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
       navigator.serviceWorker.controller?.postMessage({type:'OWNER_OP_GET_SW_VERSION'});
     }));
     async function waitVersion(expected){for(let n=0;n<20;n++){const result=await version();if(result?.version===expected)return result;await page.waitForTimeout(100);}throw Error(name+': worker version did not become '+expected);}
-    const before=await waitVersion('110.1.0');
+    const before=await waitVersion(priorVersion);
     worker=current;
     await page.evaluate(async()=>{const registration=await navigator.serviceWorker.getRegistration();await registration.update();});
-    const after=await waitVersion('110.2.0');
+    const after=await waitVersion('110.2.1');
     assert.equal(after.build,manifest.build);
     const snapshot=await page.evaluate(async()=>({boot:window.fixtureBoot,local:JSON.parse(localStorage.getItem('sw-driving-fixture')),stored:await new Promise((resolve,reject)=>{const request=indexedDB.open('sw-driving-fixture-v110');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,q=db.transaction('logs').objectStore('logs').get('live');q.onsuccess=()=>{db.close();resolve(q.result);};};})}));
     assert.equal(snapshot.boot,'unchanged');
@@ -52,7 +52,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     assert.deepEqual(snapshot.stored,{status:'D',startMin:915,endMin:916});
     assert.deepEqual(errors,[]);
     results.push({browser:name,before,after,noPageReload:true,indexedDBUnchanged:true,localStorageUnchanged:true,pageErrors:errors});
-    console.log('PASS — '+name+': installed 110.1 worker → 110.2 handshake; no page reload or Driving fixture data change');
+    console.log('PASS — '+name+': installed '+priorVersion+' worker → 110.2.1 handshake; no reload or Driving fixture data change');
   } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 }
 fs.mkdirSync('browser-test-results',{recursive:true});fs.writeFileSync('browser-test-results/service-worker-upgrade.json',JSON.stringify(results,null,2));
