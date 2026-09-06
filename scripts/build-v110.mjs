@@ -4,7 +4,7 @@ const path='scripts/build-v109718.mjs';
 const original=fs.readFileSync(path,'utf8');
 const anchor="run('npx',['next','build']);";
 if(original.split(anchor).length!==2)throw new Error('Legacy build anchor changed; refusing an ambiguous build');
-const steps=['apply-v110-cloud.mjs','test-owner-op-cloud-v110.mjs','verify-owner-op-cloud-service.mjs','apply-module-isolation-v110.mjs','finalize-signature-persistence-v110.mjs','finalize-signature-ui-v110.mjs','apply-logbook-editor-v110.mjs','finalize-logbook-editor-v110.mjs','test-logbook-editor-v110.mjs','test-module-isolation-v110.mjs','test-day-form-v110.mjs','verify-isolation-locks-v110.mjs'];
+const steps=['apply-v110-cloud.mjs','test-owner-op-cloud-v110.mjs','verify-owner-op-cloud-service.mjs','apply-module-isolation-v110.mjs','finalize-signature-persistence-v110.mjs','finalize-signature-ui-v110.mjs','apply-logbook-editor-v110.mjs','finalize-logbook-editor-v110.mjs','finalize-migration-guard-v1102.mjs','test-migration-guard-v1102.mjs','test-logbook-editor-v110.mjs','test-module-isolation-v110.mjs','test-day-form-v110.mjs','verify-isolation-locks-v110.mjs'];
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

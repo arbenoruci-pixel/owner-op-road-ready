@@ -33,7 +33,8 @@ const cssPath='source/src/logbook-editor-v110.css';
 let css=fs.readFileSync(cssPath,'utf8');
 if(!css.includes('EDITOR_ACCESSIBLE_PICKED_V110'))css+=`
 /* EDITOR_ACCESSIBLE_PICKED_V110 */
-.editor-ui-v110 .reason-pills button *, .editor-ui-v110 .insert-reason-grid button * { color:inherit !important; -webkit-text-fill-color:currentColor !important; }
+.editor-ui-v110 .reason-pills button, .editor-ui-v110 .reason-pills button *, .editor-ui-v110 .insert-reason-grid button, .editor-ui-v110 .insert-reason-grid button * { color:inherit !important; -webkit-text-fill-color:currentColor !important; }
+.editor-ui-v110 .reason-pills button.picked { color:#075643 !important; -webkit-text-fill-color:#075643 !important; }
 .editor-ui-v110 .midnight-end-v110 { padding:0 !important; min-height:24px !important; }
 .editor-ui-v110 .midnight-end-v110 input { margin:0 !important; min-height:18px !important; max-height:18px !important; padding:0 !important; }
 `;
