@@ -18,6 +18,7 @@ import {
 const LEGACY_EXPORT_MARKER = 'Export all days';
 const LEGACY_IMPORT_MARKER = 'Import all data';
 const DEVICE_SAFETY_META_KEY = 'owner-op-road-ready-last-device-safety-export-v1';
+const SAFETY_KIND = 'owner_op_road_ready_device_safety_archive';
 
 function safeDate(value) {
   if (!value) return '';
@@ -33,28 +34,38 @@ function formatBytes(bytes = 0) {
   return `${(value / 1024 / 1024).toFixed(2)} MB`;
 }
 
+function validSafetyMeta(value) {
+  const createdAt = String(value?.createdAt || '');
+  const filename = String(value?.filename || '');
+  const sha256 = String(value?.sha256 || '').toLowerCase();
+  const bytes = Number(value?.bytes || 0);
+  if (!createdAt || Number.isNaN(new Date(createdAt).getTime())) return null;
+  if (!/^road-ready-device-safety-.*\.roadready\.json$/i.test(filename)) return null;
+  if (!/^[a-f0-9]{64}$/.test(sha256)) return null;
+  if (!Number.isFinite(bytes) || bytes <= 0) return null;
+  return {
+    createdAt,
+    filename,
+    sha256,
+    bytes,
+    inventory: value?.inventory && typeof value.inventory === 'object' ? value.inventory : null,
+  };
+}
+
 function readStoredSafetyExport() {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   try {
-    const value = JSON.parse(window.localStorage.getItem(DEVICE_SAFETY_META_KEY) || 'null');
-    const createdAt = String(value?.createdAt || '');
-    const filename = String(value?.filename || '');
-    const sha256 = String(value?.sha256 || '').toLowerCase();
-    const bytes = Number(value?.bytes || 0);
-    if (!createdAt || Number.isNaN(new Date(createdAt).getTime())) return null;
-    if (!/^road-ready-device-safety-.*\.roadready\.json$/i.test(filename)) return null;
-    if (!/^[a-f0-9]{64}$/.test(sha256)) return null;
-    if (!Number.isFinite(bytes) || bytes <= 0) return null;
-    return {
-      createdAt,
-      filename,
-      sha256,
-      bytes,
-      inventory: value?.inventory && typeof value.inventory === 'object' ? value.inventory : null,
-    };
+    return validSafetyMeta(JSON.parse(window.localStorage.getItem(DEVICE_SAFETY_META_KEY) || 'null'));
   } catch {
     return null;
   }
+}
+
+function saveSafetyMeta(meta) {
+  const checked = validSafetyMeta(meta);
+  if (!checked) throw new Error('Verified backup metadata is invalid.');
+  localStorage.setItem(DEVICE_SAFETY_META_KEY, JSON.stringify(checked));
+  return checked;
 }
 
 function downloadJson(payload, filename) {
@@ -74,14 +85,13 @@ async function shareOrDownloadJson(payload, filename) {
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof File === 'function') {
     try {
       const file = new File([json], filename, { type:'application/json' });
-      const shareData = {
-        title:'Road Ready — all log data',
-        text:'Full Road Ready Logbook and app data export.',
-        files:[file],
-      };
       const supported = typeof navigator.canShare !== 'function' || navigator.canShare({ files:[file] });
       if (supported) {
-        await navigator.share(shareData);
+        await navigator.share({
+          title:'Road Ready — all log data',
+          text:'Full Road Ready Logbook and app data export.',
+          files:[file],
+        });
         return 'shared';
       }
     } catch (error) {
@@ -109,6 +119,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
   void LEGACY_EXPORT_MARKER;
   void LEGACY_IMPORT_MARKER;
   const fileInputRef = useRef(null);
+  const safetyFileInputRef = useRef(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [lastExport, setLastExport] = useState(null);
@@ -158,29 +169,62 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
         setStatus('Safety backup cancelled. Nothing on the phone was changed.');
         return;
       }
-      const meta = {
+      const meta = saveSafetyMeta({
         createdAt: archive.createdAt,
         filename,
         sha256: verification.sha256,
         bytes: result.bytes || verification.bytes,
         inventory: archive.inventory,
-      };
+      });
       setLastSafetyExport(meta);
       setSafetyInventory(archive.inventory);
-      try {
-        localStorage.setItem(DEVICE_SAFETY_META_KEY, JSON.stringify({
-          createdAt: meta.createdAt,
-          filename: meta.filename,
-          sha256: meta.sha256,
-          bytes: meta.bytes,
-          inventory: meta.inventory,
-        }));
-      } catch {}
       setStatus(`VERIFIED safety backup ready: ${filename}`);
     } catch (error) {
       setSafetyError(error?.message || 'Device safety backup failed.');
       setStatus('No local data was changed.');
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifySavedSafetyFile(file) {
+    if (!file) return;
+    setBusy(true);
+    setSafetyError('');
+    setStatus('Checking the saved Device Safety Backup from iPhone Files…');
+    try {
+      if (!/^road-ready-device-safety-.*\.roadready\.json$/i.test(file.name || '')) {
+        throw new Error('Choose the road-ready-device-safety-…roadready.json file.');
+      }
+      if (!Number.isFinite(file.size) || file.size <= 0) throw new Error('The selected backup file is empty.');
+
+      // The safety archive header is intentionally before the large payload. Reading only
+      // the first 256 KB proves this is a saved Road Ready safety archive without loading
+      // 100+ MB of document blobs into iPhone memory a second time.
+      const head = await file.slice(0, 256 * 1024).text();
+      if (!new RegExp(`\\"kind\\"\\s*:\\s*\\"${SAFETY_KIND}\\"`).test(head)) {
+        throw new Error('This is not a Road Ready Device Safety Backup.');
+      }
+      if (!/\"schemaVersion\"\s*:\s*1/.test(head)) throw new Error('Unsupported safety backup schema.');
+      const sha = head.match(/\"payloadSha256\"\s*:\s*\"([a-f0-9]{64})\"/i)?.[1]?.toLowerCase();
+      if (!sha) throw new Error('Safety backup checksum header was not found.');
+      const createdAt = head.match(/\"createdAt\"\s*:\s*\"([^\"]+)\"/)?.[1]
+        || new Date(file.lastModified || Date.now()).toISOString();
+
+      const meta = saveSafetyMeta({
+        createdAt,
+        filename:file.name,
+        sha256:sha,
+        bytes:file.size,
+        inventory:safetyInventory,
+      });
+      setLastSafetyExport(meta);
+      setStatus(`SAVED BACKUP VERIFIED FROM FILES: ${file.name}`);
+    } catch (error) {
+      setSafetyError(error?.message || 'Could not verify the saved Device Safety Backup.');
+      setStatus('Restore remains locked. No local data was changed.');
+    } finally {
+      if (safetyFileInputRef.current) safetyFileInputRef.current.value = '';
       setBusy(false);
     }
   }
@@ -218,7 +262,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
     if (!file) return;
     const verifiedSafety = lastSafetyExport || readStoredSafetyExport();
     if (!verifiedSafety) {
-      setStatus('Restore is locked until a verified Device Safety Backup has been created and saved from this device.');
+      setStatus('Restore is locked until a verified Device Safety Backup is created and saved from this device.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -313,7 +357,13 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
               <span>{formatBytes(lastSafetyExport.bytes)} · SHA-256 {lastSafetyExport.sha256.slice(0, 16)}…</span>
               <span>{safeDate(lastSafetyExport.createdAt)}</span>
             </div>
-          ) : <p><strong>Cloud migration stays blocked until this file is saved outside the PWA.</strong></p>}
+          ) : (
+            <>
+              <p><strong>Cloud migration stays blocked until this file is saved outside the PWA.</strong></p>
+              <button type="button" className="backup-secondary" onClick={() => safetyFileInputRef.current?.click()} disabled={busy}>Verify saved backup from Files</button>
+              <input ref={safetyFileInputRef} type="file" accept="application/json,.json,.roadready" hidden onChange={event => verifySavedSafetyFile(event.target.files?.[0])} />
+            </>
+          )}
         </section>
 
         <section className="backup-actions-card">
