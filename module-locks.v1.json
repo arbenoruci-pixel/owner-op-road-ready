@@ -3,15 +3,17 @@
   "release": "110.1.0",
   "policy": "Intentional stable-module edits require review, regression tests, and an explicit lock revision. Legacy read imports are frozen; new consumers use the public API.",
   "files": {
-    "source/src/modules/logbook/certificationV110.js": "d3351447d548ab9af6474620e03b7cd963a1b43c18c518f64b778144d05af2e1",
-    "source/src/modules/logbook/public-api.js": "b9a26a437414fc6c1b9e749e693070aa847a74a1fd449d7b135583cf9288453d",
+    "source/src/modules/logbook/certificationV110.js": "20ad778bf03c8fd70ebdf48ef290ae4170e3f88a326055ac79f51aa18bd21821",
+    "source/src/modules/logbook/public-api.js": "62edb2a242de37903232c11f39fbad66f708a8bb05502ff2b9caa1b8ae1238ca",
     "source/src/modules/logbook/certificationFingerprintV1032.js": "7392a44c4ed77ee117eea2dfbdd93878e982ffdd4fad20dced7cc5fc649d3f83",
-    "source/src/modules/logbook/signing.js": "dfcac382b43ec2f379d15d590e4cd1c014b25d6ea28cc1d892a3330f00310aef",
+    "source/src/modules/logbook/signing.js": "87d5aaa95556ca432193393ebf703d2f0ed8cbe3c070ac850047f262acee680b",
     "source/src/core/timeline/timelineEngine.js": "051fb11760778953447adaa2439d2f660f8f1adb48ed5c6c74d60601dd99c0e6",
     "source/src/core/hos/hosEngine.js": "796130c9a78c83a7866a06376f9b2d8747c9209a3c01bd387b55ac6f6028e52d",
     "source/src/core/compliance/rawRodsChecks.js": "222c6729b79f2e7111936176841ca149737378611304105a8d175e0a7b67ad57",
     "source/src/core/backup/dayTransfer.js": "4d1417372c7e32dcc88e50073994533590391ea992439700cf707e0fb59d448b",
-    "source/src/modules/scanner-core/public-api.js": "d24494314b52789ba20705c3d7900a5eade0daef79ab62e4cea7deab897cbc26"
+    "source/src/modules/scanner-core/public-api.js": "d24494314b52789ba20705c3d7900a5eade0daef79ab62e4cea7deab897cbc26",
+    "source/src/modules/logbook/dayFormV110.js": "352b948a6839bf501fccf26f69c6ac6a521c73877f57b69cb6cbc00907dae79d",
+    "source/src/modules/logbook/DayLogScreen.jsx": "79e935b38fa46ae794c80b896fc755e51518a500b954753c1b01937af691a314"
   },
   "legacyReadImports": [
     "source/src/modules/dot/DotMode.jsx -> ../logbook/signing.js",
