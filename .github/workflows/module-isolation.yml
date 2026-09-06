@@ -1,0 +1,54 @@
+name: Module isolation regression
+on:
+  push:
+    branches: [main, fix/module-isolation-20260906]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: module-isolation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Exact production build and behavioral contracts
+        run: node scripts/build-v110.mjs
+      - name: Architecture contracts
+        run: npm run verify:architecture
+      - name: Existing Logbook regressions
+        run: |
+          node scripts/verify-shipping-doc-sign-loop-v962.mjs
+          node scripts/verify-sign-minute-boundary-v963.mjs
+          node scripts/verify-historical-location-isolation-v962.mjs
+          node scripts/verify-day-export-import-v9600.mjs
+      - name: Install isolated browser test tools
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Real browser sign, document and reload checks
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/owner-op-test-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/browser-isolation-v110.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owner-op-browser-tests
+          path: |
+            browser-test-results/
+            /tmp/owner-op-test-server.log
+          retention-days: 3
