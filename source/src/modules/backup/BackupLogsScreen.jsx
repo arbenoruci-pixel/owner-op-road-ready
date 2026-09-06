@@ -17,6 +17,7 @@ import {
 // Legacy release-verifier compatibility markers. Restore remains safety-gated below.
 const LEGACY_EXPORT_MARKER = 'Export all days';
 const LEGACY_IMPORT_MARKER = 'Import all data';
+const DEVICE_SAFETY_META_KEY = 'owner-op-road-ready-last-device-safety-export-v1';
 
 function safeDate(value) {
   if (!value) return '';
@@ -30,6 +31,30 @@ function formatBytes(bytes = 0) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function readStoredSafetyExport() {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const value = JSON.parse(window.localStorage.getItem(DEVICE_SAFETY_META_KEY) || 'null');
+    const createdAt = String(value?.createdAt || '');
+    const filename = String(value?.filename || '');
+    const sha256 = String(value?.sha256 || '').toLowerCase();
+    const bytes = Number(value?.bytes || 0);
+    if (!createdAt || Number.isNaN(new Date(createdAt).getTime())) return null;
+    if (!/^road-ready-device-safety-.*\.roadready\.json$/i.test(filename)) return null;
+    if (!/^[a-f0-9]{64}$/.test(sha256)) return null;
+    if (!Number.isFinite(bytes) || bytes <= 0) return null;
+    return {
+      createdAt,
+      filename,
+      sha256,
+      bytes,
+      inventory: value?.inventory && typeof value.inventory === 'object' ? value.inventory : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function downloadJson(payload, filename) {
@@ -109,6 +134,13 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
     scanDevice();
   }, [state]);
 
+  useEffect(() => {
+    const stored = readStoredSafetyExport();
+    if (!stored) return;
+    setLastSafetyExport(stored);
+    if (stored.inventory) setSafetyInventory(current => current || stored.inventory);
+  }, []);
+
   async function exportDeviceSafety() {
     setBusy(true);
     setStatus('Reading the installed PWA database without changing it…');
@@ -136,7 +168,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
       setLastSafetyExport(meta);
       setSafetyInventory(archive.inventory);
       try {
-        localStorage.setItem('owner-op-road-ready-last-device-safety-export-v1', JSON.stringify({
+        localStorage.setItem(DEVICE_SAFETY_META_KEY, JSON.stringify({
           createdAt: meta.createdAt,
           filename: meta.filename,
           sha256: meta.sha256,
@@ -184,11 +216,13 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
 
   async function importFile(file) {
     if (!file) return;
-    if (!lastSafetyExport) {
-      setStatus('Restore is locked until a verified Device Safety Backup is created in this session.');
+    const verifiedSafety = lastSafetyExport || readStoredSafetyExport();
+    if (!verifiedSafety) {
+      setStatus('Restore is locked until a verified Device Safety Backup has been created and saved from this device.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
+    if (!lastSafetyExport) setLastSafetyExport(verifiedSafety);
     setBusy(true);
     setStatus('Reading and validating the full backup…');
     try {
@@ -202,7 +236,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
         '',
         ...summaryLines(sum),
         '',
-        'Current local app data will be replaced. A verified Device Safety Backup was created first in this session.',
+        'Current local app data will be replaced. A verified Device Safety Backup was created first and saved from this device.',
       ].join('\n');
       if (typeof window !== 'undefined' && !window.confirm(message)) {
         setStatus('Restore cancelled. Your current data is unchanged.');
@@ -290,7 +324,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
 
         <section className="backup-info-card">
           <b>Restore protection</b>
-          <p>Restore is intentionally locked until a verified Device Safety Backup has been created in the current session.</p>
+          <p>Restore stays locked until this device has a valid verified Device Safety Backup record. Returning from iPhone Files or reopening the PWA will not relock it.</p>
           <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy || !lastSafetyExport}>Restore from readable backup</button>
           <input ref={fileInputRef} type="file" accept="application/json,.json,.roadready" hidden onChange={event => importFile(event.target.files?.[0])} />
         </section>
