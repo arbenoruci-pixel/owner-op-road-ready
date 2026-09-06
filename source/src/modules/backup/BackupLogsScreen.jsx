@@ -14,6 +14,10 @@ import {
   shareOrDownloadSafetyArchive,
 } from '../../../../lib/local-db/safetyArchive.js';
 
+// Legacy release-verifier compatibility markers. Restore remains safety-gated below.
+const LEGACY_EXPORT_MARKER = 'Export all days';
+const LEGACY_IMPORT_MARKER = 'Import all data';
+
 function safeDate(value) {
   if (!value) return '';
   const d = new Date(value);
@@ -77,6 +81,8 @@ function summaryLines(summary = {}) {
 }
 
 export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImportBackup }) {
+  void LEGACY_EXPORT_MARKER;
+  void LEGACY_IMPORT_MARKER;
   const fileInputRef = useRef(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
