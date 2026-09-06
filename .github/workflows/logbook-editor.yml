@@ -1,0 +1,69 @@
+name: Logbook editor regression
+on:
+  push:
+    branches: [fix/logbook-editor-v1102-20260906]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: logbook-editor-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve versioned source for materializer inspection
+        run: |
+          mkdir -p runtime-inspection
+          git archive --format=tar.gz HEAD > runtime-inspection/versioned-source.tar.gz
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Exact production build and behavioral contracts
+        run: node scripts/build-v110.mjs
+      - name: Architecture contracts
+        run: npm run verify:architecture
+      - name: Existing Logbook regressions
+        run: |
+          node scripts/verify-shipping-doc-sign-loop-v962.mjs
+          node scripts/verify-sign-minute-boundary-v963.mjs
+          node scripts/verify-historical-location-isolation-v962.mjs
+          node scripts/verify-day-export-import-v9600.mjs
+      - name: Preserve final runtime for source review
+        if: always()
+        run: |
+          tar -czf runtime-inspection/materialized-runtime.tar.gz source lib scripts public package.json package-lock.json module-locks.v1.json
+          git diff --stat > runtime-inspection/materialized-diff.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owner-op-runtime-inspection
+          path: runtime-inspection/
+          retention-days: 3
+      - name: Install isolated browser test tools
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Browser certification isolation
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/owner-op-editor-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/browser-isolation-v110.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owner-op-editor-browser-tests
+          path: |
+            browser-test-results/
+            /tmp/owner-op-editor-server.log
+          retention-days: 3
