@@ -27,7 +27,10 @@ function contrast(a,b){const lum=c=>{const rgb=c.match(/[\d.]+/g).slice(0,3).map
 async function visualChecks(page){
  const results=await page.locator('.editor-v1102').evaluate(root=>{const inputs=[...root.querySelectorAll('input')].filter(e=>e.getBoundingClientRect().width>0).map(e=>{const s=getComputedStyle(e),p=getComputedStyle(e,'::placeholder');return {label:e.getAttribute('aria-label')||e.placeholder,color:s.webkitTextFillColor||s.color,background:s.backgroundColor,placeholder:p.color,fontSize:s.fontSize};});const width=innerWidth,overflow=[...root.querySelectorAll('*')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0 && (r.right>width+2||r.left< -2);}).map(e=>e.className?.baseVal||e.className||e.tagName);return {inputs,overflow,rootWidth:root.getBoundingClientRect().width,width};});
  for(const i of results.inputs){assert.ok(parseFloat(i.fontSize)>=16,JSON.stringify(i));assert.ok(contrast(i.color,i.background)>=4.5,'Input contrast '+JSON.stringify(i));assert.ok(contrast(i.placeholder,i.background)>=4.5,'Placeholder contrast '+JSON.stringify(i));}
- assert.deepEqual(results.overflow,[],'Horizontal clipping: '+results.overflow.join(','));return results;
+ assert.deepEqual(results.overflow,[],'Horizontal clipping: '+results.overflow.join(','));
+ const buttons=await page.locator('.editor-v1102 .reason-pills button, .editor-v1102 .insert-reason-grid button').evaluateAll(rows=>rows.map(e=>{const s=getComputedStyle(e);return {text:e.textContent,color:s.webkitTextFillColor==='currentcolor'?s.color:(s.webkitTextFillColor||s.color),background:s.backgroundColor};}));
+ for(const b of buttons)assert.ok(contrast(b.color,b.background)>=4.5,'Activity button contrast '+JSON.stringify(b));
+ results.activityButtons=buttons;return results;
 }
 async function openEdit(page,id){await page.locator(`[data-event-row="${id}"]`).getByRole('button',{name:'Edit',exact:true}).click();await page.locator('.editor-v1102').waitFor();}
 async function cancel(page){await page.locator('.editor-v1102').getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('.editor-v1102').waitFor({state:'hidden'});}

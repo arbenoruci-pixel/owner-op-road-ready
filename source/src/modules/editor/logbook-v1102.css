@@ -72,3 +72,6 @@
 .editor-clean-v85.editor-v1102 .multi-pick-hint,.editor-clean-v85.editor-v1102 .insert-split-preview{color:#475467!important}
 .editor-clean-v85.editor-v1102 .editor-location-suggestions{display:flex!important;flex-wrap:wrap!important;gap:6px!important;overflow:visible!important;white-space:normal!important;max-width:100%!important}
 .editor-clean-v85.editor-v1102 .editor-location-suggestions button{flex:0 1 auto!important;min-width:0!important;max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere;color:#344054!important;background:#f0f4f7!important;box-shadow:none!important;min-height:40px}
+
+/* Selected legacy activity pills define a separate WebKit text fill. */
+.editor-clean-v85.editor-v1102 .reason-pills button,.editor-clean-v85.editor-v1102 .reason-pills button.picked{-webkit-text-fill-color:currentColor!important}
