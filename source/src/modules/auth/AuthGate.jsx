@@ -152,14 +152,17 @@ export default function AuthGate({ children }) {
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setTimeout(() => active && verifyAccess(nextSession), 0);
     });
-    const online = () => session && verifyAccess(session);
+    const online = async () => {
+      const current = await supabase.auth.getSession();
+      if (active) verifyAccess(current.data.session);
+    };
     window.addEventListener('online', online);
     return () => {
       active = false;
       data.subscription.unsubscribe();
       window.removeEventListener('online', online);
     };
-  }, [supabase, verifyAccess, session]);
+  }, [supabase, verifyAccess]);
 
   async function submit(event) {
     event.preventDefault();
@@ -224,7 +227,7 @@ export default function AuthGate({ children }) {
           <h1>{title}</h1>
           <p>{detail}</p>
           {error ? <div className="owner-auth-error" role="alert">{error}</div> : null}
-          <button className="owner-auth-primary" type="button" disabled={busy || navigator.onLine === false} onClick={async () => { setBusy(true); try { await verifyAccess((await supabase.auth.getSession()).data.session); } finally { setBusy(false); } }}>Check access again</button>
+          <button className="owner-auth-primary" type="button" disabled={busy || (typeof navigator !== 'undefined' && navigator.onLine === false)} onClick={async () => { setBusy(true); try { await verifyAccess((await supabase.auth.getSession()).data.session); } finally { setBusy(false); } }}>Check access again</button>
           <button type="button" className="owner-auth-secondary" onClick={signOut}>Use another email</button>
         </section>
       </main>
