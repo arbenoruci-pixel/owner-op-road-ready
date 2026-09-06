@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CURRENT_APP_VERSION } from '../../core/update/appUpdate.js';
 import { readBusinessStore, writeBusinessStore } from '../business/businessStore.js';
 import {
@@ -7,12 +7,25 @@ import {
   fullBackupFileNameV105,
   fullBackupSummaryV105,
 } from './fullBackupV105.js';
+import {
+  buildDeviceSafetyArchive,
+  buildDeviceSafetyInventory,
+  safetyArchiveFilename,
+  shareOrDownloadSafetyArchive,
+} from '../../../../lib/local-db/safetyArchive.js';
 
 function safeDate(value) {
   if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+}
+
+function formatBytes(bytes = 0) {
+  const value = Number(bytes || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(2)} MB`;
 }
 
 function downloadJson(payload, filename) {
@@ -68,8 +81,71 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [lastExport, setLastExport] = useState(null);
+  const [safetyInventory, setSafetyInventory] = useState(null);
+  const [safetyError, setSafetyError] = useState('');
+  const [lastSafetyExport, setLastSafetyExport] = useState(null);
   const businessStore = readBusinessStore();
   const summary = useMemo(() => fullBackupSummaryV105(state, businessStore), [state, businessStore.updatedAt]);
+
+  async function scanDevice() {
+    setSafetyError('');
+    try {
+      const inventory = await buildDeviceSafetyInventory(state, readBusinessStore());
+      setSafetyInventory(inventory);
+      return inventory;
+    } catch (error) {
+      setSafetyError(error?.message || 'Could not read the local PWA database.');
+      return null;
+    }
+  }
+
+  useEffect(() => {
+    scanDevice();
+  }, [state]);
+
+  async function exportDeviceSafety() {
+    setBusy(true);
+    setStatus('Reading the installed PWA database without changing it…');
+    setSafetyError('');
+    try {
+      const { archive, verification } = await buildDeviceSafetyArchive({
+        state,
+        businessStore: readBusinessStore(),
+        appVersion: CURRENT_APP_VERSION,
+      });
+      const filename = safetyArchiveFilename();
+      setStatus('Checksum verified. Opening the iPhone share sheet…');
+      const result = await shareOrDownloadSafetyArchive(archive, filename);
+      if (result.mode === 'cancelled') {
+        setStatus('Safety backup cancelled. Nothing on the phone was changed.');
+        return;
+      }
+      const meta = {
+        createdAt: archive.createdAt,
+        filename,
+        sha256: verification.sha256,
+        bytes: result.bytes || verification.bytes,
+        inventory: archive.inventory,
+      };
+      setLastSafetyExport(meta);
+      setSafetyInventory(archive.inventory);
+      try {
+        localStorage.setItem('owner-op-road-ready-last-device-safety-export-v1', JSON.stringify({
+          createdAt: meta.createdAt,
+          filename: meta.filename,
+          sha256: meta.sha256,
+          bytes: meta.bytes,
+          inventory: meta.inventory,
+        }));
+      } catch {}
+      setStatus(`VERIFIED safety backup ready: ${filename}`);
+    } catch (error) {
+      setSafetyError(error?.message || 'Device safety backup failed.');
+      setStatus('No local data was changed.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function exportBackup() {
     setBusy(true);
@@ -102,6 +178,11 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
 
   async function importFile(file) {
     if (!file) return;
+    if (!lastSafetyExport) {
+      setStatus('Restore is locked until a verified Device Safety Backup is created in this session.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     setBusy(true);
     setStatus('Reading and validating the full backup…');
     try {
@@ -111,14 +192,14 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
       if (!extracted?.state) throw new Error('This file does not contain Road Ready log data.');
       const sum = extracted.summary || {};
       const message = [
-        'Import all Road Ready data from this file?',
+        'RESTORE all Road Ready data from this file?',
         '',
         ...summaryLines(sum),
         '',
-        'Current local app data will be replaced. A private safety copy will be saved on this phone first.',
+        'Current local app data will be replaced. A verified Device Safety Backup was created first in this session.',
       ].join('\n');
       if (typeof window !== 'undefined' && !window.confirm(message)) {
-        setStatus('Import cancelled. Your current data is unchanged.');
+        setStatus('Restore cancelled. Your current data is unchanged.');
         return;
       }
 
@@ -136,9 +217,10 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
         schemaVersion:extracted.schemaVersion,
       });
       if (extracted.businessStore) writeBusinessStore(extracted.businessStore);
-      setStatus(`All data imported from ${file.name}.`);
+      setStatus(`All data restored from ${file.name}.`);
+      await scanDevice();
     } catch (error) {
-      setStatus(error?.message || 'Full import failed');
+      setStatus(error?.message || 'Full restore failed');
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
       setBusy(false);
@@ -150,44 +232,66 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
       <header className="backup-head">
         <button type="button" onClick={onBack}>‹</button>
         <div>
-          <span>Logbook</span>
-          <b>Export & Import All Data</b>
+          <span>Data Safety</span>
+          <b>Protect This iPhone First</b>
         </div>
         <span />
       </header>
 
       <main className="backup-body">
         <section className="backup-status-card">
-          <span className="backup-eyebrow">Complete Road Ready transfer</span>
-          <b>Every log day in one file</b>
-          <p>The export contains duty events, signatures, inspections, certification state, routes, active-load data, driver guides, linked document metadata, fuel links, DOT wallet data and business records.</p>
-          <div className="backup-mini-grid">
-            <div><strong>{summary.logDays}</strong><span>all days</span></div>
-            <div><strong>{summary.events}</strong><span>events</span></div>
-            <div><strong>{summary.routeLegs}</strong><span>route legs</span></div>
-            <div><strong>{summary.loadGuides}</strong><span>load guides</span></div>
-          </div>
+          <span className="backup-eyebrow">Installed PWA · local source of truth</span>
+          <b>Nothing is migrated until this copy is protected</b>
+          <p>This scan reads the Road Ready data already stored on this iPhone. It does not pull cloud data, replace a log, or delete a document.</p>
+          {safetyError ? <div className="backup-toast">{safetyError}</div> : null}
+          {safetyInventory ? (
+            <>
+              <div className="backup-mini-grid">
+                <div><strong>{safetyInventory.logDays}</strong><span>log dates</span></div>
+                <div><strong>{safetyInventory.events}</strong><span>duty events</span></div>
+                <div><strong>{safetyInventory.signedLogs}</strong><span>signed logs</span></div>
+                <div><strong>{safetyInventory.dexieRows}</strong><span>local DB rows</span></div>
+              </div>
+              <div className="backup-info-card ready">
+                <b>Local history detected</b>
+                <p>{safetyInventory.firstDay || 'No dated record'} → {safetyInventory.lastDay || 'No dated record'}</p>
+                <span>{safetyInventory.inspections} inspections · {safetyInventory.routeLegs} route legs · {safetyInventory.walletDocuments} wallet docs</span>
+                <span>{safetyInventory.documentBlobRows} local document blob(s) · {formatBytes(safetyInventory.documentBlobBytes)}</span>
+                <span>{safetyInventory.snapshotRows} IndexedDB snapshot(s) · {safetyInventory.localStorageEntries} Road Ready localStorage item(s)</span>
+              </div>
+            </>
+          ) : <p>Reading local database inventory…</p>}
         </section>
 
         <section className="backup-actions-card">
-          <button type="button" className="backup-primary" onClick={exportBackup} disabled={busy}>Export all days</button>
-          <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy}>Import all data</button>
-          <input ref={fileInputRef} type="file" accept="application/json,.json,.roadready" hidden onChange={event => importFile(event.target.files?.[0])} />
-          <p>On iPhone, Export opens the share sheet so you can save the JSON to Files, send it, or upload it for diagnosis.</p>
+          <button type="button" className="backup-primary" onClick={exportDeviceSafety} disabled={busy}>1 · Create VERIFIED Device Safety Backup</button>
+          <p>This is the important file. It includes the app state, business records, IndexedDB tables, local document blobs, saved snapshots and Road Ready localStorage. Binary files are checksum-protected inside the archive.</p>
+          {lastSafetyExport ? (
+            <div className="backup-info-card ready">
+              <b>Device backup verified</b>
+              <p>{lastSafetyExport.filename}</p>
+              <span>{formatBytes(lastSafetyExport.bytes)} · SHA-256 {lastSafetyExport.sha256.slice(0, 16)}…</span>
+              <span>{safeDate(lastSafetyExport.createdAt)}</span>
+            </div>
+          ) : <p><strong>Cloud migration stays blocked until this file is saved outside the PWA.</strong></p>}
+        </section>
+
+        <section className="backup-actions-card">
+          <b>Readable Road Ready JSON</b>
+          <p>This second export is easier to inspect in chat and contains the normalized logbook/app records.</p>
+          <button type="button" className="backup-secondary" onClick={exportBackup} disabled={busy}>2 · Export readable all-data JSON</button>
         </section>
 
         <section className="backup-info-card">
-          <b>For log repair and diagnosis</b>
-          <ol>
-            <li>Tap Export all days.</li>
-            <li>Save the JSON file to Files.</li>
-            <li>Upload that JSON in the chat so every event, route and load link can be checked exactly.</li>
-          </ol>
+          <b>Restore protection</b>
+          <p>Restore is intentionally locked until a verified Device Safety Backup has been created in the current session.</p>
+          <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy || !lastSafetyExport}>Restore from readable backup</button>
+          <input ref={fileInputRef} type="file" accept="application/json,.json,.roadready" hidden onChange={event => importFile(event.target.files?.[0])} />
         </section>
 
         {lastExport ? (
           <section className="backup-info-card ready">
-            <b>Last export this session</b>
+            <b>Last readable export this session</b>
             <p>{lastExport.filename}</p>
             <span>{safeDate(lastExport.createdAt)}</span>
           </section>
