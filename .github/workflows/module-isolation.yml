@@ -1,7 +1,7 @@
 name: Module isolation regression
 on:
   push:
-    branches: [main, fix/module-isolation-20260906]
+    branches: [main, fix/module-isolation-20260906, fix/logbook-editor-20260906]
   pull_request:
     branches: [main]
 permissions:
@@ -15,6 +15,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Capture versioned build inputs
+        run: git ls-files -z source scripts lib app pages public package.json package-lock.json 'next.config.*' vercel.json module-locks.v1.json | tar --null -T - -czf /tmp/owner-op-versioned.tar.gz
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -22,6 +24,12 @@ jobs:
       - run: npm ci
       - name: Exact production build and behavioral contracts
         run: node scripts/build-v110.mjs
+      - name: Capture materialized runtime
+        if: always()
+        run: |
+          find source scripts lib app pages public -type f 2>/dev/null > /tmp/owner-op-runtime-files.txt || true
+          printf '%s\n' package.json package-lock.json module-locks.v1.json >> /tmp/owner-op-runtime-files.txt
+          tar -T /tmp/owner-op-runtime-files.txt -czf /tmp/owner-op-materialized.tar.gz
       - name: Architecture contracts
         run: npm run verify:architecture
       - name: Existing Logbook regressions
@@ -44,6 +52,7 @@ jobs:
             sleep 1
           done
           node scripts/browser-isolation-v110.mjs
+          if [ -f scripts/browser-logbook-editor-v110.mjs ]; then node scripts/browser-logbook-editor-v110.mjs; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -51,4 +60,6 @@ jobs:
           path: |
             browser-test-results/
             /tmp/owner-op-test-server.log
+            /tmp/owner-op-versioned.tar.gz
+            /tmp/owner-op-materialized.tar.gz
           retention-days: 3
