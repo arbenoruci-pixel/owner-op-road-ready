@@ -1,6 +1,6 @@
 /* Deliberately scoped to Logbook and its editors. */
 .editor-clean-v85.editor-v1102,.logbook-v1102{color:#172b3a; color-scheme:light}
-.editor-clean-v85.editor-v1102{background:#fff!important;max-height:100dvh!important;overflow-y:auto!important;overscroll-behavior:contain;padding-bottom:calc(16px + env(safe-area-inset-bottom))!important}
+.editor-clean-v85.editor-v1102{background:#fff!important;max-height:100dvh!important;overflow-y:auto!important;overscroll-behavior:contain;padding-bottom:calc(16px + env(safe-area-inset-bottom))!important;z-index:19002!important}
 .editor-clean-v85.editor-v1102 *,.logbook-v1102 .event-row{box-sizing:border-box;min-width:0}
 .editor-clean-v85.editor-v1102 .sheet-head{background:#fff!important;color:#172b3a!important;border-bottom:1px solid #e5ebf0;box-shadow:none!important;position:sticky;top:0;z-index:5}
 .editor-clean-v85.editor-v1102 .sheet-head button{color:#17384c!important;background:#f0f4f7!important;min-height:44px}
@@ -60,9 +60,13 @@
 .logbook-v1102 .selected-link-v1102 button{background:#087467;color:#fff;border:0;border-radius:8px;padding:12px;min-height:44px}
 .logbook-v1102 .timeline-review-v1102{margin:8px 12px;color:#85430e;background:#fff7eb;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.5}
 @media(max-width:360px){.editor-clean-v85.editor-v1102 .editor-form-v85{padding:10px!important}.editor-clean-v85.editor-v1102 .time-groups-v1102{gap:8px}.editor-clean-v85.editor-v1102 .editor-duty-grid{gap:4px}}
-
 .logbook-v1102 .event-route-meta{color:#475467!important;opacity:1;white-space:normal;overflow-wrap:anywhere}
 .logbook-v1102 .event-content{flex:1;min-width:0}.logbook-v1102 .event-title-line b{color:#172b3a!important}
-
 /* Beat the generated legacy editor's more specific compact rules. */
 .sheet.editor-clean-v85.editor-v1102 svg.logbook-graph-v1102,.logbook-v1102.graph-first-screen svg.logbook-graph-v1102{width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;filter:none!important}
+.editor-clean-v85.editor-v1102 .insert-duration-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;overflow:visible!important;white-space:normal!important}
+.editor-clean-v85.editor-v1102 .insert-duration-grid button{width:auto!important;min-width:0!important;min-height:44px;white-space:normal!important;color:#344054!important;background:#f0f4f7!important;border:0!important;box-shadow:none!important}
+.editor-clean-v85.editor-v1102 .insert-driver-block,.editor-clean-v85.editor-v1102 .insert-duration-panel{box-shadow:none!important;border:0!important;background:#fff!important}
+.editor-clean-v85.editor-v1102 .insert-reason-grid button{color:#344054!important;background:#f0f4f7!important;box-shadow:none!important;white-space:normal!important;border:0!important}
+.editor-clean-v85.editor-v1102 .insert-reason-grid button.picked{background:#ddf1eb!important;color:#064d42!important}
+.editor-clean-v85.editor-v1102 .multi-pick-hint,.editor-clean-v85.editor-v1102 .insert-split-preview{color:#475467!important}
