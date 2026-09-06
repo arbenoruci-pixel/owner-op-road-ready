@@ -15,19 +15,29 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Archive tracked source for reproducible audit
-        run: git archive --format=tar.gz HEAD > /tmp/owner-op-source.tar.gz
-      - uses: actions/upload-artifact@v4
-        with:
-          name: owner-op-source
-          path: /tmp/owner-op-source.tar.gz
-          retention-days: 3
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Archive test dependencies
+        run: tar -czf /tmp/owner-op-test-deps.tar.gz node_modules/dexie
+      - uses: actions/upload-artifact@v4
+        with:
+          name: owner-op-test-deps
+          path: /tmp/owner-op-test-deps.tar.gz
+          retention-days: 3
+      - name: Exact production build
+        run: node scripts/build-v110.mjs
+      - name: Archive materialized source for audit
+        if: always()
+        run: tar -czf /tmp/owner-op-materialized.tar.gz source lib scripts app public package.json release-version.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owner-op-materialized
+          path: /tmp/owner-op-materialized.tar.gz
+          retention-days: 3
       - name: Architecture contracts
         run: npm run verify:architecture
       - name: Logbook certification regression
