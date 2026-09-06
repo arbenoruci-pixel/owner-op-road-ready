@@ -3,8 +3,9 @@ const read=p=>fs.readFileSync(p,'utf8');
 function once(src,before,after,label){ if(src.includes(after))return src; if(src.split(before).length!==2)throw new Error('Isolation patch anchor changed: '+label); return src.replace(before,after); }
 const appPath='source/src/app/App.jsx';let app=read(appPath);
 if(!app.includes('MODULE_ISOLATION_V110')){
+ app=app.replace(/^\s*['"]use client['"];?\s*/gm,'');
  app=app.replace("from '../modules/logbook/certificationFingerprintV1032.js'", "from '../modules/logbook/certificationV110.js'");
- app="'use client';\n// MODULE_ISOLATION_V110\nimport { createCertificationRecord, upgradeVerifiedLegacyCertifications } from '../modules/logbook/certificationV110.js';\nimport { runExternalCommand, preserveRecordedDays } from '../modules/logbook/public-api.js';\n"+app;
+ app="'use client';\n// MODULE_ISOLATION_V110\nimport { createCertificationRecord, upgradeVerifiedLegacyCertifications, certificationStatusV1032 } from '../modules/logbook/certificationV110.js';\nimport { runExternalCommand, preserveRecordedDays, readLogbookDayState, applyDayFormEdit } from '../modules/logbook/public-api.js';\n"+app;
  // The old normalizer remains a proposal engine, not the owner of historical RODS.
  app=once(app,'function normalizeState(s) {',`function normalizeState(s) {
   const before = upgradeVerifiedLegacyCertifications(s);
@@ -28,7 +29,7 @@ function normalizeStateLegacyV110(s) {`,'normalize');
 const applyLoadGuideActionV108 = (state, detail) => runExternalCommand(state, draft => legacyLoadGuideActionV108(draft, detail), 'loads', detail);`,'loads boundary');
  // Capture exactly the state accepted by the functional update, including an
  // immutable attestation context. Keep old attestations for audit/review.
- app=once(app,'const certifiedFingerprintV1032 = certificationFingerprintV1032(s, day);',`const certificationV110 = createCertificationRecord(s, day, { driverName });
+ app=once(app,'const certifiedFingerprintV1032 = certificationFingerprintV1032(s, day);',`const certificationV110 = createCertificationRecord(s, day, { driverName, signatureDataUrl:latestSignature.dataUrl });
         const certifiedFingerprintV1032 = certificationV110.certifiedFingerprint;`,'single sign');
  app=once(app,'certifiedSnapshotAt:Date.now(),','certifiedSnapshotAt:Date.now(),\n              ...certificationV110,','single sign record');
  // Immediate durable write, with an explicit error on failure. The snapshot
@@ -47,13 +48,22 @@ const applyLoadGuideActionV108 = (state, detail) => runExternalCommand(state, dr
  app=once(app,'      return reconcileCertificationStatusesV1032({ ...s, signatureByDay, certifyStatus });',`      const signedStateV110 = reconcileCertificationStatusesV1032({ ...s, signatureByDay, certifyStatus });
       saveAppSnapshot(APP_STATE_KEY, signedStateV110).catch(() => window.alert?.('Signature storage failed. Keep this app open and export a backup before closing.'));
       return signedStateV110;`,'durable batch');
+ // Daily form edits and reads use day-owned values, including explicit empty fields.
+ app=once(app,'<DayLogScreen\n        state={state}','<DayLogScreen\n        state={readLogbookDayState(state, state.activeDay)}','day read context');
+ app=once(app,'      return changesCertifiedRouteOrDocs ? markDayRecert(next, s.activeDay) : next;',`      next = applyDayFormEdit(s, next, payload, s.activeDay);
+      return changesCertifiedRouteOrDocs ? markDayRecert(next, s.activeDay) : reconcileCertificationStatusesV1032(next);`,'day form edit');
+ app=once(app,"const status = currentFingerprint === signature.certifiedFingerprint ? 'Certified' : 'Needs Recertification';","const status = certificationStatusV1032(next, day).status;",'authoritative recertification');
  fs.writeFileSync(appPath,app);
 }
-let signing=read('source/src/modules/logbook/signing.js');signing=signing.replace("from './certificationFingerprintV1032.js'","from './certificationV110.js'");fs.writeFileSync('source/src/modules/logbook/signing.js',signing);
+let signing=read('source/src/modules/logbook/signing.js');signing=signing.replace("from './certificationFingerprintV1032.js'","from './certificationV110.js'");if(!signing.includes("from './dayFormV110.js'"))signing="import { readLogbookDayState } from './dayFormV110.js';\n"+signing;
+signing=once(signing,'export function validateLogForSigning(state, day) {','export function validateLogForSigning(state, day) {\n  state = readLogbookDayState(state, day);','signing form context');fs.writeFileSync('source/src/modules/logbook/signing.js',signing);
+let dayScreen=read('source/src/modules/logbook/DayLogScreen.jsx');dayScreen=once(dayScreen,"return state.signatureByDay?.[state.activeDay]?.driverName || state.driverProfile?.name || DEFAULT_DRIVER_NAME;","return state.formByDay?.[state.activeDay]?.driverName ?? (state.signatureByDay?.[state.activeDay]?.driverName || state.driverProfile?.name || DEFAULT_DRIVER_NAME);",'day driver override');fs.writeFileSync('source/src/modules/logbook/DayLogScreen.jsx',dayScreen);
 let local=read('lib/local-db/appState.js');local=once(local,'const stateAtCall = state;','const stateAtCall = structuredClone(state);','snapshot immutability');fs.writeFileSync('lib/local-db/appState.js',local);
-let core=read('lib/owner-op-cloud/core.js');core=once(core,'snapshot.profileAtBackup = profileFromState(state);','snapshot.profileAtBackup = state.signatureByDay?.[day]?.certificationContext?.profileAtBackup || profileFromState(state);','historical cloud profile');fs.writeFileSync('lib/owner-op-cloud/core.js',core);
+let core=read('lib/owner-op-cloud/core.js');if(!core.includes("from '../../source/src/modules/logbook/public-api.js'"))core="import { readLogbookDayState } from '../../source/src/modules/logbook/public-api.js';\n"+core;core=once(core,'snapshot.profileAtBackup = profileFromState(state);','snapshot.profileAtBackup = profileFromState(readLogbookDayState(state, day));','historical cloud profile');fs.writeFileSync('lib/owner-op-cloud/core.js',core);
 let migration=read('lib/owner-op-cloud/migration.js');
-if(!migration.includes("from './verifiedStorageV110.js'"))migration="'use client';\nimport { uploadVerified } from './verifiedStorageV110.js';\n"+migration;
+migration=migration.replace(/^\s*['"]use client['"];?\s*/gm,'');
+if(!migration.includes("from './verifiedStorageV110.js'"))migration="import { uploadVerified } from './verifiedStorageV110.js';\n"+migration;
+migration="'use client';\n"+migration;
 const oldUpload=`      const upload = await cloudClient().storage.from(BUCKET).upload(storagePath, blob, {
         upsert: false,
         contentType: mime,
