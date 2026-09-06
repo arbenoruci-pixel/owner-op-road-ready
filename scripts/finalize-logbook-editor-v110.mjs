@@ -38,6 +38,11 @@ if(!css.includes('EDITOR_ACCESSIBLE_PICKED_V110'))css+=`
 .editor-ui-v110 .midnight-end-v110 { padding:0 !important; min-height:24px !important; }
 .editor-ui-v110 .midnight-end-v110 input { margin:0 !important; min-height:18px !important; max-height:18px !important; padding:0 !important; }
 `;
+if(!css.includes('EDITOR_SAFE_LAYER_V11021'))css+=`
+/* EDITOR_SAFE_LAYER_V11021: clear the floating account button/menu (19000/19001)
+   while keeping the authentication gate (20000) above the editor. */
+.editor-ui-v110 { z-index:19002 !important; }
+`;
 fs.writeFileSync(cssPath,css);
 // Blurring an unchanged location is read-only. Calling the manual-location
 // callback would otherwise erase GPS coordinates before a note-only save.
