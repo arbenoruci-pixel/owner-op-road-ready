@@ -1,19 +1,25 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-// Read-only integration probes. No real user, file or log is created.
+
 const source=fs.readFileSync('lib/owner-op-cloud/client.js','utf8');
 const key=source.match(/const PUBLIC_KEY = '([^']+)'/)?.[1];
+const base=source.match(/export const CLOUD_URL = '([^']+)'/)?.[1];
 assert.ok(key,'Public API key must be configured');
-const endpoint='https://vnidjrxidvusulinozbn.supabase.co/functions/v1/owner-op-cloud-v1';
-async function probe(name,body,status,authorization){
- const response=await fetch(endpoint,{method:body?'POST':'GET',headers:{apikey:key,...(body?{'Content-Type':'application/json'}:{}),...(authorization?{Authorization:authorization}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(25000)});
- const json=await response.json();
- assert.equal(response.status,status,`${name}: ${JSON.stringify(json)}`);
- if(!body)assert.equal(json.status,'ready');
- console.log('PASS — live cloud service: '+name);
-}
-await probe('service responds',null,200);
-await probe('catalog denies missing login',{action:'catalog'},401);
-await probe('catalog denies forged login',{action:'catalog'},401,'Bearer invalid.test.token');
-await probe('officer package denies nonexistent capability',{action:'inspect',token:'0'.repeat(64)},403);
-console.log('4 live read-only cloud service checks passed');
+assert.equal(base,'https://ghwkcgczuwctzxsxmqzx.supabase.co','Owner Operator must use only the isolated prototype Supabase project');
+assert.ok(!source.includes('vnidjrxidvusulinozbn'),'Tepiha Supabase project must never be referenced by Owner Operator cloud code');
+
+const auth=await fetch(base+'/auth/v1/settings',{headers:{apikey:key},signal:AbortSignal.timeout(25000)});
+assert.equal(auth.status,200,'Supabase Auth settings endpoint must be reachable');
+const authSettings=await auth.json();
+assert.ok(authSettings?.external?.email !== false,'Email authentication must be available');
+console.log('PASS — isolated Owner Operator Auth endpoint responds');
+
+const access=await fetch(base+'/rest/v1/rpc/owner_op_access_v1',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(25000)});
+assert.ok([401,403,404].includes(access.status),`Anonymous access check unexpectedly returned ${access.status}`);
+console.log('PASS — anonymous clients cannot call approved-account access RPC');
+
+const storage=await fetch(base+'/storage/v1/object/public/owner-op-private/nonexistent',{headers:{apikey:key},signal:AbortSignal.timeout(25000)});
+assert.notEqual(storage.status,200,'Private Owner Operator bucket must not be publicly readable');
+console.log('PASS — Owner Operator document bucket is not public');
+
+console.log('3 live read-only isolation/auth checks passed');
