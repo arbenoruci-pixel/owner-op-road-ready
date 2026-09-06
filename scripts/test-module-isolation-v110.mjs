@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import vm from 'node:vm';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createCertificationRecord, certificationStatusV1032 as status, reconcileCertificationStatusesV1032 as reconcile, upgradeVerifiedLegacyCertifications } from '../source/src/modules/logbook/certificationV110.js';
@@ -39,12 +38,20 @@ await test('corrupt downloaded bytes are rejected',async()=>{await assert.reject
 await test('duplicate retry succeeds only for identical cloud bytes',async()=>{const r=await uploadVerified({upload:async()=>({error:{message:'The resource already exists'}}),download:async()=>({data:blob})},'p',blob,'application/pdf',sha,hash);assert.equal(r.sha256,sha);});
 await test('genuine upload failure is surfaced',async()=>{await assert.rejects(()=>uploadVerified({upload:async()=>({error:Error('denied')})},'p',blob,'application/pdf',sha,hash),/denied/);});
 const app=fs.readFileSync('source/src/app/App.jsx','utf8');
-await test('runtime signing and all document adapters are wired through boundaries',()=>{assert.match(app,/MODULE_ISOLATION_V110/);assert.equal((app.match(/runExternalCommand\(current, draft/g)||[]).length,3);assert.match(app,/legacyLoadGuideActionV108\(draft, detail\)/);assert.equal((app.match(/saveAppSnapshot\(APP_STATE_KEY, signedStateV110\)/g)||[]).length,2);assert.match(app,/preserveRecordedDays\(saved, corrected/);assert.doesNotMatch(app,/metadataOnlyReason =/);});
+await test('runtime signing and all document adapters are wired through boundaries',()=>{assert.match(app,/MODULE_ISOLATION_V110/);assert.equal((app.match(/runExternalCommand\(current, draft/g)||[]).length,3);assert.match(app,/legacyLoadGuideActionV108\(draft, detail\)/);assert.equal((app.match(/return signedStateV110;/g)||[]).length,2);assert.match(app,/preserveRecordedDays\(saved, corrected/);assert.doesNotMatch(app,/metadataOnlyReason =/);});
+await test('signing updater proposals never write to storage',()=>{
+ const signing=app.slice(app.indexOf('  function signLogDay('),app.indexOf('  function saveInspection('));
+ assert.doesNotMatch(signing,/saveAppSnapshot\(/);
+ assert.match(signing,/now:signingTimeV110/);
+ assert.match(signing,/const now = batchSigningTimeV110/);
+ assert.match(app,/SIGNATURE_COMMIT_PERSISTENCE_V110/);
+ const effect=app.slice(app.indexOf('// SIGNATURE_COMMIT_PERSISTENCE_V110'),app.indexOf('// SIGNATURE_COMMIT_PERSISTENCE_V110')+1200);
+ assert.match(effect,/React\.useLayoutEffect/);assert.match(effect,/saveAppSnapshot\(APP_STATE_KEY, state\)/);
+});
 // Exercise the exact generated startup normalizer (without rendering JSX).
 await test('actual startup normalize -> sign -> reload is idempotent for recorded days',async()=>{
  const start=app.indexOf('function defaultInitialState()');assert.ok(start>0);
  let prefix=app.slice(0,start).replace(/^import .* from ['"][^'"]+\.jsx['"];?\n/gm,'').replace(/^import React[^\n]+\n/gm,'').replace(/^import .* from ['"][^'"]*(?:clientSync|authBridge)\.js['"];?\n/gm,'');
- // No browser-only work is invoked by this synthetic startup fixture.
  const file='source/src/app/.normalize-v110-test.mjs';
  fs.writeFileSync(file,prefix+'\n'+app.match(/function sorted\(events\) \{[\s\S]*?\n\}/)[0]+'\nexport { normalizeState };\n');
  try{const {normalizeState}=await import(pathToFileURL(process.cwd()+'/'+file));const s=signed();const n=normalizeState(JSON.parse(JSON.stringify(s)));assert.deepEqual(n.eventsByDay[day],s.eventsByDay[day]);assert.deepEqual(n.signatureByDay[day],s.signatureByDay[day]);assert.equal(status(n,day).status,'Certified');const n2=normalizeState(JSON.parse(JSON.stringify(n)));assert.equal(status(n2,day).status,'Certified');assert.deepEqual(n2.eventsByDay[day],s.eventsByDay[day]);}finally{fs.rmSync(file,{force:true});}
