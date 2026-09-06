@@ -59,6 +59,7 @@ jobs:
             sleep 1
           done
           node scripts/browser-isolation-v110.mjs
+          node scripts/browser-logbook-editor-v1102.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

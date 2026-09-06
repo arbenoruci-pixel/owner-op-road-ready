@@ -1,6 +1,6 @@
 {
   "contractVersion": 1,
-  "release": "110.1.0",
+  "release": "110.2.0",
   "policy": "Intentional stable-module edits require review, regression tests, and an explicit lock revision. Legacy read imports are frozen; new consumers use the public API.",
   "files": {
     "source/src/modules/logbook/certificationV110.js": "20ad778bf03c8fd70ebdf48ef290ae4170e3f88a326055ac79f51aa18bd21821",
@@ -13,7 +13,7 @@
     "source/src/core/backup/dayTransfer.js": "4d1417372c7e32dcc88e50073994533590391ea992439700cf707e0fb59d448b",
     "source/src/modules/scanner-core/public-api.js": "d24494314b52789ba20705c3d7900a5eade0daef79ab62e4cea7deab897cbc26",
     "source/src/modules/logbook/dayFormV110.js": "352b948a6839bf501fccf26f69c6ac6a521c73877f57b69cb6cbc00907dae79d",
-    "source/src/modules/logbook/DayLogScreen.jsx": "60f8ec428c03c4131888774443e41db63f75b54f757944f7afa19cde7618a9a8"
+    "source/src/modules/logbook/DayLogScreen.jsx": "ef590a6ff6d7b2dca389a5be687548038767746b74c042d5667b36cce7f46843"
   },
   "legacyReadImports": [
     "source/src/modules/dot/DotMode.jsx -> ../logbook/signing.js",
