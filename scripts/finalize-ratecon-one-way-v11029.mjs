@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const VERSION='110.2.9';
 const BUILD='v110209-ratecon-one-way';
 function read(path){return fs.readFileSync(path,'utf8');}
-function write(path,value){fs.mkdirSync(path.split('/').slice(0,-1).join('/'),{recursive:true});fs.writeFileSync(path,value);}
+function write(path,value){const parent=path.split('/').slice(0,-1).join('/');if(parent)fs.mkdirSync(parent,{recursive:true});fs.writeFileSync(path,value);}
 function once(source,before,after,label){
   if(source.includes(after) && !source.includes(before)) return source;
   const count=source.split(before).length-1;
