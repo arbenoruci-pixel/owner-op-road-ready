@@ -47,7 +47,7 @@ export default function CompactGraphPanelV111({ events = [], selectedId, editId,
     window.addEventListener('pointermove', move, { passive: false }); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', cancel);
   }
   return <div ref={panel} className={`editor-graph-panel editor-graph-wrap-v85 compact-graph-panel-v111 ${wide ? 'graph-focus-v111' : ''}`}>
-    <div className="compact-graph-toolbar-v111"><span>{editable ? 'Drag Start and End to edit event time' : selected?.isLive ? 'Live timeline · Now' : 'Duty timeline'}</span><button type="button" aria-expanded={wide} onClick={() => setWide(v => !v)}>{wide ? 'Done graph' : 'Full screen'}</button></div>
+    <div className="compact-graph-toolbar-v111 compact-graph-toolbar-minimal-v11024"><button type="button" aria-expanded={wide} onClick={() => setWide(v => !v)}>{wide ? 'Done graph' : 'Full screen'}</button></div>
     <div className="editor-graph-card" aria-label={header || 'Duty timeline'}>
       <LogGraph editorBoundaries={editable} events={events} selectedId={selectedId} editId={editId} onSelect={onSelect} onEmptyTap={onEmptyTap} className="compact-graph-svg-v111" />
     </div>
