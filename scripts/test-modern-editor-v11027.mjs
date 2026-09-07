@@ -33,8 +33,11 @@ console.log('PASS — header, two-card time, four duty choices, GPS location, vi
 
 assert.match(eventList,/onSelect\?\.\(event\.id\)/);assert.match(eventList,/selected \? \(/);assert.match(eventList,/motive-edit-reveal-v11027/);assert.match(eventList,/Edit selected event/);
 assert.match(css,/MOTIVE_EDIT_REVEAL_V11027/);assert.match(css,/motive-edit-reveal-v11027\{position:absolute!important;left:0!important/);
-const graphTap=day.match(/function handleGraphEventTap\(eventId\) \{([\s\S]*?)\n  \}\n\n  const tz/);
-assert.ok(graphTap,'graph tap handler missing');assert.match(graphTap[1],/onSelect\?\.\(eventId\)/);assert.doesNotMatch(graphTap[1],/onOpenEdit/);
+const graphTapStart=day.indexOf('function handleGraphEventTap(eventId)');
+const graphTapEnd=day.indexOf('function handleLogbookBack()',graphTapStart);
+assert.ok(graphTapStart>=0&&graphTapEnd>graphTapStart,'graph tap handler missing');
+const graphTap=day.slice(graphTapStart,graphTapEnd);
+assert.match(graphTap,/onSelect\?\.\(eventId\)/);assert.doesNotMatch(graphTap,/onOpenEdit/);
 console.log('PASS — event tap selects first and reveals an explicit Motive-style Edit action');
 
 assert.doesNotMatch(edit,/This range replaces overlapping manual duty time\. Save keeps the original in edit history\./);assert.match(edit,/previewResultV11023\?\.ok===false/);assert.match(edit,/Save changes/);
