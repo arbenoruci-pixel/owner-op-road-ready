@@ -2,61 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import LogGraph from '../../graph/LogGraph.jsx';
 import { timeLabel } from '../../../shared/utils/time.js';
 import { draggedMinuteV111, handleCentersV111, clampedHandleLeftV111 } from './graphHandlesV111.js';
-
 // RESTORED_GRABBERS_V11021: CSS-pixel touch targets remain large on a phone.
 // The SVG timeline retains exact coordinates; only the grabber labels spread
 // apart for short events. Moving a grabber changes the existing editor draft.
 export default function CompactGraphPanelV111({ events = [], selectedId, editId, onEditTime, onSelect, onEmptyTap, header }) {
-  const panel = useRef(null), rail = useRef(null), cleanup = useRef(() => {});
-  const callback = useRef(onEditTime); callback.current = onEditTime;
-  const [wide, setWide] = useState(false), [width, setWidth] = useState(320);
-  const selected = events.find(e => e.id === (editId || selectedId));
-  const editable = !!selected && !!onEditTime && !selected.isLive;
-  const centers = handleCentersV111(selected?.startMin || 0, selected?.endMin || 0, width);
-  useEffect(() => {
-    const node = rail.current || panel.current;
-    const measure = () => setWidth(node.getBoundingClientRect().width);
-    measure(); const observer = new ResizeObserver(measure); observer.observe(node);
-    window.addEventListener('resize',measure); window.visualViewport?.addEventListener('resize',measure);
-    return () => { observer.disconnect(); window.removeEventListener('resize',measure); window.visualViewport?.removeEventListener('resize',measure); };
-  }, [editable, wide]);
-  useEffect(() => () => cleanup.current(), []);
-  useEffect(() => {
-    const escape = e => { if (e.key === 'Escape') setWide(false); };
-    window.addEventListener('keydown', escape);
-    return () => window.removeEventListener('keydown', escape);
-  }, []);
-  function drag(e, edge) {
-    if (!editable || (e.button != null && e.button !== 0)) return;
-    e.preventDefault(); e.stopPropagation(); cleanup.current();
-    const id = e.pointerId, x = e.clientX, initial = selected[edge + 'Min'];
-    const svgWidth = panel.current.querySelector('svg').getBoundingClientRect().width;
-    const snapshot = { ...selected };
-    const move = p => {
-      if (p.pointerId !== id) return;
-      p.preventDefault(); callback.current?.(edge, draggedMinuteV111(snapshot, edge, initial, p.clientX - x, svgWidth));
-    };
-    const stop = () => {
-      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', cancel);
-      cleanup.current = () => {};
-    };
-    const end = p => { if (p.pointerId === id) stop(); };
-    const cancel = p => { if (p.pointerId === id) { callback.current?.(edge, initial); stop(); } };
-    cleanup.current = stop;
-    e.currentTarget.setPointerCapture?.(id);
-    window.addEventListener('pointermove', move, { passive: false }); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', cancel);
-  }
+  const panel = useRef(null), rail = useRef(null), cleanup = useRef(() => {});const callback = useRef(onEditTime); callback.current = onEditTime;const [wide, setWide] = useState(false), [width, setWidth] = useState(320);const selected = events.find(e => e.id === (editId || selectedId));const editable = !!selected && !!onEditTime && !selected.isLive;const centers = handleCentersV111(selected?.startMin || 0, selected?.endMin || 0, width);
+  useEffect(() => {const node = rail.current || panel.current;const measure = () => setWidth(node.getBoundingClientRect().width);measure(); const observer = new ResizeObserver(measure); observer.observe(node);window.addEventListener('resize',measure); window.visualViewport?.addEventListener('resize',measure);return () => { observer.disconnect(); window.removeEventListener('resize',measure); window.visualViewport?.removeEventListener('resize',measure); };}, [editable, wide]);
+  useEffect(() => () => cleanup.current(), []);useEffect(() => {const escape = e => { if (e.key === 'Escape') setWide(false); };window.addEventListener('keydown', escape);return () => window.removeEventListener('keydown', escape);}, []);
+  function drag(e, edge) {if (!editable || (e.button != null && e.button !== 0)) return;e.preventDefault(); e.stopPropagation(); cleanup.current();const id = e.pointerId, x = e.clientX, initial = selected[edge + 'Min'];const svgWidth = panel.current.querySelector('svg').getBoundingClientRect().width;const snapshot = { ...selected };const move = p => {if (p.pointerId !== id) return;p.preventDefault(); callback.current?.(edge, draggedMinuteV111(snapshot, edge, initial, p.clientX - x, svgWidth));};const stop = () => {window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', cancel);cleanup.current = () => {};};const end = p => { if (p.pointerId === id) stop(); };const cancel = p => { if (p.pointerId === id) { callback.current?.(edge, initial); stop(); } };cleanup.current = stop;e.currentTarget.setPointerCapture?.(id);window.addEventListener('pointermove', move, { passive: false }); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', cancel);}
   return <div ref={panel} className={`editor-graph-panel editor-graph-wrap-v85 compact-graph-panel-v111 ${wide ? 'graph-focus-v111' : ''}`}>
-    <div className="compact-graph-toolbar-v111"><span>{editable ? 'Drag Start and End to edit event time' : selected?.isLive ? 'Live timeline · Now' : 'Duty timeline'}</span><button type="button" aria-expanded={wide} onClick={() => setWide(v => !v)}>{wide ? 'Done graph' : 'Full screen'}</button></div>
-    <div className="editor-graph-card" aria-label={header || 'Duty timeline'}>
-      <LogGraph editorBoundaries={editable} events={events} selectedId={selectedId} editId={editId} onSelect={onSelect} onEmptyTap={onEmptyTap} className="compact-graph-svg-v111" />
-    </div>
-    {editable && <div className="graph-handle-rail-v111" ref={rail}>
-      {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110" role="slider" aria-label={`${edge} time handle`} aria-valuemin={edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} style={{ left: clampedHandleLeftV111(edge,centers[edge]) }} onPointerDown={e => drag(e, edge)} onKeyDown={e => {
-        if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
-        e.preventDefault(); const direction = e.key === 'ArrowLeft' ? -1 : 1;
-        onEditTime(edge, draggedMinuteV111(selected, edge, selected[edge + 'Min'], direction * (e.shiftKey ? 5 : 1) * 0.894 / 1440, 1));
-      }}><span>{edge.toUpperCase()} <i aria-hidden="true">↔</i></span><b>{timeLabel(selected[edge + 'Min'])}</b></button>)}
-    </div>}
+    <div className="compact-graph-toolbar-v111 compact-graph-toolbar-minimal-v11024"><button type="button" aria-expanded={wide} onClick={() => setWide(v => !v)}>{wide ? 'Done graph' : 'Full screen'}</button></div>
+    <div className="editor-graph-card" aria-label={header || 'Duty timeline'}><LogGraph editorBoundaries={editable} events={events} selectedId={selectedId} editId={editId} onSelect={onSelect} onEmptyTap={onEmptyTap} className="compact-graph-svg-v111" /></div>
+    {editable && <div className="graph-handle-rail-v111" ref={rail}>{['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110" role="slider" aria-label={`${edge} time handle`} aria-valuemin={edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} style={{ left: clampedHandleLeftV111(edge,centers[edge]) }} onPointerDown={e => drag(e, edge)} onKeyDown={e => {if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;e.preventDefault(); const direction = e.key === 'ArrowLeft' ? -1 : 1;onEditTime(edge, draggedMinuteV111(selected, edge, selected[edge + 'Min'], direction * (e.shiftKey ? 5 : 1) * 0.894 / 1440, 1));}}><span>{edge.toUpperCase()} <i aria-hidden="true">↔</i></span><b>{timeLabel(selected[edge + 'Min'])}</b></button>)}</div>}
   </div>;
 }
