@@ -41,8 +41,19 @@ for(const [name,type]of [['chromium',chromium],['webkit',webkit]]){
    await page.getByRole('button',{name:'Full screen',exact:true}).click();assert.equal(await page.locator('.graph-focus-v111').count(),1);await page.screenshot({path:`${output}/${name}-${kind}-graph-focus.png`,fullPage:false});await page.getByRole('button',{name:'Done graph',exact:true}).click();
    if(kind==='closed'){
     const end=page.getByRole('slider',{name:'end time handle',exact:true});const b=await end.boundingBox();
-    await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2+12,b.y+b.height/2,{steps:8});await page.mouse.up();
-    const time=await page.getByLabel('End time',{exact:true}).inputValue();assert.notEqual(time,'15:16');assert.equal(Number(await end.getAttribute('aria-valuenow')),Number(time.slice(0,2))*60+Number(time.slice(3)));
+    const svgWidth=(await page.locator('.editor-compact-v111 svg').boundingBox()).width;
+    const x=Math.round(b.x+b.width/2),y=Math.round(b.y+b.height/2),expectedMinute=Math.round(916+12/(svgWidth*.894)*1440);
+    await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+12,y,{steps:8});await page.mouse.up();
+    // WebKit can deliver the final pointer update after mouse.up resolves. Read
+    // both controls in one rendered frame and require the exact dispatched delta.
+    await page.waitForFunction(expected=>{
+      const root=document.querySelector('.editor-compact-v111');
+      const input=root?.querySelector('input[aria-label="End time"]');
+      const handle=root?.querySelector('[role="slider"][data-edge="end"]');
+      const [h,m]=String(input?.value||'').split(':').map(Number);
+      return h*60+m===expected && Number(handle?.getAttribute('aria-valuenow'))===expected;
+    },expectedMinute,{timeout:5000});
+    const time=await page.getByLabel('End time',{exact:true}).inputValue();assert.notEqual(time,'15:16');assert.equal(Number(time.slice(0,2))*60+Number(time.slice(3)),expectedMinute);assert.equal(Number(await end.getAttribute('aria-valuenow')),expectedMinute);
     const start=page.getByRole('slider',{name:'start time handle',exact:true});await start.focus();await page.keyboard.press('ArrowLeft');assert.equal(await page.getByLabel('Start time',{exact:true}).inputValue(),'15:14');
     await page.locator('.cancel-main').click();assert.deepEqual((await stored(page)).eventsByDay[day],before.eventsByDay[day]);
     await page.locator('[data-log-event-id=target] .blue-edit').click();const handle=page.getByRole('slider',{name:'end time handle',exact:true});await handle.focus();await page.keyboard.press('ArrowRight');await page.locator('.save-main').click();const saved=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='target').endMin===917);assert.deepEqual(saved.eventsByDay[day],before.eventsByDay[day].map(e=>e.id==='target'?{...e,endMin:917}:e));
