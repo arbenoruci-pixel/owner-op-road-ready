@@ -60,15 +60,33 @@ for(const path of ['source/src/modules/editor/EditEventSheet.jsx','source/src/mo
   const path='source/src/modules/logbook/DayLogScreen.jsx';
   let source=fs.readFileSync(path,'utf8');
   source=replaceExact(source,
-`    onSelect?.(eventId);
+`  function handleGraphEventTap(eventId) {
+    if (!eventId) {
+      onSelect?.(null);
+      return;
+    }
+    if (state.selectMode) {
+      onToggleSelectedId?.(eventId);
+      return;
+    }
+    onSelect?.(eventId);
     window.setTimeout(() => onOpenEdit?.(eventId), 0);
   }
 
-  const tz = homeTerminalConfigFromState(state);`,
-`    onSelect?.(eventId);
+  function handleLogbookBack() {`,
+`  function handleGraphEventTap(eventId) {
+    if (!eventId) {
+      onSelect?.(null);
+      return;
+    }
+    if (state.selectMode) {
+      onToggleSelectedId?.(eventId);
+      return;
+    }
+    onSelect?.(eventId);
   }
 
-  const tz = homeTerminalConfigFromState(state);`,
+  function handleLogbookBack() {`,
 'graph tap selects before edit');
   fs.writeFileSync(path,source);
 }
