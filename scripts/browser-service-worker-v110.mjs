@@ -1,4 +1,4 @@
-// Test the exact emitted worker on a loopback origin with synthetic data only.
+// Exact emitted worker, synthetic open Driving page, explicit activation handshake.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -43,7 +43,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [pr
       const deadline=Date.now()+30000, observed=[];let attempt=0;
       while(Date.now()<deadline){
         const result=await version();observed.push(result);if(result?.version===expected)return result;
-        if(++attempt%4===0)await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r?.update();});
+        if(++attempt%4===0)await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();r?.waiting?.postMessage({type:'OWNER_OP_ACTIVATE_UPDATE'});await r?.update();});
         await page.waitForTimeout(250);
       }
       const registration=await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return {active:r?.active?.state,waiting:r?.waiting?.state,installing:r?.installing?.state,controller:navigator.serviceWorker.controller?.scriptURL};});
@@ -60,7 +60,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [pr
     assert.deepEqual(snapshot.local,{currentStatus:'D',eventId:'fixture-live',startMin:915,endMin:916});
     assert.deepEqual(snapshot.stored,{status:'D',startMin:915,endMin:916});
     assert.deepEqual(errors,[]);
-    results.push({browser:name,before,after,noPageReload:true,indexedDBUnchanged:true,localStorageUnchanged:true,pageErrors:errors});
+    results.push({browser:name,before,after,activationProtocol:'OWNER_OP_ACTIVATE_UPDATE',noPageReload:true,indexedDBUnchanged:true,localStorageUnchanged:true,pageErrors:errors});
     console.log('PASS — '+name+': installed '+priorVersion+' worker → 110.2.1 handshake; no reload or Driving fixture data change');
   } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 }

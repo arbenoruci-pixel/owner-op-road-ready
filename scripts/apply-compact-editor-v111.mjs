@@ -17,6 +17,10 @@ for (const name of ['EditEventSheet','InsertEditEventSheet']) {
  const cancel='        <button className="cancel-main" onClick={onClose}>Cancel</button>';
  s=once(s,cancel,'');
  s=once(s,'      </div>\n    </div>\n  );\n}',`      </div>\n      <div className="compact-editor-footer-v111">\n        <button className="cancel-main" onClick={onClose}>Cancel</button>\n        ${insert?`{!(mode === 'select' && !selectedExisting) && (${save})}`:save}\n      </div>\n    </div>\n  );\n}`);
+ if(!insert) {
+  s=once(s,'<section className="form-section editor-on-duty-reasons">','<details className="compact-activities-v111"><summary>On duty activity <strong>{selectedOnReasons.length ? selectedOnReasons.join(\' · \') : \'Choose activity\'}</strong></summary><section className="form-section editor-on-duty-reasons">');
+  s=once(s,'          </section>\n        )}\n\n        {activityKind && (','          </section></details>\n        )}\n\n        {activityKind && (');
+ }
  if(insert) {
   s=once(s,'<div>Insert Events</div>','<div>Insert Duty Status</div>');
   const a=s.indexOf("            {mode === 'insert' && (\n              <div className=\"insert-duration-panel\">"), b=s.indexOf("            {reasonNeedsLoadLink",a);
@@ -25,6 +29,35 @@ for (const name of ['EditEventSheet','InsertEditEventSheet']) {
  }
  s='// COMPACT_EDITOR_LAYOUT_V111: presentation only, existing draft/save contract retained.\n'+s;
  fs.writeFileSync(path,s);
+}
+// A transparent SVG line has a zero-height DOM box. Use a rectangular hit
+// target so taps, keyboard access and browser hit testing share one real area.
+const graphPath='source/src/modules/graph/LogGraphV110.jsx';
+let graph=fs.readFileSync(graphPath,'utf8');
+if(!graph.includes('ACCESSIBLE_GRAPH_HITS_V111')){
+ const a=graph.indexOf('    {segments.map(s=><line key={`${s.event.id}-hit`}'),b=graph.indexOf("    {editable && ['start','end'].map",a);
+ if(a<0||b<0)throw Error('Graph hit-area anchor changed');
+ graph=graph.slice(0,a)+`    {/* ACCESSIBLE_GRAPH_HITS_V111: transparent interaction area only. */}
+    {segments.map(s=>{
+      const w=Math.min(G.width-G.left-G.right,Math.max(80,s.x2-s.x1));
+      const x=Math.max(G.left,Math.min(G.width-G.right-w,(s.x1+s.x2-w)/2));
+      return <rect key={s.event.id+'-hit'} data-hit-event={s.event.id} x={x} y={s.y-28} width={w} height="56" fill="transparent" role="button" tabIndex={onSelect?0:-1} aria-label={s.event.status+' '+timeLabel(s.event.startMin)} onClick={e=>{e.stopPropagation();onSelect?.(s.event.id);}} onKeyDown={e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();onSelect?.(s.event.id);}}} />;
+    })}
+`+graph.slice(b);
+ fs.writeFileSync(graphPath,graph);
+}
+const cssPath='source/src/modules/editor/compact-editor-v111.css';
+let styles=fs.readFileSync(cssPath,'utf8');
+if(!styles.includes('COMPACT_NO_SHRINK_V111')){
+ styles+=`\n/* COMPACT_NO_SHRINK_V111: overflowing form children scroll instead of collapsing. */
+.editor-ui-v110.editor-compact-v111 .form.editor-form-v85 > *{flex-shrink:0!important}
+.editor-ui-v110.editor-compact-v111 .selected-duration-live{flex:0 0 auto!important;min-height:40px!important;height:auto!important;margin:0!important}
+.editor-ui-v110.editor-compact-v111 .compact-activities-v111{flex:none;margin:0;border:1px solid #c4cdd9;border-radius:7px;padding:0 8px;color:#334155;background:#f7faf9}
+.editor-ui-v110.editor-compact-v111 .compact-activities-v111>summary{cursor:pointer;min-height:40px;padding:7px 0;font-size:11px;line-height:1.3;color:#526278}
+.editor-ui-v110.editor-compact-v111 .compact-activities-v111>summary strong{display:block;font-size:13px;line-height:1.3;color:#075643;font-weight:600}
+.editor-ui-v110.editor-compact-v111 .compact-activities-v111[open]>section{padding:4px 0 8px!important}
+`;
+ fs.writeFileSync(cssPath,styles);
 }
 fs.writeFileSync('source/src/modules/editor/components/EditorGraphPanel.jsx',"export { default } from './CompactGraphPanelV111.jsx';\n");
 const controls='source/src/modules/editor/components/EditorTimeControlsV110.jsx';
