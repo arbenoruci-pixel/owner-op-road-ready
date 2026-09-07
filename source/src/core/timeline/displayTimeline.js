@@ -24,9 +24,9 @@ function realDisplayBase(events = []) {
 }
 
 function safeCarryForwardStatus(status = '') {
-  // A stored non-driving duty status remains in effect across midnight. A bare
-  // historical D row alone is insufficient evidence to invent new Driving on
-  // the following day; real active Driving rollover is owned by its session.
+  // Smart paper-log mode must never paint a new day as DRIVING just because
+  // the previous day ended in D. Driving across midnight requires a real
+  // stored event/rollover, not display carry-forward.
   return status === 'D' ? 'OFF' : (status || 'OFF');
 }
 
@@ -48,6 +48,9 @@ function startFillOptions(events = [], options = {}) {
   if (options.fillStartWith) return options;
   if (options.disableStartFill) return options;
 
+  // A RODS day cannot have an uncovered period before the first event. When
+  // the caller has no previous-day context, use OFF as the conservative visual
+  // bridge and let RoadGuard/signing review the day if the record needs edits.
   return {
     ...options,
     fillStartWith: options.fallbackStartStatus || 'OFF',
@@ -63,45 +66,11 @@ export function displayEventsForDay(events, isCurrentDay=false, options = {}) {
   });
 }
 
-function emptyDayCarry(previous, day, today, options = {}) {
-  if (!previous || day > today) return [];
-  const isCurrentDay = day === today;
-  const endMin = isCurrentDay
-    ? Math.max(0, Math.min(1440, Number(options.nowMinute ?? nowMin())))
-    : 1440;
-  if (endMin <= 0) return [];
-  const status = safeCarryForwardStatus(previous.status);
-  const sameStatus = status === previous.status;
-  return [{
-    id:`carryover_${day}_${previous.id || status}`,
-    status,
-    startMin:0,
-    endMin,
-    city:sameStatus ? (previous.city || '') : '',
-    state:sameStatus ? (previous.state || '') : '',
-    note:sameStatus ? (previous.note || previous.description || '') : 'Off Duty',
-    description:'',
-    source:'carryover',
-    syntheticCoverage:true,
-    carriedFromPreviousDay:true,
-    displayOnly:true,
-    isLive:isCurrentDay,
-    recordedEndMin:null,
-  }];
-}
-
 export function displayEventsForDayFromState(eventsByDay = {}, day, options = {}) {
-  const today = options.today || localDayKey();
+  const today = localDayKey();
   const raw = realDisplayBase(eventsByDay?.[day] || []);
   const first = normalizeLogEvents(raw)[0];
   const previous = previousLastEvent(eventsByDay, day);
-
-  // Midnight is a log-day boundary, not a duty-status change. An empty new day
-  // therefore displays yesterday's last non-driving status from 00:00 through
-  // Now (or through 24:00 for a historical empty day). This is display-only:
-  // it never mutates yesterday, creates a fake raw event, or rewrites a signed day.
-  if (!raw.length) return emptyDayCarry(previous, day, today, options);
-
   const fillStartWith = first && Number(first.startMin || 0) > 0
     ? safeCarryForwardStatus(previous?.status || options.fallbackStartStatus || 'OFF')
     : options.fillStartWith;
