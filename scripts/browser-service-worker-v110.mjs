@@ -8,11 +8,11 @@ assert.deepEqual(traceGeometry([{id:'a',status:'OFF',startMin:0,endMin:60},{id:'
 console.log('PASS — nested overlaps never invent coverage gaps');
 const current=fs.readFileSync('public/sw.js','utf8');
 const manifest=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));
-const VERSION='110.2.3',BUILD='v110203-motive-override-chips';
-assert.equal(manifest.version,VERSION);assert.equal(manifest.build,BUILD);assert.equal(manifest.force,false);
-assert.ok(current.includes(`OWNER_OP_SW_VERSION = '${VERSION}'`));
+const VERSION=manifest.version,BUILD=manifest.build;
+assert.equal(manifest.force,false);assert.ok(current.includes(`OWNER_OP_SW_VERSION = '${VERSION}'`));assert.ok(current.includes(`OWNER_OP_SW_BUILD = '${BUILD}'`));
 const results=[];
-for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [priorVersion,priorBuild] of [['110.1.0','v110100-module-isolation'],['110.2.0','v110200-logbook-editor'],['110.2.1','v110201-logbook-followup'],['110.2.2','v110202-compact-handles']]){
+for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [priorVersion,priorBuild] of [['110.1.0','v110100-module-isolation'],['110.2.0','v110200-logbook-editor'],['110.2.1','v110201-logbook-followup'],['110.2.2','v110202-compact-handles'],['110.2.3','v110203-motive-override-chips'],['110.2.4','v110204-live-continuity-compact']]){
+ if(priorVersion===VERSION)continue;
  const prior=current.replace(`'${VERSION}'`,`'${priorVersion}'`).replace(`'${BUILD}'`,`'${priorBuild}'`);
  let worker=prior;
  const server=http.createServer((req,res)=>{
@@ -37,16 +37,11 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [pr
   }));
   async function waitVersion(expected){
    const deadline=Date.now()+30000,observed=[];let attempt=0;
-   while(Date.now()<deadline){
-    const result=await version();observed.push(result);if(result?.version===expected)return result;
-    if(++attempt%4===0)await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();r?.waiting?.postMessage({type:'OWNER_OP_ACTIVATE_UPDATE'});await r?.update();});
-    await page.waitForTimeout(250);
-   }
+   while(Date.now()<deadline){const result=await version();observed.push(result);if(result?.version===expected)return result;if(++attempt%4===0)await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();r?.waiting?.postMessage({type:'OWNER_OP_ACTIVATE_UPDATE'});await r?.update();});await page.waitForTimeout(250);}
    const registration=await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return {active:r?.active?.state,waiting:r?.waiting?.state,installing:r?.installing?.state,controller:navigator.serviceWorker.controller?.scriptURL};});
    fs.mkdirSync('browser-test-results',{recursive:true});fs.writeFileSync('browser-test-results/worker-failure.json',JSON.stringify({name,expected,observed,registration},null,2));throw Error(name+': worker version did not become '+expected);
   }
-  const before=await waitVersion(priorVersion);worker=current;
-  await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update();});
+  const before=await waitVersion(priorVersion);worker=current;await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update();});
   const after=await waitVersion(VERSION);assert.equal(after.build,BUILD);
   const snapshot=await page.evaluate(async()=>({boot:window.fixtureBoot,local:JSON.parse(localStorage.getItem('sw-driving-fixture')),stored:await new Promise((resolve,reject)=>{const r=indexedDB.open('sw-driving-fixture-v110');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,q=db.transaction('logs').objectStore('logs').get('live');q.onsuccess=()=>{db.close();resolve(q.result);};};})}));
   assert.equal(snapshot.boot,'unchanged');assert.deepEqual(snapshot.local,{currentStatus:'D',eventId:'fixture-live',startMin:915,endMin:916});assert.deepEqual(snapshot.stored,{status:'D',startMin:915,endMin:916});assert.deepEqual(errors,[]);
