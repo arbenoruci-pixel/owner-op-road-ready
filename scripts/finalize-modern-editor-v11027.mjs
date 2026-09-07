@@ -35,6 +35,44 @@ for(const path of ['source/src/modules/editor/EditEventSheet.jsx','source/src/mo
   fs.writeFileSync(path,source);
 }
 
+// Motive interaction: selecting a graph/list event reveals Edit; selection is
+// read-only and opening the editor remains an explicit second action.
+{
+  const path='source/src/modules/logbook/EventList.jsx';
+  let source=fs.readFileSync(path,'utf8');
+  source=replaceExact(source,
+`            onClick={() => continuityOnly ? undefined : (selectMode ? onToggleSelected(event.id) : onOpenEdit(event.id))}`,
+`            onClick={() => continuityOnly ? undefined : (selectMode ? onToggleSelected(event.id) : onSelect?.(event.id))}`,
+'event tap selects before edit');
+  source=replaceExact(source,
+`            ) : (
+              <button className="blue-edit" onClick={(e)=>{ e.stopPropagation(); onOpenEdit(event.id); }}>Edit</button>
+            )}`,
+`            ) : selected ? (
+              <button className="blue-edit motive-edit-reveal-v11027" aria-label="Edit selected event" onClick={(e)=>{ e.stopPropagation(); onOpenEdit(event.id); }}>Edit</button>
+            ) : (
+              <span className="event-edit-placeholder-v11027" aria-hidden="true" />
+            )}`,
+'Edit reveal action');
+  fs.writeFileSync(path,source);
+}
+{
+  const path='source/src/modules/logbook/DayLogScreen.jsx';
+  let source=fs.readFileSync(path,'utf8');
+  source=replaceExact(source,
+`    onSelect?.(eventId);
+    window.setTimeout(() => onOpenEdit?.(eventId), 0);
+  }
+
+  const tz = homeTerminalConfigFromState(state);`,
+`    onSelect?.(eventId);
+  }
+
+  const tz = homeTerminalConfigFromState(state);`,
+'graph tap selects before edit');
+  fs.writeFileSync(path,source);
+}
+
 // Final small overrides keep the visible target Motive-like while preserving
 // the tested Cancel control as a subtle secondary action.
 {
@@ -51,13 +89,23 @@ for(const path of ['source/src/modules/editor/EditEventSheet.jsx','source/src/mo
 .editor-ui-v110.editor-modern-v11027 .compact-editor-footer-v111 .cancel-main{display:block!important;grid-column:1!important;width:72px!important;height:44px!important;min-height:44px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;color:#6a7077!important;-webkit-text-fill-color:#6a7077!important;font-size:13px!important;font-weight:500!important;box-shadow:none!important}
 .editor-ui-v110.editor-modern-v11027 .compact-editor-footer-v111 .edit-sticky-save{grid-column:2!important;width:100%!important}
 `;
+  if(!source.includes('MOTIVE_EDIT_REVEAL_V11027')) source += `
+/* MOTIVE_EDIT_REVEAL_V11027 */
+.events.clean-events .event-row.clean-event-row{position:relative!important;overflow:hidden!important;transition:background .16s ease,padding .16s ease!important}
+.events.clean-events .event-row.clean-event-row:not(.selectable):not(.continuity-only-v11026){grid-template-columns:34px minmax(0,1fr) 0!important}
+.events.clean-events .event-row.clean-event-row.selected:not(.selectable):not(.continuity-only-v11026){padding-left:88px!important;background:#eaf4ff!important;box-shadow:none!important}
+.events.clean-events .event-row.clean-event-row.selected:not(.selectable):not(.continuity-only-v11026)::after{content:'';position:absolute;left:78px;top:0;bottom:0;width:1px;background:#c7def8}
+.events.clean-events .motive-edit-reveal-v11027{position:absolute!important;left:0!important;top:0!important;bottom:0!important;width:78px!important;height:auto!important;min-height:100%!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:#087cf0!important;color:#fff!important;-webkit-text-fill-color:#fff!important;font-size:15px!important;font-weight:750!important;box-shadow:none!important;z-index:2!important}
+.events.clean-events .motive-edit-reveal-v11027:active{background:#006bd6!important}
+.events.clean-events .event-edit-placeholder-v11027{display:block!important;width:0!important;height:0!important;overflow:hidden!important}
+`;
   fs.writeFileSync(path,source);
 }
 
 const VERSION='110.2.7',BUILD='v110207-fast-edit';
 for(const path of ['release-version.json','public/app-version.json']){
   const meta=JSON.parse(fs.readFileSync(path,'utf8'));
-  Object.assign(meta,{version:VERSION,build:BUILD,force:false,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,label:'Fast Logbook editor',notes:['Graph-first editor with Motive-style Start/End flags and 44px touch targets.','Start Time and End Time use two direct cards; one-minute fine tuning stays secondary.','Duty status, multi-select activities, location and always-visible notes use a cleaner phone-first hierarchy while protected override, HOS and certification behavior remain unchanged.']});
+  Object.assign(meta,{version:VERSION,build:BUILD,force:false,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,label:'Fast Logbook editor',notes:['Tap a graph or list event to select it; a clear blue Edit action appears before the editor opens.','Graph-first editor uses Motive-style Start/End flags with 44px touch targets and two direct Start/End cards.','Duty status, multi-select activities, location and always-visible notes use a cleaner phone-first hierarchy while protected override, HOS and certification behavior remain unchanged.']});
   fs.writeFileSync(path,JSON.stringify(meta,null,2)+'\n');
 }
 for(const [path,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
