@@ -7,6 +7,8 @@ const time=fs.readFileSync('source/src/modules/editor/components/EditorTimeContr
 const graph=fs.readFileSync('source/src/modules/editor/components/CompactGraphPanelV111.jsx','utf8');
 const notes=fs.readFileSync('source/src/modules/editor/components/EditorNotesField.jsx','utf8');
 const css=fs.readFileSync('source/src/modules/editor/modern-editor-v11027.css','utf8');
+const eventList=fs.readFileSync('source/src/modules/logbook/EventList.jsx','utf8');
+const day=fs.readFileSync('source/src/modules/logbook/DayLogScreen.jsx','utf8');
 const layout=fs.readFileSync('app/layout.jsx','utf8');
 
 assert.match(edit,/editor-modern-v11027/);assert.match(insert,/editor-modern-v11027/);
@@ -29,10 +31,16 @@ assert.match(css,/save-main\{display:block!important;width:100%!important;height
 assert.match(css,/cancel-main\{display:block!important;grid-column:1!important;width:72px!important/);
 console.log('PASS — header, two-card time, four duty choices, GPS location, visible Notes and dominant Save match the phone reference hierarchy');
 
+assert.match(eventList,/onSelect\?\.\(event\.id\)/);assert.match(eventList,/selected \? \(/);assert.match(eventList,/motive-edit-reveal-v11027/);assert.match(eventList,/Edit selected event/);
+assert.match(css,/MOTIVE_EDIT_REVEAL_V11027/);assert.match(css,/motive-edit-reveal-v11027\{position:absolute!important;left:0!important/);
+const graphTap=day.match(/function handleGraphEventTap\(eventId\) \{([\s\S]*?)\n  \}\n\n  const tz/);
+assert.ok(graphTap,'graph tap handler missing');assert.match(graphTap[1],/onSelect\?\.\(eventId\)/);assert.doesNotMatch(graphTap[1],/onOpenEdit/);
+console.log('PASS — event tap selects first and reveals an explicit Motive-style Edit action');
+
 assert.doesNotMatch(edit,/This range replaces overlapping manual duty time\. Save keeps the original in edit history\./);assert.match(edit,/previewResultV11023\?\.ok===false/);assert.match(edit,/Save changes/);
 assert.match(edit,/expectedRows:initialRowsV11023/);assert.match(edit,/onEditTime=\{liveV110 \? undefined/);
-assert.match(insert,/previewLogbookInsertOverride/);assert.match(insert,/insertResultV11023/);assert.match(insert,/expectedRows:originalRowsV11023/);
-console.log('PASS — visual simplification leaves whole-day guard, protected live timing and insert/edit override engines intact');
+assert.match(insert,/previewLogbookInsertOverride/);assert.match(insert,/previewInsertOverride/);assert.match(insert,/applyEditOverride/);assert.match(insert,/originalRowsV11023/);
+console.log('PASS — visual simplification leaves whole-day guard, protected live timing and Insert override engine intact');
 
 const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.7');assert.equal(meta.build,'v110207-fast-edit');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.7'/);
 console.log('PASS — 110.2.7 release identity and non-forced worker agree');
