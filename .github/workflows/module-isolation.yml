@@ -1,7 +1,7 @@
 name: Module isolation regression
 on:
   push:
-    branches: [main, fix/module-isolation-20260906, fix/logbook-editor-20260906, fix/logbook-followup-v11021-20260906, fix/compact-handle-resize-v11022-20260907, fix/motive-override-chips-11023-20260906, feat/dot-officer-email-11028-20260907, fix/ratecon-one-way-11029-20260907]
+    branches: [main, fix/module-isolation-20260906, fix/logbook-editor-20260906, fix/logbook-followup-v11021-20260906, fix/compact-handle-resize-v11022-20260907, fix/motive-override-chips-11023-20260906, feat/dot-officer-email-11028-20260907, fix/ratecon-one-way-11029-20260907, fix/live-start-edit-110210-20260907]
   pull_request:
     branches: [main]
 permissions:
@@ -45,7 +45,7 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium webkit
-      - name: Real browser sign, editor, override, continuity, GPS, DOT email, Rate Con and service-worker checks
+      - name: Real browser sign, editor, override, continuity, GPS, DOT email, Rate Con, live Start and service-worker checks
         run: |
           npx next start --hostname 127.0.0.1 --port 3000 > /tmp/owner-op-test-server.log 2>&1 &
           SERVER_PID=$!
