@@ -29,6 +29,9 @@ const driving=displayEventsForDayFromState({'2026-09-06':[{...previous,id:'drive
 assert.equal(driving[0].status,'OFF');
 console.log('PASS — a bare historical D row cannot invent next-day Driving without its active session');
 
-const finalizer=fs.readFileSync('scripts/finalize-midnight-carry-v11025.mjs','utf8');
-assert.match(finalizer,/homeTerminalDayKey/);assert.match(finalizer,/homeTerminalMinute/);assert.match(finalizer,/setInterval\(\(\) => setTimelineNowV11025\(Date\.now\(\)\), 15000\)/);assert.match(finalizer,/!event\.carriedFromPreviousDay/);
-console.log('PASS — Day Log refreshes carry in home-terminal time and keeps it non-editable');
+const day=fs.readFileSync('source/src/modules/logbook/DayLogScreen.jsx','utf8');
+assert.match(day,/const clockV110 = useLogbookClockV110\(state\)/);assert.match(day,/today:clockV110\.day/);assert.match(day,/nowMinute:liveMinuteV1036/);assert.match(day,/currentStatus:state\.currentStatus/);assert.match(day,/!event\.carriedFromPreviousDay/);
+console.log('PASS — Day Log uses its existing exact home-terminal clock and keeps carry non-editable');
+
+const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.5');assert.equal(meta.build,'v110205-midnight-status-carry');assert.equal(meta.force,false);
+console.log('PASS — 110.2.5 release identity is consistent and non-forced');
