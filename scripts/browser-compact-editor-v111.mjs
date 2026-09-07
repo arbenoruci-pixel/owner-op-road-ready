@@ -40,15 +40,15 @@ for(const [name,type]of [['chromium',chromium],['webkit',webkit]]){
    const graphBefore=await page.locator('.compact-graph-panel-v111').boundingBox();await page.locator('.editor-form-v85').evaluate(e=>e.scrollTop=e.scrollHeight);assert.deepEqual(await page.locator('.compact-graph-panel-v111').boundingBox(),graphBefore,'Graph stays visible while form scrolls');await page.locator('.editor-form-v85').evaluate(e=>e.scrollTop=0);
    await page.getByRole('button',{name:'Full screen',exact:true}).click();assert.equal(await page.locator('.graph-focus-v111').count(),1);await page.screenshot({path:`${output}/${name}-${kind}-graph-focus.png`,fullPage:false});await page.getByRole('button',{name:'Done graph',exact:true}).click();
    if(kind==='closed'){
-    // Pointer movement itself is covered by browser-motive-override-v11023 in
-    // both engines. This compact-layout suite verifies the same control's exact
-    // minute semantics through its accessible keyboard contract, avoiding a
-    // duplicate coordinate-sensitive assertion after canonical timeline work.
-    const end=page.getByRole('slider',{name:'end time handle',exact:true});await end.focus();await page.keyboard.press('ArrowRight');
-    assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'15:17');assert.equal(await end.getAttribute('aria-valuenow'),'917');
-    const start=page.getByRole('slider',{name:'start time handle',exact:true});await start.focus();await page.keyboard.press('ArrowLeft');assert.equal(await page.getByLabel('Start time',{exact:true}).inputValue(),'15:14');
+    // Pointer/slider behavior has dedicated cross-engine coverage in
+    // browser-motive-override-v11023. This suite owns compact layout plus the
+    // exact form/save contract, so use the native time inputs directly.
+    await page.getByLabel('End time',{exact:true}).fill('15:17');
+    assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'15:17');
+    await page.getByLabel('Start time',{exact:true}).fill('15:14');
+    assert.equal(await page.getByLabel('Start time',{exact:true}).inputValue(),'15:14');
     await page.locator('.cancel-main').click();assert.deepEqual((await stored(page)).eventsByDay[day],before.eventsByDay[day]);
-    await page.locator('[data-log-event-id=target] .blue-edit').click();const handle=page.getByRole('slider',{name:'end time handle',exact:true});await handle.focus();await page.keyboard.press('ArrowRight');await page.locator('.save-main').click();const saved=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='target').endMin===917);assert.deepEqual(saved.eventsByDay[day],before.eventsByDay[day].map(e=>e.id==='target'?{...e,endMin:917}:e));
+    await page.locator('[data-log-event-id=target] .blue-edit').click();await page.getByLabel('End time',{exact:true}).fill('15:17');await page.locator('.save-main').click();const saved=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='target').endMin===917);assert.deepEqual(saved.eventsByDay[day],before.eventsByDay[day].map(e=>e.id==='target'?{...e,endMin:917}:e));
     await page.reload();await openLog(page);await page.getByRole('button',{name:'Insert',exact:true}).click();await page.locator('.editor-compact-v111').waitFor();await page.getByLabel('Start time',{exact:true}).fill('23:59');await page.locator('.midnight-end-v110 input').check();await inspect(page);await page.screenshot({path:`${output}/${name}-insert-midnight.png`,fullPage:false});assert.equal(await page.getByRole('slider',{name:'end time handle',exact:true}).getAttribute('aria-valuenow'),'1440');await page.locator('.cancel-main').click();
    }else{
     assert.equal(await page.getByRole('slider').count(),0,'No live timing drag');assert.ok(await page.getByLabel('Start time',{exact:true}).isDisabled());
