@@ -1,6 +1,40 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
+// v98.8 owns the legacy display helper, so extend it only after every legacy
+// materializer has completed. This keeps the real production chain reproducible.
+const displayPath='source/src/core/timeline/displayTimeline.js';
+let display=fs.readFileSync(displayPath,'utf8');
+display=display.replace('  const today = localDayKey();','  const today = options.today || localDayKey();');
+const oldEmpty=`  if (!raw.length && day === today) {
+    return [emptyCurrentDayEvent(day, previous, options)];
+  }`;
+const newEmpty=`  if (!raw.length && day === today) {
+    return [emptyCurrentDayEvent(day, previous, options)];
+  }
+  if (!raw.length && previous && day < today) {
+    return [emptyCurrentDayEvent(day, previous, {
+      ...options,
+      currentStatus:previous.status,
+      currentReason:previous.note || previous.description,
+      currentLocation:{ city:previous.city || '', state:previous.state || '' },
+      nowMinute:1440,
+    })];
+  }`;
+if(display.includes(oldEmpty))display=display.replace(oldEmpty,newEmpty);
+const oldCoverage=`    source:'display_timeline',
+    displayOnly:true,
+    syntheticCoverage:true,`;
+const newCoverage=`    source:'display_timeline',
+    displayOnly:true,
+    syntheticCoverage:true,
+    carriedFromPreviousDay:!!previous,
+    isLive:Number(options.nowMinute ?? nowMin()) < 1440,`;
+if(display.includes(oldCoverage))display=display.replace(oldCoverage,newCoverage);
+assert.ok(display.includes('options.today || localDayKey()'),'home-terminal day override missing');
+assert.ok(display.includes('carriedFromPreviousDay:!!previous'),'carry marker missing');
+fs.writeFileSync(displayPath,display);
+
 const dayPath='source/src/modules/logbook/DayLogScreen.jsx';
 let day=fs.readFileSync(dayPath,'utf8');
 day=day.replace(
@@ -26,14 +60,16 @@ const newBlock=`  const [timelineNowV11025, setTimelineNowV11025] = useState(() 
     () => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay, {
       today: timelineTodayV11025,
       nowMinute: timelineMinuteV11025,
+      currentStatus:state.currentStatus,
+      currentReason:state.currentReason,
+      currentLocation:state.currentLocation,
     }),
-    [state.eventsByDay, state.activeDay, timelineTodayV11025, timelineMinuteV11025]
+    [state.eventsByDay, state.activeDay, state.currentStatus, state.currentReason, state.currentLocation, timelineTodayV11025, timelineMinuteV11025]
   );`;
 if(day.includes(oldBlock)) day=day.replace(oldBlock,newBlock);
 assert.ok(day.includes('timelineMinuteV11025'),'Day Log home-terminal live clock patch missing');
+assert.ok(day.includes('currentStatus:state.currentStatus'),'current-status carry wiring missing');
 
-// Carry-over rows are visual continuity, not editable raw events. Keep them out
-// of the editable event list while the graph and Log Check see the continuity.
 const oldList=`  const eventListEvents = useMemo(
     () => (bulkPreviewEvents || []).map(event => enrichLoadEventFromLinkedRoute(state, state.activeDay, event)),`;
 const newList=`  const eventListEvents = useMemo(
@@ -58,4 +94,4 @@ for(const p of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/T
   source=source.replace(/App v110\.2\.4/g,`App v${VERSION}`).replace(/APP V110\.2\.4/g,`APP V${VERSION}`);
   fs.writeFileSync(p,source);
 }
-console.log('PASS — 110.2.5 midnight duty-status carry finalized');
+console.log('PASS — 110.2.5 midnight duty-status carry finalized after materialization');
