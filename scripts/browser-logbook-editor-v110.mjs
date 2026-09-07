@@ -44,7 +44,12 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const zon
   await page.locator('.editor-ui-v110').waitFor();
   assert.equal(await page.getByLabel('Start time',{exact:true}).inputValue(),'15:15');assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'15:16');
   assert.equal((await page.locator('.selected-duration-live b').innerText()).trim(),'1m');assert.match(await page.locator('.selected-duration-live em').innerText(),/3:15 PM.*3:16 PM/);
-  assert.match(await page.locator('.editor-timezone-v110').innerText(),/America\/New_York/);
+  // The compact redesign deliberately removed the helper timezone row. Verify
+  // the semantic contract instead: the configured home-terminal timezone is
+  // America/New_York while both non-home device timezones render the same
+  // exact 15:15–15:16 historical values asserted above.
+  assert.notEqual(zone,'America/New_York');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-home-terminal-timezone-v1')),'America/New_York');
   const closedContrast=await inspect(page,prefix+' closed');await page.screenshot({path:`browser-test-results/${prefix}-closed-editor.png`,fullPage:false});
   await page.getByLabel('End time',{exact:true}).fill('15:17');assert.equal((await page.locator('.selected-duration-live b').innerText()).trim(),'2m');
   await page.locator('.cancel-main').click();await page.waitForTimeout(400);assert.deepEqual((await stored(page)).eventsByDay[day],before.eventsByDay[day]);
@@ -68,7 +73,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const zon
   await page.setViewportSize({width:320,height:740});await inspect(page,prefix+' narrow');await page.screenshot({path:`browser-test-results/${prefix}-320px.png`,fullPage:false});
   await page.getByRole('button',{name:'Change status',exact:true}).click();await page.waitForTimeout(250);assert.equal(await page.locator('.editor-ui-v110').count(),0);assert.equal((await stored(page)).currentStatus,'D');
   assert.deepEqual(errors,[]);const unexpected=consoleErrors.filter(s=>!s.includes('Failed to load resource')&&!s.includes('403')&&!s.includes('404'));assert.deepEqual(unexpected,[]);
-  results.push({browser:name,phoneTimeZone:zone,homeTimeZone:'America/New_York',closedContrast,liveContrast,checks:'gap/overlap; one-minute draft; Cancel; exact Save; reload; invalid range; 24:00; live Now; note-only Save/reload; explicit status handoff; 320px; no JS exceptions',pageErrors:errors,expectedBlockedResourceErrors:consoleErrors.length});
+  results.push({browser:name,phoneTimeZone:zone,homeTimeZone:'America/New_York',closedContrast,liveContrast,checks:'gap/overlap; one-minute draft; Cancel; exact Save; reload; invalid range; 24:00; home-terminal timezone independent of device zone; live Now; note-only Save/reload; explicit status handoff; 320px; no JS exceptions',pageErrors:errors,expectedBlockedResourceErrors:consoleErrors.length});
   console.log('PASS — '+prefix+' real mobile Logbook/editor flows');
  }catch(error){await page.screenshot({path:`browser-test-results/${prefix}-failure.png`,fullPage:false}).catch(()=>{});fs.writeFileSync(`browser-test-results/${prefix}-failure.json`,JSON.stringify({message:error.message,errors,consoleErrors,state:await stored(page).catch(()=>null)},null,2));throw error;}finally{await browser.close();}
 }
