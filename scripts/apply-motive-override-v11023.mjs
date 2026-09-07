@@ -2,148 +2,19 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 function once(text, before, after, label) {
-  if (text.includes(after)) return text;
+  // Check the old anchor first: a replacement may be a substring of it.
+  if (!text.includes(before) && text.includes(after)) return text;
   assert.equal(text.split(before).length, 2, label + ' anchor changed');
   return text.replace(before, after);
 }
 
-const editingPath='source/src/modules/logbook/eventEditingV110.js';
-let editing=fs.readFileSync(editingPath,'utf8');
-const oldBlock=`/** Exact single-event edit. No inferred OFF, neighbor merge, current-status change,
- * load mutation or signature replacement. The caller updates certification status. */
-export function applyLogbookEditorEdit(state, { day, id, patch = {}, expected }, at = new Date()) {
-  const rows = state.eventsByDay?.[day] || [];
-  const index = rows.findIndex(e => e?.id === id && !e.voided);
-  if (index < 0) return { ok:false, error:'This event is no longer available. Reopen the log.' };
-  const before = rows[index];
-  if (expected && !equal(before,expected)) return { ok:false, error:'This event changed while the editor was open. Reopen it before saving.' };
-  const changes = {};
-  for (const [key,value] of Object.entries(patch)) {
-    if (!EDIT_FIELDS.has(key)) return { ok:false, error:\`Unsupported log field: \${key}\` };
-    if (!equal(value,before[key])) changes[key] = value;
-  }
-  if (!Object.keys(changes).length) return { ok:true, changed:false, state };
-  const live = projectLogbookEvents(state,day,at).find(e => e.id === id)?.isLive;
-  if (live && ['status','startMin','endMin'].some(k => Object.hasOwn(changes,k))) return { ok:false, error:'Use Change status to end the live event. Its timing continues while you edit details.' };
-  const after = { ...before, ...changes };
-  if (!['OFF','SB','D','ON'].includes(after.status)) return { ok:false,error:'Choose a valid duty status.' };
-  const error = editorRangeError(Number(after.startMin),Number(after.endMin));
-  if (error) return { ok:false,error };
-  const next = rows.slice(); next[index] = after;
-  return { ok:true, changed:true, state:{ ...state, eventsByDay:{ ...state.eventsByDay,[day]:next } } };
-}`;
-const newBlock=`// MOTIVE_OVERRIDE_V11023: a manual time edit owns its selected interval.
-// Overlapped manual rows are trimmed/split/removed; protected automatic Driving
-// and the currently live row can never be overwritten by another event.
-function isProtectedAutomaticDriving(event = {}) {
-  if (event?.status !== 'D') return false;
-  const source = String(event.source || '').toLowerCase();
-  return event.autoRecorded === true || event.eld === true || event.vehicleGateway === true ||
-    event.locationSource === 'eld' || event.drivingSource === 'eld' || event.drivingSource === 'vehicle_gateway' ||
-    source === 'eld' || source === 'vehicle_gateway' || source.startsWith('gps_drive');
-}
-function intervalsOverlap(aStart,aEnd,bStart,bEnd) {
-  return Number(aStart) < Number(bEnd) && Number(aEnd) > Number(bStart);
-}
-function uniqueSplitId(rows, sourceId, targetId, minute) {
-  const used = new Set(rows.map(e => String(e?.id || '')));
-  const base = \`\${sourceId}__split_\${targetId}_\${minute}\`;
-  if (!used.has(base)) return base;
-  for (let i=2;i<1000;i+=1) if (!used.has(\`\${base}_\${i}\`)) return \`\${base}_\${i}\`;
-  return \`\${base}_\${Date.now()}\`;
-}
-function overrideManualInterval(rows, before, after) {
-  const work = rows.filter(e => e?.id !== before.id).map(e => ({...e}));
-  const changedIds = new Set([before.id]);
-  // When one handle shrinks the old interval, the touching neighbor takes the
-  // released time. This keeps a normal RODS day continuous like Motive.
-  if (Number(after.startMin) > Number(before.startMin)) {
-    const previous = work.filter(e => Number(e.endMin) === Number(before.startMin) && Number(e.startMin) < Number(before.startMin))
-      .sort((a,b)=>Number(b.startMin)-Number(a.startMin))[0];
-    if (previous && !isProtectedAutomaticDriving(previous)) {
-      const blocker = work.filter(e => e.id !== previous.id && Number(e.startMin) > Number(before.startMin) && Number(e.startMin) < Number(after.startMin))
-        .sort((a,b)=>Number(a.startMin)-Number(b.startMin))[0];
-      previous.endMin = blocker ? Number(blocker.startMin) : Number(after.startMin);
-      changedIds.add(previous.id);
-    }
-  }
-  if (Number(after.endMin) < Number(before.endMin)) {
-    const next = work.filter(e => Number(e.startMin) === Number(before.endMin) && Number(e.endMin) > Number(before.endMin))
-      .sort((a,b)=>Number(a.endMin)-Number(b.endMin))[0];
-    if (next && !isProtectedAutomaticDriving(next)) {
-      const blocker = work.filter(e => e.id !== next.id && Number(e.endMin) < Number(before.endMin) && Number(e.endMin) > Number(after.endMin))
-        .sort((a,b)=>Number(b.endMin)-Number(a.endMin))[0];
-      next.startMin = blocker ? Number(blocker.endMin) : Number(after.endMin);
-      changedIds.add(next.id);
-    }
-  }
-  const out=[];
-  for (const row of work) {
-    if (!intervalsOverlap(row.startMin,row.endMin,after.startMin,after.endMin)) { out.push(row); continue; }
-    if (isProtectedAutomaticDriving(row)) return {ok:false,error:'Automatic Driving time cannot be overwritten. Move the handle to the Driving boundary.'};
-    changedIds.add(row.id);
-    const keepLeft = Number(row.startMin) < Number(after.startMin);
-    const keepRight = Number(row.endMin) > Number(after.endMin);
-    if (keepLeft) out.push({...row,endMin:Number(after.startMin)});
-    if (keepRight) {
-      const right = {...row,startMin:Number(after.endMin)};
-      if (keepLeft) right.id = uniqueSplitId([...rows,...out],row.id,before.id,after.endMin);
-      out.push(right);
-    }
-  }
-  out.push(after);
-  out.sort((a,b)=>Number(a.startMin)-Number(b.startMin) || Number(a.endMin)-Number(b.endMin) || String(a.id).localeCompare(String(b.id)));
-  return {ok:true,events:out,changedIds:[...changedIds]};
-}
-export function previewLogbookEditorOverride(state, { day, id, patch = {}, expected }, at = new Date()) {
-  const rows = state.eventsByDay?.[day] || [];
-  const index = rows.findIndex(e => e?.id === id && !e.voided);
-  if (index < 0) return { ok:false, error:'This event is no longer available. Reopen the log.' };
-  const before = rows[index];
-  if (expected && !equal(before,expected)) return { ok:false, error:'This event changed while the editor was open. Reopen it before saving.' };
-  const changes = {};
-  for (const [key,value] of Object.entries(patch)) {
-    if (!EDIT_FIELDS.has(key)) return { ok:false, error:\`Unsupported log field: \${key}\` };
-    if (!equal(value,before[key])) changes[key] = value;
-  }
-  if (!Object.keys(changes).length) return { ok:true, changed:false, events:rows, changedIds:[] };
-  const projected = projectLogbookEvents(state,day,at);
-  const liveTarget = projected.find(e => e.id === id)?.isLive;
-  const timingChanged = ['startMin','endMin'].some(k => Object.hasOwn(changes,k));
-  if (liveTarget && ['status','startMin','endMin'].some(k => Object.hasOwn(changes,k))) return { ok:false, error:'Use Change status to end the live event. Its timing continues while you edit details.' };
-  const after = { ...before, ...changes };
-  if (!['OFF','SB','D','ON'].includes(after.status)) return { ok:false,error:'Choose a valid duty status.' };
-  const error = editorRangeError(Number(after.startMin),Number(after.endMin));
-  if (error) return { ok:false,error };
-  if (isProtectedAutomaticDriving(before) && ['status','startMin','endMin'].some(k => Object.hasOwn(changes,k))) {
-    return {ok:false,error:'Automatic Driving time is protected. Add notes/details without changing its duty time.'};
-  }
-  if (timingChanged) {
-    const liveConflict = projected.find(e => e.id !== id && e.isLive && intervalsOverlap(e.startMin,e.endMin,after.startMin,after.endMin));
-    if (liveConflict) return {ok:false,error:'The current live event cannot be overwritten. Move the handle to its start time or change status first.'};
-    const result = overrideManualInterval(rows,before,after);
-    if (!result.ok) return result;
-    return {ok:true,changed:true,events:result.events,changedIds:result.changedIds,timelineChanged:result.changedIds.some(changedId=>changedId!==id)};
-  }
-  const next=rows.slice(); next[index]=after;
-  return {ok:true,changed:true,events:next,changedIds:[id],timelineChanged:false};
-}
-/** Explicit Logbook edit. Time changes use Motive-style manual interval override;
- * metadata-only edits remain exact single-row writes. Loads/documents stay external. */
-export function applyLogbookEditorEdit(state, command, at = new Date()) {
-  const result = previewLogbookEditorOverride(state,command,at);
-  if (!result.ok || !result.changed) return result.ok ? {...result,state} : result;
-  return {...result,state:{...state,eventsByDay:{...state.eventsByDay,[command.day]:result.events}}};
-}`;
-if (!editing.includes('MOTIVE_OVERRIDE_V11023')) {
-  assert.equal(editing.split(oldBlock).length,2,'eventEditing exact-edit block changed');
-  editing=editing.replace(oldBlock,newBlock);
-  fs.writeFileSync(editingPath,editing);
-}
+// Canonical command is applied after every legacy materializer.
+fs.copyFileSync('source/src/modules/logbook/overrideContractV11023.js','source/src/modules/logbook/eventEditingV110.js');
 
 const apiPath='source/src/modules/logbook/public-api.js';
 let api=fs.readFileSync(apiPath,'utf8');
-api=api.replace('projectLogbookEvents, applyLogbookEditorEdit','projectLogbookEvents, previewLogbookEditorOverride, applyLogbookEditorEdit');
+api=api.replace('projectLogbookEvents, applyLogbookEditorEdit','projectLogbookEvents, previewLogbookEditorOverride, previewLogbookInsertOverride, applyLogbookEditorInsert, isProtectedAutomaticDriving, applyLogbookEditorEdit');
+api=api.replace("['eventsByDay','certifyStatus'","['eventsByDay','logbookEditHistoryByDay','certifyStatus'");
 fs.writeFileSync(apiPath,api);
 
 const editPath='source/src/modules/editor/EditEventSheet.jsx';
@@ -227,6 +98,81 @@ if(!css.includes('MOTIVE_QUICK_CHIPS_V11023')) {
   fs.writeFileSync(cssPath,css);
 }
 
+// Full day snapshot is required for an edit that can change neighboring records.
+edit=fs.readFileSync(editPath,'utf8');
+edit=once(edit,'  const projectedV110 = projectLogbookEvents',
+  '  const initialRowsV11023 = useMemo(() => structuredClone(logbookContext.eventsByDay?.[dayV110] || []), [event.id,dayV110]);\n  const projectedV110 = projectLogbookEvents','day snapshot');
+edit=edit.replace('patch:previewPatchV11023,expected:initialRawV110}', 'patch:previewPatchV11023,expected:initialRawV110,expectedRows:initialRowsV11023}');
+edit=edit.replace('expected:initialRawV110,patch}', 'expected:initialRawV110,expectedRows:initialRowsV11023,patch}');
+edit=edit.replace('JSON.stringify(parseOnDutyNote(initialForm.note).selected)', 'JSON.stringify(selectedReasonsFromForm(initialForm))');
+edit=once(edit,'                  key={reason}\n','                  key={reason}\n                  aria-pressed={selectedOnReasons.includes(reason)}\n                  title={reason}\n','edit chip semantics');
+// Activities follow Duty Status directly; Location/Notes stay below them.
+const locationStart=edit.indexOf('        <EditorLocationFields');
+const activityStart=edit.indexOf("        {status === 'ON' && (",locationStart);
+const activityEnd=edit.indexOf('        {activityKind && (',activityStart);
+assert.ok(locationStart>0 && activityStart>locationStart && activityEnd>activityStart);
+const locationBlock=edit.slice(locationStart,activityStart),activityBlock=edit.slice(activityStart,activityEnd);
+edit=edit.slice(0,locationStart)+activityBlock+locationBlock+edit.slice(activityEnd);
+edit=edit.replace("'Dragging this event replaces overlapping manual duty time. Automatic/live Driving stays protected.'",
+  "'This range replaces overlapping manual duty time. Save keeps the original in edit history.'");
+fs.writeFileSync(editPath,edit);
+
+insertEditor=fs.readFileSync(insertPath,'utf8');
+insertEditor=insertEditor.replace("editorRangeError, projectLogbookEvents }", "editorRangeError, projectLogbookEvents, previewLogbookInsertOverride }");
+insertEditor=once(insertEditor,'  const clockV110 = useLogbookClockV110(logbookContext);',`  const clockV110 = useLogbookClockV110(logbookContext);
+  const originalRowsV11023 = useMemo(() => structuredClone(logbookContext.eventsByDay?.[logbookContext.activeDay] || []), [logbookContext.activeDay]);`,'insert day snapshot');
+insertEditor=once(insertEditor,"  const [insertDraftEvent, setInsertDraftEvent] = useState(() => draftEvent({",`  const [insertDraftEvent, setInsertDraftEvent] = useState(() => draftEvent({
+    id:'manual_' + globalThis.crypto.randomUUID(),`,'stable new event ID');
+// Same names and note delimiter in both editors. No automatic PTI selection.
+insertEditor=insertEditor.replace(/const onReasons = \[[^\n]+\];/,"const onReasons = ['Pre-trip inspection','Fuel','Pickup / Loading','Delivery / Unloading','Drop Off','Drop & Hook','Waiting','Hook Empty / Reposition'];");
+insertEditor=insertEditor.replace("return picked.length ? picked : [reasons[0]].filter(Boolean);","return picked;");
+insertEditor=insertEditor.replace("return reasons.filter(Boolean).join(' / ');","return reasons.filter(Boolean).join(' · ');");
+insertEditor=insertEditor.replace("return reasonListForStatus(status)[0] || statusLabel(status);","return status === 'ON' ? '' : (reasonListForStatus(status)[0] || statusLabel(status));");
+insertEditor=insertEditor.replace("(current.length > 1 ? current.filter(item => item !== reason) : current)","current.filter(item => item !== reason)");
+insertEditor=once(insertEditor,'              key={reason}\n','              key={reason}\n              aria-pressed={selectedReasons.includes(reason)}\n              title={reason}\n','insert chip semantics');
+// This result supplies both preview and Save; the legacy insert normalizer is
+// intentionally bypassed only for this explicit manual editor command.
+insertEditor=once(insertEditor,'  const previewEvents = rangeErrorV110 ? events : graphEvents();',`  const insertEventV11023 = {...insertDraftEvent,id:insertDraftEvent.id,status:form.status,startMin:fromInput(form.start),endMin:fromInput(form.end),city:form.city,state:form.state,note:form.note,reasons:selectedReasons,description:form.description,lat:form.lat,lng:form.lng,gpsAccuracy:form.gpsAccuracy,locationSource:form.locationSource};
+  const insertResultV11023 = rangeErrorV110 ? {ok:false,error:rangeErrorV110} : previewLogbookInsertOverride(logbookContext,{day:logbookContext.activeDay,event:insertEventV11023,expectedRows:originalRowsV11023},clockV110.at);
+  const previewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookEvents({...logbookContext,eventsByDay:{...logbookContext.eventsByDay,[logbookContext.activeDay]:insertResultV11023.events}},logbookContext.activeDay,clockV110.at) : [...events,{...insertEventV11023,isDraft:true}]) : events;`,'insert shared preview');
+insertEditor=once(insertEditor,"      createFn?.(payload);",`      if (!insertResultV11023.ok) return;
+      const accepted=createFn?.({__logbookInsertV11023:true,day:logbookContext.activeDay,expectedRows:originalRowsV11023,event:{...payload,id:insertDraftEvent.id,note:form.note || statusLabel(form.status),reasons:selectedReasons}});
+      if (accepted !== false) onClose();`,'insert exact command');
+insertEditor=insertEditor.replace('disabled={!!rangeErrorV110}',"disabled={!!rangeErrorV110 || (mode === 'insert' && !insertResultV11023.ok)}");
+insertEditor=insertEditor.replace('{rangeErrorV110 && <p role="alert" className="editor-error-v110">{rangeErrorV110}</p>}',`{(rangeErrorV110 || (mode === 'insert' && !insertResultV11023.ok)) && <p role="alert" className="editor-error-v110">{rangeErrorV110 || insertResultV11023.error}</p>}`);
+fs.writeFileSync(insertPath,insertEditor);
+
+app=fs.readFileSync(appPath,'utf8');
+app=app.replace('import { applyLogbookEditorEdit }', 'import { applyLogbookEditorEdit, applyLogbookEditorInsert }');
+app=app.replace('patch:patch.patch,expected:patch.expected}', 'patch:patch.patch,expected:patch.expected,expectedRows:patch.expectedRows}');
+app=once(app,'  function addEvent(eventOrEvents) {',`  function addEvent(eventOrEvents) {
+    // Explicit Insert uses the same protected interval command as its preview.
+    if(eventOrEvents?.__logbookInsertV11023) {
+      const command={day:eventOrEvents.day,event:eventOrEvents.event,expectedRows:eventOrEvents.expectedRows};
+      const checked=applyLogbookEditorInsert(state,command);
+      if(!checked.ok){window.alert(checked.error);return false;}
+      const acceptedInspection=maybeAcceptInspectionForEvent(state,command.day,command.event);
+      setState(current=>{
+        const result=applyLogbookEditorInsert(current,command);
+        if(!result.ok)return current;
+        const next=withAcceptedPreTripInspection(result.state,command.day,command.event,acceptedInspection);
+        return markDayRecert(reconcilePreTripInspections(next,[command.day]),command.day);
+      });
+      return true;
+    }`,'insert App command');
+fs.writeFileSync(appPath,app);
+// UI refinement affects only the requested editor. 44px touch targets and a
+// compact three-column grid; text stays readable at 320px and under WebKit.
+css=fs.readFileSync(cssPath,'utf8');
+css+=`\n/* REVIEWED_QUICK_CHIPS_V11023 */
+.editor-ui-v110.editor-compact-v111 .quick-activities-v11023 .form-label-row{display:none!important}
+.editor-ui-v110.editor-compact-v111 .quick-activities-v11023 .reason-pills button,.editor-ui-v110.editor-compact-v111 .quick-activities-v11023 .insert-reason-grid button{min-height:44px!important;font-size:12px!important;letter-spacing:0!important;border-radius:10px!important;padding:6px 5px!important;font-weight:600!important}
+.editor-ui-v110.editor-compact-v111 .quick-activities-v11023 .reason-pills,.editor-ui-v110.editor-compact-v111 .quick-activities-v11023 .insert-reason-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important}
+.editor-ui-v110.editor-compact-v111 .quick-activities-v11023 .drop-hook-note{font-size:11px!important;line-height:1.35!important;padding:5px 0!important;margin:0!important;color:#526278!important;background:transparent!important;border:0!important}
+.editor-ui-v110.editor-compact-v111 .quick-activities-head-v11023{margin-bottom:6px!important}
+.editor-ui-v110.editor-compact-v111 .quick-activities-v11023 .insert-section-title{font-size:12px!important;margin:0 0 6px!important;color:#334155!important}
+`;
+fs.writeFileSync(cssPath,css);
 const VERSION='110.2.3',BUILD='v110203-motive-override-chips';
 for(const p of ['release-version.json','public/app-version.json']){
   const meta=JSON.parse(fs.readFileSync(p,'utf8'));

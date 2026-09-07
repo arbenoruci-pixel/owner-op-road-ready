@@ -1,55 +1,51 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { applyLogbookEditorEdit, previewLogbookEditorOverride } from '../source/src/modules/logbook/eventEditingV110.js';
-const day='2026-09-06';
-const at=new Date('2026-09-06T21:00:00Z');
-const row=(id,status,startMin,endMin,extra={})=>({id,status,startMin,endMin,city:'Willowbrook',state:'IL',source:'manual',...extra});
-const stateFor=rows=>({activeDay:day,homeTerminalTimeZone:'America/New_York',eventsByDay:{[day]:rows},certifyStatus:{[day]:'Needs signature'},currentStatus:'OFF'});
-{
- const rows=[row('off1','OFF',0,600),row('on','ON',600,660),row('off2','OFF',660,900),row('sb','SB',900,1200)];
- const s=stateFor(rows),r=applyLogbookEditorEdit(s,{day,id:'on',expected:rows[1],patch:{endMin:750}},at);
- assert.equal(r.ok,true);assert.deepEqual(r.state.eventsByDay[day].map(e=>[e.id,e.startMin,e.endMin]),[['off1',0,600],['on',600,750],['off2',750,900],['sb',900,1200]]);assert.equal(r.timelineChanged,true);
- console.log('PASS — expanding END trims the next manual event and leaves a connected boundary');
-}
-{
- const rows=[row('off','OFF',0,1000),row('on','ON',1000,1060),row('rest','OFF',1060,1440)];
- const s=stateFor(rows),r=applyLogbookEditorEdit(s,{day,id:'on',expected:rows[1],patch:{startMin:300,endMin:400}},at);
- assert.equal(r.ok,true);const out=r.state.eventsByDay[day];
- assert.deepEqual(out.map(e=>[e.status,e.startMin,e.endMin]),[['OFF',0,300],['ON',300,400],['OFF',400,1000],['OFF',1000,1440]]);
- assert.equal(out[2].id.startsWith('off__split_on_400'),true);
- console.log('PASS — placing an event inside another manual event splits the covered event around it');
-}
-{
- const rows=[row('off1','OFF',0,600),row('on','ON',600,780),row('off2','OFF',780,1200)];
- const s=stateFor(rows),r=applyLogbookEditorEdit(s,{day,id:'on',expected:rows[1],patch:{endMin:700}},at);
- assert.equal(r.ok,true);assert.deepEqual(r.state.eventsByDay[day].map(e=>[e.id,e.startMin,e.endMin]),[['off1',0,600],['on',600,700],['off2',700,1200]]);
- console.log('PASS — shrinking END lets the touching next status take the released time');
-}
-{
- const rows=[row('off','OFF',0,500),row('on','ON',500,600),row('sb','SB',600,700),row('d','D',700,760,{source:'gps_drive'})];
- const s=stateFor(rows),r=applyLogbookEditorEdit(s,{day,id:'on',expected:rows[1],patch:{endMin:720}},at);
- assert.equal(r.ok,false);assert.match(r.error,/Automatic Driving time cannot be overwritten/);assert.deepEqual(s.eventsByDay[day],rows);
- console.log('PASS — automatic Driving blocks an overlapping manual override');
-}
-{
- const rows=[row('off','OFF',0,500),row('on','ON',500,600),row('live','OFF',600,601,{source:'live_status'})];
- const s={...stateFor(rows),currentStatus:'OFF'};
- const r=previewLogbookEditorOverride(s,{day,id:'on',expected:rows[1],patch:{endMin:700}},new Date('2026-09-06T16:30:00Z'));
- assert.equal(r.ok,false);assert.match(r.error,/current live event cannot be overwritten/i);
- console.log('PASS — the active live event blocks another event from swallowing its projected time');
-}
-{
- const rows=[row('off','OFF',0,600),row('on','ON',600,700,{reasons:['Fuel']}),row('rest','OFF',700,1440)];
- const s=stateFor(rows),r=applyLogbookEditorEdit(s,{day,id:'on',expected:rows[1],patch:{note:'Fuel · Delivery / Unloading',reasons:['Fuel','Delivery / Unloading']}},at);
- assert.equal(r.ok,true);assert.deepEqual(r.state.eventsByDay[day].map(e=>[e.id,e.startMin,e.endMin]),rows.map(e=>[e.id,e.startMin,e.endMin]));assert.equal(r.timelineChanged,false);assert.deepEqual(r.state.eventsByDay[day][1].reasons,['Fuel','Delivery / Unloading']);
- console.log('PASS — multi-select activity metadata stays on one event without moving neighbors');
-}
-const editor=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');
-const insert=fs.readFileSync('source/src/modules/editor/InsertEditEventSheet.jsx','utf8');
-const css=fs.readFileSync('source/src/modules/editor/compact-editor-v111.css','utf8');
-assert.match(editor,/quick-activities-v11023/);assert.match(editor,/PTI/);assert.match(editor,/previewLogbookEditorOverride/);assert.match(editor,/previewResultV11023\?\.ok === false/);assert.doesNotMatch(editor,/<details className="compact-activities-v111"><summary>On duty activity/);
-assert.match(insert,/MOTIVE_INSERT_QUICK_CHIPS_V11023/);assert.doesNotMatch(insert,/<details className="compact-activities-v111"><summary>Activity/);assert.match(insert,/quick-chip-check-v11023/);
-assert.match(css,/quick-activities-v11023/);assert.match(css,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);assert.match(css,/@media\(max-width:360px\)/);
-console.log('PASS — Edit and Insert expose compact, always-visible multi-select quick activity chips');
-const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.3');assert.equal(meta.build,'v110203-motive-override-chips');assert.equal(meta.force,false);
-console.log('PASS — release identity 110.2.3 is explicit and non-forced');
+import {applyLogbookEditorEdit as edit,previewLogbookEditorOverride as preview,applyLogbookEditorInsert as insert,previewLogbookInsertOverride as insertPreview} from '../source/src/modules/logbook/eventEditingV110.js';
+import {createCertificationRecord,certificationStatusV1032} from '../source/src/modules/logbook/certificationV110.js';
+import {runExternalCommand} from '../source/src/modules/logbook/public-api.js';
+const day='2026-07-10',at=new Date('2026-09-06T21:20:00Z');let passed=0;
+const row=(id,status,startMin,endMin,extra={})=>({id,status,startMin,endMin,city:'Test City',state:'IL',source:'manual',...extra});
+const fixture=rows=>({activeDay:day,homeTerminalTimeZone:'America/New_York',eventsByDay:{[day]:rows},currentStatus:'OFF',signatureByDay:{},certifyStatus:{[day]:'Needs signature'},formByDay:{},inspectionByDay:{},routeLegsByDay:{},dotWallet:{documents:{fixture:{title:'untouched'}}},loadGuidesById:{fixture:{status:'open'}}});
+const command=(s,patch)=>({day,id:'target',patch,expected:s.eventsByDay[day].find(e=>e.id==='target'),expectedRows:structuredClone(s.eventsByDay[day])});
+const ranges=r=>r.events.filter(e=>!e.voided&&!e.synthetic).map(e=>[e.status,e.startMin,e.endMin]);
+const basic=()=>fixture([row('off','OFF',0,600),row('target','ON',600,660),row('next','OFF',660,720),row('sb','SB',720,780),row('rest','OFF',780,1440)]);
+function test(name,fn){fn();passed++;console.log('PASS — '+name);}
+test('expanding END trims its neighbor at the exact minute',()=>{const s=basic(),r=edit(s,command(s,{endMin:700}),at);assert.ok(r.ok);assert.deepEqual(ranges(r),[['OFF',0,600],['ON',600,700],['OFF',700,720],['SB',720,780],['OFF',780,1440]]);});
+test('expanding START trims previous manual time',()=>{const s=basic(),r=edit(s,command(s,{startMin:500}),at);assert.ok(r.ok);assert.equal(r.events[0].endMin,500);assert.equal(r.events[1].id,'target');});
+test('fully covered events are replaced and partial final event resumes',()=>{const s=basic(),r=edit(s,command(s,{endMin:750}),at);assert.ok(r.ok);assert.deepEqual(r.removedIds,['next']);assert.deepEqual(ranges(r),[['OFF',0,600],['ON',600,750],['SB',750,780],['OFF',780,1440]]);});
+test('multi-event sweep never leaves duplicate duty minutes',()=>{const s=basic(),r=edit(s,command(s,{startMin:500,endMin:800}),at);assert.ok(r.ok);assert.deepEqual(ranges(r),[['OFF',0,500],['ON',500,800],['OFF',800,1440]]);});
+test('shrinking START transfers only released original time to touching previous',()=>{const s=basic(),r=edit(s,command(s,{startMin:620}),at);assert.ok(r.ok);assert.equal(r.events[0].endMin,620);assert.equal(r.events[1].startMin,620);});
+test('shrinking END transfers released original time to touching next',()=>{const s=basic(),r=edit(s,command(s,{endMin:630}),at);assert.ok(r.ok);assert.equal(r.events[2].startMin,630);});
+test('a middle cut creates two preserved fragments with unique IDs',()=>{const s=basic(),r=edit(s,command(s,{startMin:300,endMin:400}),at);assert.ok(r.ok);assert.deepEqual(ranges(r).slice(0,4),[['OFF',0,300],['ON',300,400],['OFF',400,600],['OFF',600,720]]);assert.equal(r.events[0].id,'off');assert.equal(r.events[2].splitFromEventId,'off');assert.equal(new Set(r.events.map(e=>e.id)).size,r.events.length);});
+test('the screenshot case cuts long OFF around dragged ON instead of Overlap',()=>{const s=fixture([row('off','OFF',0,1365),row('target','ON',1344,1365)]);const r=edit(s,command(s,{startMin:1184}),at);assert.ok(r.ok);assert.deepEqual(ranges(r),[['OFF',0,1184],['ON',1184,1365]]);});
+test('moving into empty time never invents OFF between old and new intervals',()=>{const s=fixture([row('prev','OFF',0,100),row('target','ON',100,200)]);const r=edit(s,command(s,{startMin:400,endMin:500}),at);assert.ok(r.ok);assert.deepEqual(ranges(r),[['OFF',0,200],['ON',400,500]]);});
+test('isolated event moved in an empty day creates only that event',()=>{const s=fixture([row('target','ON',100,200)]);const r=edit(s,command(s,{startMin:400,endMin:500}),at);assert.ok(r.ok);assert.deepEqual(ranges(r),[['ON',400,500]]);});
+test('a pre-existing gap is not silently filled during shrink',()=>{const s=fixture([row('prev','OFF',0,90),row('target','ON',100,200),row('next','OFF',210,300)]);const r=edit(s,command(s,{startMin:120,endMin:180}),at);assert.ok(r.ok);assert.deepEqual(ranges(r),[['OFF',0,90],['ON',120,180],['OFF',210,300]]);});
+test('nested overlaps outside the selected interval remain unchanged evidence',()=>{const s=fixture([row('a','OFF',0,100),row('b','SB',20,50),row('target','ON',200,300)]);const r=edit(s,command(s,{endMin:310}),at);assert.ok(r.ok);assert.deepEqual(r.events.slice(0,2),s.eventsByDay[day].slice(0,2));});
+test('one-minute and 24:00 endpoints are exact',()=>{const s=basic(),r=edit(s,command(s,{startMin:1439,endMin:1440}),at);assert.ok(r.ok);assert.equal(r.events.at(-1).startMin,1439);assert.equal(r.events.at(-1).endMin,1440);});
+for(const patch of [{startMin:-1},{endMin:1441},{endMin:600},{startMin:610.5},{startMin:'06:00'},{id:'fake'},{signatureByDay:{}}])test('invalid command is rejected '+JSON.stringify(patch),()=>{const s=basic(),copy=structuredClone(s);assert.equal(edit(s,command(s,patch),at).ok,false);assert.deepEqual(s,copy);});
+test('open, preview, cancel and no-op keep original state byte-identical',()=>{const s=basic(),copy=JSON.stringify(s);preview(s,command(s,{endMin:750}),at);assert.equal(JSON.stringify(s),copy);assert.equal(edit(s,command(s,{}),at).state,s);});
+test('metadata-only Save leaves all overlapping rows/times untouched',()=>{const s=fixture([row('off','OFF',0,900),row('target','ON',600,660)]),r=edit(s,command(s,{note:'Fuel · Delivery / Unloading',reasons:['Fuel','Delivery / Unloading']}),at);assert.ok(r.ok);assert.equal(r.events[0],s.eventsByDay[day][0]);assert.deepEqual(r.events.map(e=>[e.id,e.startMin,e.endMin]),s.eventsByDay[day].map(e=>[e.id,e.startMin,e.endMin]));assert.equal(r.state.logbookEditHistoryByDay,undefined);});
+test('stale selected row fails closed',()=>{const s=basic(),c=command(s,{endMin:750});s.eventsByDay[day][1].note='Concurrent edit';assert.equal(edit(s,c,at).ok,false);});
+test('stale neighboring row fails closed before overwrite',()=>{const s=basic(),c=command(s,{endMin:750});s.eventsByDay[day][2].note='Concurrent edit';assert.equal(edit(s,c,at).ok,false);});
+for(const extra of [{source:'gps_drive'},{source:'eld'},{source:'vehicle_gateway'},{autoRecorded:true},{automaticallyRecorded:true},{drivingSource:'eld'}])test('automatic Driving remains protected '+JSON.stringify(extra),()=>{const s=basic();s.eventsByDay[day][3]={...s.eventsByDay[day][3],status:'D',...extra};const r=edit(s,command(s,{endMin:750}),at);assert.equal(r.ok,false);});
+test('automatic Driving target permits metadata, rejects temporal edits',()=>{const s=fixture([row('target','D',100,200,{source:'gps_drive'})]);assert.equal(edit(s,command(s,{endMin:220}),at).ok,false);assert.ok(edit(s,command(s,{note:'Reviewed note'}),at).ok);});
+test('shrink cannot move a protected automatic neighbor boundary',()=>{const s=fixture([row('target','ON',100,200),row('d','D',200,400,{source:'gps_drive'})]);assert.equal(edit(s,command(s,{endMin:180}),at).ok,false);});
+function liveState(status='D'){const s=fixture([row('target','ON',0,600),row('live',status,600,601,{source:'live_status',lat:1,lng:2})]);s.activeDay='2026-09-06';s.eventsByDay[s.activeDay]=s.eventsByDay[day];delete s.eventsByDay[day];s.currentStatus=status;if(status==='D')s.manualDrivingSession={active:true,eventId:'live',startDay:s.activeDay};return s;}
+for(const status of ['ON','D','OFF'])test('active '+status+' time and future continuation cannot be overwritten',()=>{const s=liveState(status);for(const patch of [{endMin:610},{startMin:1100,endMin:1200},{endMin:590}]){assert.equal(edit(s,{day:s.activeDay,id:'target',patch},at).ok,false);}const before=structuredClone(s),r=edit(s,{day:s.activeDay,id:'live',patch:{note:'Fuel · PTI'}},at);assert.ok(r.ok);assert.equal(r.events.at(-1).endMin,601);assert.deepEqual(r.state.manualDrivingSession,s.manualDrivingSession);assert.equal(r.events.at(-1).lat,1);assert.deepEqual(s,before);});
+test('voided and display-only evidence never participates in overriding',()=>{const s=basic();s.eventsByDay[day].push(row('void','D',650,850,{source:'gps_drive',voided:true}),row('generated','OFF',0,1440,{synthetic:true}));const originals=s.eventsByDay[day].slice(-2);const r=edit(s,command(s,{endMin:750}),at);assert.ok(r.ok);assert.deepEqual(r.events.slice(-2),originals);});
+test('split ID collisions are deterministic and unique',()=>{const s=basic();s.eventsByDay[day].push(row('off__split_target_400','OFF',1440,1440,{voided:true}));const a=preview(s,command(s,{startMin:300,endMin:400}),at),b=preview(s,command(s,{startMin:300,endMin:400}),at);assert.ok(a.ok);assert.deepEqual(a.events,b.events);assert.equal(a.events.find(e=>e.splitFromEventId).id,'off__split_target_400_2');});
+test('split cannot double-count entered mileage',()=>{const s=basic();s.eventsByDay[day][0].manualMiles=100;const r=edit(s,command(s,{startMin:300,endMin:400}),at);assert.ok(r.ok);assert.equal(r.events.reduce((n,e)=>n+Number(e.manualMiles||0),0),100);});
+test('original records and edited timeline are archived without losing signature',()=>{const s=basic();s.signatureByDay[day]=createCertificationRecord(s,day,{now:1000});s.certifyStatus[day]='Certified';const original=structuredClone(s),c=command(s,{endMin:750}),p=preview(s,c,at),r=edit(s,c,at);assert.deepEqual(r.events,p.events);assert.deepEqual(s,original);assert.deepEqual(r.state.signatureByDay,s.signatureByDay);assert.equal(certificationStatusV1032(r.state,day).status,'Needs Recertification');const h=r.state.logbookEditHistoryByDay[day][0];assert.deepEqual(h.beforeEvents,original.eventsByDay[day]);assert.deepEqual(h.afterEvents,r.events);assert.deepEqual(JSON.parse(JSON.stringify(r.state)).logbookEditHistoryByDay,r.state.logbookEditHistoryByDay);});
+for(const source of ['documents','loads','scanner','wallet'])test(source+' cannot rewrite editor history',()=>{const s=basic(),r=edit(s,command(s,{endMin:750}),at).state;const n=runExternalCommand(r,d=>{d.logbookEditHistoryByDay={};d.eventsByDay={};return d;},source);assert.deepEqual(n.logbookEditHistoryByDay,r.logbookEditHistoryByDay);assert.deepEqual(n.eventsByDay,r.eventsByDay);});
+test('Insert into empty space does not fabricate surrounding coverage',()=>{const s=fixture([]),event=row('new','ON',100,120,{note:'Fuel · Pre-trip inspection',reasons:['Fuel','Pre-trip inspection']});const p=insertPreview(s,{day,event,expectedRows:[]},at),r=insert(s,{day,event,expectedRows:[]},at);assert.ok(r.ok);assert.deepEqual(r.events,p.events);assert.deepEqual(ranges(r),[['ON',100,120]]);assert.deepEqual(r.events[0].reasons,event.reasons);});
+test('Insert uses the same split/replace command and archive',()=>{const s=fixture([row('off','OFF',0,1440)]),r=insert(s,{day,event:row('new','ON',600,660),expectedRows:s.eventsByDay[day]},at);assert.ok(r.ok);assert.deepEqual(ranges(r),[['OFF',0,600],['ON',600,660],['OFF',660,1440]]);assert.equal(r.state.logbookEditHistoryByDay[day][0].kind,'insert');});
+test('Insert cannot bypass automatic Driving protection',()=>{const s=fixture([row('d','D',0,1440,{source:'gps_drive'})]);assert.equal(insert(s,{day,event:row('new','ON',600,660)},at).ok,false);});
+test('Insert cannot bypass live Driving protection',()=>{const s=liveState();assert.equal(insert(s,{day:s.activeDay,event:row('new','ON',620,650)},at).ok,false);});
+test('Insert with duplicate ID rejects instead of deleting a stored row',()=>{const s=basic();assert.equal(insert(s,{day,event:row('target','ON',620,650)},at).ok,false);});
+test('1000 seeded connected-timeline overrides retain disjoint valid intervals',()=>{let seed=3947;const random=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);for(let i=0;i<1000;i++){const s=fixture([row('a','OFF',0,300),row('target','ON',300,600),row('b','SB',600,900),row('c','D',900,1200),row('d','OFF',1200,1440)]);const start=Math.floor(random()*1439),end=start+1+Math.floor(random()*(1440-start));const r=edit(s,command(s,{startMin:start,endMin:end}),at);assert.ok(r.ok);for(let j=0;j<r.events.length;j++){assert.ok(r.events[j].endMin>r.events[j].startMin);if(j)assert.equal(r.events[j-1].endMin,r.events[j].startMin);}assert.equal(r.events[0].startMin,0);assert.equal(r.events.at(-1).endMin,1440);assert.equal(r.events.find(e=>e.id==='target').startMin,start);}});
+const editor=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8'),add=fs.readFileSync('source/src/modules/editor/InsertEditEventSheet.jsx','utf8'),app=fs.readFileSync('source/src/app/App.jsx','utf8');
+test('final JSX contains visible multi-select chips with no dangling details tag',()=>{assert.match(editor,/quick-activities-v11023/);assert.doesNotMatch(editor,/<\/section><\/details>/);assert.match(editor,/aria-pressed=\{selectedOnReasons.includes\(reason\)\}/);assert.match(add,/aria-pressed=\{selectedReasons.includes\(reason\)\}/);assert.match(add,/reasons:selectedReasons/);});
+test('both editors use atomic preview/save commands and raw-day preconditions',()=>{assert.match(editor,/expectedRows:initialRowsV11023/);assert.match(add,/expectedRows:originalRowsV11023/);assert.match(add,/previewLogbookInsertOverride/);assert.match(app,/applyLogbookEditorInsert\(current,command\)/);assert.match(app,/expectedRows:patch.expectedRows/);});
+test('release identity is explicit and non-forced',()=>{const m=JSON.parse(fs.readFileSync('public/app-version.json'));assert.equal(m.version,'110.2.3');assert.equal(m.build,'v110203-motive-override-chips');assert.equal(m.force,false);});
+console.log(`${passed} override/chips/final-runtime checks passed, including 1000 seeded timelines`);

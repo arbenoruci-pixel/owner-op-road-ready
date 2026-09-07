@@ -49,7 +49,7 @@ export default function CompactGraphPanelV111({ events = [], selectedId, editId,
   return <div ref={panel} className={`editor-graph-panel editor-graph-wrap-v85 compact-graph-panel-v111 ${wide ? 'graph-focus-v111' : ''}`}>
     <div className="compact-graph-toolbar-v111"><span>{editable ? 'Drag Start and End to edit event time' : selected?.isLive ? 'Live timeline · Now' : 'Duty timeline'}</span><button type="button" aria-expanded={wide} onClick={() => setWide(v => !v)}>{wide ? 'Done graph' : 'Full screen'}</button></div>
     <div className="editor-graph-card" aria-label={header || 'Duty timeline'}>
-      <LogGraph events={events} selectedId={selectedId} editId={editId} onSelect={onSelect} onEmptyTap={onEmptyTap} className="compact-graph-svg-v111" />
+      <LogGraph editorBoundaries={editable} events={events} selectedId={selectedId} editId={editId} onSelect={onSelect} onEmptyTap={onEmptyTap} className="compact-graph-svg-v111" />
     </div>
     {editable && <div className="graph-handle-rail-v111" ref={rail}>
       {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110" role="slider" aria-label={`${edge} time handle`} aria-valuemin={edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} style={{ left: clampedHandleLeftV111(edge,centers[edge]) }} onPointerDown={e => drag(e, edge)} onKeyDown={e => {

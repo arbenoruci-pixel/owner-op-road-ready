@@ -1,0 +1,169 @@
+// Logbook UI contract. Stored minute values are home-terminal wall-clock values.
+// Projection is read-only; editing never invokes continuity/repair normalizers.
+import { getHomeTerminalTimeZone, homeTerminalDayKey, homeTerminalMinute } from '../../core/time/homeTerminalTime.js';
+
+export function editorTimeInput(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  const m = Math.max(0, Math.min(1440, Math.round(n)));
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+export function editorMinute(value) {
+  if (value === '24:00') return 1440;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value))) return NaN;
+  const [h,m] = value.split(':').map(Number);
+  return h * 60 + m;
+}
+export function editorRangeError(start, end, live = false) {
+  if (!Number.isInteger(start) || !Number.isInteger(end)) return 'Enter a valid Start and End time.';
+  if (start < 0 || start > 1439 || end < 0 || end > 1440) return 'Times must stay within the selected log day.';
+  if (end < start || (!live && end === start)) return 'End must be after Start. For a midnight ending, select 24:00.';
+  return '';
+}
+export function logbookClock(state = {}, at = new Date()) {
+  const timeZone = getHomeTerminalTimeZone(state);
+  return { timeZone, day:homeTerminalDayKey(at,timeZone), minute:homeTerminalMinute(at,timeZone), at };
+}
+export function projectLogbookEvents(state = {}, day = state.activeDay, at = new Date()) {
+  const clock = logbookClock(state, at);
+  const rows = (state.eventsByDay?.[day] || []).filter(e => e && !e.voided && !e.syntheticCoverage && !e.displayOnly && !e.carriedFromPreviousDay && !e.synthetic && !e.continuityGenerated && !['timeline_continuity','carryover','display','display_timeline'].includes(e.source))
+    .map(e => ({ ...e })).sort((a,b) => a.startMin - b.startMin);
+  const last = rows[rows.length - 1];
+  if (!last || day !== clock.day || state.certifyStatus?.[day] === 'Certified') return rows;
+  const manual = state.manualDrivingSession, gps = state.gpsTrip;
+  const ownedSession = (manual?.active === true && manual.eventId === last.id && (!manual.startDay || manual.startDay === day)) || (gps?.status === 'active' && gps.eventId === last.id);
+  const liveSource = ['live_status','manual_drive_midnight_continuation'].includes(last.source);
+  if (state.currentStatus === last.status && (ownedSession || liveSource) && Number(last.startMin) <= clock.minute) {
+    rows[rows.length-1] = { ...last, endMin:clock.minute, isLive:true, recordedEndMin:last.endMin };
+  }
+  return rows;
+}
+const EDIT_FIELDS = new Set(['status','startMin','endMin','city','state','description','note','reasons','lat','lng','gpsAccuracy','locationSource','shippingDocs','loadNo','bol','destination','destinationState','loadDetailsExplicit']);
+const equal = (a,b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+// MOTIVE_OVERRIDE_V11023: an explicit edit owns its interval. Nothing here runs
+// during startup, opening the editor, cancelling, or a metadata-only edit.
+export function isProtectedAutomaticDriving(event = {}) {
+  if (event.status !== 'D') return false;
+  return event.autoRecorded === true || event.automaticallyRecorded === true || event.eld === true || event.vehicleGateway === true ||
+    [event.source,event.drivingSource,event.recordingSource].some(value => /^(eld|vehicle_gateway|gateway|engine|automatic|auto_driv|gps_drive)(?:$|[_ -])/i.test(String(value || ''))) ||
+    event.locationSource === 'eld';
+}
+const active = e => e && !e.voided && !e.syntheticCoverage && !e.displayOnly && !e.carriedFromPreviousDay && !e.synthetic && !e.continuityGenerated && !['timeline_continuity','carryover','display','display_timeline'].includes(e.source);
+const overlaps = (a,b) => a.startMin < b.endMin && a.endMin > b.startMin;
+const boundsChanged = (a,b) => a.startMin !== b.startMin || a.endMin !== b.endMin || a.status !== b.status;
+function liveIds(state,day,at) {
+  const ids = new Set(projectLogbookEvents(state,day,at).filter(e=>e.isLive).map(e=>e.id));
+  for (const session of [state.manualDrivingSession,state.gpsTrip]) {
+    if (session && (session.active === true || session.status === 'active') && (state.eventsByDay?.[day]||[]).some(e=>e.id===session.eventId)) ids.add(session.eventId);
+  }
+  return ids;
+}
+function changedSummary(before,after,targetId) {
+  const map=new Map(after.map(e=>[e.id,e]));
+  const changedIds=before.filter(e=>!equal(e,map.get(e.id))).map(e=>e.id);
+  const addedIds=after.filter(e=>!before.some(b=>b.id===e.id)).map(e=>e.id);
+  return {changedIds:[...new Set([...changedIds,...addedIds])],removedIds:before.filter(e=>!map.has(e.id)).map(e=>e.id),
+    addedIds,neighborIds:changedIds.filter(id=>id!==targetId)};
+}
+function replaceInterval(rows,before,after,protectedIds) {
+  const real=rows.filter(active);
+  if (new Set(real.map(e=>e.id)).size!==real.length) return {ok:false,error:'Duplicate event IDs require review before changing time.'};
+  // Do not silently round, normalize, merge, or repair other stored records.
+  if (real.some(e=>typeof e.startMin !== 'number' || typeof e.endMin !== 'number' || editorRangeError(e.startMin,e.endMin))) return {ok:false,error:'An existing event has invalid times. Review it before replacing duty time.'};
+  const protectedRow=e=>protectedIds.has(e.id)||isProtectedAutomaticDriving(e);
+  const work=real.filter(e=>e.id!==before?.id).map(e=>({...e}));
+  // Release only the part of the ORIGINAL range vacated by the chosen handles.
+  // Never bridge an existing gap, extend to midnight, or invent a new status.
+  if (before && after.startMin>before.startMin) {
+    const candidates=work.filter(e=>e.endMin===before.startMin&&e.startMin<before.startMin);
+    const occupied=work.filter(e=>e.endMin>before.startMin&&e.startMin<Math.min(after.startMin,before.endMin));
+    if(candidates.length===1) {
+      const previous=candidates[0],stop=Math.min(after.startMin,before.endMin,...occupied.map(e=>Math.max(before.startMin,e.startMin)));
+      if(stop>previous.endMin) previous.endMin=stop;
+    }
+  }
+  if (before && after.endMin<before.endMin) {
+    const candidates=work.filter(e=>e.startMin===before.endMin&&e.endMin>before.endMin);
+    const occupied=work.filter(e=>e.startMin<before.endMin&&e.endMin>Math.max(after.endMin,before.startMin));
+    if(candidates.length===1) {
+      const next=candidates[0],start=Math.max(after.endMin,before.startMin,...occupied.map(e=>Math.min(before.endMin,e.endMin)));
+      if(start<next.startMin) next.startMin=start;
+    }
+  }
+  const used=new Set(rows.map(e=>e?.id)),out=[];
+  for(const row of work) {
+    const original=real.find(e=>e.id===row.id);
+    if(protectedRow(original) && !equal(row,original)) return {ok:false,error:'This boundary touches a live or automatic Driving event. Its time cannot be extended or shortened.'};
+    // A running status reserves the rest of this day, including future minutes.
+    const protectedRange=protectedIds.has(row.id)?{...row,endMin:1440}:row;
+    if(protectedRow(row) && overlaps(protectedRange,after)) return {ok:false,error:protectedIds.has(row.id)?'The current live event cannot be overwritten. End it using Change status first.':'Automatic Driving time cannot be overwritten. Keep this range outside its recorded time.'};
+    if(!overlaps(row,after)){out.push(row);continue;}
+    const left=row.startMin<after.startMin,right=row.endMin>after.endMin;
+    if(left) out.push({...row,endMin:after.startMin});
+    if(right) {
+      const fragment={...row,startMin:after.endMin};
+      if(left) {
+        const key=`${row.id}__split_${after.id}_${after.endMin}`;let id=key,n=2;
+        while(used.has(id))id=`${key}_${n++}`;
+        used.add(id);fragment.id=id;fragment.splitFromEventId=row.id;
+        // Keep entered mileage once, never duplicate it across two fragments.
+        if(Number(row.manualMiles)>0){fragment.manualMiles=0;fragment.manualMilesNeedsReview=true;}
+      }
+      out.push(fragment);
+    }
+  }
+  out.push(after);out.sort((a,b)=>a.startMin-b.startMin||a.endMin-b.endMin||String(a.id).localeCompare(String(b.id)));
+  // Voided/display-only rows remain evidence; they never participate in clipping.
+  const result=[...out,...rows.filter(e=>!active(e))];
+  const summary=changedSummary(real,out,after.id);
+  return {ok:true,changed:true,events:result,...summary,timelineChanged:summary.neighborIds.length>0};
+}
+export function previewLogbookEditorOverride(state,{day,id,patch={},expected,expectedRows},at=new Date()) {
+  const rows=state.eventsByDay?.[day]||[],before=rows.find(e=>active(e)&&e.id===id);
+  if(!before)return {ok:false,error:'This event is no longer available. Reopen the log.'};
+  if(expected&&!equal(before,expected))return {ok:false,error:'This event changed while the editor was open. Reopen it before saving.'};
+  const changes={};
+  for(const [key,value]of Object.entries(patch)){
+    if(!EDIT_FIELDS.has(key))return {ok:false,error:`Unsupported log field: ${key}`};
+    if(!equal(value,before[key]))changes[key]=value;
+  }
+  if(!Object.keys(changes).length)return {ok:true,changed:false,events:rows,changedIds:[],neighborIds:[]};
+  const after={...before,...changes},temporal=boundsChanged(before,after),live=liveIds(state,day,at);
+  if(temporal&&live.has(id))return {ok:false,error:'Use Change status to end the live event. Its timing continues while you edit details.'};
+  if(temporal&&isProtectedAutomaticDriving(before))return {ok:false,error:'Automatic Driving time is protected. Its notes can be edited separately.'};
+  if(!['OFF','SB','D','ON'].includes(after.status))return {ok:false,error:'Choose a valid duty status.'};
+  const error=editorRangeError(after.startMin,after.endMin);
+  if(error)return {ok:false,error};
+  if(temporal){
+    if(expectedRows&&!equal(rows,expectedRows))return {ok:false,error:'Another event changed while Edit was open. Reopen the day before replacing time.'};
+    return replaceInterval(rows,before,after,live);
+  }
+  return {ok:true,changed:true,events:rows.map(e=>e===before?after:e),changedIds:[id],neighborIds:[],timelineChanged:false};
+}
+export function previewLogbookInsertOverride(state,{day,event,expectedRows},at=new Date()) {
+  const rows=state.eventsByDay?.[day]||[];
+  if(expectedRows&&!equal(rows,expectedRows))return {ok:false,error:'The day changed while Insert was open. Reopen it before saving.'};
+  if(!event||!event.id||rows.some(e=>e?.id===event.id))return {ok:false,error:'The new event requires a unique ID. Reopen Insert.'};
+  if(!['OFF','SB','D','ON'].includes(event.status))return {ok:false,error:'Choose a valid duty status.'};
+  const error=editorRangeError(event.startMin,event.endMin);if(error)return {ok:false,error};
+  return replaceInterval(rows,null,{...event,source:'manual'},liveIds(state,day,at));
+}
+function commitResult(state,command,result,at,kind) {
+  if(!result.ok||!result.changed)return result.ok?{...result,state}:result;
+  let next={...state,eventsByDay:{...state.eventsByDay,[command.day]:result.events}};
+  const id=command.id||command.event?.id;
+  const before=(state.eventsByDay?.[command.day]||[]).find(e=>e?.id===id),after=result.events.find(e=>e?.id===id);
+  if(kind==='insert'||boundsChanged(before,after)){
+    const history=state.logbookEditHistoryByDay?.[command.day]||[];
+    const entry={kind,targetId:id,editedAt:at.toISOString(),changedIds:result.changedIds,
+      beforeEvents:structuredClone(state.eventsByDay?.[command.day]||[]),afterEvents:structuredClone(result.events)};
+    next={...next,logbookEditHistoryByDay:{...state.logbookEditHistoryByDay,[command.day]:[...history,entry]}};
+  }
+  return {...result,state:next};
+}
+export function applyLogbookEditorEdit(state,command,at=new Date()) {
+  return commitResult(state,command,previewLogbookEditorOverride(state,command,at),at,'edit');
+}
+export function applyLogbookEditorInsert(state,command,at=new Date()) {
+  return commitResult(state,command,previewLogbookInsertOverride(state,command,at),at,'insert');
+}
