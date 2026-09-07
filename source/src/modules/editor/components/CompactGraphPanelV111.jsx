@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import LogGraph from '../../graph/LogGraph.jsx';
 import { timeLabel } from '../../../shared/utils/time.js';
 import { draggedMinuteV111, handleCentersV111, clampedHandleLeftV111 } from './graphHandlesV111.js';
-// Large CSS-pixel hit targets remain on phones. The visible control is lighter;
-// exact timeline coordinates and the existing protected draft contract are unchanged.
+// RESTORED_GRABBERS_V11021: large CSS-pixel hit targets remain on phones.
+// The modern visible control is lighter; exact timeline coordinates and the
+// existing protected draft contract are unchanged.
 export default function CompactGraphPanelV111({ events = [], selectedId, editId, onEditTime, onSelect, onEmptyTap, header }) {
   const panel = useRef(null), rail = useRef(null), cleanup = useRef(() => {});const callback = useRef(onEditTime); callback.current = onEditTime;const [wide, setWide] = useState(false), [width, setWidth] = useState(320);const selected = events.find(e => e.id === (editId || selectedId));const editable = !!selected && !!onEditTime && !selected.isLive;const centers = handleCentersV111(selected?.startMin || 0, selected?.endMin || 0, width);
   useEffect(() => {const node = rail.current || panel.current;const measure = () => setWidth(node.getBoundingClientRect().width);measure(); const observer = new ResizeObserver(measure); observer.observe(node);window.addEventListener('resize',measure); window.visualViewport?.addEventListener('resize',measure);return () => { observer.disconnect(); window.removeEventListener('resize',measure); window.visualViewport?.removeEventListener('resize',measure); };}, [editable, wide]);
