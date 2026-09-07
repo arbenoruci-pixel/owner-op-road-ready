@@ -35,46 +35,36 @@ assert.ok(display.includes('options.today || localDayKey()'),'home-terminal day 
 assert.ok(display.includes('carriedFromPreviousDay:!!previous'),'carry marker missing');
 fs.writeFileSync(displayPath,display);
 
+// The final 110.2.x Day Log already owns useLogbookClockV110. Reuse that exact
+// clock instead of creating a second timer. It updates Now in home-terminal time.
 const dayPath='source/src/modules/logbook/DayLogScreen.jsx';
 let day=fs.readFileSync(dayPath,'utf8');
-day=day.replace(
-  "import { homeTerminalConfigFromState } from '../../core/time/homeTerminalTime.js';",
-  "import { homeTerminalConfigFromState, homeTerminalDayKey, homeTerminalMinute } from '../../core/time/homeTerminalTime.js';"
-);
 const oldBlock=`  const rawDayEvents = state.eventsByDay?.[state.activeDay] || [];
   const displayEvents = useMemo(
-    () => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay),
-    [state.eventsByDay, state.activeDay]
+    () => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay, { nowMinute:liveMinuteV1036 }),
+    [state.eventsByDay, state.activeDay, liveMinuteV1036]
   );`;
-const newBlock=`  const [timelineNowV11025, setTimelineNowV11025] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setTimelineNowV11025(Date.now()), 15000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const timelineZoneV11025 = homeTerminalConfigFromState(state).timeZone;
-  const timelineDateV11025 = new Date(timelineNowV11025);
-  const timelineTodayV11025 = homeTerminalDayKey(timelineDateV11025, timelineZoneV11025);
-  const timelineMinuteV11025 = homeTerminalMinute(timelineDateV11025, timelineZoneV11025);
-  const rawDayEvents = state.eventsByDay?.[state.activeDay] || [];
+const newBlock=`  const rawDayEvents = state.eventsByDay?.[state.activeDay] || [];
   const displayEvents = useMemo(
     () => displayEventsForDayFromState(state.eventsByDay || {}, state.activeDay, {
-      today: timelineTodayV11025,
-      nowMinute: timelineMinuteV11025,
+      today:clockV110.day,
+      nowMinute:liveMinuteV1036,
       currentStatus:state.currentStatus,
       currentReason:state.currentReason,
       currentLocation:state.currentLocation,
     }),
-    [state.eventsByDay, state.activeDay, state.currentStatus, state.currentReason, state.currentLocation, timelineTodayV11025, timelineMinuteV11025]
+    [state.eventsByDay, state.activeDay, state.currentStatus, state.currentReason, state.currentLocation, clockV110.day, liveMinuteV1036]
   );`;
-if(day.includes(oldBlock)) day=day.replace(oldBlock,newBlock);
-assert.ok(day.includes('timelineMinuteV11025'),'Day Log home-terminal live clock patch missing');
+if(day.includes(oldBlock))day=day.replace(oldBlock,newBlock);
+assert.ok(day.includes('today:clockV110.day'),'Day Log exact home-terminal day carry wiring missing');
 assert.ok(day.includes('currentStatus:state.currentStatus'),'current-status carry wiring missing');
 
+// Carry-over rows are visual continuity, not editable raw events.
 const oldList=`  const eventListEvents = useMemo(
     () => (bulkPreviewEvents || []).map(event => enrichLoadEventFromLinkedRoute(state, state.activeDay, event)),`;
 const newList=`  const eventListEvents = useMemo(
     () => (bulkPreviewEvents || []).filter(event => !event.displayOnly && !event.carriedFromPreviousDay).map(event => enrichLoadEventFromLinkedRoute(state, state.activeDay, event)),`;
-if(day.includes(oldList)) day=day.replace(oldList,newList);
+if(day.includes(oldList))day=day.replace(oldList,newList);
 assert.ok(day.includes('!event.carriedFromPreviousDay'),'carry-over edit-list guard missing');
 fs.writeFileSync(dayPath,day);
 
@@ -94,4 +84,4 @@ for(const p of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/T
   source=source.replace(/App v110\.2\.4/g,`App v${VERSION}`).replace(/APP V110\.2\.4/g,`APP V${VERSION}`);
   fs.writeFileSync(p,source);
 }
-console.log('PASS — 110.2.5 midnight duty-status carry finalized after materialization');
+console.log('PASS — 110.2.5 midnight duty-status carry finalized through existing home-terminal clock');
