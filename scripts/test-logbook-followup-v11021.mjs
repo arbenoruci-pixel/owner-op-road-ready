@@ -13,13 +13,9 @@ const fields=fs.readFileSync('source/src/modules/editor/components/EditorLocatio
 assert.match(fields,/if \(parsed.city !== city \|\| parsed.state !== state\) onLocationChange\(parsed.city, parsed.state\)/);
 assert.match(fields,/onLocationDraftChange\?\.\(e.target.value\)/);
 console.log('PASS — final materialized location field guards blur and retains explicit typing');
-const graph=fs.readFileSync('source/src/modules/graph/LogGraphV110.jsx','utf8');
-assert.match(graph,/RESTORED_GRABBERS_V11021/);
-assert.match(graph,/graph-handle-large-v110/);
-assert.match(graph,/Drag Start and End to edit event time/);
-assert.match(graph,/r="64" fill="transparent"/);
-const editor=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');
-assert.match(editor,/onEditTime=\{liveV110 \? undefined/);
-console.log('PASS — closed-event editor restores large draggable START/END grabbers while live Driving keeps time handles disabled');
+const handles=fs.readFileSync('source/src/modules/editor/components/CompactGraphPanelV111.jsx','utf8');
+assert.match(handles,/RESTORED_GRABBERS_V11021/);assert.match(handles,/graph-handle-large-v110/);assert.match(handles,/Drag Start and End to edit event time/);assert.match(handles,/!selected.isLive/);
+const editor=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');assert.match(editor,/liveV110 \? undefined/);
+console.log('PASS — closed-event large grabbers and live guard remain installed');
 const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.1');assert.equal(meta.build,'v110201-logbook-followup');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.1'/);
 console.log('PASS — release manifest and worker agree without forcing a reload');

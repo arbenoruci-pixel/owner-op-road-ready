@@ -23,7 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Exact production build and behavioral contracts
-        run: node scripts/build-v110.mjs
+        run: node scripts/build-v110.mjs 2>&1 | tee /tmp/owner-op-build.log
       - name: Capture materialized runtime
         if: always()
         run: |
@@ -42,7 +42,7 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium webkit
-      - name: Real browser sign, document and reload checks
+      - name: Real browser sign, editor, GPS and service-worker checks
         run: |
           npx next start --hostname 127.0.0.1 --port 3000 > /tmp/owner-op-test-server.log 2>&1 &
           SERVER_PID=$!
@@ -51,15 +51,17 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
-          node scripts/browser-isolation-v110.mjs
-          node scripts/browser-logbook-editor-v110.mjs
-          node scripts/browser-service-worker-v110.mjs
-          node scripts/browser-logbook-followup-v11021.mjs
+          failed=0
+          for test in browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-logbook-followup-v11021 browser-service-worker-v110; do
+            if ! node scripts/$test.mjs 2>&1 | tee /tmp/$test.log; then failed=1; fi
+          done
+          exit "$failed"
       - name: Verify exact production deployment and isolated hosted editor
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           node scripts/verify-production-v11021.mjs
           TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-logbook-followup-v11021.mjs
+          TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-compact-editor-v111.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -67,6 +69,8 @@ jobs:
           path: |
             browser-test-results/
             /tmp/owner-op-test-server.log
+            /tmp/owner-op-build.log
+            /tmp/browser-*.log
             /tmp/owner-op-versioned.tar.gz
             /tmp/owner-op-materialized.tar.gz
           retention-days: 3

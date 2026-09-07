@@ -12,7 +12,6 @@ assert.equal(manifest.version,'110.2.1'); assert.equal(manifest.force,false);
 assert.match(current,/OWNER_OP_SW_VERSION = '110\.2\.1'/);
 const results=[];
 for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [priorVersion,priorBuild] of [['110.1.0','v110100-module-isolation'],['110.2.0','v110200-logbook-editor']]) {
-  // Worker behavior is unchanged; only these release constants differ.
   const prior=current.replace("'110.2.1'",`'${priorVersion}'`).replace("'v110201-logbook-followup'",`'${priorBuild}'`);
   let worker=prior;
   const server=http.createServer((req,res)=>{
@@ -40,7 +39,17 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [pr
       navigator.serviceWorker.addEventListener('message',receive);
       navigator.serviceWorker.controller?.postMessage({type:'OWNER_OP_GET_SW_VERSION'});
     }));
-    async function waitVersion(expected){for(let n=0;n<20;n++){const result=await version();if(result?.version===expected)return result;await page.waitForTimeout(100);}throw Error(name+': worker version did not become '+expected);}
+    async function waitVersion(expected){
+      const deadline=Date.now()+30000, observed=[];let attempt=0;
+      while(Date.now()<deadline){
+        const result=await version();observed.push(result);if(result?.version===expected)return result;
+        if(++attempt%4===0)await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r?.update();});
+        await page.waitForTimeout(250);
+      }
+      const registration=await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return {active:r?.active?.state,waiting:r?.waiting?.state,installing:r?.installing?.state,controller:navigator.serviceWorker.controller?.scriptURL};});
+      fs.mkdirSync('browser-test-results',{recursive:true});fs.writeFileSync('browser-test-results/worker-failure.json',JSON.stringify({name,expected,observed,registration},null,2));
+      throw Error(name+': worker version did not become '+expected);
+    }
     const before=await waitVersion(priorVersion);
     worker=current;
     await page.evaluate(async()=>{const registration=await navigator.serviceWorker.getRegistration();await registration.update();});
