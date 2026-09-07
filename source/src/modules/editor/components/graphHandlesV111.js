@@ -11,6 +11,13 @@ export function handleCentersV111(startMin, endMin, width, buttonWidth = 100) {
   }
   return { start, end };
 }
+// CSS evaluates against the CURRENT rail width, even before ResizeObserver
+// delivers its next callback. Both caps reserve room for the other 100px chip.
+export function clampedHandleLeftV111(edge, center) {
+  return edge === 'start'
+    ? `clamp(8px, ${center - 50}px, calc(100% - 216px))`
+    : `clamp(116px, ${center - 50}px, calc(100% - 108px))`;
+}
 export function draggedMinuteV111(event, edge, initial, deltaX, width) {
   if (!event || !['start','end'].includes(edge) || !Number.isFinite(width) || width <= 0) return initial;
   const raw = Math.round(initial + deltaX / (width * 0.894) * 1440);

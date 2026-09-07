@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import LogGraph from '../../graph/LogGraph.jsx';
 import { timeLabel } from '../../../shared/utils/time.js';
-import { draggedMinuteV111, handleCentersV111 } from './graphHandlesV111.js';
+import { draggedMinuteV111, handleCentersV111, clampedHandleLeftV111 } from './graphHandlesV111.js';
 
 // RESTORED_GRABBERS_V11021: CSS-pixel touch targets remain large on a phone.
 // The SVG timeline retains exact coordinates; only the grabber labels spread
@@ -17,7 +17,8 @@ export default function CompactGraphPanelV111({ events = [], selectedId, editId,
     const node = rail.current || panel.current;
     const measure = () => setWidth(node.getBoundingClientRect().width);
     measure(); const observer = new ResizeObserver(measure); observer.observe(node);
-    return () => observer.disconnect();
+    window.addEventListener('resize',measure); window.visualViewport?.addEventListener('resize',measure);
+    return () => { observer.disconnect(); window.removeEventListener('resize',measure); window.visualViewport?.removeEventListener('resize',measure); };
   }, [editable, wide]);
   useEffect(() => () => cleanup.current(), []);
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function CompactGraphPanelV111({ events = [], selectedId, editId,
       <LogGraph events={events} selectedId={selectedId} editId={editId} onSelect={onSelect} onEmptyTap={onEmptyTap} className="compact-graph-svg-v111" />
     </div>
     {editable && <div className="graph-handle-rail-v111" ref={rail}>
-      {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110" role="slider" aria-label={`${edge} time handle`} aria-valuemin={edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} style={{ left: centers[edge] - 50 }} onPointerDown={e => drag(e, edge)} onKeyDown={e => {
+      {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110" role="slider" aria-label={`${edge} time handle`} aria-valuemin={edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} style={{ left: clampedHandleLeftV111(edge,centers[edge]) }} onPointerDown={e => drag(e, edge)} onKeyDown={e => {
         if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
         e.preventDefault(); const direction = e.key === 'ArrowLeft' ? -1 : 1;
         onEditTime(edge, draggedMinuteV111(selected, edge, selected[edge + 'Min'], direction * (e.shiftKey ? 5 : 1) * 0.894 / 1440, 1));
