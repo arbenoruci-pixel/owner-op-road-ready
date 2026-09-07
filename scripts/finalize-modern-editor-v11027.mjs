@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 
 function replaceExact(source,before,after,label){
   if(source.includes(after)) return source;
@@ -136,4 +137,17 @@ for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/u
   source=source.replace(/App v110\.2\.6/g,`App v${VERSION}`).replace(/APP V110\.2\.6/g,`APP V${VERSION}`);
   fs.writeFileSync(path,source);
 }
+
+// DayLogScreen is a stable locked Logbook boundary. This release intentionally
+// changes only its graph-tap UI behavior (select first, explicit Edit second).
+// Recompute only that reviewed lock after all materializers/finalizers finish.
+{
+  const lockPath='module-locks.v1.json';
+  const stablePath='source/src/modules/logbook/DayLogScreen.jsx';
+  const locks=JSON.parse(fs.readFileSync(lockPath,'utf8'));
+  locks.release=VERSION;
+  locks.files[stablePath]=crypto.createHash('sha256').update(fs.readFileSync(stablePath)).digest('hex');
+  fs.writeFileSync(lockPath,JSON.stringify(locks,null,2)+'\n');
+}
+
 console.log('PASS — 110.2.7 Motive-style fast editor finalized after materialization');
