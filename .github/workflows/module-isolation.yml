@@ -55,7 +55,7 @@ jobs:
             sleep 1
           done
           failed=0
-          for test in browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-resize-grabbers-v111 browser-logbook-followup-v11021 browser-motive-override-v11023 browser-canonical-continuity-v11026 browser-service-worker-v110; do
+          for test in browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-resize-grabbers-v111 browser-logbook-followup-v11021 browser-motive-override-v11023 browser-canonical-continuity-v11026 browser-modern-editor-v11027 browser-service-worker-v110; do
             if ! node scripts/$test.mjs 2>&1 | tee /tmp/$test.log; then failed=1; fi
           done
           exit "$failed"
@@ -67,6 +67,7 @@ jobs:
           TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-compact-editor-v111.mjs
           TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-motive-override-v11023.mjs
           TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-canonical-continuity-v11026.mjs
+          TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-modern-editor-v11027.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
