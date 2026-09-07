@@ -50,7 +50,8 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const zon
   await page.locator('.cancel-main').click();await page.waitForTimeout(400);assert.deepEqual((await stored(page)).eventsByDay[day],before.eventsByDay[day]);
   await page.locator('[data-log-event-id=short] .blue-edit').click();await page.getByLabel('End time',{exact:true}).fill('15:17');await page.locator('.save-main').click();
   const saved=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='short')?.endMin===917);
-  assert.deepEqual(saved.eventsByDay[day].filter(e=>e.id!=='short'),before.eventsByDay[day].filter(e=>e.id!=='short'));
+  assert.deepEqual(saved.eventsByDay[day].filter(e=>e.id!=='short'),before.eventsByDay[day].filter(e=>e.id!=='short').map(e=>e.id==='drive'?{...e,startMin:917}:e));
+  assert.deepEqual(saved.logbookEditHistoryByDay[day][0].beforeEvents,before.eventsByDay[day]);
   await page.reload();await openLog(page);await page.locator('[data-log-event-id=short] .blue-edit').click();assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'15:17');
   await page.getByLabel('End time',{exact:true}).fill('15:14');assert.ok(await page.locator('[role=alert]').count());assert.equal(await page.locator('.save-main').isDisabled(),true);await page.locator('.cancel-main').click();
   await page.locator('[data-log-event-id=rest] .blue-edit').click();assert.equal(await page.locator('.midnight-end-v110 input').isChecked(),true);assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'00:00');assert.match(await page.locator('.selected-duration-live em').innerText(),/next day/);await page.locator('.cancel-main').click();

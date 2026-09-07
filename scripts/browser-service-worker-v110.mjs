@@ -8,11 +8,11 @@ assert.deepEqual(traceGeometry([{id:'a',status:'OFF',startMin:0,endMin:60},{id:'
 console.log('PASS — nested overlaps never invent coverage gaps');
 const current=fs.readFileSync('public/sw.js','utf8');
 const manifest=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));
-const VERSION='110.2.2',BUILD='v110202-compact-handles';
+const VERSION='110.2.3',BUILD='v110203-motive-override-chips';
 assert.equal(manifest.version,VERSION);assert.equal(manifest.build,BUILD);assert.equal(manifest.force,false);
 assert.ok(current.includes(`OWNER_OP_SW_VERSION = '${VERSION}'`));
 const results=[];
-for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [priorVersion,priorBuild] of [['110.1.0','v110100-module-isolation'],['110.2.0','v110200-logbook-editor'],['110.2.1','v110201-logbook-followup']]){
+for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const [priorVersion,priorBuild] of [['110.1.0','v110100-module-isolation'],['110.2.0','v110200-logbook-editor'],['110.2.1','v110201-logbook-followup'],['110.2.2','v110202-compact-handles']]){
  const prior=current.replace(`'${VERSION}'`,`'${priorVersion}'`).replace(`'${BUILD}'`,`'${priorBuild}'`);
  let worker=prior;
  const server=http.createServer((req,res)=>{

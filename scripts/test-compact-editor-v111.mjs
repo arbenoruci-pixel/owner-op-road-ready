@@ -17,8 +17,8 @@ for(const name of ['EditEventSheet','InsertEditEventSheet'])test(name+' has grap
  assert.ok(graph>0&&form>graph);if(duty>0)assert.ok(duty>form);
  assert.equal((s.match(/className="save-main"/g)||[]).length,1);assert.match(s,/compact-editor-footer-v111/);assert.match(s,/editor-compact-v111/);
 });
-test('existing live edit and original-row guard stay installed',()=>{
- const s=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');assert.match(s,/onEditTime=\{liveV110 \? undefined/);assert.match(s,/expected:initialRawV110,patch/);assert.match(s,/onClose\(\)/);
+test('live edit and full raw-day concurrency guards stay installed',()=>{
+ const s=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');assert.match(s,/onEditTime=\{liveV110 \? undefined/);assert.match(s,/onSave\(\{__logbookEditorV110:true,day:dayV110,expected:initialRawV110,expectedRows:initialRowsV11023,patch\}\)/);assert.match(s,/initialRowsV11023 = useMemo\(\(\) => structuredClone\(logbookContext.eventsByDay/);assert.match(s,/onClose\(\)/);
 });
 test('compact renderer uses real-pixel targets and pointer cancellation',()=>{
  const s=fs.readFileSync('source/src/modules/editor/components/CompactGraphPanelV111.jsx','utf8');assert.match(s,/role="slider"/);assert.match(s,/setPointerCapture/);assert.match(s,/pointercancel/);assert.match(s,/!selected.isLive/);assert.match(s,/Done graph/);assert.doesNotMatch(s,/localStorage|indexedDB|setState\(/);

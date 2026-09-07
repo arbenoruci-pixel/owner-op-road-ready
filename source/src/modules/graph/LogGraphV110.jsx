@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { GRAPH as G, TRACE_COLORS, graphX, graphY, traceGeometry } from './graphGeometryV110.js';
 import { timeLabel, durLabel } from '../../shared/utils/time.js';
 const STATUSES = ['OFF','SB','D','ON'];
-export default function LogGraph({ events=[],selectedId,onSelect,onEmptyTap,editId,onEditTime,violationRanges=[],className='' }) {
+export default function LogGraph({ events=[],selectedId,onSelect,onEmptyTap,editId,onEditTime,violationRanges=[],className='',editorBoundaries=false }) {
   const svg = useRef(null), dragCleanup = useRef(null);
   useEffect(() => () => dragCleanup.current?.(),[]);
   const {segments,discontinuities,chains} = traceGeometry(events);
@@ -36,6 +36,7 @@ export default function LogGraph({ events=[],selectedId,onSelect,onEmptyTap,edit
       <text x={Math.min(G.width-G.right-25,Math.max(G.left+25,graphX(d.start)))} y="298" textAnchor="middle" fill="#92400e" fontSize="13">{d.type}</text>
     </g>)}
     {selected && <rect className="graph-selected-band" x={selected.x1} y={G.top} width={Math.max(0,selected.x2-selected.x1)} height={4*G.row} fill={TRACE_COLORS[selected.event.status]} opacity="0.09" pointerEvents="none" />}
+    {editorBoundaries && selected && ['start','end'].map(edge=><line key={edge} data-editor-boundary={edge} x1={edge==='start'?selected.x1:selected.x2} x2={edge==='start'?selected.x1:selected.x2} y1={G.top} y2={G.top+4*G.row} stroke="#53657b" strokeWidth="1.5" strokeDasharray="4 3" pointerEvents="none" />)}
     {violationRanges.map((r,i)=>r.startMin!=null&&r.endMin>r.startMin&&STATUSES.includes(r.status)?<rect key={i} x={graphX(r.startMin)} y={graphY(r.status)-9} width={graphX(r.endMin)-graphX(r.startMin)} height="18" fill={r.severity==='high'?'#fee2e2':'#fef3c7'} pointerEvents="none" />:null)}
     {chains.map((path,i)=><path key={`join-${i}`} className="duty-junction-v110" d={path} fill="none" stroke="#687789" strokeWidth={G.stroke} strokeLinecap="butt" strokeLinejoin="miter" pointerEvents="none" />)}
     {segments.map(s=><path key={s.event.id} className="duty-trace-v110" data-event-id={s.event.id} data-adjacent={s.adjacent} d={s.path} fill="none" stroke={TRACE_COLORS[s.event.status]} strokeWidth={G.stroke} strokeLinecap="butt" strokeLinejoin="miter" pointerEvents="none" />)}
