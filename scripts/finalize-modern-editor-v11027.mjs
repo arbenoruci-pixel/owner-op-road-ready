@@ -7,7 +7,6 @@ function replaceExact(source,before,after,label){
   return source.replace(before,after);
 }
 
-// Import the scoped modern layer after every legacy/editor stylesheet.
 {
   const path='app/layout.jsx';
   let source=fs.readFileSync(path,'utf8');
@@ -20,16 +19,12 @@ function replaceExact(source,before,after,label){
   fs.writeFileSync(path,source);
 }
 
-// The final materialized sheets get one extra class. Runtime data/edit contracts
-// remain unchanged; the redesign is a presentation and interaction-density layer.
 for(const path of ['source/src/modules/editor/EditEventSheet.jsx','source/src/modules/editor/InsertEditEventSheet.jsx']){
   let source=fs.readFileSync(path,'utf8');
   source=source.replace('editor-compact-v111"','editor-compact-v111 editor-modern-v11027"');
   fs.writeFileSync(path,source);
 }
 
-// Keep only blocking override feedback in the normal edit flow. The successful
-// replacement behavior is visible directly in the graph preview.
 {
   const path='source/src/modules/editor/EditEventSheet.jsx';
   let source=fs.readFileSync(path,'utf8');
@@ -40,7 +35,18 @@ for(const path of ['source/src/modules/editor/EditEventSheet.jsx','source/src/mo
   fs.writeFileSync(path,source);
 }
 
-// Release identity. Worker behavior is unchanged and no forced refresh is used.
+// Insert already renders its own Activity title. The modern quick-activity
+// container supplies the single compact heading for both sheets.
+{
+  const path='source/src/modules/editor/modern-editor-v11027.css';
+  let source=fs.readFileSync(path,'utf8');
+  if(!source.includes('MODERN_INSERT_ACTIVITY_HEADING_V11027')) source += `
+/* MODERN_INSERT_ACTIVITY_HEADING_V11027 */
+.editor-ui-v110.editor-modern-v11027 .quick-activities-v11023>.insert-section-title{display:none!important}
+`;
+  fs.writeFileSync(path,source);
+}
+
 const VERSION='110.2.7',BUILD='v110207-fast-edit';
 for(const path of ['release-version.json','public/app-version.json']){
   const meta=JSON.parse(fs.readFileSync(path,'utf8'));
