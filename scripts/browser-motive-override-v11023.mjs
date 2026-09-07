@@ -39,7 +39,17 @@ for(const [name,type]of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(await page.locator('details.compact-activities-v111').count(),0);
     assert.equal(await page.locator('.editor-compact-v111 [data-editor-boundary]').count(),2);
     const h=page.getByRole('slider',{name:'end time handle',exact:true}),r=await h.boundingBox(),svg=await page.locator('.editor-compact-v111 svg').boundingBox();
-    await page.mouse.move(r.x+r.width/2,r.y+r.height/2);await page.mouse.down();await page.mouse.move(r.x+r.width/2+90*svg.width*.894/1440,r.y+r.height/2,{steps:12});await page.mouse.up();
+    // Both engines dispatch integral CSS pointer coordinates. A 24-hour phone
+    // graph maps several minutes to one pixel, so verify that exact pixel delta
+    // first, then use the existing one-minute keyboard nudges for 12:30 exactly.
+    const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),dx=Math.round(90*svg.width*.894/1440);
+    await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx,y,{steps:12});await page.mouse.up();
+    const expectedMinute=660+Math.round(dx/(svg.width*.894)*1440);
+    assert.equal(Number(await h.getAttribute('aria-valuenow')),expectedMinute);
+    const observed=await page.getByLabel('End time',{exact:true}).inputValue();
+    assert.equal(Number(observed.slice(0,2))*60+Number(observed.slice(3)),expectedMinute);
+    assert.ok(Math.abs(750-expectedMinute)<=Math.ceil(1440/(svg.width*.894)));
+    await h.focus();for(let n=0;n<Math.abs(750-expectedMinute);n++)await page.keyboard.press(expectedMinute<750?'ArrowRight':'ArrowLeft');
     assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'12:30');
     assert.equal(await page.locator('.editor-compact-v111 .graph-discontinuity[data-kind=Overlap]').count(),0);
     assert.equal(await page.locator('.editor-compact-v111 .graph-discontinuity[data-kind=Gap]').count(),0);
