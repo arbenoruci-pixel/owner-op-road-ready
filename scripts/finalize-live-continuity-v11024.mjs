@@ -41,4 +41,10 @@ for(const p of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/T
   source=source.replace(/App v110\.2\.3/g,`App v${VERSION}`).replace(/APP V110\.2\.3/g,`APP V${VERSION}`);
   fs.writeFileSync(p,source);
 }
+// This older regression includes a release-identity assertion. Keep every
+// behavioral assertion intact and synchronize only its explicit release values.
+const legacyTest='scripts/test-motive-override-v11023.mjs';
+let legacy=fs.readFileSync(legacyTest,'utf8');
+legacy=legacy.replace("assert.equal(m.version,'110.2.3');assert.equal(m.build,'v110203-motive-override-chips')",`assert.equal(m.version,'${VERSION}');assert.equal(m.build,'${BUILD}')`);
+fs.writeFileSync(legacyTest,legacy);
 console.log('PASS — 110.2.4 live timeline and compact helper copy finalized');
