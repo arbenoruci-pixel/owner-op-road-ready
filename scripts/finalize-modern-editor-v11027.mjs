@@ -35,8 +35,8 @@ for(const path of ['source/src/modules/editor/EditEventSheet.jsx','source/src/mo
   fs.writeFileSync(path,source);
 }
 
-// Insert already renders its own Activity title. The modern quick-activity
-// container supplies the single compact heading for both sheets.
+// Final small overrides keep the visible target Motive-like while preserving
+// the tested Cancel control as a subtle secondary action.
 {
   const path='source/src/modules/editor/modern-editor-v11027.css';
   let source=fs.readFileSync(path,'utf8');
@@ -44,13 +44,20 @@ for(const path of ['source/src/modules/editor/EditEventSheet.jsx','source/src/mo
 /* MODERN_INSERT_ACTIVITY_HEADING_V11027 */
 .editor-ui-v110.editor-modern-v11027 .quick-activities-v11023>.insert-section-title{display:none!important}
 `;
+  if(!source.includes('MODERN_MOTIVE_FINAL_V11027')) source += `
+/* MODERN_MOTIVE_FINAL_V11027 */
+.editor-ui-v110.editor-modern-v11027 .graph-handle-large-v110{height:44px!important;min-height:44px!important}
+.editor-ui-v110.editor-modern-v11027 .compact-editor-footer-v111{display:grid!important;grid-template-columns:72px minmax(0,1fr)!important;gap:10px!important;align-items:center!important}
+.editor-ui-v110.editor-modern-v11027 .compact-editor-footer-v111 .cancel-main{display:block!important;grid-column:1!important;width:72px!important;height:44px!important;min-height:44px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;color:#6a7077!important;-webkit-text-fill-color:#6a7077!important;font-size:13px!important;font-weight:500!important;box-shadow:none!important}
+.editor-ui-v110.editor-modern-v11027 .compact-editor-footer-v111 .edit-sticky-save{grid-column:2!important;width:100%!important}
+`;
   fs.writeFileSync(path,source);
 }
 
 const VERSION='110.2.7',BUILD='v110207-fast-edit';
 for(const path of ['release-version.json','public/app-version.json']){
   const meta=JSON.parse(fs.readFileSync(path,'utf8'));
-  Object.assign(meta,{version:VERSION,build:BUILD,force:false,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,label:'Fast Logbook editor',notes:['Graph-first editor with lighter 44px Start/End handles.','Start, Duration and End share one compact strip; fine-tuning remains available on demand.','Duty status, multi-select activities, location and notes use a cleaner phone-first hierarchy while protected override, HOS and certification behavior remain unchanged.']});
+  Object.assign(meta,{version:VERSION,build:BUILD,force:false,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,label:'Fast Logbook editor',notes:['Graph-first editor with Motive-style Start/End flags and 44px touch targets.','Start Time and End Time use two direct cards; one-minute fine tuning stays secondary.','Duty status, multi-select activities, location and always-visible notes use a cleaner phone-first hierarchy while protected override, HOS and certification behavior remain unchanged.']});
   fs.writeFileSync(path,JSON.stringify(meta,null,2)+'\n');
 }
 for(const [path,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
@@ -63,4 +70,4 @@ for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/u
   source=source.replace(/App v110\.2\.6/g,`App v${VERSION}`).replace(/APP V110\.2\.6/g,`APP V${VERSION}`);
   fs.writeFileSync(path,source);
 }
-console.log('PASS — 110.2.7 graph-first fast editor finalized after materialization');
+console.log('PASS — 110.2.7 Motive-style fast editor finalized after materialization');
