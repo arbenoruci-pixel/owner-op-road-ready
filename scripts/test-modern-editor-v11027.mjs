@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 
 const edit=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');
 const insert=fs.readFileSync('source/src/modules/editor/InsertEditEventSheet.jsx','utf8');
@@ -8,7 +9,8 @@ const graph=fs.readFileSync('source/src/modules/editor/components/CompactGraphPa
 const notes=fs.readFileSync('source/src/modules/editor/components/EditorNotesField.jsx','utf8');
 const css=fs.readFileSync('source/src/modules/editor/modern-editor-v11027.css','utf8');
 const eventList=fs.readFileSync('source/src/modules/logbook/EventList.jsx','utf8');
-const day=fs.readFileSync('source/src/modules/logbook/DayLogScreen.jsx','utf8');
+const dayPath='source/src/modules/logbook/DayLogScreen.jsx';
+const day=fs.readFileSync(dayPath,'utf8');
 const layout=fs.readFileSync('app/layout.jsx','utf8');
 
 assert.match(edit,/editor-modern-v11027/);assert.match(insert,/editor-modern-v11027/);
@@ -46,4 +48,7 @@ assert.match(insert,/previewLogbookInsertOverride/);assert.match(insert,/preview
 console.log('PASS — visual simplification leaves whole-day guard, protected live timing and Insert override engine intact');
 
 const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.7');assert.equal(meta.build,'v110207-fast-edit');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.7'/);
-console.log('PASS — 110.2.7 release identity and non-forced worker agree');
+const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));
+assert.equal(locks.release,'110.2.7');
+assert.equal(locks.files[dayPath],crypto.createHash('sha256').update(day).digest('hex'));
+console.log('PASS — 110.2.7 release identity, non-forced worker and reviewed DayLogScreen lock agree');
