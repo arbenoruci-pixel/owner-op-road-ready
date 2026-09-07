@@ -14,8 +14,8 @@ assert.match(fields,/if \(parsed.city !== city \|\| parsed.state !== state\) onL
 assert.match(fields,/onLocationDraftChange\?\.\(e.target.value\)/);
 console.log('PASS — final materialized location field guards blur and retains explicit typing');
 const handles=fs.readFileSync('source/src/modules/editor/components/CompactGraphPanelV111.jsx','utf8');
-assert.match(handles,/RESTORED_GRABBERS_V11021/);assert.match(handles,/graph-handle-large-v110/);assert.match(handles,/Drag Start and End to edit event time/);assert.match(handles,/!selected.isLive/);
+assert.match(handles,/RESTORED_GRABBERS_V11021/);assert.match(handles,/graph-handle-large-v110/);assert.match(handles,/compact-graph-toolbar-minimal-v11024/);assert.match(handles,/!selected.isLive/);assert.doesNotMatch(handles,/Drag Start and End to edit event time/);
 const editor=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');assert.match(editor,/liveV110 \? undefined/);
-console.log('PASS — closed-event large grabbers and live guard remain installed');
-const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.3');assert.equal(meta.build,'v110203-motive-override-chips');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.3'/);
+console.log('PASS — closed-event large grabbers, compact toolbar and live guard remain installed');
+const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.4');assert.equal(meta.build,'v110204-live-continuity-compact');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.4'/);
 console.log('PASS — release manifest and worker agree without forcing a reload');
