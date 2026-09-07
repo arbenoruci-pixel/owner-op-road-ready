@@ -1,7 +1,7 @@
 name: Module isolation regression
 on:
   push:
-    branches: [main, fix/module-isolation-20260906, fix/logbook-editor-20260906, fix/logbook-followup-v11021-20260906]
+    branches: [main, fix/module-isolation-20260906, fix/logbook-editor-20260906, fix/logbook-followup-v11021-20260906, fix/compact-handle-resize-v11022-20260907]
   pull_request:
     branches: [main]
 permissions:
@@ -55,7 +55,7 @@ jobs:
             sleep 1
           done
           failed=0
-          for test in browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-logbook-followup-v11021 browser-service-worker-v110; do
+          for test in browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-resize-grabbers-v111 browser-logbook-followup-v11021 browser-service-worker-v110; do
             if ! node scripts/$test.mjs 2>&1 | tee /tmp/$test.log; then failed=1; fi
           done
           exit "$failed"

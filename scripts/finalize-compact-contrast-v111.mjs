@@ -26,4 +26,15 @@ if(!css.includes('COMPACT_FOOTER_CONTRAST_V111')){
 }
 assert.match(s,/COMPACT_INSERT_ACTIVITY_V111/);
 assert.match(css,/button.save-main:disabled\{background:#dce7e4!important;color:#425c54/);
-console.log('PASS — compact Insert activity and explicit enabled/disabled footer contrast');
+// New release identifier for the post-merge responsive fix. All contracts run
+// after this finalization, against the same identifiers that Next will publish.
+const VERSION='110.2.2',BUILD='v110202-compact-handles';
+for(const p of ['release-version.json','public/app-version.json']){
+ const meta=JSON.parse(fs.readFileSync(p,'utf8'));fs.writeFileSync(p,JSON.stringify({...meta,version:VERSION,build:BUILD,force:false,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null},null,2)+'\n');
+}
+for(const [p,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
+ let s=fs.readFileSync(p,'utf8');
+ s=s.replace(new RegExp(`(const ${name}_VERSION = )['\"][^'\"]+['\"]`),`$1'${VERSION}'`).replace(new RegExp(`(const ${name}_BUILD = )['\"][^'\"]+['\"]`),`$1'${BUILD}'`);fs.writeFileSync(p,s);
+}
+for(const p of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx'])fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/App v110\.2\.1/g,'App v'+VERSION).replace(/APP V110\.2\.1/g,'APP V'+VERSION));
+console.log('PASS — compact Insert/footer contrast; bounded responsive handles release '+VERSION);

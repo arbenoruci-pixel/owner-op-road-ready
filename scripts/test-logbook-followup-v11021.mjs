@@ -17,5 +17,5 @@ const handles=fs.readFileSync('source/src/modules/editor/components/CompactGraph
 assert.match(handles,/RESTORED_GRABBERS_V11021/);assert.match(handles,/graph-handle-large-v110/);assert.match(handles,/Drag Start and End to edit event time/);assert.match(handles,/!selected.isLive/);
 const editor=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');assert.match(editor,/liveV110 \? undefined/);
 console.log('PASS — closed-event large grabbers and live guard remain installed');
-const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.1');assert.equal(meta.build,'v110201-logbook-followup');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.1'/);
+const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.2');assert.equal(meta.build,'v110202-compact-handles');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.2'/);
 console.log('PASS — release manifest and worker agree without forcing a reload');
