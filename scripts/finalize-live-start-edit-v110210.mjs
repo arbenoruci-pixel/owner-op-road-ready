@@ -103,15 +103,15 @@ function once(source,before,after,label){
   write(path,source);
 }
 
-// Update the existing real-browser contracts: live Start is editable, exactly
-// one START slider is visible, and End remains Now/read-only.
+// Earlier browser finalizers rewrite how Edit is opened. Patch only the stable
+// live timing assertions so this release composes with that selected-then-Edit UI.
 {
   const path='scripts/browser-logbook-editor-v110.mjs';
   let source=read(path);
   source=once(source,
-    "await page.locator('[data-log-event-id=live] .blue-edit').click();assert.ok(await page.getByLabel('Start time',{exact:true}).isDisabled());assert.match(await page.locator('.live-now-v110').innerText(),/Now\\s*17:20/);assert.equal((await page.locator('.selected-duration-live b').innerText()).trim(),'2h 5m');",
-    "await page.locator('[data-log-event-id=live] .blue-edit').click();assert.equal(await page.getByLabel('Start time',{exact:true}).isDisabled(),false);assert.equal(await page.getByRole('slider',{name:'start time handle',exact:true}).count(),1);assert.equal(await page.getByRole('slider',{name:'end time handle',exact:true}).count(),0);assert.match(await page.locator('.live-now-v110').innerText(),/Now\\s*17:20/);assert.equal((await page.locator('.selected-duration-live b').innerText()).trim(),'2h 5m');",
-    'browser live start enabled');
+    "assert.ok(await page.getByLabel('Start time',{exact:true}).isDisabled());",
+    "assert.equal(await page.getByLabel('Start time',{exact:true}).isDisabled(),false);assert.equal(await page.getByRole('slider',{name:'start time handle',exact:true}).count(),1);assert.equal(await page.getByRole('slider',{name:'end time handle',exact:true}).count(),0);",
+    'browser live Start assertion');
   write(path,source);
 }
 {
@@ -120,7 +120,7 @@ function once(source,before,after,label){
   source=once(source,
     "assert.equal(await page.getByRole('slider').count(),0,'live timing remains protected');assert.ok(await page.getByLabel('Start time',{exact:true}).isDisabled());",
     "assert.equal(await page.getByRole('slider').count(),1,'live event exposes only its Start boundary');assert.equal(await page.getByRole('slider',{name:'start time handle',exact:true}).count(),1);assert.equal(await page.getByRole('slider',{name:'end time handle',exact:true}).count(),0);assert.equal(await page.getByLabel('Start time',{exact:true}).isDisabled(),false);",
-    'compact browser live start contract');
+    'compact browser live Start contract');
   write(path,source);
 }
 
