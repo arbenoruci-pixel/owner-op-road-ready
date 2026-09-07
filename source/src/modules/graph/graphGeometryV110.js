@@ -7,7 +7,9 @@ export function traceGeometry(events = []) {
   const segments = [], discontinuities = [];
   rows.forEach((event,i) => {
     const previous = rows[i-1];
-    const adjacent = !!previous && previous.endMin === event.startMin;
+    // A third event spanning the boundary makes this bend ambiguous. Keep the
+    // overlapping traces separate; retain their actual stored endpoints.
+    const adjacent = !!previous && previous.endMin === event.startMin && !rows.some(other => other !== previous && other !== event && other.startMin < event.startMin && other.endMin > event.startMin);
     const x1=graphX(event.startMin), x2=graphX(event.endMin), y=graphY(event.status);
     const path = adjacent && previous.status !== event.status
       ? `M ${x1} ${graphY(previous.status)} V ${y} H ${x2}`
