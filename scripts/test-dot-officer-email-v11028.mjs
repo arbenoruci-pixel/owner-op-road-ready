@@ -13,7 +13,9 @@ assert.match(dot,/aria-label="Officer email in officer view"/);
 assert.match(dot,/type="email"/);
 assert.doesNotMatch(dot,/placeholder="Routing \/ reference code \(if provided\)"/);
 assert.match(dot,/backupLocalData\(\{[\s\S]*onlyDays:days/);
-assert.match(dot,/cloudApi\(\{ action:'create_share', wallet_keys:walletKeys \}\)/);
+assert.match(dot,/cloudApi\(\{ action:'create_share', wallet_keys:\[\] \}\)/);
+assert.doesNotMatch(dot,/const walletKeys = Object\.keys\(state\.dotWallet/);
+assert.match(dot,/8-day logs only/);
 assert.match(dot,/\/inspection#\$\{share\.token\}/);
 assert.match(dot,/window\.location\.href = mailto/);
 assert.match(dot,/Secure link ready/);
@@ -40,4 +42,4 @@ const css=fs.readFileSync('source/src/styles.css','utf8');
 assert.match(css,/DOT_OFFICER_EMAIL_V11028/);
 assert.match(css,/min-height:44px/);
 
-console.log('PASS — officer enters email, Road Ready syncs the eight-day package, creates a private capability link, and opens an addressed email without routing-code UI');
+console.log('PASS — officer enters email, Road Ready syncs only the eight-day logs, creates a private capability link, and opens an addressed email without routing-code UI');
