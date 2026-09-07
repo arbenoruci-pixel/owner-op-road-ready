@@ -24,6 +24,10 @@ function once(source,before,after,label){
     "const after={...before,...changes},temporal=boundsChanged(before,after),live=liveIds(state,day,at);const liveTarget=live.has(id);const liveStartCorrection=liveTarget&&temporal&&Object.hasOwn(changes,'startMin')&&!Object.hasOwn(changes,'status')&&!Object.hasOwn(changes,'endMin');if(temporal&&liveTarget&&!liveStartCorrection)return{ok:false,error:'Use Change status to end the live event. End stays at Now while Start can be corrected.'};if(temporal&&isProtectedAutomaticDriving(before))return{ok:false,error:'Automatic Driving time is protected. Its notes can be edited separately.'};",
     'live edit permission');
   source=once(source,
+    "const error=editorRangeError(after.startMin,after.endMin);if(error)return{ok:false,error};if(temporal){",
+    "const effectiveEnd=liveStartCorrection?logbookClock(state,at).minute:after.endMin;const error=editorRangeError(after.startMin,effectiveEnd);if(error)return{ok:false,error};if(temporal){",
+    'live Start range uses Now');
+  source=once(source,
     "if(temporal){if(expectedRows&&!equal(rows,expectedRows))return{ok:false,error:'Another event changed while Edit was open. Reopen the day before replacing time.'};return replaceInterval(rows,before,after,live);}return{ok:true,changed:true,events:rows.map(e=>e===before?after:e),changedIds:[id],neighborIds:[],timelineChanged:false};",
     "if(temporal){if(expectedRows&&!equal(rows,expectedRows))return{ok:false,error:'Another event changed while Edit was open. Reopen the day before replacing time.'};if(liveStartCorrection){const clock=logbookClock(state,at);if(after.startMin>=clock.minute)return{ok:false,error:'Live Start must stay before Now.'};const projectedBefore={...before,endMin:clock.minute};const liveAfter={...after,endMin:clock.minute};return replaceInterval(rows,projectedBefore,liveAfter,live);}return replaceInterval(rows,before,after,live);}return{ok:true,changed:true,events:rows.map(e=>e===before?after:e),changedIds:[id],neighborIds:[],timelineChanged:false};",
     'live start override');
