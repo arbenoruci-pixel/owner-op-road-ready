@@ -29,7 +29,10 @@ export function projectLogbookEvents(state = {}, day = state.activeDay, at = new
   const rows = (state.eventsByDay?.[day] || []).filter(e => e && !e.voided && !e.syntheticCoverage && !e.displayOnly && !e.carriedFromPreviousDay && !e.synthetic && !e.continuityGenerated && !['timeline_continuity','carryover','display','display_timeline'].includes(e.source))
     .map(e => ({ ...e })).sort((a,b) => a.startMin - b.startMin);
   const last = rows[rows.length - 1];
-  if (!last || day !== clock.day || state.certifyStatus?.[day] === 'Certified') return rows;
+  // Current-day projection stays live even if the day was signed earlier. A new
+  // duty-status change after signing still has to draw continuously to Now; this
+  // is display-only and never rewrites the signed historical row.
+  if (!last || day !== clock.day) return rows;
   const manual = state.manualDrivingSession, gps = state.gpsTrip;
   const ownedSession = (manual?.active === true && manual.eventId === last.id && (!manual.startDay || manual.startDay === day)) || (gps?.status === 'active' && gps.eventId === last.id);
   const liveSource = ['live_status','manual_drive_midnight_continuation'].includes(last.source);
@@ -68,12 +71,9 @@ function changedSummary(before,after,targetId) {
 function replaceInterval(rows,before,after,protectedIds) {
   const real=rows.filter(active);
   if (new Set(real.map(e=>e.id)).size!==real.length) return {ok:false,error:'Duplicate event IDs require review before changing time.'};
-  // Do not silently round, normalize, merge, or repair other stored records.
   if (real.some(e=>typeof e.startMin !== 'number' || typeof e.endMin !== 'number' || editorRangeError(e.startMin,e.endMin))) return {ok:false,error:'An existing event has invalid times. Review it before replacing duty time.'};
   const protectedRow=e=>protectedIds.has(e.id)||isProtectedAutomaticDriving(e);
   const work=real.filter(e=>e.id!==before?.id).map(e=>({...e}));
-  // Release only the part of the ORIGINAL range vacated by the chosen handles.
-  // Never bridge an existing gap, extend to midnight, or invent a new status.
   if (before && after.startMin>before.startMin) {
     const candidates=work.filter(e=>e.endMin===before.startMin&&e.startMin<before.startMin);
     const occupied=work.filter(e=>e.endMin>before.startMin&&e.startMin<Math.min(after.startMin,before.endMin));
@@ -94,7 +94,6 @@ function replaceInterval(rows,before,after,protectedIds) {
   for(const row of work) {
     const original=real.find(e=>e.id===row.id);
     if(protectedRow(original) && !equal(row,original)) return {ok:false,error:'This boundary touches a live or automatic Driving event. Its time cannot be extended or shortened.'};
-    // A running status reserves the rest of this day, including future minutes.
     const protectedRange=protectedIds.has(row.id)?{...row,endMin:1440}:row;
     if(protectedRow(row) && overlaps(protectedRange,after)) return {ok:false,error:protectedIds.has(row.id)?'The current live event cannot be overwritten. End it using Change status first.':'Automatic Driving time cannot be overwritten. Keep this range outside its recorded time.'};
     if(!overlaps(row,after)){out.push(row);continue;}
@@ -106,14 +105,12 @@ function replaceInterval(rows,before,after,protectedIds) {
         const key=`${row.id}__split_${after.id}_${after.endMin}`;let id=key,n=2;
         while(used.has(id))id=`${key}_${n++}`;
         used.add(id);fragment.id=id;fragment.splitFromEventId=row.id;
-        // Keep entered mileage once, never duplicate it across two fragments.
         if(Number(row.manualMiles)>0){fragment.manualMiles=0;fragment.manualMilesNeedsReview=true;}
       }
       out.push(fragment);
     }
   }
   out.push(after);out.sort((a,b)=>a.startMin-b.startMin||a.endMin-b.endMin||String(a.id).localeCompare(String(b.id)));
-  // Voided/display-only rows remain evidence; they never participate in clipping.
   const result=[...out,...rows.filter(e=>!active(e))];
   const summary=changedSummary(real,out,after.id);
   return {ok:true,changed:true,events:result,...summary,timelineChanged:summary.neighborIds.length>0};
