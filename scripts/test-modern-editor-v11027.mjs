@@ -30,8 +30,9 @@ assert.match(css,/cancel-main\{display:block!important;grid-column:1!important;w
 console.log('PASS — header, two-card time, four duty choices, GPS location, visible Notes and dominant Save match the phone reference hierarchy');
 
 assert.doesNotMatch(edit,/This range replaces overlapping manual duty time\. Save keeps the original in edit history\./);assert.match(edit,/previewResultV11023\?\.ok===false/);assert.match(edit,/Save changes/);
-assert.match(edit,/expectedRows:initialRowsV11023/);assert.match(edit,/onEditTime=\{liveV110 \? undefined/);assert.match(insert,/insertLogbookEditorOverride/);
-console.log('PASS — visual simplification leaves whole-day guard, protected live timing and override engine intact');
+assert.match(edit,/expectedRows:initialRowsV11023/);assert.match(edit,/onEditTime=\{liveV110 \? undefined/);
+assert.match(insert,/previewLogbookInsertOverride/);assert.match(insert,/insertResultV11023/);assert.match(insert,/expectedRows:originalRowsV11023/);
+console.log('PASS — visual simplification leaves whole-day guard, protected live timing and insert/edit override engines intact');
 
 const meta=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));assert.equal(meta.version,'110.2.7');assert.equal(meta.build,'v110207-fast-edit');assert.equal(meta.force,false);assert.match(fs.readFileSync('public/sw.js','utf8'),/OWNER_OP_SW_VERSION = '110\.2\.7'/);
 console.log('PASS — 110.2.7 release identity and non-forced worker agree');
