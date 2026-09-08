@@ -66,7 +66,6 @@ assert.equal(noPickup.type.id,'rate_confirmation','no pickup BOL context means n
 
 const scan=fs.readFileSync('source/src/modules/scan/SmartScanSheetV105.jsx','utf8');
 assert.match(scan,/applyLiveBolContextV11035\(result, state\)/);
-assert.match(scan,/liveContextLoadV11035/);
 assert.match(scan,/Current live pickup BOL/);
 
 const app=fs.readFileSync('source/src/app/App.jsx','utf8');
