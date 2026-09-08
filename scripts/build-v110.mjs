@@ -9,7 +9,7 @@ steps.push('finalize-live-archive-v1103.mjs','test-live-archive-evidence.mjs','t
 steps.push('finalize-status-midnight-carry-v11032.mjs','test-status-midnight-carry-v11032.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-smart-load-identity-v11033.mjs','test-smart-load-identity-v11033.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-live-load-scanner-editor-v11034c.mjs','test-live-load-scanner-editor-v11034.mjs','verify-isolation-locks-v110.mjs');
-steps.push('finalize-live-bol-context-v11035b.mjs','test-live-bol-context-v11035.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-live-bol-context-v11035c.mjs','test-live-bol-context-v11035c.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
