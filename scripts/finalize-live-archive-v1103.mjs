@@ -198,4 +198,7 @@ for(const [path,prefix] of [['source/src/core/update/appUpdate.js','FALLBACK_APP
     .replace(new RegExp('(const '+prefix+'_BUILD = )[\'\"][^\'\"]+[\'\"]'),"$1'"+BUILD+"'");write(path,source);
 }
 for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx'])write(path,read(path).replace(/(App v|APP V)110\.2\.12/g,'$1'+VERSION));
+const continuityTest='scripts/test-duty-graph-continuity.mjs';
+source=read(continuityTest).replace("assert.equal(meta.version,'110.2.12');assert.equal(meta.build,'v110212-duty-graph-continuity');assert.equal(meta.force,false);",`assert.equal(meta.version,'${VERSION}');assert.equal(meta.build,'${BUILD}');assert.equal(meta.force,false);`);
+write(continuityTest,source);
 console.log('PASS — live archive, mileage, verified document links, statement handling and exact exports materialized');
