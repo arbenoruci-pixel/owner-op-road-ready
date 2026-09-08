@@ -69,13 +69,17 @@ function once(source,before,after,label){
   write(path,source);
 }
 
-// Current live duty event is a load-identity source. This lets the real load
-// 26023311 beat stale loadInfo from a prior load such as Red Lightning 38246703.
+// Current live duty event is a load-identity source. Insert just before loadInfo,
+// because older materializers may rewrite the business-load loop itself.
 {
   const path='source/src/modules/documents/documentFoundationV105.js';
   let source=read(path);
-  const anchor='  for (const load of businessStore.loads || []) add(candidateFromBusinessLoadV105(load));';
-  const patch=anchor+`\n\n  // LIVE_LOAD_EVENT_CANDIDATE_V11034
+  if(!source.includes('LIVE_LOAD_EVENT_CANDIDATE_V11034')){
+    const marker=source.match(/\n\s*const info = state\.loadInfo \|\| \{\};/);
+    assert.ok(marker,'110.3.4 loadInfo marker missing for live load candidate');
+    const patch=`
+
+  // LIVE_LOAD_EVENT_CANDIDATE_V11034
   const activeDayV11034 = textV105(state.activeDay) || Object.keys(state.eventsByDay || {}).sort().at(-1) || '';
   const liveLoadEntryV11034 = eventEntriesV105(state).filter(entry => entry.day === activeDayV11034 && eventLoadRefsV105(entry.event).length).at(-1) || null;
   if (liveLoadEntryV11034) {
@@ -84,8 +88,11 @@ function once(source,before,after,label){
     if (loadNo) {
       const candidate=candidateSkeletonV105(loadNo);
       candidate.id=textV105(event.canonicalLoadId || 'live_event_'+loadNo);
-      candidate.active=true; candidate.status='open'; candidate.sourceKinds=['live_duty_event'];
-      candidate.updatedAt=liveLoadEntryV11034.at; candidate.latestActivityAt=liveLoadEntryV11034.at;
+      candidate.active=true;
+      candidate.status='open';
+      candidate.sourceKinds=['live_duty_event'];
+      candidate.updatedAt=liveLoadEntryV11034.at;
+      candidate.latestActivityAt=liveLoadEntryV11034.at;
       if (isPickupEventV105(event)) candidate.latestPickupAt=liveLoadEntryV11034.at;
       candidate.broker=normalizeCanonicalLoadNoV105(state.loadInfo?.loadNo || state.loadInfo?.shippingDocs)===loadNo ? textV105(state.loadInfo?.broker) : textV105(event.broker);
       candidate.origin=[textV105(event.city),stateCodeV105(event.state)].filter(Boolean).join(', ');
@@ -96,7 +103,8 @@ function once(source,before,after,label){
       add(candidate);
     }
   }`;
-  source=once(source,anchor,patch,'live load candidate');
+    source=source.replace(marker[0],patch+marker[0]);
+  }
   write(path,source);
 }
 
