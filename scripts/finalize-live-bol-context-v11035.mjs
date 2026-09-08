@@ -59,9 +59,12 @@ function once(source,before,after,label){
 {
   const path='source/src/modules/scan/SmartScanSheetV105.jsx';
   let source=read(path);
-  const importAnchor="import { saveScannedDocument } from './scanStorage.js';";
   const importLine="import { applyLiveBolContextV11035 } from './liveBolContextV11035.js';";
-  if(!source.includes(importLine)) source=once(source,importAnchor,importAnchor+'\n'+importLine,'live BOL helper import');
+  if(!source.includes(importLine)){
+    const firstImport=source.match(/^import[^\n]+\n/m)?.[0];
+    assert.ok(firstImport,'110.3.5 scanner first import missing');
+    source=source.replace(firstImport,firstImport+importLine+'\n');
+  }
   source=once(source,
     "  function applyResult(result, preferredLoadNo = '') {\n    const typeId = result.type?.id || 'other';",
     "  function applyResult(result, preferredLoadNo = '') {\n    result = applyLiveBolContextV11035(result, state);\n    const typeId = result.type?.id || 'other';",
