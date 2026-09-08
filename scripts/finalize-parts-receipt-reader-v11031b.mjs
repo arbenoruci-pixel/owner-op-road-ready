@@ -12,8 +12,7 @@ function replaceOnce(source,before,after,label){
   assert.equal(count,1,`110.3.1 anchor changed: ${label}; found ${count}`);
   return source.replace(before,after);
 }
-function replaceCatalogType(source,id,replacement){
-  if(source.includes(replacement)) return source;
+function catalogBounds(source,id){
   const token=`  t('${id}'`;
   const start=source.indexOf(token);
   assert.ok(start>=0,`110.3.1 catalog type missing: ${id}`);
@@ -22,34 +21,67 @@ function replaceCatalogType(source,id,replacement){
   const arrayEnd=source.indexOf('\n]);',start+token.length);
   const ends=[nextType,arrayEnd].filter(value=>value>start);
   assert.ok(ends.length,`110.3.1 catalog end missing: ${id}`);
-  const end=Math.min(...ends);
+  return {start,end:Math.min(...ends)};
+}
+function replaceCatalogType(source,id,replacement){
+  if(source.includes(replacement)) return source;
+  const {start,end}=catalogBounds(source,id);
   return source.slice(0,start)+replacement+source.slice(end);
+}
+function addCatalogNegativeSignals(source,id,needle,insert){
+  if(source.includes(needle)) return source;
+  const {start,end}=catalogBounds(source,id);
+  let block=source.slice(start,end);
+  assert.ok(block.includes('negativeSignals:['),`110.3.1 ${id} negativeSignals missing`);
+  block=block.replace('negativeSignals:[',`negativeSignals:[${insert}`);
+  return source.slice(0,start)+block+source.slice(end);
 }
 
 const partsCatalog=`  t('parts_receipt','Truck Parts Receipt','Parts','maintenance','maintenance','other',['maintenance','expenses','tax'],[
-    [/\\bpart\\s*(?:n[o0]\\.?|number|#)\\b/i,62],
-    [/\\bdescription\\b[\\s\\S]{0,180}\\b(?:list|net)\\b[\\s\\S]{0,120}\\bamount\\b/i,40],
-    [/\\bpaid\\s+c[o0]unter\\b/i,52],
-    [/\\bparts?\\b[\\s\\S]{0,140}\\bsales\\s+tax\\b[\\s\\S]{0,140}\\btotal\\b/i,36],
-    [/\\bcustomer\\s+copy\\b/i,18],
-    [/\\binvoice\\s*(?:number|no\\.?|#)\\b/i,16],
-    [/\\bterms?\\b[\\s\\S]{0,30}\\bcash\\b/i,10],
-    [/returned\\s+goods|no\\s+cash\\s+refunds?|electrical\\s+items?.{0,80}non[- ]?returnable/i,14],
-  ],{ required:['date','merchant','invoiceNo','total'], fileSignals:[/parts|counter/i], priority:34, minScore:70,
-    negativeSignals:[[/repair\\s+(?:order|invoice)|work\\s+order/i,58],[/\\blabor\\b|technician|service\\s+advisor|work\\s+performed|complaint\\s*:|cause\\s*:|correction\\s*:/i,42]] }),`;
+    [/\\bpart\\s*(?:n[o0]\\.?|number|#)\\b/i,90],
+    [/\\bdescription\\b[\\s\\S]{0,220}\\b(?:list|net)\\b[\\s\\S]{0,160}\\bamount\\b/i,65],
+    [/\\bpaid\\s+c[o0]unter\\b/i,100],
+    [/\\bparts?\\b[\\s\\S]{0,180}\\bsales\\s+tax\\b[\\s\\S]{0,180}\\btotal\\b/i,70],
+    [/\\bcustomer\\s+copy\\b/i,25],
+    [/\\binvoice\\s*(?:number|no\\.?|#)\\b/i,20],
+    [/\\bterms?\\b[\\s\\S]{0,40}\\bcash\\b/i,14],
+    [/returned\\s+goods|no\\s+cash\\s+refunds?|electrical\\s+items?.{0,100}non[- ]?returnable/i,18],
+  ],{ required:['date','merchant','invoiceNo','total'], fileSignals:[/parts|counter/i], priority:50, minScore:90,
+    negativeSignals:[[/repair\\s+(?:order|invoice)|work\\s+order/i,90],[/\\blabor\\b|technician|service\\s+advisor|work\\s+performed|complaint\\s*:|cause\\s*:|correction\\s*:/i,70]] }),`;
 {
   const path='source/src/modules/scan/truckDocumentCatalogV1040.js';
-  write(path,replaceCatalogType(read(path),'parts_receipt',partsCatalog));
+  let source=replaceCatalogType(read(path),'parts_receipt',partsCatalog);
+  // A packing list can share QTY/DESCRIPTION columns. A paid counter sale with
+  // tax/total is mutually exclusive evidence and must suppress that generic guess.
+  source=addCatalogNegativeSignals(
+    source,'packing_list','PARTS_COUNTER_NEGATIVE_V11031',
+    `[/\\bpaid\\s+c[o0]unter\\b/i,180/* PARTS_COUNTER_NEGATIVE_V11031 */],[/\\bparts?\\b[\\s\\S]{0,180}\\bsales\\s+tax\\b[\\s\\S]{0,180}\\btotal\\b/i,130],`
+  );
+  write(path,source);
 }
 
 {
   const path='source/src/modules/scan/truckDocumentEngineV1040.js';
   let source=read(path);
-  if(!source.includes("import { extractPartsReceiptFieldsV11031 } from './partsReceiptV11031.js';")){
+  if(!source.includes("import { extractPartsReceiptFieldsV11031, scorePartsReceiptStructureV11031 } from './partsReceiptV11031.js';")){
+    if(source.includes("import { extractPartsReceiptFieldsV11031 } from './partsReceiptV11031.js';")){
+      source=source.replace("import { extractPartsReceiptFieldsV11031 } from './partsReceiptV11031.js';","import { extractPartsReceiptFieldsV11031, scorePartsReceiptStructureV11031 } from './partsReceiptV11031.js';");
+    }else{
+      source=replaceOnce(source,
+        `import { analyzeSmartDocumentV1030 } from './smartDocumentReaderV1030.js';`,
+        `import { analyzeSmartDocumentV1030 } from './smartDocumentReaderV1030.js';\nimport { extractPartsReceiptFieldsV11031, scorePartsReceiptStructureV11031 } from './partsReceiptV11031.js';`,
+        'parts field reader import');
+    }
+  }
+  if(!source.includes('function classifyTruckDocumentTextBaseV11031(')){
     source=replaceOnce(source,
-      `import { analyzeSmartDocumentV1030 } from './smartDocumentReaderV1030.js';`,
-      `import { analyzeSmartDocumentV1030 } from './smartDocumentReaderV1030.js';\nimport { extractPartsReceiptFieldsV11031 } from './partsReceiptV11031.js';`,
-      'parts field reader import');
+      `export function classifyTruckDocumentTextV1040({`,
+      `function classifyTruckDocumentTextBaseV11031({`,
+      'base classifier rename');
+    const pageMarker='\nfunction pageSections(text = \'\') {';
+    assert.ok(source.includes(pageMarker),'110.3.1 pageSections anchor missing');
+    const wrapper=`\n// PARTS_COUNTER_ARBITRATION_V11031: structural arbitration runs after every\n// legacy scanner materializer. Packing lists share item columns, while a paid\n// parts-counter sale also has counter-payment/tax/total evidence. Repair labor\n// remains a hard exclusion.\nexport function classifyTruckDocumentTextV1040(options = {}) {\n  const base=classifyTruckDocumentTextBaseV11031(options);\n  const source=plainText(options.text || '');\n  const structural=scorePartsReceiptStructureV11031(source);\n  const repairWork=/repair\\s+(?:order|invoice)|work\\s+order/i.test(source) && /\\blabor\\b|technician|service\\s+advisor|work\\s+performed|complaint\\s*:|cause\\s*:|correction\\s*:/i.test(source);\n  if (!structural.strong || repairWork) return base;\n  const type=truckDocumentTypeMetaV1040('parts_receipt');\n  const score=Math.max(Number(base.score || 0)+1, structural.score + Number(type.priority || 0));\n  const evidence=[...(base.evidence || []).filter(item=>item?.source!=='parts-counter-v11031'),...structural.evidence.map(name=>({source:'parts-counter-v11031',pattern:name,weight:1}))];\n  const alternatives=[type,...(base.alternatives || []).filter(item=>item?.id!=='parts_receipt')].slice(0,8);\n  return {...base,type,detectedType:type,score,margin:Math.max(Number(base.margin || 0),32),confidence:Math.max(Number(base.confidence || 0),.96),evidence,alternatives,lowEvidence:false,partsReceiptStructureV11031:structural};\n}\n`;
+    source=source.replace(pageMarker,wrapper+pageMarker);
   }
   if(!source.includes("if (meta.id === 'parts_receipt') fields = extractPartsReceiptFieldsV11031(text, fields);")){
     const pattern=/  (?:const|let) fields = extractCommonFields\(text, base\.fields \|\| \{\}, meta\.id\);/;
@@ -72,7 +104,7 @@ const partsCatalog=`  t('parts_receipt','Truck Parts Receipt','Parts','maintenan
   if(!source.includes('function partsReceipt(text) {')){
     const marker='function repair(text) {';
     assert.ok(source.includes(marker),'110.3.1 template repair anchor missing');
-    const profile=`function partsReceipt(text) {\n  const p = scoreProfile({ id:'truck-parts-counter-receipt', typeId:'parts_receipt', text, threshold:96, positive:[\n    [/\\bpart\\s*(?:n[o0]\\.?|number|#)\\b/i,62,'part-number column'],\n    [/\\bdescription\\b[\\s\\S]{0,180}\\b(?:list|net)\\b[\\s\\S]{0,120}\\bamount\\b/i,40,'parts price table'],\n    [/\\bpaid\\s+c[o0]unter\\b/i,52,'paid counter'],\n    [/\\bparts?\\b[\\s\\S]{0,140}\\bsales\\s+tax\\b[\\s\\S]{0,140}\\btotal\\b/i,36,'parts tax total'],\n    [/\\bcustomer\\s+copy\\b/i,18,'customer copy'], [/\\binvoice\\s*(?:number|no\\.?|#)\\b/i,16,'invoice #'],\n    [/\\b(?:truck\\s+cent(?:er|ers)|fleetpride|truckpro|mack|volvo|freightliner|kenworth|peterbilt|international|western\\s+star)\\b/i,10,'truck parts seller'],\n  ], negative:[\n    [/repair\\s+(?:order|invoice)|work\\s+order/i,58,'repair order'],\n    [/\\blabor\\b|technician|service\\s+advisor|work\\s+performed|complaint\\s*:|cause\\s*:|correction\\s*:/i,42,'repair work'],\n  ] });\n  const structural = p.evidence.filter(x => ['part-number column','parts price table','paid counter','parts tax total'].includes(x)).length;\n  if (structural >= 3) p.score += 30;\n  p.strong = p.score >= p.threshold;\n  p.data = { structural };\n  return p;\n}\n\n`;
+    const profile=`function partsReceipt(text) {\n  const p = scoreProfile({ id:'truck-parts-counter-receipt', typeId:'parts_receipt', text, threshold:96, positive:[\n    [/\\bpart\\s*(?:n[o0]\\.?|number|#)\\b/i,90,'part-number column'],\n    [/\\bdescription\\b[\\s\\S]{0,220}\\b(?:list|net)\\b[\\s\\S]{0,160}\\bamount\\b/i,65,'parts price table'],\n    [/\\bpaid\\s+c[o0]unter\\b/i,100,'paid counter'],\n    [/\\bparts?\\b[\\s\\S]{0,180}\\bsales\\s+tax\\b[\\s\\S]{0,180}\\btotal\\b/i,70,'parts tax total'],\n    [/\\bcustomer\\s+copy\\b/i,25,'customer copy'], [/\\binvoice\\s*(?:number|no\\.?|#)\\b/i,20,'invoice #'],\n    [/\\b(?:truck\\s+cent(?:er|ers)|fleetpride|truckpro|mack|volvo|freightliner|kenworth|peterbilt|international|western\\s+star)\\b/i,10,'truck parts seller'],\n  ], negative:[\n    [/repair\\s+(?:order|invoice)|work\\s+order/i,90,'repair order'],\n    [/\\blabor\\b|technician|service\\s+advisor|work\\s+performed|complaint\\s*:|cause\\s*:|correction\\s*:/i,70,'repair work'],\n  ] });\n  const structural = p.evidence.filter(x => ['part-number column','parts price table','paid counter','parts tax total'].includes(x)).length;\n  if (structural >= 3) p.score += 40;\n  p.strong = p.score >= p.threshold;\n  p.data = { structural };\n  return p;\n}\n\n`;
     source=source.replace(marker,profile+marker);
   }
   source=replaceOnce(source,
