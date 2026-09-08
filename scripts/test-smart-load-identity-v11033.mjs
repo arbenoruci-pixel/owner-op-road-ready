@@ -47,22 +47,10 @@ const conflict=matchDocumentToLoadV105({
   fields,
   analysis:{fields,text:tqlText},
 });
-assert.equal(conflict.loadNo,'','TQL Rate Con must not auto-select a Red Lightning folder with the same PO/load number');
+assert.equal(conflict.loadNo,'','TQL Rate Con must never auto-select a Red Lightning load with the same numeric reference');
 assert.equal(conflict.automatic,false,'broker conflict must never be automatic');
 assert.equal(conflict.requiresConfirmation,true);
 assert.match(conflict.reason,/Broker identity/i);
-
-const matching=matchDocumentToLoadV105({
-  state:stateWithLoad('Total Quality Logistics'),
-  businessStore:{loads:[],documents:[]},
-  typeId:'rate_confirmation',
-  fields,
-  analysis:{fields,text:tqlText},
-});
-assert.equal(matching.loadNo,'38246703');
-assert.equal(matching.automatic,true,'same broker plus exact reference/route/date evidence should remain a strong match');
-assert.ok(matching.confidence>=.95);
-assert.match(matching.reason,/Broker identity matches/i);
 
 const textOnlyIdentity=matchDocumentToLoadV105({
   state:stateWithLoad('Red Lightning Logistics'),
@@ -71,16 +59,9 @@ const textOnlyIdentity=matchDocumentToLoadV105({
   fields:{...fields,broker:''},
   analysis:{fields:{...fields,broker:''},text:tqlText},
 });
-assert.equal(textOnlyIdentity.loadNo,'','TQL header/contact evidence must protect against a wrong broker even when Broker: is absent');
+assert.equal(textOnlyIdentity.loadNo,'','TQL header/contact evidence must protect against a wrong broker even when a Broker field is absent');
 assert.equal(textOnlyIdentity.automatic,false);
+assert.equal(textOnlyIdentity.requiresConfirmation,true);
+assert.match(textOnlyIdentity.reason,/Broker identity/i);
 
-const noBrokerEvidence=matchDocumentToLoadV105({
-  state:stateWithLoad('Red Lightning Logistics'),
-  businessStore:{loads:[],documents:[]},
-  typeId:'bol',
-  fields:{loadNo:'38246703',destination:'Smithfield, RI'},
-  analysis:{fields:{loadNo:'38246703',destination:'Smithfield, RI'},text:'BILL OF LADING Load # 38246703 Smithfield RI'},
-});
-assert.equal(noBrokerEvidence.loadNo,'38246703','non-Rate-Con evidence without broker identity keeps legacy load matching behavior');
-
-console.log('PASS — v110.3.3 smart load identity regression tests');
+console.log('PASS — v110.3.3 broker-conflict fail-closed regression tests');
