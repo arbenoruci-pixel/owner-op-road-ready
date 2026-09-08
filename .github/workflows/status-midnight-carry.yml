@@ -1,0 +1,48 @@
+name: Status midnight carry regression
+on:
+  push:
+    branches: [main, fix/on-duty-midnight-carry-20260908]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: status-midnight-carry-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Production build and behavioral contracts
+        run: node scripts/build-v110.mjs > /tmp/status-carry-build.log 2>&1
+      - name: Install isolated browser tests
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Save ON and reopen on Chromium and WebKit
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/status-carry-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          BROWSER_ENGINE=chromium node scripts/browser-status-midnight-carry-v11032.mjs
+          BROWSER_ENGINE=webkit node scripts/browser-status-midnight-carry-v11032.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: status-midnight-carry-evidence
+          path: |
+            browser-test-results/status-midnight-carry/
+            /tmp/status-carry-build.log
+            /tmp/status-carry-server.log
+          retention-days: 7
