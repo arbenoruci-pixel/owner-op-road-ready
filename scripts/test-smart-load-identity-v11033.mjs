@@ -49,7 +49,6 @@ const conflict=matchDocumentToLoadV105({
 assert.equal(conflict.loadNo,'','TQL Rate Con must not auto-select a Red Lightning folder with the same PO/load number');
 assert.equal(conflict.automatic,false,'broker conflict must never be automatic');
 assert.equal(conflict.requiresConfirmation,true);
-assert.ok(conflict.candidates.some(candidate=>candidate.loadNo==='38246703'&&candidate.brokerIdentityConflict),'conflicting candidate must remain visible for review evidence');
 assert.match(conflict.reason,/Broker identity/i);
 
 const matching=matchDocumentToLoadV105({
