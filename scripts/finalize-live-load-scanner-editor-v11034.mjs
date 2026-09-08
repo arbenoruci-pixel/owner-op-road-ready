@@ -12,8 +12,8 @@ function once(source,before,after,label){
   return source.replace(before,after);
 }
 
-// 1) Production document router: a photographed shipping BOL with BOL NO +
-// SHIP TO/FROM structure always wins over a loose Rate Confirmation guess.
+// Production router: photographed shipping BOL structure wins over a loose
+// Rate Confirmation guess. This runs after all isolated scanner engines exist.
 {
   const path='source/src/modules/scan/engines/isolatedDocumentRouterV10959.js';
   let source=read(path);
@@ -25,12 +25,40 @@ function once(source,before,after,label){
     if(source.includes(asyncName)) source=source.replace(asyncName,'async function analyzeTruckDocumentIsolatedBaseV11034(');
     else if(source.includes(syncName)) source=source.replace(syncName,'function analyzeTruckDocumentIsolatedBaseV11034(');
     else throw new Error('110.3.4 isolated document analyzer export missing');
-    source += `\n\nfunction bolCleanV11034(value=''){return String(value||'').replace(/\\r/g,'').trim();}\nfunction bolDateV11034(text=''){const m=String(text).match(/(?:^|\\n)\\s*DATE\\s*[:#-]?\\s*(\\d{1,2}[\\/-]\\d{1,2}[\\/-]\\d{2,4})/i)||String(text).match(/\\b(\\d{1,2}[\\/-]\\d{1,2}[\\/-]\\d{4})\\b/);return m?.[1]||'';}\nfunction bolPlaceV11034(text='',heading=''){const escaped=heading.replace(/[.*+?^\\${}()|[\\]\\\\]/g,'\\\\$&');const m=String(text).match(new RegExp(escaped+'[\\\\s\\\\S]{0,360}?\\\\b([A-Z][A-Za-z .\\\\'-]{1,45},\\\\s*[A-Z]{2})(?:\\\\s+\\\\d{5})?','i'));return bolCleanV11034(m?.[1]||'');}\nexport function enforceStructuralBolV11034(result={}){\n  const text=bolCleanV11034(result.text||result.rawText||result.ocrText||result.analysisText||'');\n  const compact=text.replace(/\\s+/g,' ');\n  const bolMatch=text.match(/\\bB[O0]L\\s*(?:N[O0]\\.?|NUMBER|#)\\s*[:#-]?\\s*([A-Z0-9-]{5,24})/i);\n  const bolNo=String(result.fields?.bolNo||bolMatch?.[1]||'').toUpperCase().replace(/[^A-Z0-9-]/g,'');\n  const shippingStructure=!!bolNo&&/\\bSHIP\\s+TO\\b/i.test(text)&&/\\bSHIP\\s+FROM\\b/i.test(text)&&/\\bCARRIER\\b/i.test(text);\n  if(!shippingStructure)return result;\n  const current=result.fields||{};\n  const trailer=bolCleanV11034((text.match(/\\bTRAILER\\s*[:#-]?\\s*([A-Z0-9-]{5,24})/i)||[])[1]||current.trailerNo||'').toUpperCase();\n  const carrier=bolCleanV11034((text.match(/(?:^|\\n)\\s*CARRIER\\s*[:#-]?\\s*([^\\n]{3,80})/i)||[])[1]||current.carrierName||current.carrier||'');\n  const totalWeight=Number(String((text.match(/TOTAL\\s+WEIGHT\\s*[:#-]?\\s*([0-9,]+(?:\\.[0-9]+)?)/i)||[])[1]||current.weight||'').replace(/,/g,''))||0;\n  const origin=current.origin||bolPlaceV11034(text,'SHIP FROM');\n  const destination=current.destination||bolPlaceV11034(text,'SHIP TO');\n  const date=current.documentDate||current.date||bolDateV11034(text);\n  const tql=/TOTAL\\s+QUALITY\\s+LOGISTICS|\\bTQL\\b/i.test(carrier+' '+compact);\n  const fields={...current,loadNo:bolNo,bolNo,documentDate:date,date,trailerNo:trailer||current.trailerNo||'',carrierName:carrier||current.carrierName||'',broker:tql?'Total Quality Logistics (TQL)':(current.broker||''),origin,destination,weight:totalWeight||Number(current.weight||0)};\n  const type=truckDocumentTypeMetaV1040('bol');\n  const missing=['loadNo','documentDate'].filter(key=>!fields[key]);\n  return {...result,type,detectedType:type,fields,confidence:Math.max(.96,Number(result.confidence||0)),needsReview:missing.length>0,method:String(result.method||'')+'+structural-bol-v11034',structuralBolV11034:true};\n}\nexport async function analyzeTruckDocumentIsolatedV10959(file,options={}){return enforceStructuralBolV11034(await analyzeTruckDocumentIsolatedBaseV11034(file,options));}\n`;
+    const wrapper=[
+      '',
+      'function bolCleanV11034(value=\'\'){return String(value||\'\').replace(/\\r/g,\'\').trim();}',
+      'function bolDateV11034(text=\'\'){const s=String(text);const m=s.match(/(?:^|\\n)\\s*DATE\\s*[:#-]?\\s*(\\d{1,2}[\\/-]\\d{1,2}[\\/-]\\d{2,4})/i)||s.match(/\\b(\\d{1,2}[\\/-]\\d{1,2}[\\/-]\\d{4})\\b/);return m?.[1]||\'\';}',
+      'function bolPlaceV11034(text=\'\',heading=\'\'){const s=String(text);const i=s.toUpperCase().indexOf(String(heading).toUpperCase());if(i<0)return \'\';const block=s.slice(i,i+420);const m=block.match(/\\b([A-Z][A-Za-z .\'-]{1,45},\\s*[A-Z]{2})(?:\\s+\\d{5})?\\b/i);return bolCleanV11034(m?.[1]||\'\');}',
+      'export function enforceStructuralBolV11034(result={}){',
+      '  const text=bolCleanV11034(result.text||result.rawText||result.ocrText||result.analysisText||\'\');',
+      '  const compact=text.replace(/\\s+/g,\' \');',
+      '  const bolMatch=text.match(/\\bB[O0]L\\s*(?:N[O0]\\.?|NUMBER|#)\\s*[:#-]?\\s*([A-Z0-9-]{5,24})/i);',
+      '  const bolNo=String(result.fields?.bolNo||bolMatch?.[1]||\'\').toUpperCase().replace(/[^A-Z0-9-]/g,\'\');',
+      '  const shippingStructure=!!bolNo&&/\\bSHIP\\s+TO\\b/i.test(text)&&/\\bSHIP\\s+FROM\\b/i.test(text)&&/\\bCARRIER\\b/i.test(text);',
+      '  if(!shippingStructure)return result;',
+      '  const current=result.fields||{};',
+      '  const trailer=bolCleanV11034((text.match(/\\bTRAILER\\s*[:#-]?\\s*([A-Z0-9-]{5,24})/i)||[])[1]||current.trailerNo||\'\').toUpperCase();',
+      '  const carrier=bolCleanV11034((text.match(/(?:^|\\n)\\s*CARRIER\\s*[:#-]?\\s*([^\\n]{3,80})/i)||[])[1]||current.carrierName||current.carrier||\'\');',
+      '  const totalWeight=Number(String((text.match(/TOTAL\\s+WEIGHT\\s*[:#-]?\\s*([0-9,]+(?:\\.[0-9]+)?)/i)||[])[1]||current.weight||\'\').replace(/,/g,\'\'))||0;',
+      '  const origin=current.origin||bolPlaceV11034(text,\'SHIP FROM\');',
+      '  const destination=current.destination||bolPlaceV11034(text,\'SHIP TO\');',
+      '  const date=current.documentDate||current.date||bolDateV11034(text);',
+      '  const tql=/TOTAL\\s+QUALITY\\s+LOGISTICS|\\bTQL\\b/i.test(carrier+\' \'+compact);',
+      '  const fields={...current,loadNo:bolNo,bolNo,documentDate:date,date,trailerNo:trailer||current.trailerNo||\'\',carrierName:carrier||current.carrierName||\'\',broker:tql?\'Total Quality Logistics (TQL)\':(current.broker||\'\'),origin,destination,weight:totalWeight||Number(current.weight||0)};',
+      '  const type=truckDocumentTypeMetaV1040(\'bol\');',
+      '  const missing=[\'loadNo\',\'documentDate\'].filter(key=>!fields[key]);',
+      '  return {...result,type,detectedType:type,fields,confidence:Math.max(.96,Number(result.confidence||0)),needsReview:missing.length>0,method:String(result.method||\'\')+\'+structural-bol-v11034\',structuralBolV11034:true};',
+      '}',
+      'export async function analyzeTruckDocumentIsolatedV10959(file,options={}){return enforceStructuralBolV11034(await analyzeTruckDocumentIsolatedBaseV11034(file,options));}',
+      ''
+    ].join('\n');
+    source+=wrapper;
   }
   write(path,source);
 }
 
-// Rate Confirmation isolation gets an explicit BOL-abbreviation penalty too.
+// Rate Confirmation isolation also treats BOL NO + shipping structure as BOL evidence.
 {
   const path='source/src/modules/scan/engines/rateConfirmationEngineV1.js';
   let source=read(path);
@@ -41,20 +69,39 @@ function once(source,before,after,label){
   write(path,source);
 }
 
-// 2) Current live duty event is a load-identity source. This fixes the case where
-// loadInfo is stale (old Red Lightning 38246703) while the real live pickup event
-// already carries BOL/load 26023311.
+// Current live duty event is a load-identity source. This lets the real load
+// 26023311 beat stale loadInfo from a prior load such as Red Lightning 38246703.
 {
   const path='source/src/modules/documents/documentFoundationV105.js';
   let source=read(path);
   const anchor='  for (const load of businessStore.loads || []) add(candidateFromBusinessLoadV105(load));';
-  const patch=`${anchor}\n\n  // LIVE_LOAD_EVENT_CANDIDATE_V11034\n  const activeDayV11034 = textV105(state.activeDay) || Object.keys(state.eventsByDay || {}).sort().at(-1) || '';\n  const liveLoadEntryV11034 = eventEntriesV105(state).filter(entry => entry.day === activeDayV11034 && eventLoadRefsV105(entry.event).length).at(-1) || null;\n  if (liveLoadEntryV11034) {\n    const event=liveLoadEntryV11034.event || {};\n    const loadNo=eventLoadRefsV105(event)[0] || '';\n    if (loadNo) {\n      const candidate=candidateSkeletonV105(loadNo);\n      candidate.id=textV105(event.canonicalLoadId || 'live_event_'+loadNo);\n      candidate.active=true; candidate.status='open'; candidate.sourceKinds=['live_duty_event'];\n      candidate.updatedAt=liveLoadEntryV11034.at; candidate.latestActivityAt=liveLoadEntryV11034.at;\n      if (isPickupEventV105(event)) candidate.latestPickupAt=liveLoadEntryV11034.at;\n      candidate.broker=normalizeCanonicalLoadNoV105(state.loadInfo?.loadNo || state.loadInfo?.shippingDocs)===loadNo ? textV105(state.loadInfo?.broker) : textV105(event.broker);\n      candidate.origin=[textV105(event.city),stateCodeV105(event.state)].filter(Boolean).join(', ');\n      candidate.destination=isDateLikePlaceV105(event.destination) ? '' : textV105(event.destination || [event.destinationCity,event.destinationState].filter(Boolean).join(', '));\n      addAliasV105(candidate,'load_number',loadNo,'live_duty_event');\n      addAliasV105(candidate,'bol_number',event.bol || event.shippingDocs,'live_duty_event');\n      addAliasV105(candidate,'po_number',event.po,'live_duty_event');\n      add(candidate);\n    }\n  }`;
+  const patch=anchor+`\n\n  // LIVE_LOAD_EVENT_CANDIDATE_V11034
+  const activeDayV11034 = textV105(state.activeDay) || Object.keys(state.eventsByDay || {}).sort().at(-1) || '';
+  const liveLoadEntryV11034 = eventEntriesV105(state).filter(entry => entry.day === activeDayV11034 && eventLoadRefsV105(entry.event).length).at(-1) || null;
+  if (liveLoadEntryV11034) {
+    const event=liveLoadEntryV11034.event || {};
+    const loadNo=eventLoadRefsV105(event)[0] || '';
+    if (loadNo) {
+      const candidate=candidateSkeletonV105(loadNo);
+      candidate.id=textV105(event.canonicalLoadId || 'live_event_'+loadNo);
+      candidate.active=true; candidate.status='open'; candidate.sourceKinds=['live_duty_event'];
+      candidate.updatedAt=liveLoadEntryV11034.at; candidate.latestActivityAt=liveLoadEntryV11034.at;
+      if (isPickupEventV105(event)) candidate.latestPickupAt=liveLoadEntryV11034.at;
+      candidate.broker=normalizeCanonicalLoadNoV105(state.loadInfo?.loadNo || state.loadInfo?.shippingDocs)===loadNo ? textV105(state.loadInfo?.broker) : textV105(event.broker);
+      candidate.origin=[textV105(event.city),stateCodeV105(event.state)].filter(Boolean).join(', ');
+      candidate.destination=isDateLikePlaceV105(event.destination) ? '' : textV105(event.destination || [event.destinationCity,event.destinationState].filter(Boolean).join(', '));
+      addAliasV105(candidate,'load_number',loadNo,'live_duty_event');
+      addAliasV105(candidate,'bol_number',event.bol || event.shippingDocs,'live_duty_event');
+      addAliasV105(candidate,'po_number',event.po,'live_duty_event');
+      add(candidate);
+    }
+  }`;
   source=once(source,anchor,patch,'live load candidate');
   write(path,source);
 }
 
-// 3) Scanner UI must not re-select a rejected existing folder just because a Rate
-// Con extracted the same number. Changing document type re-runs matching cleanly.
+// Scanner UI must never revive a broker-rejected folder through numeric fallback.
+// Reclassifying a document always re-runs matching from the new type.
 {
   const path='source/src/modules/scan/SmartScanSheetV105.jsx';
   let source=read(path);
@@ -72,15 +119,12 @@ function once(source,before,after,label){
   source=once(source,
 `    const keepLoad = selectedLoadNo;
     applyResult(result, keepLoad);`,
-`    // Reclassifying a document must re-run load matching; a stale auto-selected
-    // folder is never carried into the new type.
-    applyResult(result);`,
+`    applyResult(result);`,
     'reclassification load reset');
   write(path,source);
 }
 
-// 4) Edit Duty Status graph gets the same read-only midnight continuity as the
-// main Log screen. The synthetic prefix is visible only and cannot be edited.
+// Edit Duty Status graph gets the same display-only midnight continuity as Log.
 {
   const path='source/src/modules/editor/EditEventSheet.jsx';
   let source=read(path);
@@ -91,7 +135,7 @@ function once(source,before,after,label){
     source=source.replace(firstImport,firstImport+importLine);
   }
   const previewAnchor="  const previewEvents = previewResultV11023.ok ? projectLogbookEvents(previewStateV11023,dayV110,clockV110.at) : projectedV110;";
-  const previewPatch=`${previewAnchor}\n  const editorExactEventsV11034 = (previewStateV11023?.eventsByDay?.[dayV110] || []).filter(row => !row?.displayOnly && !row?.syntheticCoverage && !row?.carriedFromPreviousDay);\n  const editorGraphEventsV11034 = dutyViewEvents(editorExactEventsV11034, previewEvents, { eventsByDay:previewStateV11023?.eventsByDay || state.eventsByDay || {}, day:dayV110 });`;
+  const previewPatch=previewAnchor+"\n  const editorExactEventsV11034 = (previewStateV11023?.eventsByDay?.[dayV110] || []).filter(row => !row?.displayOnly && !row?.syntheticCoverage && !row?.carriedFromPreviousDay);\n  const editorGraphEventsV11034 = dutyViewEvents(editorExactEventsV11034, previewEvents, { eventsByDay:previewStateV11023?.eventsByDay || state.eventsByDay || {}, day:dayV110 });";
   source=once(source,previewAnchor,previewPatch,'editor continuity projection');
   source=once(source,'        events={previewEvents}','        events={editorGraphEventsV11034}','editor graph input');
   source=once(source,
