@@ -55,7 +55,7 @@ const state={
 };
 const candidates=collectLoadCandidatesV105(state,{loads:[],documents:[]});
 assert.ok(candidates.some(candidate=>candidate.loadNo==='26023311'&&candidate.sourceKinds.includes('live_duty_event')),'live event must create the current load candidate');
-assert.ok(candidates.some(candidate=>candidate.loadNo==='38246703'),'stale loadInfo remains available for review, not forced');
+assert.ok(!candidates.some(candidate=>candidate.loadNo==='38246703'),'stale loadInfo alone must not remain a scanner authority');
 
 const bolMatch=matchDocumentToLoadV105({state,businessStore:{loads:[],documents:[]},typeId:'bol',fields:{loadNo:'26023311',bolNo:'26023311',origin:'Howe, IN',destination:'Smithfield, RI',date:'09/08/2026'},analysis:{text:bolText,fields:{loadNo:'26023311',bolNo:'26023311'}}});
 assert.equal(bolMatch.loadNo,'26023311');
@@ -72,9 +72,9 @@ assert.deepEqual(view.slice(1).map(row=>[row.status,row.startMin,row.endMin]),[[
 const editor=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');
 assert.match(editor,/editorGraphEventsV11034/);
 assert.match(editor,/events=\{editorGraphEventsV11034\}/);
-assert.match(editor,/displayOnly \|\| visibleV11034\?\.syntheticCoverage/);
+assert.match(editor,/visibleV11034\?\.displayOnly\|\|visibleV11034\?\.syntheticCoverage/);
 const scan=fs.readFileSync('source/src/modules/scan/SmartScanSheetV105.jsx','utf8');
-assert.match(scan,/existingSameReferenceV11034/);
+assert.match(scan,/safeSelectedLoadV11034/);
 assert.ok(!scan.includes('applyResult(result, keepLoad)'),'type changes must not preserve a stale auto-selected folder');
 
 console.log('PASS — v110.3.4 real-load BOL, current-load identity and editor continuity regressions');
