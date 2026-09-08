@@ -1,23 +1,24 @@
 import assert from 'node:assert/strict';
 import { matchDocumentToLoadV105 } from '../source/src/modules/documents/documentFoundationV105.js';
 
-function storeWithLoad(broker='Red Lightning Logistics'){
+function stateWithLoad(broker='Red Lightning Logistics'){
   return {
-    loads:[{
-      id:'load_38246703',
-      canonicalLoadId:'load_38246703',
-      canonicalLoadNo:'38246703',
+    loadInfo:{
       loadNo:'38246703',
+      shippingDocs:'38246703',
+      canonicalLoadId:'load_38246703',
       broker,
-      origin:'Howe, IN',
-      destination:'Smithfield, RI',
+      pickupCity:'Howe',
+      pickupState:'IN',
+      deliveryCity:'Smithfield',
+      deliveryState:'RI',
       pickupDate:'2026-09-08',
       deliveryDate:'2026-09-10',
-      status:'booked',
-      aliases:[{kind:'po_number',value:'38246703'}],
       updatedAt:Date.now(),
-    }],
-    documents:[],
+    },
+    eventsByDay:{},
+    routeLegsByDay:{},
+    loadGuidesById:{},
   };
 }
 
@@ -40,8 +41,8 @@ const fields={
 };
 
 const conflict=matchDocumentToLoadV105({
-  state:{},
-  businessStore:storeWithLoad('Red Lightning Logistics'),
+  state:stateWithLoad('Red Lightning Logistics'),
+  businessStore:{loads:[],documents:[]},
   typeId:'rate_confirmation',
   fields,
   analysis:{fields,text:tqlText},
@@ -50,23 +51,23 @@ assert.equal(conflict.loadNo,'','TQL Rate Con must not auto-select a Red Lightni
 assert.equal(conflict.automatic,false,'broker conflict must never be automatic');
 assert.equal(conflict.requiresConfirmation,true);
 assert.match(conflict.reason,/Broker identity/i);
+assert.ok(conflict.candidates.some(candidate=>candidate.loadNo==='38246703'),'the conflicting active load should remain visible as review evidence');
 
 const matching=matchDocumentToLoadV105({
-  state:{},
-  businessStore:storeWithLoad('Total Quality Logistics'),
+  state:stateWithLoad('Total Quality Logistics'),
+  businessStore:{loads:[],documents:[]},
   typeId:'rate_confirmation',
   fields,
   analysis:{fields,text:tqlText},
 });
-if(matching.loadNo!=='38246703') console.error('V11033_MATCH_DEBUG',JSON.stringify(matching));
 assert.equal(matching.loadNo,'38246703');
 assert.equal(matching.automatic,true,'same broker plus exact reference/route/date evidence should remain a strong match');
 assert.ok(matching.confidence>=.95);
 assert.match(matching.reason,/Broker identity matches/i);
 
 const textOnlyIdentity=matchDocumentToLoadV105({
-  state:{},
-  businessStore:storeWithLoad('Red Lightning Logistics'),
+  state:stateWithLoad('Red Lightning Logistics'),
+  businessStore:{loads:[],documents:[]},
   typeId:'rate_confirmation',
   fields:{...fields,broker:''},
   analysis:{fields:{...fields,broker:''},text:tqlText},
@@ -75,8 +76,8 @@ assert.equal(textOnlyIdentity.loadNo,'','TQL header/contact evidence must protec
 assert.equal(textOnlyIdentity.automatic,false);
 
 const noBrokerEvidence=matchDocumentToLoadV105({
-  state:{},
-  businessStore:storeWithLoad('Red Lightning Logistics'),
+  state:stateWithLoad('Red Lightning Logistics'),
+  businessStore:{loads:[],documents:[]},
   typeId:'bol',
   fields:{loadNo:'38246703',destination:'Smithfield, RI'},
   analysis:{fields:{loadNo:'38246703',destination:'Smithfield, RI'},text:'BILL OF LADING Load # 38246703 Smithfield RI'},
