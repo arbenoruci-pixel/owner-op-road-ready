@@ -1,0 +1,152 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+
+const VERSION='110.3.1';
+const BUILD='v110301-parts-receipt-reader';
+const read=path=>fs.readFileSync(path,'utf8');
+const write=(path,value)=>fs.writeFileSync(path,value);
+
+function replaceOnce(source,before,after,label){
+  if(source.includes(after)) return source;
+  const count=source.split(before).length-1;
+  assert.equal(count,1,`110.3.1 anchor changed: ${label}; found ${count}`);
+  return source.replace(before,after);
+}
+function catalogBounds(source,id){
+  const token=`  t('${id}'`;
+  const start=source.indexOf(token);
+  assert.ok(start>=0,`110.3.1 catalog type missing: ${id}`);
+  assert.equal(source.indexOf(token,start+token.length),-1,`110.3.1 duplicate catalog type: ${id}`);
+  const nextType=source.indexOf('\n  t(',start+token.length);
+  const arrayEnd=source.indexOf('\n]);',start+token.length);
+  const ends=[nextType,arrayEnd].filter(value=>value>start);
+  assert.ok(ends.length,`110.3.1 catalog end missing: ${id}`);
+  return {start,end:Math.min(...ends)};
+}
+function replaceCatalogType(source,id,replacement){
+  if(source.includes(replacement)) return source;
+  const {start,end}=catalogBounds(source,id);
+  return source.slice(0,start)+replacement+source.slice(end);
+}
+function addCatalogNegativeSignals(source,id,needle,insert){
+  if(source.includes(needle)) return source;
+  const {start,end}=catalogBounds(source,id);
+  let block=source.slice(start,end);
+  assert.ok(block.includes('negativeSignals:['),`110.3.1 ${id} negativeSignals missing`);
+  block=block.replace('negativeSignals:[',`negativeSignals:[${insert}`);
+  return source.slice(0,start)+block+source.slice(end);
+}
+
+const partsCatalog=`  t('parts_receipt','Truck Parts Receipt','Parts','maintenance','maintenance','other',['maintenance','expenses','tax'],[
+    [/\\bpart\\s*(?:n[o0]\\.?|number|#)\\b/i,90],
+    [/\\bdescription\\b[\\s\\S]{0,220}\\b(?:list|net)\\b[\\s\\S]{0,160}\\bamount\\b/i,65],
+    [/\\bpaid\\s+c[o0]unter\\b/i,100],
+    [/\\bparts?\\b[\\s\\S]{0,180}\\bsales\\s+tax\\b[\\s\\S]{0,180}\\btotal\\b/i,70],
+    [/\\bcustomer\\s+copy\\b/i,25],
+    [/\\binvoice\\s*(?:number|no\\.?|#)\\b/i,20],
+    [/\\bterms?\\b[\\s\\S]{0,40}\\bcash\\b/i,14],
+    [/returned\\s+goods|no\\s+cash\\s+refunds?|electrical\\s+items?.{0,100}non[- ]?returnable/i,18],
+  ],{ required:['date','merchant','invoiceNo','total'], fileSignals:[/parts|counter/i], priority:50, minScore:90,
+    negativeSignals:[[/repair\\s+(?:order|invoice)|work\\s+order/i,90],[/\\blabor\\b|technician|service\\s+advisor|work\\s+performed|complaint\\s*:|cause\\s*:|correction\\s*:/i,70]] }),`;
+{
+  const path='source/src/modules/scan/truckDocumentCatalogV1040.js';
+  let source=replaceCatalogType(read(path),'parts_receipt',partsCatalog);
+  source=addCatalogNegativeSignals(
+    source,'packing_list','PARTS_COUNTER_NEGATIVE_V11031',
+    `[/\\bpaid\\s+c[o0]unter\\b/i,180/* PARTS_COUNTER_NEGATIVE_V11031 */],[/\\bparts?\\b[\\s\\S]{0,180}\\bsales\\s+tax\\b[\\s\\S]{0,180}\\btotal\\b/i,130],`
+  );
+  write(path,source);
+}
+
+{
+  const path='source/src/modules/scan/truckDocumentEngineV1040.js';
+  let source=read(path);
+  if(!source.includes("import { extractPartsReceiptFieldsV11031, scorePartsReceiptStructureV11031 } from './partsReceiptV11031.js';")){
+    source=replaceOnce(source,
+      `import { analyzeSmartDocumentV1030 } from './smartDocumentReaderV1030.js';`,
+      `import { analyzeSmartDocumentV1030 } from './smartDocumentReaderV1030.js';\nimport { extractPartsReceiptFieldsV11031, scorePartsReceiptStructureV11031 } from './partsReceiptV11031.js';`,
+      'parts reader import');
+  }
+
+  // The final 110.3.0 engine already has a base classifier + POD/template/gate/
+  // qualification pipeline. Rename that exported pipeline and put the structural
+  // parts decision after it, so generic packing-list logic cannot overrule a
+  // paid parts-counter receipt.
+  if(!source.includes('function classifyTruckDocumentTextPipelineV11031(input = {})')){
+    source=replaceOnce(source,
+      `export function classifyTruckDocumentTextV1040(input = {}) {`,
+      `function classifyTruckDocumentTextPipelineV11031(input = {}) {`,
+      'final classifier pipeline rename');
+    const pageMarker=`\nfunction pageSections(text = '') {`;
+    assert.ok(source.includes(pageMarker),'110.3.1 pageSections anchor missing');
+    const wrapper=`\n// PARTS_COUNTER_ARBITRATION_V11031\nexport function classifyTruckDocumentTextV1040(input = {}) {\n  const base=classifyTruckDocumentTextPipelineV11031(input);\n  const source=plainText(input.text || '');\n  const structural=scorePartsReceiptStructureV11031(source);\n  const repairWork=/repair\\s+(?:order|invoice)|work\\s+order/i.test(source) && /\\blabor\\b|technician|service\\s+advisor|work\\s+performed|complaint\\s*:|cause\\s*:|correction\\s*:/i.test(source);\n  if (!structural.strong || repairWork) return base;\n  const type=truckDocumentTypeMetaV1040('parts_receipt');\n  const score=Math.max(Number(base.score || 0)+1, structural.score + Number(type.priority || 0));\n  const evidence=[...(base.evidence || []),...structural.evidence.map(name=>({source:'parts-counter-v11031',pattern:name,weight:1}))];\n  const alternatives=[{...type,score,confidence:.96},...(base.alternatives || []).filter(item=>item?.id!=='parts_receipt')].slice(0,8);\n  return {...base,type,detectedType:type,score,margin:Math.max(Number(base.margin || 0),32),confidence:Math.max(Number(base.confidence || 0),.96),evidence,alternatives,lowEvidence:false,partsReceiptStructureV11031:structural};\n}\n`;
+    source=source.replace(pageMarker,wrapper+pageMarker);
+  }
+
+  if(!source.includes("if (meta.id === 'parts_receipt') fields = extractPartsReceiptFieldsV11031(text, fields);")){
+    const pattern=/  (?:const|let) fields = extractCommonFields\(text, base\.fields \|\| \{\}, meta\.id\);/;
+    const matches=source.match(new RegExp(pattern.source,'g'))||[];
+    assert.equal(matches.length,1,`110.3.1 field extraction anchor changed; found ${matches.length}`);
+    source=source.replace(pattern,`  let fields = extractCommonFields(text, base.fields || {}, meta.id);\n  if (meta.id === 'parts_receipt') fields = extractPartsReceiptFieldsV11031(text, fields);`);
+  }
+  write(path,source);
+}
+
+{
+  const path='source/src/modules/scan/truckDocumentTemplateIntelligenceV1042.js';
+  let source=read(path);
+  if(!source.includes("import { extractPartsReceiptFieldsV11031 } from './partsReceiptV11031.js';")){
+    source=replaceOnce(source,
+      `import { truckDocumentTypeMetaV1040 } from './truckDocumentCatalogV1040.js';`,
+      `import { truckDocumentTypeMetaV1040 } from './truckDocumentCatalogV1040.js';\nimport { extractPartsReceiptFieldsV11031 } from './partsReceiptV11031.js';`,
+      'template parts import');
+  }
+  if(!source.includes('function partsReceipt(text) {')){
+    const marker='function repair(text) {';
+    assert.ok(source.includes(marker),'110.3.1 template repair anchor missing');
+    const profile=`function partsReceipt(text) {\n  const p = scoreProfile({ id:'truck-parts-counter-receipt', typeId:'parts_receipt', text, threshold:96, positive:[\n    [/\\bpart\\s*(?:n[o0]\\.?|number|#)\\b/i,90,'part-number column'],\n    [/\\bdescription\\b[\\s\\S]{0,220}\\b(?:list|net)\\b[\\s\\S]{0,160}\\bamount\\b/i,65,'parts price table'],\n    [/\\bpaid\\s+c[o0]unter\\b/i,100,'paid counter'],\n    [/\\bparts?\\b[\\s\\S]{0,180}\\bsales\\s+tax\\b[\\s\\S]{0,180}\\btotal\\b/i,70,'parts tax total'],\n    [/\\bcustomer\\s+copy\\b/i,25,'customer copy'], [/\\binvoice\\s*(?:number|no\\.?|#)\\b/i,20,'invoice #'],\n    [/\\b(?:truck\\s+cent(?:er|ers)|fleetpride|truckpro|mack|volvo|freightliner|kenworth|peterbilt|international|western\\s+star)\\b/i,10,'truck parts seller'],\n  ], negative:[\n    [/repair\\s+(?:order|invoice)|work\\s+order/i,90,'repair order'],\n    [/\\blabor\\b|technician|service\\s+advisor|work\\s+performed|complaint\\s*:|cause\\s*:|correction\\s*:/i,70,'repair work'],\n  ] });\n  const structural = p.evidence.filter(x => ['part-number column','parts price table','paid counter','parts tax total'].includes(x)).length;\n  if (structural >= 3) p.score += 40;\n  p.strong = p.score >= p.threshold;\n  p.data = { structural };\n  return p;\n}\n\n`;
+    source=source.replace(marker,profile+marker);
+  }
+  source=replaceOnce(source,
+    `return [lumper(source), rateCon(source), fuel(source), repair(source), scale(source)].sort((a,b) => b.score-a.score || Number(b.strong)-Number(a.strong));`,
+    `return [lumper(source), rateCon(source), fuel(source), partsReceipt(source), repair(source), scale(source)].sort((a,b) => b.score-a.score || Number(b.strong)-Number(a.strong));`,
+    'template candidates');
+  source=replaceOnce(source,
+    `const rateMistake = currentId === 'rate_confirmation' && ['lumper_receipt','fuel_receipt','fuel_card_statement','repair_invoice','scale_ticket'].includes(top.typeId);`,
+    `const rateMistake = currentId === 'rate_confirmation' && ['lumper_receipt','fuel_receipt','fuel_card_statement','parts_receipt','repair_invoice','scale_ticket'].includes(top.typeId);`,
+    'rate guess correction list');
+  source=replaceOnce(source,
+    `  if(typeId==='rate_confirmation')return sanitizeRate(clean(text),fields);`,
+    `  if(typeId==='rate_confirmation')return sanitizeRate(clean(text),fields);\n  if(typeId==='parts_receipt')return extractPartsReceiptFieldsV11031(clean(text),fields);`,
+    'template parts sanitize');
+  if(!source.includes("'truck parts counter receipts'")) source=source.replace("'repair/service invoices','CAT/certified scale tickets'","'truck parts counter receipts','repair/service invoices','CAT/certified scale tickets'");
+  write(path,source);
+}
+
+for(const path of ['release-version.json','public/app-version.json']){
+  const meta=JSON.parse(read(path));
+  Object.assign(meta,{
+    version:VERSION,build:BUILD,force:false,
+    sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||meta.sourceCommit||null,
+    releasedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
+    label:'Structural truck parts receipt reader',
+    notes:[
+      'Recognizes truck parts-counter receipts from part-number, pricing-table, paid-counter, sales-tax and customer-copy structure instead of relying on a dealer name.',
+      'Extracts invoice number, date, total, parts amount, sales tax, freight, payment method, account number and first part line when visible.',
+      'Repair invoices with labor/work-order evidence remain Repair Invoice; Rate Con, Logbook, HOS, fuel and load identity paths are unchanged.'
+    ]
+  });
+  write(path,JSON.stringify(meta,null,2)+'\n');
+}
+for(const [path,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
+  let source=read(path);
+  source=source.replace(new RegExp(`(const ${name}_VERSION = )['\"][^'\"]+['\"]`),`$1'${VERSION}'`)
+    .replace(new RegExp(`(const ${name}_BUILD = )['\"][^'\"]+['\"]`),`$1'${BUILD}'`);
+  write(path,source);
+}
+for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx']){
+  let source=read(path);
+  source=source.replace(/App v\d+\.\d+\.\d+/g,`App v${VERSION}`).replace(/APP V\d+\.\d+\.\d+/g,`APP V${VERSION}`);
+  write(path,source);
+}
+console.log('PASS — 110.3.1 structural Truck Parts Receipt reader finalized against final scanner pipeline');
