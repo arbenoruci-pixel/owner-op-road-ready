@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import { mock } from 'node:test';
 import { displayEventsForDayFromState } from '../source/src/core/timeline/displayTimeline.js';
 import { rawCoverageIssues, rawStoredEventsForDay } from '../source/src/core/compliance/rawRodsChecks.js';
 import { completedLogDays, signableLogDays } from '../source/src/modules/logbook/signing.js';
@@ -9,6 +10,8 @@ import { historicalContinuityDaysV11026, materializeCarriedDayForCertificationV1
 const hash = path => crypto.createHash('sha256').update(fs.readFileSync(path)).digest('hex');
 const row=(id,status,startMin,endMin,extra={})=>({id,status,startMin,endMin,city:'Willowbrook',state:'IL',source:'manual',...extra});
 const today='2026-09-07';
+// Public signing helpers read the clock internally; share the fixture day.
+mock.timers.enable({ apis:['Date'], now:new Date('2026-09-07T16:00:00Z') });
 
 // Exact installed-phone case: the three edited OFF fragments are one visible
 // continuous duty-status body, while raw audit rows stay available underneath.
