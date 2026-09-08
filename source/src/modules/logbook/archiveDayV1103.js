@@ -8,5 +8,5 @@ export function readArchiveLogbookDay(state = {}, day = '', at = new Date()) {
   if (day > clock.day) return [];
   const exact = projectLogbookEvents(state,day,at);
   const continuous = displayEventsForDayFromState(state.eventsByDay || {},day,{today:clock.day,nowMinute:clock.minute});
-  return dutyViewEvents(exact,continuous).map(event=>({...event}));
+  return dutyViewEvents(exact,continuous,{eventsByDay:state.eventsByDay,day}).map(event=>({...event}));
 }
