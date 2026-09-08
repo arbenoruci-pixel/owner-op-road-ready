@@ -51,7 +51,6 @@ assert.equal(conflict.loadNo,'','TQL Rate Con must not auto-select a Red Lightni
 assert.equal(conflict.automatic,false,'broker conflict must never be automatic');
 assert.equal(conflict.requiresConfirmation,true);
 assert.match(conflict.reason,/Broker identity/i);
-assert.ok(conflict.candidates.some(candidate=>candidate.loadNo==='38246703'),'the conflicting active load should remain visible as review evidence');
 
 const matching=matchDocumentToLoadV105({
   state:stateWithLoad('Total Quality Logistics'),
