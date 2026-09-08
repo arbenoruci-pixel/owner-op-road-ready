@@ -8,7 +8,7 @@ const steps=['apply-v110-cloud.mjs','test-owner-op-cloud-v110.mjs','verify-owner
 steps.push('finalize-live-archive-v1103.mjs','test-live-archive-evidence.mjs','test-live-archive-runtime.mjs','finalize-parts-receipt-reader-v11031c.mjs','finalize-parts-receipt-release-tests-v11031.mjs','test-parts-receipt-reader-v11031.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-status-midnight-carry-v11032.mjs','test-status-midnight-carry-v11032.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-smart-load-identity-v11033.mjs','test-smart-load-identity-v11033.mjs','verify-isolation-locks-v110.mjs');
-steps.push('finalize-live-load-scanner-editor-v11034b.mjs','test-live-load-scanner-editor-v11034.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-live-load-scanner-editor-v11034c.mjs','test-live-load-scanner-editor-v11034.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
