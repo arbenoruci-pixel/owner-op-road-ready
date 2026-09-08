@@ -58,6 +58,7 @@ const matching=matchDocumentToLoadV105({
   fields,
   analysis:{fields,text:tqlText},
 });
+if(matching.loadNo!=='38246703') console.error('V11033_MATCH_DEBUG',JSON.stringify(matching));
 assert.equal(matching.loadNo,'38246703');
 assert.equal(matching.automatic,true,'same broker plus exact reference/route/date evidence should remain a strong match');
 assert.ok(matching.confidence>=.95);
