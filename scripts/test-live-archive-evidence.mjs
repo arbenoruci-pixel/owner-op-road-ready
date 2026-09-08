@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {archiveDayMileage,archiveLoadMileage,archiveWeeks,projectArchiveState,resolveArchiveDocumentLink} from '../source/src/modules/owneros/archiveEvidenceV1103.js';
+import {parseFuelStatement,upsertFuelTransactions} from '../source/src/modules/document-readers/fuel-receipt/fuelStatementV1103.js';
+
+const day='2026-07-05';
+const state={eventsByDay:{[day]:[{id:'a',status:'D',loadNo:'A123',startMin:0,endMin:120},{id:'b',status:'D',loadNo:'B123',startMin:120,endMin:240}]},manualMilesByDay:{[day]:300},formByDay:{[day]:{distance:300}},dailyMilesByDay:{[day]:290}};
+const before=JSON.stringify(state),evidence=archiveDayMileage(state,day);
+assert.equal(evidence.miles,300);assert.equal(evidence.status,'conflict');assert.equal(archiveLoadMileage(state,'A123').total,0);
+assert.equal(archiveLoadMileage(state,'A123').recordedTotal,300);assert.equal(archiveWeeks([{loadNo:'A123',days:[day]},{loadNo:'B123',days:[day]}],state)[0].miles,300);
+assert.equal(JSON.stringify(state),before);
+assert.equal(archiveDayMileage({manualMilesByDay:{[day]:0}},day).status,'recorded');
+assert.equal(archiveDayMileage({},day).miles,null);
+assert.equal(archiveLoadMileage({milesByLoad:{A123:{[day]:206}}},'A123').total,206);
+const trip={eventsByDay:{'2026-07-05':[{id:'pickup',status:'ON',loadNo:'178564',startMin:1380,endMin:1400},{id:'drive1',status:'D',startMin:1400,endMin:1440,manualMiles:35}], '2026-07-06':[{id:'drive2',status:'D',startMin:0,endMin:60,manualMiles:45},{id:'delivery',status:'ON',loadNo:'178564',startMin:60,endMin:90}]},routeLegsByDay:{'2026-07-05':[{loadNo:'178564',pickupEventId:'pickup',deliveryEventId:'delivery'}]}};
+let projected=projectArchiveState(trip),mileage=archiveLoadMileage(projected,'424590-1');
+assert.equal(mileage.total,80);assert.deepEqual(mileage.linkedDays,['2026-07-05','2026-07-06']);
+const folders=[{loadNo:'424590-1',days:mileage.linkedDays,revenue:1000}];
+const weeks=archiveWeeks(folders,projected);assert.equal(weeks.length,2);assert.equal(weeks.reduce((s,w)=>s+w.miles,0),80);assert.equal(weeks.reduce((s,w)=>s+w.revenue,0),1000);
+const doc={id:'bol1',linkedEventId:'pickup',documentDate:'2026-07-05',linkDay:'2026-07-05'};
+const moved=structuredClone(trip);moved.eventsByDay['2026-07-06'].push({...moved.eventsByDay['2026-07-05'][0],startMin:10,endMin:20});moved.eventsByDay['2026-07-05'].shift();
+assert.equal(resolveArchiveDocumentLink(doc,moved).day,'2026-07-06');assert.equal(doc.documentDate,'2026-07-05');
+assert.equal(projectArchiveState(moved).routeLegsByDay['2026-07-06'][0].pickupDay,'2026-07-06');
+delete moved.eventsByDay['2026-07-06'];assert.equal(resolveArchiveDocumentLink(doc,moved).status,'needs_review');
+
+const csv='Transaction ID,Date of Visit,Street,City,State,Zip,Gallons Dispensed,Fuel Type,Retail,Cost,Credit Card Fee,Retail Cost,Paid,Truck Stop\r\nT1,2026-07-05 12:00,Street,Town,IL,60000,10,Diesel,,4,0,40,40,"Station, One"\r\nT2,2026-07-06 12:00,Street,Town,IN,60000,20,Diesel,,4,0,80,80,Station Two\r\n,,,,,Total Gallons,30,,,,,Total Paid,120,\r\n,,,,IL,Total Gallons,10,,,,,Total Paid,40,\r\n';
+const parsed=parseFuelStatement(csv);assert.equal(parsed.valid,true);assert.equal(parsed.transactions.length,2);assert.equal(parsed.total,120);assert.equal(parsed.transactions[0].merchant,'Station, One');
+let store=upsertFuelTransactions({fuel:[]},{id:'doc1'},{...parsed,statementVerified:true});store=upsertFuelTransactions(store,{id:'duplicate'},{...parsed,statementVerified:true});assert.equal(store.fuel.length,2);assert.equal(store.fuel.reduce((s,t)=>s+t.total,0),120);
+assert.equal(parseFuelStatement(csv.replace('Total Paid,120','Total Paid,121')).valid,false);
+assert.equal(parseFuelStatement('Ordinary receipt\nFuel "Diesel'),null);
+assert.equal(parseFuelStatement(csv.replace('2026-07-05','2026-02-30')).valid,false);
+const fuelWeeks=archiveWeeks([],{},store);assert.equal(fuelWeeks.length,2);assert.equal(fuelWeeks.reduce((s,w)=>s+w.fuelTotal,0),120);assert.equal(fuelWeeks.reduce((s,w)=>s+w.fuelGallons,0),30);
+assert.equal(fuelWeeks.find(w=>w.start==='2026-06-29').fuel[0].transactionId,'T1');
+const linkedDocWeeks=archiveWeeks([],trip,{documents:[doc]});assert.equal(linkedDocWeeks.find(w=>w.start==='2026-06-29').documents.length,1);
+assert.throws(()=>upsertFuelTransactions(store,{id:'x'},{...parsed,statementVerified:true,transactions:[{...parsed.transactions[0],total:99}]}),/Conflicting/);
+console.log('PASS — source selection, zero/missing, aliases, multi-load allocation, cross-week totals, event moves, original dates and statement transaction deduplication');
