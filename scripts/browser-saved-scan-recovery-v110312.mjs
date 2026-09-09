@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {instructionPdfV110312} from './v110312/savedScanFixtureV110312.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import os from 'node:os';
+import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import {buildInstructionGuideV110311} from '../source/src/modules/loads/instructionGuideV110311.js';
 
@@ -36,7 +38,7 @@ async function seed(page,state){
   localStorage.setItem('owner-op-prototype-auth-v1',JSON.stringify(session));
   localStorage.setItem('owner-op-road-ready-home-terminal-timezone-v1','America/New_York');
   localStorage.setItem('owner-op-road-ready-operator-profile-v1',JSON.stringify(profile));
-  await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1',20);r.onupgradeneeded=()=>{const db=r.result;for(const[name,schema]of Object.entries(schemas)){const[key,...indexes]=schema.split(',').map(s=>s.trim()),st=db.createObjectStore(name,{keyPath:key.replace(/^&/,'')});for(const raw of indexes){const field=raw.replace(/^[&*]/,'');st.createIndex(field,field.startsWith('[')?field.slice(1,-1).split('+'):field,{unique:raw.startsWith('&'),multiEntry:raw.startsWith('*')});}}};r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction(['app_snapshots','documents_local','document_blobs'],'readwrite');if(original){const blob=new Blob([new Uint8Array(original)],{type:'application/pdf'});tx.objectStore('documents_local').put({local_id:savedDocument.id,client_document_id:savedDocument.clientDocumentId,original_file_name:savedDocument.fileName,mime_type:'application/pdf',file_size_bytes:blob.size,type:'other',created_at:new Date().toISOString(),status:'active',sync_state:'local_only'});tx.objectStore('document_blobs').put({local_blob_id:'legacy-blob',client_document_id:savedDocument.clientDocumentId,blob,created_at:new Date().toISOString()});}tx.objectStore('app_snapshots').put({key:'owner-op-road-ready-state-v1',state,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};});
+  await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1',20);r.onupgradeneeded=()=>{const db=r.result;for(const[name,schema]of Object.entries(schemas)){const[key,...indexes]=schema.split(',').map(s=>s.trim()),st=db.createObjectStore(name,{keyPath:key.replace(/^&/,'')});for(const raw of indexes){const field=raw.replace(/^[&*]/,'');st.createIndex(field,field.startsWith('[')?field.slice(1,-1).split('+'):field,{unique:raw.startsWith('&'),multiEntry:raw.startsWith('*')});}}};r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction(['app_snapshots','documents_local','document_blobs'],'readwrite');if(original){const blob=new Blob([new Uint8Array(original)],{type:'application/pdf'});tx.objectStore('documents_local').put({local_id:savedDocument.id,client_document_id:savedDocument.clientDocumentId,original_file_name:savedDocument.fileName,mime_type:'application/pdf',file_size_bytes:blob.size,type:'other',created_at:new Date().toISOString(),status:'active',sync_state:'local_only'});tx.objectStore('document_blobs').put({local_blob_id:'legacy-blob',client_document_id:savedDocument.clientDocumentId,blob,created_at:new Date().toISOString()});}tx.objectStore('app_snapshots').put({key:'owner-op-road-ready-state-v1',state,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=event=>reject(new Error('Fixture write: '+(event.target?.error?.message||tx.error?.message||event.type)));tx.onabort=()=>reject(new Error('Fixture transaction aborted: '+(tx.error?.message||'unknown')));};});
  },{schemas,state,session,profile});
  await page.goto(origin);
  const adaptiveHome=page.locator('.adaptive-home-v1038');
@@ -52,10 +54,11 @@ async function setupRoutes(context){
 }
 const reports=[];
 for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
- const browser=await type.launch({headless:true});
- try{
+ // A disk-backed profile exercises the same durable Blob storage used by the installed app.
+
   for(const [kind,state,expectedActive] of [['lost-selection',recoveryState('lost-selection'),true],['legacy-original',recoveryState('legacy-original'),true],['late-store',recoveryState('late-store'),true]]){
-   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2,timezoneId:'America/Chicago',colorScheme:'light',serviceWorkers:'block'});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-09-07T21:21:00Z'));await setupRoutes(context);
+   const profileDir=fs.mkdtempSync(path.join(os.tmpdir(),'road-ready-recovery-'));
+   const context=await type.launchPersistentContext(profileDir,{headless:true,viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2,timezoneId:'America/Chicago',colorScheme:'light',serviceWorkers:'block'});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-09-07T21:21:00Z'));await setupRoutes(context);
    try{const lateStore=kind==='late-store'?state.testInstructionStore:null;if(lateStore)state.testInstructionStore={loads:[],documents:[]};await seed(page,state);if(lateStore){await page.evaluate(store=>{localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify(store));window.dispatchEvent(new CustomEvent('owner-op-business-updated'));},lateStore);}
 if(kind==='legacy-original'){
  await page.getByRole('button',{name:'Continue saved scan',exact:true}).click();
@@ -75,8 +78,7 @@ await page.waitForFunction(async()=>{return await new Promise(resolve=>{const re
 await page.reload();await page.locator('.adaptive-home-v1038.active-load').waitFor({timeout:30000});
 await page.getByRole('button',{name:'Full mission',exact:true}).click();await page.getByRole('heading',{name:'Route and appointments',exact:true}).waitFor();
 assert.match(await page.locator('body').innerText(),/Done/);
-assert.deepEqual(errors,[]);await page.screenshot({path:`${output}/${name}-${kind}.png`,fullPage:false});reports.push({browser:name,kind,passed:true});console.log(`PASS — ${name} ${kind}: ${expectedActive?'Saved scan survives upgrade, Home, checklist and reload':'log/route fallback stays inactive'}`);}catch(error){await page.screenshot({path:`${output}/${name}-${kind}-FAILED.png`,fullPage:false}).catch(()=>{});reports.push({browser:name,kind,passed:false,error:String(error),stack:error.stack,pageErrors:errors});console.error(error);}finally{await context.close();}
+assert.deepEqual(errors,[]);await page.screenshot({path:`${output}/${name}-${kind}.png`,fullPage:false});reports.push({browser:name,kind,passed:true});console.log(`PASS — ${name} ${kind}: ${expectedActive?'Saved scan survives upgrade, Home, checklist and reload':'log/route fallback stays inactive'}`);}catch(error){await page.screenshot({path:`${output}/${name}-${kind}-FAILED.png`,fullPage:false}).catch(()=>{});reports.push({browser:name,kind,passed:false,error:String(error),stack:error.stack,pageErrors:errors});console.error(error);}finally{await context.close();fs.rmSync(profileDir,{recursive:true,force:true});}
   }
- }finally{await browser.close();}
 }
 fs.writeFileSync(`${output}/results.json`,JSON.stringify(reports,null,2));assert.ok(reports.every(r=>r.passed),JSON.stringify(reports.filter(r=>!r.passed)));
