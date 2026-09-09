@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+// Actual production component handlers; only native OCR and external storage I/O are stubbed.
+const {mount,resetStore}=await import('./test-scanner-load-link-v11037.mjs');
+const {instructionPlanV110311,instructionFolderV110311}=await import('../source/src/modules/loads/instructionPlanV110311.js');
+const {applyInstructionGuideV110311,instructionPayloadV110311,restoreInstructionGuidesV110311}=await import('../source/src/modules/loads/instructionGuideV110311.js');
+const {readBusinessStore,writeBusinessStore}=await import('../source/src/modules/business/businessStore.js');
+const {migrateBusinessStoreV105,repairRoadReadyFoundationV105,collectLoadCandidatesV105}=await import('../source/src/modules/documents/documentFoundationV105.js');
+const {applySmartDocumentLinkV103,getActiveLoadGuideV103,applyLoadGuideActionV103,SMART_DOCUMENT_LINK_EVENT}=await import('../source/src/modules/loads/loadGuideV103.js');
+const {repairRoadReadyStateV107}=await import('../source/src/core/integrity/logbookIntegrityV107.js');
+const {repairKnownRateConMissionV10965}=await import('../source/src/modules/loads/livePickupMissionV10965.js');
+const {repairCompletedLoadCommandV10958}=await import('../source/src/modules/loads/completedLoadCloseoutV10958.js');
+const {runExternalCommand,LOGBOOK_PROTECTED_KEYS}=await import('../source/src/modules/logbook/public-api.js');
+const {safeMissionProgressV10966}=await import('../source/src/modules/loads/safeMissionModelV10966.js');
+const text=`DRIVER/CARRIER INFORMATION SHEET\nTQL PO# 76543210\nPickup Dates: 09/08/2026 Delivery Dates: 09/10/2026 09/17/2026\nTQL CONTACT INFO\nPICKUPS\nSHED CITY STATE ZIP PU# DATE TIME\nEXAMPLE FACTORY\nFCFS 08:00 to\nHowe IN 46746 87654321 09/08/2026\n16:00\nInformation:\n100 Example Road\nHowe IN 46746\nDROPS\nCONSIGNEE CITY STATE ZIP DELIVERY PO# DATE TIME\n123456 -\nEXAMPLE RECEIVER\nSmithfield RI 02917 09/10/2026 Appt 06:00 to\n07:00\nInformation:\n200 Example Avenue\nSmithfield RI 02917\nEXAMPLE FACTORY\nFCFS 08:00 to\nHowe IN 46746 09/17/2026\n16:00\nInformation:\n100 Example Road\nHowe IN 46746\nHOOK/LIVE UNLOAD - LOAD OUT RETURN\nDriver Must Accept MacroPoint\nPOD emailed to example@example.invalid w/in 24 hrs\nPicture of load loaded - submitted at pickup\nToll Fees may be subject to administrative fees ranging from $5.00-$100.00.`;
+const synthetic={type:{id:'load_tender',label:'Load Tender / Instructions'},text,fields:{loadNo:'76543210',orderNo:'76543210',broker:'Total Quality Logistics (TQL)',documentDate:'2026-09-08',pickupDate:'2026-09-08'},confidence:.95,needsReview:true};
+const input=process.env.GUIDE_DOCUMENT_RESULT?JSON.parse(fs.readFileSync(process.env.GUIDE_DOCUMENT_RESULT)):synthetic;
+const plan=instructionPlanV110311(input);assert.ok(plan);assert.equal(plan.stops.length,3);assert.equal(plan.stops[2].role,'trailer_return');assert.deepEqual(plan.stops.map(s=>s.date),['2026-09-08','2026-09-10','2026-09-17']);assert.match(plan.stops[1].appointment,/06:00–07:00/);
+assert.equal(instructionPlanV110311({...input,text:input.text+'\nTQL PO# 99999999'}),null);
+assert.equal(instructionPlanV110311({...input,text:input.text.replace(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g,'unknown')}),null);
+resetStore();let store=readBusinessStore();store.loads[0].aliases=[{kind:'po_number',value:plan.loadNo}];store.loads[0].gross=9100;writeBusinessStore(store);
+const ui=mount();await ui.scan(input);assert.equal(ui.byLabel('Load folder').props.value,plan.loadNo);await ui.save();
+assert.match(ui.text(),/Done · Open guide/);store=readBusinessStore();const record=store.documents[0];assert.ok(record.instructionGuide);assert.equal(record.broker,plan.broker);assert.equal(record.linkToLogbook,true);assert.equal(record.instructionGuide.rate,undefined);assert.equal(store.loads.find(l=>l.loadNo==='97155').gross,9100);assert.ok(collectLoadCandidatesV105({},store).some(c=>c.loadNo===plan.loadNo));
+let app={activeDay:'2026-09-09',currentStatus:'D',currentLocation:'Previous city',eventsByDay:{'2026-09-09':[{id:'existing-drive',status:'D',startMin:400,loadNo:'97155',city:'Previous city'}]},routeLegsByDay:{},signatureByDay:{'2026-09-08':{signed:true}},formByDay:{'2026-09-09':{shippingDocs:'97155'}},loadInfo:{loadNo:'97155',broker:'Red Lightning Logistics, LLC',gross:9100}};
+const protectedBefore=Object.fromEntries(LOGBOOK_PROTECTED_KEYS.filter(k=>k in app).map(k=>[k,structuredClone(app[k])]));
+let dispatched=0;window.dispatchEvent=event=>{if(event.type===SMART_DOCUMENT_LINK_EVENT){dispatched++;app=runExternalCommand(app,draft=>repairKnownRateConMissionV10965(repairCompletedLoadCommandV10958(repairRoadReadyStateV107(applySmartDocumentLinkV103(draft,event.detail),{nowDay:'2026-09-09'}))),'documents',event.detail);}return true;};
+ui.all().find(n=>n.props?.children==='Done · Open guide').props.onClick();assert.equal(dispatched,1);
+let guide=getActiveLoadGuideV103(app);assert.ok(guide,'Done activates guide');assert.equal(guide.loadNo,plan.loadNo);assert.equal(Number(app.loadInfo.gross||0),0);assert.ok(guide.risks.length);assert.equal(guide.steps.find(s=>s.id==='final_pod').stopSequence,1);assert.ok(app.documentsByDay['2026-09-08'].some(d=>d.id===record.id||d.documentId===record.id));assert.equal(app.logbookDocumentReferences[record.id].day,'2026-09-08');assert.equal(safeMissionProgressV10966(app,guide,store).guide.id,guide.id);
+const action={guideId:guide.id,stepId:'review_load',action:'toggle_done'};app=runExternalCommand(app,draft=>applyLoadGuideActionV103(draft,action),'loads',action);
+for(let i=0;i<3;i++){
+ store=migrateBusinessStoreV105(JSON.parse(JSON.stringify(store)),app);writeBusinessStore(store);
+ app=JSON.parse(JSON.stringify(runExternalCommand(app,draft=>repairRoadReadyFoundationV105(restoreInstructionGuidesV110311(draft,store)),'documents',{})));
+ guide=getActiveLoadGuideV103(app);assert.ok(guide);assert.equal(guide.loadNo,plan.loadNo);assert.ok(guide.manualDone.review_load);assert.equal(guide.stops[2].role,'trailer_return');
+ for(const [k,v]of Object.entries(protectedBefore))assert.deepEqual(app[k],v,`Protected Logbook ${k}`);
+}
+const recovered=restoreInstructionGuidesV110311({},store);assert.equal(getActiveLoadGuideV103(recovered).loadNo,plan.loadNo);assert.ok(recovered.logbookDocumentReferences[record.id]);
+const cloudDoc={...record};delete cloudDoc.instructionGuide;assert.ok(getActiveLoadGuideV103(restoreInstructionGuidesV110311({}, {documents:[cloudDoc]})));
+const rescanned=applyInstructionGuideV110311(app,instructionPayloadV110311(record));assert.ok(getActiveLoadGuideV103(rescanned).manualDone.review_load);
+const closed=structuredClone(app);closed.loadGuidesById[guide.id].status='completed';closed.loadGuidesById[guide.id].excludedFromActiveLoad=true;closed.activeLoadGuideId='';assert.equal(applyInstructionGuideV110311(closed,instructionPayloadV110311(record)).activeLoadGuideId,'');
+resetStore();store=readBusinessStore();store.loads.push({source:'rate_confirmation_v105',id:'collision',loadNo:plan.loadNo,broker:'Unrelated Broker'});writeBusinessStore(store);assert.equal(instructionFolderV110311(plan,store.loads),'');const conflict=mount();await conflict.scan(input);assert.equal(conflict.byLabel('Load folder').props.value,'');await conflict.save();assert.equal(readBusinessStore().documents[0].instructionGuide,undefined);
+resetStore();const later=mount();await later.scan(input);await later.choose('Load folder','');await later.save();assert.equal(readBusinessStore().documents[0].instructionGuide,undefined);
+resetStore();store=readBusinessStore();store.loads.push({source:'rate_confirmation_v105',id:'existing-tql',loadNo:plan.loadNo,broker:'TQL',gross:4250});writeBusinessStore(store);const existing=mount();await existing.scan(input);await existing.save();assert.equal(readBusinessStore().loads.find(l=>l.loadNo===plan.loadNo).gross,4250);assert.equal(readBusinessStore().documents[0].instructionGuide.rate,4250);
+store=readBusinessStore();const setItem=window.localStorage.setItem;let quotaAttempts=0;window.localStorage.setItem=(key,value)=>{if(++quotaAttempts<3)throw new DOMException('Quota exceeded','QuotaExceededError');return setItem(key,value);};
+writeBusinessStore(store);window.localStorage.setItem=setItem;const quotaStore=readBusinessStore();assert.ok(quotaStore.documents[0].extracted.instructionPlanV110311);assert.ok(getActiveLoadGuideV103(restoreInstructionGuidesV110311({},quotaStore)));
+console.log('PASS — instruction guide: qualified stops, Save/Done, Logbook links, three reloads, progress, recovery, broker collisions, choose later and existing pay');
