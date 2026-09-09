@@ -11,7 +11,11 @@ patch(loads+'loadGuideV103.js','export function applySmartDocumentLinkV103(state
 patch(loads+'loadGuideV103.js',"import { guideClosedOrMalformedV10958", "import {applyInstructionGuideV110311} from './instructionGuideV110311.js';\nimport { guideClosedOrMalformedV10958");
 const foundation='source/src/modules/documents/documentFoundationV105.js';
 patch(foundation,'export function repairRoadReadyFoundationV105(inputState = {}, options = {}) {','function repairRoadReadyFoundationBaseV110311(inputState = {}, options = {}) {');
-if(!read(foundation).includes('import {preserveInstructionSelectionV110311}'))fs.writeFileSync(foundation,"import {preserveInstructionSelectionV110311} from '../loads/instructionAuthorityV110311.js';\n"+read(foundation)+"\nexport function repairRoadReadyFoundationV105(state={},options={}) {return preserveInstructionSelectionV110311(state,repairRoadReadyFoundationBaseV110311(state,options));}\n");
+if(!read(foundation).includes('import {preserveInstructionSelectionV110311,instructionStopsPendingV110311}'))fs.writeFileSync(foundation,"import {preserveInstructionSelectionV110311,instructionStopsPendingV110311} from '../loads/instructionAuthorityV110311.js';\n"+read(foundation)+"\nexport function repairRoadReadyFoundationV105(state={},options={}) {return preserveInstructionSelectionV110311(state,repairRoadReadyFoundationBaseV110311(state,options));}\n");
+patch(foundation,"  if (COMPLETE_STATUS_V105.test(textV105(guide.status))) return true;", "  if (COMPLETE_STATUS_V105.test(textV105(guide.status))) return true;\n  if(instructionStopsPendingV110311(guide))return false;");
+const closeout=loads+'completedLoadCloseoutV10958.js';
+if(!read(closeout).includes('import {instructionStopsPendingV110311}'))fs.writeFileSync(closeout,"import {instructionStopsPendingV110311} from './instructionAuthorityV110311.js';\n"+read(closeout));
+patch(closeout,'  const allRelatedLegsClosed =', '  if(instructionStopsPendingV110311(guide))return false;\n  const allRelatedLegsClosed =');
 const app='source/src/app/App.jsx';
 patch(app,"import { applyLoadGuideActionV103", "import {restoreInstructionGuidesV110311} from '../modules/loads/instructionGuideV110311.js';\nimport {readBusinessStore as readGuideStoreV110311} from '../modules/business/businessStore.js';\nimport { applyLoadGuideActionV103");
 patch(app,'  const [offlineHydrated, setOfflineHydrated] = useState(false);',`  const [offlineHydrated, setOfflineHydrated] = useState(false);
@@ -23,11 +27,11 @@ const sheet=scan+'SmartScanSheetV105.jsx';
 patch(sheet,"import { resolveArchiveDocumentLink }", "import {instructionPlanV110311,instructionFolderV110311} from '../loads/instructionPlanV110311.js';\nimport {persistInstructionGuideV110311,finishInstructionScanV110311} from '../loads/instructionGuideV110311.js';\nimport { resolveArchiveDocumentLink }");
 patch(sheet,'  const requiresLoad = loadDocumentType(selectedType);', '  const requiresLoad = loadDocumentType(selectedType);\n  const confirmedInstructionPlanV110311=useMemo(()=>instructionPlanV110311(analysis||{}),[analysis]);');
 patch(sheet,"onClose, onOpenBusiness, initialPreferredType", "onClose, onOpenBusiness, onOpenGuide, initialPreferredType");
-patch(sheet,"const loadNo = initialScanLoadV11037(result, nextMatch, preferredLoadNo, preserveLoadChoice);", "const planV110311=instructionPlanV110311(result);\n    const instructionLoadV110311=instructionFolderV110311(planV110311,collectLoadCandidatesV105(state,businessStore));\n    const loadNo = planV110311 && !preserveLoadChoice ? instructionLoadV110311 : initialScanLoadV11037(result, nextMatch, preferredLoadNo, preserveLoadChoice);");
+patch(sheet,"const loadNo = initialScanLoadV11037(result, nextMatch, preferredLoadNo, preserveLoadChoice);", "const planV110311=instructionPlanV110311(result);\n    const instructionLoadV110311=instructionFolderV110311(planV110311,[...collectLoadCandidatesV105(state,businessStore),...(businessStore.loads||[])]);\n    const loadNo = planV110311 && !preserveLoadChoice ? instructionLoadV110311 : initialScanLoadV11037(result, nextMatch, preferredLoadNo, preserveLoadChoice);");
 patch(sheet,'setLinkToLogbook(false); // Logbook linking is an explicit driver choice.','setLinkToLogbook(Boolean(planV110311 && safeSelectedLoadV11034===instructionLoadV110311 && instructionLoadV110311));');
 patch(sheet,'const storageFieldsV10964 = compactRateConSaveFieldsV10964(mergedFields);',`const instructionPlanForSaveV110311=instructionPlanV110311({...analysis,type:meta});
       const storageFieldsV10964 = compactRateConSaveFieldsV10964(mergedFields);
-      if(instructionPlanForSaveV110311 && selectedLoadNo===instructionFolderV110311(instructionPlanForSaveV110311,collectLoadCandidatesV105(state,currentStore))) {
+      if(instructionPlanForSaveV110311 && selectedLoadNo===instructionFolderV110311(instructionPlanForSaveV110311,[...collectLoadCandidatesV105(state,currentStore),...(currentStore.loads||[])])) {
         storageFieldsV10964.instructionPlanV110311=instructionPlanForSaveV110311;
         storageFieldsV10964.stops=instructionPlanForSaveV110311.stops;
       }`);
@@ -35,7 +39,7 @@ patch(sheet,'let nextStore = upsertVaultDocumentV105(currentStore, record, state
       let nextStore = upsertVaultDocumentV105(instructionSaveV110311.store, record, state);`);
 patch(sheet,'if(record.linkToLogbook)dispatchVaultDocumentCommitV105','if(record.linkToLogbook && !record.instructionGuide)dispatchVaultDocumentCommitV105');
 patch(sheet,"onClick={stage === 'saved' ? onClose : reset}","onClick={stage === 'saved' ? () => finishInstructionScanV110311(saved,onClose,onOpenGuide) : reset}");
-patch(sheet,"{selectedType === 'rate_confirmation' && primaryLoadReference(analysis)","{(selectedType === 'rate_confirmation' || instructionFolderV110311(confirmedInstructionPlanV110311,candidates)) && primaryLoadReference(analysis)");
+patch(sheet,"{selectedType === 'rate_confirmation' && primaryLoadReference(analysis)","{(selectedType === 'rate_confirmation' || instructionFolderV110311(confirmedInstructionPlanV110311,[...candidates,...(store.loads||[])])) && primaryLoadReference(analysis)");
 patch(sheet,"{selectedLoad?.broker || match?.broker || 'Load folder'}", "{selectedLoad?.broker || (confirmedInstructionPlanV110311?.loadNo===selectedLoadNo ? confirmedInstructionPlanV110311.broker : match?.broker) || 'Load folder'}");
 patch(sheet,'<em>DOCUMENT SAVED</em>',"<em>{saved.record.instructionGuideId ? 'DOCUMENT AND GUIDE SAVED' : 'DOCUMENT SAVED'}</em>");
 patch(sheet,'<h1>{saved.meta.label}</h1>',`<h1>{saved.meta.label}</h1>

@@ -16,3 +16,9 @@ export function preserveInstructionSelectionV110311(before={},after={}) {
  if(!instructionGuideBackedV110311(guide)||guide.status!=='active'||guide.excludedFromActiveLoad)return after;
  return {...after,activeLoadGuideId:id,loadInfo:{...before.loadInfo,guideId:id,loadNo:guide.loadNo,shippingDocs:guide.loadNo,orderNo:guide.loadNo,broker:guide.broker,source:guide.source,stops:guide.stops,pickupDate:guide.pickupDate,deliveryDate:guide.deliveryDate}};
 }
+
+export function instructionStopsPendingV110311(guide={}) {
+ if(!instructionGuideBackedV110311(guide)||guide.status!=='active'||guide.excludedFromActiveLoad)return false;
+ const completed=new Set((guide.completedStopIds||[]).map(String));
+ return guide.stops.some(s=>s.type==='delivery'&&!completed.has(String(s.deliverySequence))&&!guide.manualDone?.[`complete_stop_${s.deliverySequence}`]);
+}

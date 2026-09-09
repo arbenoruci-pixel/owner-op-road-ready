@@ -33,6 +33,7 @@ for(let i=0;i<3;i++){
  guide=getActiveLoadGuideV103(app);assert.ok(guide);assert.equal(guide.loadNo,plan.loadNo);assert.ok(guide.manualDone.review_load);assert.equal(guide.stops[2].role,'trailer_return');
  for(const [k,v]of Object.entries(protectedBefore))assert.deepEqual(app[k],v,`Protected Logbook ${k}`);
 }
+const delivered=structuredClone(app);delivered.loadGuidesById[guide.id].completedStopIds=['1'];delivered.routeLegsByDay={'2026-09-10':[{id:'delivered-leg',loadGroupId:guide.id,loadNo:plan.loadNo,stopSequence:1,status:'delivered',stopStatus:'done'}]};assert.ok(getActiveLoadGuideV103(repairCompletedLoadCommandV10958(repairRoadReadyFoundationV105(delivered))),'Trailer return keeps guide active after freight delivery');
 const recovered=restoreInstructionGuidesV110311({},store);assert.equal(getActiveLoadGuideV103(recovered).loadNo,plan.loadNo);assert.ok(recovered.logbookDocumentReferences[record.id]);
 const cloudDoc={...record};delete cloudDoc.instructionGuide;assert.ok(getActiveLoadGuideV103(restoreInstructionGuidesV110311({}, {documents:[cloudDoc]})));
 const rescanned=applyInstructionGuideV110311(app,instructionPayloadV110311(record));assert.ok(getActiveLoadGuideV103(rescanned).manualDone.review_load);
