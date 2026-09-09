@@ -1,0 +1,24 @@
+/* Keep the light scanner review readable inside either app theme. */
+.screen.smart-scan-v105 { color-scheme:light; color:#172033; background:#eef2f5; }
+.screen.smart-scan-v105 .smart-scan-head-v105,
+.screen.smart-scan-v105 .scan-file-preview-v105,
+.screen.smart-scan-v105 .scan-three-v105>label,
+.screen.smart-scan-v105 .scan-destination-v105,
+.screen.smart-scan-v105 .scan-log-link-v105,
+.screen.smart-scan-v105 .scan-details-v105 { background:#fff; color:#172033; }
+.screen.smart-scan-v105 h1,
+.screen.smart-scan-v105 h2,
+.screen.smart-scan-v105 b,
+.screen.smart-scan-v105 .scan-driver-check-v105 span { color:#172033 !important; }
+.screen.smart-scan-v105 select,
+.screen.smart-scan-v105 input[type=date] {
+  color-scheme:light; background:#f8fafc !important; color:#172033 !important;
+  -webkit-text-fill-color:#172033; border:1px solid #94a3b8;
+  width:100%; min-width:0; max-width:100%; min-height:48px; box-sizing:border-box;
+}
+.screen.smart-scan-v105 .scan-three-v105>label { min-width:0; }
+.screen.smart-scan-v105 .scan-file-preview-v105 p,
+.screen.smart-scan-v105 .scan-three-v105 label>em,
+.screen.smart-scan-v105 .scan-log-link-v105 em { color:#475569; }
+.screen.smart-scan-v105 .scan-save-v105 { background:#1d4ed8; color:#fff; }
+.screen.smart-scan-v105 .scan-save-v105:disabled { background:#64748b; color:#fff; opacity:1; }
