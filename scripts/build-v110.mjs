@@ -14,6 +14,7 @@ steps.push('finalize-smart-scanner-v11036.mjs','test-smart-scanner-v11036.mjs','
 steps.push('finalize-scanner-load-link-v11037.mjs','test-scanner-load-link-v11037.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-scanner-field-semantics-v11038.mjs','test-scanner-field-semantics-v11038.mjs','test-scanner-load-link-v11037.mjs','test-smart-scanner-v11036.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-smart-scan-routing-v11039.mjs','test-smart-scan-evidence-v11039.mjs','test-smart-scan-routing-v11039.mjs','test-scanner-field-semantics-v11038.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-tql-instructions-v110310.mjs','test-tql-instructions-v110310.mjs','test-smart-scan-routing-v11039.mjs','test-scanner-field-semantics-v11038.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
