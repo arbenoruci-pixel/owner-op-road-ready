@@ -22,6 +22,7 @@ steps.push('finalize-insert-time-v110314.mjs','test-insert-time-v110314.mjs','te
 steps.push('finalize-paper-log-v110315.mjs','test-paper-log-v110315.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-insert-interaction-v110316.mjs','test-insert-interaction-v110316.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-wizard-midnight-v110317.mjs','test-wizard-midnight-v110317.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-smart-scan-recovery-v110318.mjs','test-smart-scan-recovery-v110318.mjs','test-saved-scan-recovery-v110312.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
