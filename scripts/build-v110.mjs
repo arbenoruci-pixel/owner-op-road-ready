@@ -26,6 +26,7 @@ steps.push('finalize-smart-scan-recovery-v110318.mjs','test-smart-scan-recovery-
 steps.push('finalize-midnight-prefix-v110319.mjs','test-midnight-prefix-v110319.mjs','test-status-midnight-carry-v11032.mjs','test-paper-log-v110315.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-invoice-send-v110320.mjs','test-invoice-send-v110320.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-checklist-evidence-v110321.mjs','test-checklist-evidence-v110321.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-load-guide-v110322.mjs','test-load-guide-v110322.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

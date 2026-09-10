@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {checklistFixture} from './v110321/checklistFixture.mjs';
+import {resolveDriverGuideV103,buildDriverLoadGuideV103} from '../source/src/modules/loads/loadGuideV103.js';
+import {safeMissionProgressV10966} from '../source/src/modules/loads/safeMissionModelV10966.js';
+const removed=['pretrip','arrive_pickup','depart_pickup','arrive_delivery_1','depart_delivery_1','arrive_delivery_2'];
+const f=checklistFixture();
+assert.equal(f.guide.steps.length,9);
+assert.ok(f.guide.steps.every(s=>s.kind!=='status'));
+const route=buildDriverLoadGuideV103({loadNo:'12345678',stops:[{type:'pickup',city:'Windsor',state:'CT'},{type:'delivery',city:'Coldwater',state:'MI'},{type:'delivery',city:'Howe',state:'IN'}]});
+assert.ok(route.steps.some(s=>s.id==='route_delivery_2'));
+assert.ok(route.steps.every(s=>s.kind!=='status'));
+// Simulate an old snapshot whose unfinished first task is pre-trip.
+f.guide.steps.unshift(...removed.map(id=>({id,kind:'status',status:'ON',title:'Old Logbook task'})));
+f.guide.steps.push({id:'old-custom-logbook',kind:'manual',action:'open_status'});
+f.state.eventsByDay={};
+const before=structuredClone(f);
+const home=resolveDriverGuideV103(f.state,f.guide,f.store),mission=safeMissionProgressV10966(f.state,f.guide,f.store);
+assert.deepEqual(home,mission);
+assert.equal(home.total,9);assert.equal(home.completed,3);assert.equal(home.percent,33);
+assert.equal(home.currentStep.id,'route_pickup');
+assert.ok(home.steps.every(s=>!removed.includes(s.id)&&s.id!=='old-custom-logbook'));
+assert.deepEqual(f,before,'reading a saved guide must leave saved steps and Logbook data intact');
+f.guide.manualDone=Object.fromEntries(home.steps.map(s=>[s.id,1]));
+assert.equal(resolveDriverGuideV103(f.state,f.guide,f.store).complete,true,'removed status tasks cannot block load completion');
+console.log('PASS — new multi-stop and saved guides omit Logbook prompts; totals, Home, mission and completion agree; saved data unchanged');
