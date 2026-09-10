@@ -18,6 +18,7 @@ patch(recovery,"&&l.broker&&brokerKey(l.broker)!==brokerKey(record.broker)","&&l
 patch(recovery,"if(fields.broker&&brokerKey(fields.broker)!==brokerKey(record.broker))return null;","if(fields.broker&&record.broker&&brokerKey(fields.broker)!==brokerKey(record.broker))return null;");
 patch(recovery," if(!Array.isArray(stops)||stops.length<2||stops.some(s=>!s.city||!s.state||!/^\\d{4}-\\d{2}-\\d{2}$/.test(s.date||'')))return null;", " // Optional stop dates/addresses do not block the saved load.\n if(Array.isArray(stops))fields.stops=stops.map(s=>({...s}));");
 patch(recovery,"broker:record.broker},{documentId:record.id", "broker:record.broker||fields.broker||''},{documentId:record.id");
+patch(recovery,"candidates.filter(g=>(g.deliveryDate||g.pickupDate||'')>=cutoff)","candidates.filter(g=>(g.deliveryDate||g.pickupDate||'')>=cutoff || !g.deliveryDate&&!g.pickupDate&&stamp(g.createdAt)>=Date.now()-14*86400000)");
 
 // Readable shipping references are equivalent across broker/customer labels.
 // A unique match is required; equipment, contact numbers and date alone never match.

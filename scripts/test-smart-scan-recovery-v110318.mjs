@@ -9,7 +9,7 @@ import {referencesFromDocumentV105} from '../source/src/modules/documents/docume
 import {savedScanResultV110318} from '../source/src/modules/scan/savedScanResumeV110318.js';
 
 const rate={id:'saved-rate',type:'rate_confirmation',status:'verified',canonicalLoadNo:'76543210',broker:'Example Freight',createdAt:Date.now(),documentDate:'2026-09-08',extracted:{loadNo:'76543210',orderNo:'76543210',broker:'Example Freight',origin:'Howe, IN',destination:'Smithfield, RI',pickupDate:'2026-09-08',stops:[{type:'pickup',city:'Howe',state:'IN',date:'2026-09-08'},{type:'delivery',city:'Smithfield',state:'RI',date:''}]}};
-for(const doc of [rate,{...rate,extracted:{...rate.extracted,stops:undefined}},{...rate,broker:'',extracted:{...rate.extracted,broker:''}},{...rate,status:'needs_review',documentDate:'',loadAssignmentStatusV11037:'driver_selected'}]) {
+for(const doc of [rate,{...rate,extracted:{...rate.extracted,pickupDate:'',stops:undefined}},{...rate,extracted:{...rate.extracted,stops:undefined}},{...rate,broker:'',extracted:{...rate.extracted,broker:''}},{...rate,status:'needs_review',documentDate:'',loadAssignmentStatusV11037:'driver_selected'}]) {
   const guide=buildSavedDocumentGuideV110312(doc);assert.ok(guide,'A saved load opens with incomplete appointments');
   const restored=restoreSavedLoadGuidesV110312({}, {documents:[doc]});
   assert.equal(getActiveLoadGuideV103(restored)?.loadNo,rate.canonicalLoadNo);
