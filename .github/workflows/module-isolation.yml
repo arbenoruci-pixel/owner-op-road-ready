@@ -59,7 +59,7 @@ jobs:
             sleep 1
           done
           failed=0
-          for test in browser-smart-scan-recovery-v110318 browser-wizard-midnight-v110317 browser-insert-interaction-v110316 browser-paper-log-v110315 browser-saved-scan-recovery-v110312 browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-resize-grabbers-v111 browser-logbook-followup-v11021 browser-motive-override-v11023 browser-canonical-continuity-v11026 browser-duty-graph-continuity browser-modern-editor-v11027 browser-dot-officer-email-v11028 browser-ratecon-one-way-v11029 browser-persistent-guide-v110311 browser-service-worker-v110; do
+          for test in browser-midnight-prefix-v110319 browser-smart-scan-recovery-v110318 browser-wizard-midnight-v110317 browser-insert-interaction-v110316 browser-paper-log-v110315 browser-saved-scan-recovery-v110312 browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-resize-grabbers-v111 browser-logbook-followup-v11021 browser-motive-override-v11023 browser-canonical-continuity-v11026 browser-duty-graph-continuity browser-modern-editor-v11027 browser-dot-officer-email-v11028 browser-ratecon-one-way-v11029 browser-persistent-guide-v110311 browser-service-worker-v110; do
             if ! node scripts/$test.mjs 2>&1 | tee /tmp/$test.log; then failed=1; fi
           done
           exit "$failed"

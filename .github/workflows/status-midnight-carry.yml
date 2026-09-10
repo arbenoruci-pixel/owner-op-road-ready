@@ -35,6 +35,7 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          node scripts/browser-midnight-prefix-v110319.mjs
           node scripts/browser-wizard-midnight-v110317.mjs
           node scripts/browser-insert-interaction-v110316.mjs
           node scripts/browser-paper-log-v110315.mjs
@@ -45,6 +46,7 @@ jobs:
         with:
           name: status-midnight-carry-evidence
           path: |
+            browser-test-results/midnight-prefix-*/
             browser-test-results/wizard-midnight-*/
             browser-test-results/status-midnight-carry/
             browser-test-results/paper-log-*/
