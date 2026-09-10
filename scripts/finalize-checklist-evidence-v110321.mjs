@@ -15,7 +15,7 @@ const model=loads+'safeMissionModelV10966.js';
 if(!read(model).includes("import {resolveChecklistEvidenceV110321}"))fs.writeFileSync(model,"import {resolveChecklistEvidenceV110321} from './checklistEvidenceV110321.js';\n"+read(model));
 const m=read(model),at=m.indexOf('export function safeMissionProgressV10966(');
 assert.ok(at>=0);fs.writeFileSync(model,m.slice(0,at)+`export function safeMissionProgressV10966(state = {}, guideInput = null, businessStore = {}) {
-  return resolveChecklistEvidenceV110321(state,safeGuideV10966(guideInput),businessStore);
+  return resolveChecklistEvidenceV110321(state,guideInput,businessStore);
 }
 `);
 const ui=loads+'SafeDriverMissionV10966.jsx';

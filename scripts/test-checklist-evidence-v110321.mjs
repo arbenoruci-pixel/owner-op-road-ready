@@ -56,6 +56,9 @@ check('Explicit manual completion remains supported',f=>{f.guide.manualDone.pick
 check('Unreviewed summaries cannot complete document steps',f=>{f.bol.reviewStatus='needs_review';pending(f,'pickup_bol','pretrip');});
 check('An explicit different load defeats a stale BOL alias',f=>{f.store.loads.push({loadNo:'99999999'});f.state.eventsByDay['2026-09-08'][0].loadNo='99999999';f.state.eventsByDay['2026-09-10'][0].reasons=['Delivery'];pending(f,'pretrip');});
 check('An empty pickup checklist is not evidence of physical readiness',f=>{f.guide.steps.find(s=>s.id==='pickup_ready').checklist=[];pending(f,'pickup_ready');});
+check('Deleting a Vault row cannot resurrect an old Logbook document summary',f=>{f.state.documentsByDay={'2026-09-08':[structuredClone(f.bol)]};f.store.documents=[];pending(f,'pickup_bol','pretrip');});
+check('Persisted character objects recover checklist text in both views',f=>{f.bol.podSigned=true;f.guide.steps=f.guide.steps.map(s=>({...s,checklist:(s.checklist||[]).map(item=>({...item}))}));done(f,'delivery_docs_1','pickup_ready');const a=resolveDriverGuideV103(f.state,f.guide,f.store),b=safeMissionProgressV10966(f.state,f.guide,f.store);assert.deepEqual(a.steps,b.steps);assert.deepEqual(step(f,'delivery_docs_1').checklist,['Collect signed POD']);});
+check('Unreadable checklist requirements remain pending',f=>{f.bol.podSigned=true;f.guide.steps.find(s=>s.id==='delivery_docs_1').checklist=[{unknown:'unrecognized'}];pending(f,'delivery_docs_1');});
 const component=fs.readFileSync('source/src/modules/loads/SafeDriverMissionV10966.jsx','utf8');
 assert.doesNotMatch(component,/safe_mission_bol_relink_v10966|if \(progress.pickupPresent\)/);
 assert.match(component,/completionEvidence.label/);

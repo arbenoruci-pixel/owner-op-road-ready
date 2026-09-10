@@ -66,6 +66,7 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.getByRole('button',{name:'Full mission',exact:true}).click();
     const row=id=>page.locator(`[data-checklist-step="${id}"]`);
     await row('pretrip').waitFor();
+    assert.doesNotMatch(await page.locator('body').innerText(),/\[object Object\]/);
     assert.equal(await row('pretrip').getAttribute('data-complete'),'true');
     assert.match(await row('pretrip').innerText(),/Done/);assert.match(await row('pretrip').innerText(),/Logbook/);
     assert.equal(await row('pretrip').getByRole('button').count(),0);

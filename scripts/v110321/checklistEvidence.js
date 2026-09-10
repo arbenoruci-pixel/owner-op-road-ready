@@ -42,10 +42,10 @@ const delivery = event => /\bdelivery\b|\bunloading\b|\bdelivered\b|\bdrop\s*off
 const trailerReturn = event => /\btrailer\s*(?:drop|return)\b|\breturn(?:ed)?\s*(?:empty\s*)?trailer\b/.test(activity(event));
 
 function documents(state, store) {
-  // Reviewed Vault rows win, including explicit removal, reassignment and signature edits.
-  const reviewed = list(store.documents);
-  const older = rows(state.documentsByDay).filter(d => !reviewed.some(r => docIds(r).some(id => docIds(d).includes(id))));
-  return [...reviewed, ...older];
+  // A loaded Vault collection is authoritative, including records removed entirely.
+  // Logbook document rows are reference summaries, not a second live Vault.
+  if (Array.isArray(store.documents)) return list(store.documents);
+  return rows(state.documentsByDay);
 }
 function nowOnLogClock(state, now) {
   try {
@@ -63,11 +63,22 @@ function eventEntries(state, now) {
       return {...entry, end, closed:Number.isFinite(end) && end > entry.at && end <= clock};
     });
 }
+function checklistItems(value) {
+  const items = Array.isArray(value) ? value : value == null ? [] : [value];
+  return items.map(item => {
+    if (typeof item !== 'object' || !item) return text(item);
+    if (text(item.text || item.label)) return text(item.text || item.label);
+    const keys = Object.keys(item);
+    if (keys.length && keys.every(k => /^\d+$/.test(k) && typeof item[k] === 'string')) return keys.sort((a,b)=>Number(a)-Number(b)).map(k=>item[k]).join('').trim();
+    return 'Review saved checklist item';
+  }).filter(Boolean);
+}
 const logEvidence = entry => entry && ({source:'logbook',eventId:text(entry.event.id),day:entry.day,label:`Logbook · ${entry.day} · ${String(Math.floor(Number(entry.event.startMin)/60)).padStart(2,'0')}:${String(Number(entry.event.startMin)%60).padStart(2,'0')}`});
 const documentEvidence = doc => doc && ({source:'document',documentId:docIds(doc)[0] || '',day:isoDay(doc.documentDate || doc.date),label:signed(doc) ? 'Signed delivery document saved' : 'Load document saved'});
 
 export function resolveChecklistEvidenceV110321(state = {}, guide = null, store = {}, {now = Date.now()} = {}) {
   if (!guide) return {guide:null,steps:[],completed:0,total:0,percent:0,currentStep:null,complete:false,pickupPresent:false,bol:null};
+  guide = {...guide,steps:list(guide.steps).map(step=>({...step,checklist:checklistItems(step.checklist)}))};
   const stops = list(guide.stops), pickupStop = stops.find(s => s.type === 'pickup');
   const deliveries = stops.filter(s => s.type === 'delivery').map((s,i) => ({...s,deliverySequence:i+1}));
   const allDocs = documents(state,store);
