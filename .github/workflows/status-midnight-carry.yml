@@ -26,7 +26,7 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium webkit
-      - name: Save ON and reopen on Chromium and WebKit
+      - name: Insert time controls, Save ON and reopen on Chromium and WebKit
         run: |
           npx next start --hostname 127.0.0.1 --port 3000 > /tmp/status-carry-server.log 2>&1 &
           SERVER_PID=$!
@@ -35,6 +35,7 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          node scripts/browser-insert-time-v110314.mjs
           BROWSER_ENGINE=chromium node scripts/browser-status-midnight-carry-v11032.mjs
           BROWSER_ENGINE=webkit node scripts/browser-status-midnight-carry-v11032.mjs
       - uses: actions/upload-artifact@v4
@@ -43,6 +44,7 @@ jobs:
           name: status-midnight-carry-evidence
           path: |
             browser-test-results/status-midnight-carry/
+            browser-test-results/insert-time-*/
             /tmp/status-carry-build.log
             /tmp/status-carry-server.log
           retention-days: 7
