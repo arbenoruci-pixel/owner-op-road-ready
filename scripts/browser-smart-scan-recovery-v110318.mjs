@@ -67,6 +67,7 @@ function scanState(kind){
  if(kind==='resume'){doc.status='needs_review';doc.reviewStatus='needs_review';doc.canonicalLoadNo='';state.testOriginalPdfBytes=Array.from(simplePdf(rateText));}
  return state;
 }
+async function expectMission(page){await page.getByRole('heading',{name:'76543210',exact:true}).waitFor();await page.getByText('Howe, IN → Smithfield, RI',{exact:true}).waitFor();await page.getByText('Driver checklist',{exact:true}).waitFor();}
 const reports=[];
 for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
  for(const kind of ['missing-appointment','resume','bol-upload']){
@@ -100,11 +101,11 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
     if(kind==='resume'){assert.equal(docs.length,1);assert.equal(docs[0].id,'saved-rate-318');assert.ok(docs[0].loadGuideV110312);}
     else {const bol=docs.find(d=>d.type==='bol');assert.equal(bol.canonicalLoadNo,'76543210');assert.equal(bol.linkToLogbook,true);assert.ok(bol.references.some(r=>r.value==='87654321'));}
     await done.click();
-    if(kind==='resume')await page.getByRole('heading',{name:'Route and appointments',exact:true}).waitFor();
+    if(kind==='resume')await expectMission(page);
    } else {
     await page.locator('.adaptive-home-v1038.active-load').waitFor();
     assert.equal(await page.getByRole('button',{name:'Continue saved scan',exact:true}).count(),0);
-    await page.getByRole('button',{name:'Full mission',exact:true}).click();await page.getByRole('heading',{name:'Route and appointments',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Full mission',exact:true}).click();await expectMission(page);
    }
    await page.screenshot({path:`${output}/${name}-${kind}.png`});
    await page.reload();await page.locator('.adaptive-home-v1038.active-load').waitFor({timeout:30000});assert.deepEqual(errors,[]);
