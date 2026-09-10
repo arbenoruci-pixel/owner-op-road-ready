@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBillingPacketPdfV102, downloadPdfBytesV102 } from './ownerOpsPdfV102.js';
-import { planInvoiceSubmission, requireCompletePacket, submitInvoiceOnce } from './invoiceSubmissionV110320.js';
+import { planInvoiceSubmission, reconcileBillingDocuments, requireCompletePacket, submitInvoiceOnce } from './invoiceSubmissionV110320.js';
 import { connectedOutlook, connectOutlook, disconnectOutlook, outlookAccessToken, outlookConfiguration, outlookOwnerKey } from './outlookConnectionV110320.js';
 import './invoiceSendV110320.css';
 
-export default function InvoiceSendPanel({ load, documents, profile, invoices, onAccepted, onFirstLine }) {
+export default function InvoiceSendPanel({ load, documents, profile, invoices, reviewedDocuments, onAccepted, onFirstLine }) {
   const [config, setConfig] = useState(null);
   const [account, setAccount] = useState(() => connectedOutlook());
   const [packet, setPacket] = useState(null);
@@ -13,11 +13,11 @@ export default function InvoiceSendPanel({ load, documents, profile, invoices, o
   const [receipt, setReceipt] = useState(null);
   const running = useRef(false);
   const planning = useMemo(() => {
-    try { return { plan: planInvoiceSubmission({ load, documents, profile, invoices }) }; }
+    try { return { plan: planInvoiceSubmission({ load, documents: reconcileBillingDocuments(documents, reviewedDocuments), profile, invoices }) }; }
     catch (e) { return { error: e.message }; }
-  }, [load, documents, profile, invoices]);
+  }, [load, documents, reviewedDocuments, profile, invoices]);
   const plan = planning.plan;
-  const recordKey = plan && `road-ready-invoice-send-v110320:${outlookOwnerKey()}:${profile.mcNumber || profile.carrierName}:${plan.load.id || plan.load.loadNo}`;
+  const recordKey = plan && `road-ready-invoice-send-v110320:${outlookOwnerKey()}:${plan.load.id || plan.load.loadNo}`;
   useEffect(() => { let live = true; outlookConfiguration().then(value => { if (live) setConfig(value); }).catch(e => { if (live) setError(e.message); }); return () => { live = false; }; }, []);
   useEffect(() => {
     let live = true; setPacket(null); setError('');

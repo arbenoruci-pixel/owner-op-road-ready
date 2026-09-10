@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { planInvoiceSubmission, requireCompletePacket, graphMailPayload, submitInvoiceOnce } from '../source/src/modules/owneros/invoiceSubmissionV110320.js';
+import { planInvoiceSubmission, reconcileBillingDocuments, requireCompletePacket, graphMailPayload, submitInvoiceOnce } from '../source/src/modules/owneros/invoiceSubmissionV110320.js';
 const load={id:'test-load',loadNo:'TEST-42',broker:'Example Freight',billingEmail:'broker@example.test',gross:4250,origin:'Howe, IN',destination:'Smithfield, RI'};
 const profile={carrierName:'Example Carrier',mcNumber:'TEST',email:'carrier@example.test',factoring:{enabled:true,email:'factor@example.test'}};
 const documents=[{client_document_id:'rate',load_no:load.loadNo,type:'rate_confirmation'},{client_document_id:'bol',load_no:load.loadNo,type:'bol'},{client_document_id:'pod',load_no:load.loadNo,type:'pod',podSigned:true},{client_document_id:'private-log',load_no:load.loadNo,type:'logbook'},{client_document_id:'other-load',load_no:'OTHER',type:'pod',podSigned:true}];
@@ -16,3 +16,11 @@ let storage=memory(),calls=0;const args={storage,recordKey:'one',plan,bytes,from
 for(const status of [401,403,429]){storage=memory();await assert.rejects(submitInvoiceOnce({...args,storage,send:async()=>({status})}));assert.equal(JSON.parse(storage.getItem('one')).status,'failed');await submitInvoiceOnce({...args,storage});}
 for(const send of [async()=>{throw Error('network lost')},async()=>({status:503})]){storage=memory();await assert.rejects(submitInvoiceOnce({...args,storage,send}));assert.equal(JSON.parse(storage.getItem('one')).status,'unknown');await assert.rejects(submitInvoiceOnce({...args,storage}),/previous attempt/);}
 console.log('PASS — correct factoring recipient, exact total, signed BOL/POD, original files only, PDF attachment, accepted/failed/uncertain outcomes and duplicate suppression');
+
+const raw=[{local_id:'r',client_document_id:'r-blob',type:'other',load_no:'WRONG',extracted:{type:'other'}},{local_id:'p',client_document_id:'p-blob',type:'pod',load_no:load.loadNo,podSigned:true},{local_id:'b',client_document_id:'b-blob',type:'bol',load_no:load.loadNo}];
+const review=[{localDocumentId:'r',type:'rate_confirmation',canonicalLoadNo:load.loadNo},{clientDocumentId:'p-blob',type:'pod',canonicalLoadNo:load.loadNo,extracted:{podSigned:true}},{id:'b',type:'bol',canonicalLoadNo:'DIFFERENT'}];
+const reconciled=reconcileBillingDocuments(raw,review);assert.equal(planInvoiceSubmission({...input,documents:reconciled}).documents.length,2);assert.equal(reconciled[0].client_document_id,'r-blob');assert.equal(reconciled[2].load_no,'DIFFERENT');
+assert.equal(reconcileBillingDocuments(raw,[{id:'p',status:'archived',archivedAt:1}]).length,2);
+assert.equal(reconcileBillingDocuments(raw,[{id:'p',canonicalLoadNo:''}]).find(d=>d.local_id==='p').load_no,'');
+assert.equal(reconcileBillingDocuments(raw,[{id:'p',extracted:{podSigned:false}}]).find(d=>d.local_id==='p').podSigned,false);
+console.log('PASS — canonical Vault corrections, reassignments, archives, explicit unassignment and rejected signature override stale blob metadata');

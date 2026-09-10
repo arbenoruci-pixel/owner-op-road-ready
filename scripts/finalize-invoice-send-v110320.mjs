@@ -16,7 +16,7 @@ const start = read(screen).indexOf('  function openBillingEmail() {');
 const end = read(screen).indexOf('  function exportIftaCsv()', start);
 if (start >= 0) { assert.ok(end > start); const s = read(screen); fs.writeFileSync(screen, s.slice(0, start) + s.slice(end)); }
 patch(screen, '<button type="button" onClick={openBillingEmail}>Email billing</button>', '');
-patch(screen, '<form className="billing-profile-v102"', `<InvoiceSendPanelV110320 key={selectedLoad?.id || selectedLoad?.loadNo} load={selectedLoad} documents={documents} profile={profileDraft} invoices={invoices}
+patch(screen, '<form className="billing-profile-v102"', `<InvoiceSendPanelV110320 key={selectedLoad?.id || selectedLoad?.loadNo} load={selectedLoad} documents={documents} reviewedDocuments={businessStore.documents} profile={profileDraft} invoices={invoices}
             onFirstLine={()=>{const next={...profileDraft,factoring:{...profileDraft.factoring,enabled:true,company:'FirstLine Funding Group',email:'ffg@firstlinefundinggroup.com'}};setProfileDraft(next);setOwnerStore(updateOwnerOpsProfileV102(readOwnerOpsStoreV102(),next));}}
             onAccepted={receipt=>{const current=readOwnerOpsStoreV102();const next=appendOwnerOpsRowsV102(current,'invoices',[{...receipt,date:new Date().toISOString().slice(0,10),status:'submitted',sentAt:receipt.acceptedAt}]);setOwnerStore(next);setBusinessStore(updateBusinessRecord(readBusinessStore(),'loads',selectedLoad.id,{status:'submitted',invoiceNo:receipt.invoiceNo,invoiceSentAt:receipt.acceptedAt}));}}
           />

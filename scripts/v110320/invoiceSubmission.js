@@ -5,6 +5,22 @@ const amount = value => Number(String(value ?? '').replace(/[$,]/g, ''));
 export const validEmail = value => /^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/.test(String(value || ''));
 export const documentKind = doc => clean(doc.extracted?.type || doc.classification?.selectedType || doc.type).toLowerCase().replace(/[ -]+/g, '_');
 export const documentLoad = doc => key(doc.load_no || doc.loadNo || doc.extracted?.loadNo || doc.extracted?.orderNo);
+export function reconcileBillingDocuments(originals = [], reviewedDocuments = []) {
+  const hidden = doc => doc.archivedAt || /^(archived|deleted|cancelled|canceled|dismissed|superseded)$/i.test(clean(doc.status));
+  return originals.flatMap(raw => {
+    const reviewed = reviewedDocuments.find(doc =>
+      (raw.client_document_id && raw.client_document_id === (doc.clientDocumentId || doc.client_document_id)) ||
+      (raw.local_id && [doc.id, doc.localDocumentId, doc.local_id].includes(raw.local_id)));
+    if (hidden(reviewed || raw)) return [];
+    if (!reviewed) return [raw];
+    const loadNo = reviewed.loadAssignmentStatusV11037 === 'unassigned' ? '' : (reviewed.canonicalLoadNo ?? reviewed.loadNo ?? raw.load_no ?? '');
+    const type = reviewed.type || documentKind(raw);
+    const signature = reviewed.podSigned ?? reviewed.extracted?.podSigned ?? raw.podSigned ?? raw.extracted?.podSigned;
+    return [{ ...raw, ...reviewed, local_id: raw.local_id, client_document_id: raw.client_document_id,
+      load_no: loadNo, type, podSigned: signature,
+      extracted: { ...raw.extracted, ...reviewed.extracted, type, loadNo, podSigned: signature } }];
+  });
+}
 export function planInvoiceSubmission({ load, documents = [], profile = {}, invoices = [], today = new Date().toLocaleDateString('en-CA') }) {
   if (!load || !key(load.loadNo)) throw Error('Choose a load with its broker load number.');
   const total = amount(load.gross ?? load.total);
