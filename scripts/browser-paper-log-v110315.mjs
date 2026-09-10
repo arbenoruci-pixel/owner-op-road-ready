@@ -61,13 +61,14 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.reload();await openLog(page);assert.deepEqual((await stored(page)).eventsByDay,saved.eventsByDay);await page.screenshot({path:`${output}/${name}-insert-driving-reopened.png`});
    } else {
     await openEdit(page);assert.equal(await page.getByRole('slider').count(),2);assert.equal(await page.getByLabel('End time',{exact:true}).isDisabled(),false);assert.equal(await page.locator('.editor-duty-grid button').count(),4);
-    const next=status==='ON'?'SB':'ON';await page.locator('.editor-duty-grid').getByRole('button',{name:next,exact:true}).click();await enabled(page);await page.locator('.save-main').click();
+    if(status!=='D'){const next=status==='ON'?'SB':'ON';await page.locator('.editor-duty-grid').getByRole('button',{name:next,exact:true}).click();await enabled(page);await page.locator('.save-main').click();
     const changed=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='target')?.status===next);assert.equal(changed.currentStatus,next);
-    await page.reload();await openLog(page);await openEdit(page);await page.getByLabel('End time',{exact:true}).fill('23:45');await enabled(page);assert.equal(await boundary(page,'end'),1425);
+    await page.reload();await openLog(page);await openEdit(page);}
+    await page.getByLabel('End time',{exact:true}).fill('23:45');await enabled(page);assert.equal(await boundary(page,'end'),1425);
     await page.locator('.save-main').click();const ended=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='target')?.paperLogEndV110315===true);assert.equal(ended.eventsByDay[day].find(e=>e.id==='target').endMin,1425);
     await page.clock.setFixedTime(new Date('2026-09-10T03:56:00Z'));await page.reload();await openLog(page);await openEdit(page);
     assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'23:45');assert.equal(await boundary(page,'end'),1425);assert.deepEqual((await stored(page)).eventsByDay,ended.eventsByDay);
-    if(status==='D')assert.equal((await stored(page)).manualDrivingSession.active,false);
+    if(status==='D'){assert.equal((await stored(page)).manualDrivingSession.active,false);await page.clock.setFixedTime(new Date('2026-09-10T04:05:00Z'));await page.reload();await openLog(page);const midnight=await stored(page);assert.equal((midnight.eventsByDay['2026-09-10']||[]).some(e=>e.status==='D'),false);assert.equal(midnight.eventsByDay[day].find(e=>e.id==='target').endMin,1425);}
     await page.screenshot({path:`${output}/${name}-${status}-end-persists.png`});
    }
    const final=await stored(page);for(const key of ['signatureByDay','routeLegsByDay','loadGuidesById'])assert.deepEqual(final[key],original[key]);

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {applyLogbookEditorEdit as edit,applyLogbookEditorInsert as insert,previewLogbookEditorOverride as preview,projectLogbookEvents as project} from '../source/src/modules/logbook/eventEditingV110.js';
+import {applyManualDrivingMidnightContinuity} from '../source/src/core/timeline/manualDrivingContinuity.js';
 const day='2026-09-09',at=new Date('2026-09-10T03:55:00Z'),later=new Date('2026-09-10T04:00:00Z');
 const row=(id,status,startMin,endMin,source='manual')=>({id,status,startMin,endMin,source,note:'Keep '+id,lat:41,lng:-71});
 function fixture(){return {activeDay:day,homeTerminalTimeZone:'America/New_York',currentStatus:'SB',eventsByDay:{[day]:[row('early','D',0,25),row('sleep','SB',25,750),row('pti','ON',750,778),row('target','D',778,1321,'gps_drive'),row('live','SB',1321,1322,'live_status')]},signatureByDay:{'2026-09-08':{signed:true}},routeLegsByDay:{[day]:[{id:'route',eventId:'target'}]},loadGuidesById:{guide:{route:'Keep'}}};}
@@ -24,7 +25,7 @@ for(const status of ['OFF','SB','ON','D'])test('Current '+status+' accepts End, 
  if(status==='D')s.manualDrivingSession={active:true,eventId:'live',startDay:day};
  const r=edit(s,command(s,'live',{endMin:1400}),at);assert.equal(r.ok,true,r.error);assert.equal(r.events.find(e=>e.id==='live').paperLogEndV110315,true);
  assert.equal(project(JSON.parse(JSON.stringify(r.state)),day,at).find(e=>e.id==='live').endMin,1400);
- if(status==='D')assert.equal(r.state.manualDrivingSession.active,false);
+ if(status==='D'){assert.equal(r.state.manualDrivingSession.active,false);const next=applyManualDrivingMidnightContinuity(r.state,{currentDay:'2026-09-10',previousDay:day,nowMinute:5,forceActiveDriving:true});assert.deepEqual(next.eventsByDay,r.state.eventsByDay,'Manual End must not reopen Driving at midnight');}
  const st=edit(s,command(s,'live',{status:status==='ON'?'SB':'ON'}),at);assert.equal(st.ok,true,st.error);assert.equal(st.state.currentStatus,status==='ON'?'SB':'ON');
  const start=edit(s,command(s,'live',{startMin:1300}),at);assert.equal(start.ok,true,start.error);
  for(const [a,b] of [[1420,1435],[1420,1439]]) {const ins=insert(s,{day,event:row('new','ON',a,b)},at);assert.equal(ins.ok,true,ins.error);assert.equal(ins.state.currentStatus,status);assert.equal(ins.events.find(e=>e.id==='live').startMin,b);}
