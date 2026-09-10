@@ -80,6 +80,11 @@ patch(contract,"const projected=elapsedRows(state,day,at), result=replaceInterva
 // An Insert with optional, unknown location must not erase the existing
 // location of resumed Driving during startup's location reconciliation.
 patch('source/src/app/App.jsx',"    if (!previous.city || !previous.state) return event;\n    const sameCity", "    if (!previous.city || !previous.state || /^(GPS|Unknown|Pending)$/i.test(String(previous.city).trim()) || /^(UNK|UNKNOWN)$/i.test(String(previous.state).trim())) return event;\n    const sameCity");
+// Wait for React to commit the final pointer position before asserting the
+// exact pixel-to-minute result; the expected boundary remains unchanged.
+patch('scripts/browser-motive-override-v11023.mjs',
+ "    const expectedMinute=660+Math.round(dx/(svg.width*.894)*1440);\n    assert.equal(Number(await h.getAttribute('aria-valuenow')),expectedMinute);",
+ "    const expectedMinute=660+Math.round(dx/(svg.width*.894)*1440);\n    await page.waitForFunction(minute => Number(document.querySelector('[role=slider][data-edge=end]')?.getAttribute('aria-valuenow'))===minute,expectedMinute,{timeout:5000});\n    assert.equal(Number(await h.getAttribute('aria-valuenow')),expectedMinute);");
 const VERSION='110.3.16',BUILD='v110316-insert-touch-and-midnight';
 for(const file of ['release-version.json','public/app-version.json']){const d=JSON.parse(read(file));Object.assign(d,{version:VERSION,build:BUILD,force:false,label:'v110.3.16 Insert time and graph',releasedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,notes:['Insert handles move one-minute intervals in both directions.','Midnight End remains editable and graph taps keep Insert open.','Insert preserves the existing overnight OFF, SB or ON tail when splitting a previous day.']});fs.writeFileSync(file,JSON.stringify(d,null,2)+'\n');}
 for(const file of ['package.json','package-lock.json']){const d=JSON.parse(read(file));d.version=VERSION;if(d.packages?.[''])d.packages[''].version=VERSION;fs.writeFileSync(file,JSON.stringify(d,null,2)+'\n');}
