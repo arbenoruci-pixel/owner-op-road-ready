@@ -28,10 +28,27 @@ async function range(page,start,end){await page.getByLabel('Start time',{exact:t
 const reports=[];
 for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
  const browser=await type.launch({headless:true});
- for(const scenario of ['yesterday-OFF','yesterday-SB','yesterday-ON','current-D']) {
+ for(const scenario of ['yesterday-OFF','yesterday-SB','yesterday-ON','current-D','carry-today','carry-yesterday']) {
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2,timezoneId:'Europe/Belgrade',serviceWorkers:'block'}),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   try {
+   if(scenario.startsWith('carry-')) {
+    const state=fixture('SB');state.eventsByDay={'2026-09-08':[row('overnight','SB',1321,1322,{source:'live_status'})]};
+    await setup(page,context,state,scenario==='carry-today'?'2026-09-09T09:44:00Z':'2026-09-10T09:44:00Z');
+    const original=await stored(page);
+    await page.getByRole('button',{name:'Insert',exact:true}).click();await page.locator('.editor-compact-v111').waitFor();
+    await range(page,'05:00','05:30');assert.equal(await page.locator('.editor-graph-card .graph-discontinuity[data-kind="Gap"]').count(),0);
+    assert.deepEqual((await stored(page)).eventsByDay,original.eventsByDay);await page.locator('.save-main').click();
+    await waitState(page,s=>s.eventsByDay[day]?.some(e=>e.startMin===300&&e.endMin===330&&e.status==='ON'));
+    await page.reload();await openLog(page);
+    await page.getByRole('button',{name:'Insert',exact:true}).click();await page.locator('.editor-compact-v111').waitFor();
+    await range(page,'01:00','01:30');assert.equal(await page.locator('.editor-graph-card .graph-discontinuity[data-kind="Gap"]').count(),0);await page.locator('.save-main').click();
+    const saved=await waitState(page,s=>s.eventsByDay[day]?.some(e=>e.startMin===60&&e.endMin===90&&e.status==='ON'));
+    assert.deepEqual(saved.eventsByDay['2026-09-08'],original.eventsByDay['2026-09-08']);
+    await page.reload();await openLog(page);assert.deepEqual((await stored(page)).eventsByDay,saved.eventsByDay);
+    await page.screenshot({path:`${output}/${name}-${scenario}-reopened.png`});assert.deepEqual(errors,[]);
+    reports.push({browser:name,scenario,passed:true});console.log(`PASS — ${name} ${scenario}: carried SB, repeated Insert, Save and reopen`);continue;
+   }
    const status=scenario.split('-')[1],state=fixture(status,true);
    state.eventsByDay[day].at(-1).status=status;
    if(status==='D'){state.eventsByDay[day].at(-1).id='target-live';state.manualDrivingSession={active:true,eventId:'target-live',startDay:day};}
@@ -79,7 +96,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
    await page.screenshot({path:`${output}/${name}-${scenario}-reopened.png`});
    for(const key of ['signatureByDay','routeLegsByDay','loadGuidesById'])assert.deepEqual(midnight[key],original[key]);
    assert.deepEqual(errors,[]);reports.push({browser:name,scenario,passed:true});console.log(`PASS — ${name} ${scenario}: Insert touch, midnight, Save, repeated insertion and reopening`);
-  }catch(error){await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`}).catch(()=>{});reports.push({browser:name,scenario,passed:false,error:String(error),stack:error.stack,errors});console.error(error);}
+  }catch(error){await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`}).catch(()=>{});fs.writeFileSync(`${output}/${name}-${scenario}-state.json`,JSON.stringify(await stored(page).catch(()=>null),null,2));reports.push({browser:name,scenario,passed:false,error:String(error),stack:error.stack,errors});console.error(error);}
   finally{await context.close();}
  }
  await browser.close();

@@ -37,9 +37,19 @@ patch(time,"onChange={e=>onEndChange(e.target.value)}","onChange={e=>onEndChange
 // Logbook view. Insert splits that same interval when the driver saves there.
 // Explicitly ended records and unrelated earlier intervals retain their bounds.
 const contract='source/src/modules/logbook/eventEditingV110.js';
+patch(contract,"// Logbook UI contract. Stored minute values are home-terminal wall-clock values.","// Logbook UI contract. Stored minute values are home-terminal wall-clock values.\nimport { previousRecordedDuty } from '../../core/timeline/knownMidnightCarry.js';");
 patch(contract,'export function previewLogbookInsertOverride(state,{day,event,expectedRows},at=new Date()) {',`function insertRowsV110316(state,day,event,at) {
   const projected=elapsedRows(state,day,at),clock=logbookClock(state,at);
   const last=projected.rows.filter(active).slice().sort((a,b)=>a.startMin-b.startMin).at(-1);
+  const previous=previousRecordedDuty(state.eventsByDay,day);
+  const first=projected.rows.filter(active).slice().sort((a,b)=>a.startMin-b.startMin)[0];
+  if(previous && ['OFF','SB','ON'].includes(previous.status) && !previous.paperLogEndV110315
+    && (!first || first.startMin>0) && (!first || event.startMin<first.startMin)) {
+    const endMin=first?first.startMin:day===clock.day?Math.min(1440,Math.max(1,clock.minute,event.endMin+1)):1440;
+    const carry={id:'paper_insert_carry_'+day+'_'+event.id,status:previous.status,startMin:0,endMin,
+      city:previous.city||'',state:previous.state||'',note:previous.note||'',source:'live_status'};
+    return {...projected,rows:[carry,...projected.rows]};
+  }
   if(day<clock.day && last && ['OFF','SB','ON'].includes(last.status)
     && last.source==='live_status' && !last.paperLogEndV110315
     && event.endMin>last.startMin && last.endMin<1440) {

@@ -27,3 +27,12 @@ for(const status of ['OFF','SB','ON']) {
  assert.equal(save(ended,command,at).events.find(e=>e.id==='tail').endMin,1322);
  console.log(`PASS — yesterday's ${status} continues around Insert; Save/reopen and repeated Insert agree; explicit End remains exact`);
 }
+for(const activeDay of ['2026-09-09','2026-09-10']) {
+ const state={activeDay,homeTerminalTimeZone:'America/New_York',currentStatus:'SB',eventsByDay:{'2026-09-08':[{id:'sleep',status:'SB',startMin:1000,endMin:1001,source:'live_status'}]}};
+ const original=structuredClone(state),r=save(state,{day:activeDay,event:{id:'first',status:'ON',startMin:300,endMin:330}},at);
+ assert.equal(r.ok,true,r.error);assert.deepEqual(state,original);assert.deepEqual(traceGeometry(r.events).discontinuities,[]);
+ assert.deepEqual(r.state.eventsByDay['2026-09-08'],state.eventsByDay['2026-09-08']);
+ const next=save(JSON.parse(JSON.stringify(r.state)),{day:activeDay,event:{id:'again',status:'OFF',startMin:60,endMin:90}},at);
+ assert.equal(next.ok,true,next.error);assert.deepEqual(traceGeometry(next.events).discontinuities,[]);
+ console.log('PASS — carried SB on '+activeDay+' surrounds Insert without changing the prior day');
+}
