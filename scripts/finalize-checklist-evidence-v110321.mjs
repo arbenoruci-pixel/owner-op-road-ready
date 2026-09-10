@@ -29,6 +29,8 @@ patch(ui,"import React, { useEffect, useMemo } from 'react';","import React, { u
 patch(ui,"  dispatchSmartDocumentLinkV100,\n",'');
 patch(ui,'key={step.id + index} style={{','key={step.id + index} data-checklist-step={step.id} data-complete={step.complete} style={{');
 patch(ui,'{step.detail}</em> : null}</div>','{step.detail}</em> : null}{step.complete && step.completionEvidence ? <small style={{display:"block",marginTop:4,color:"#08784e"}}>{step.completionEvidence.label}</small> : null}</div>');
+// Mission buttons have white surfaces and must not inherit the app's white button text.
+fs.writeFileSync(ui,read(ui).replaceAll("background:'#fff', fontWeight:","background:'#fff', color:'#175cc8', fontWeight:"));
 const home='source/src/modules/home/AdaptiveHomeV1038.jsx';
 patch(home,"import React, { useMemo } from 'react';","import React, { useMemo } from 'react';\nimport {useChecklistStoreV110321} from '../loads/useChecklistStoreV110321.js';");
 patch(home,'  const guide = useMemo(() => getActiveLoadGuideV103(props.state), [props.state]);\n  const progress = useMemo(() => resolveDriverGuideV103(props.state, guide), [props.state, guide]);','  const checklistStore = useChecklistStoreV110321();\n  const guide = useMemo(() => getActiveLoadGuideV103(props.state), [props.state, checklistStore]);\n  const progress = useMemo(() => resolveDriverGuideV103(props.state, guide, checklistStore), [props.state, guide, checklistStore]);');

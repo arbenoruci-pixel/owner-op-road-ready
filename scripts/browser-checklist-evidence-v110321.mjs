@@ -70,6 +70,12 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     assert.equal(await row('pretrip').getAttribute('data-complete'),'true');
     assert.match(await row('pretrip').innerText(),/Done/);assert.match(await row('pretrip').innerText(),/Logbook/);
     assert.equal(await row('pretrip').getByRole('button').count(),0);
+    const contrast=await page.locator('[data-checklist-step] button').evaluateAll(buttons=>buttons.map(el=>{
+      const c=getComputedStyle(el),rgb=v=>(v.match(/[\d.]+/g)||[]).slice(0,3).map(Number),lum=v=>rgb(v).map(n=>{n/=255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4;}).reduce((a,n,i)=>a+n*[.2126,.7152,.0722][i],0);
+      const foreground=lum(c.webkitTextFillColor||c.color),background=lum(c.backgroundColor);
+      return {text:el.innerText,ratio:(Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05)};
+    }));
+    assert.ok(contrast.length && contrast.every(button=>button.text.trim() && button.ratio>=4.5),JSON.stringify(contrast));
     assert.equal(await row('arrive_delivery_1').getAttribute('data-complete'),'true');
     assert.equal(await row('final_pod').getAttribute('data-complete'),'false');
     if(scenario==='existing-load-logs')assert.equal(await row('depart_pickup').getAttribute('data-complete'),'true');
