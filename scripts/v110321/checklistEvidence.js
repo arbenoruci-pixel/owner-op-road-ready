@@ -14,7 +14,7 @@ const refs = value => [...new Set([
 ])];
 const canonical = value => ref(value?.canonicalLoadNo ?? value?.loadNo ?? value?.orderNo);
 const hidden = value => value?.deleted === true || value?.deletedAt || value?.archivedAt || /^(archived|deleted|cancelled|canceled|dismissed|superseded|void)$/.test(text(value?.status).toLowerCase());
-const usableDoc = value => !hidden(value) && value?.loadAssignmentStatusV11037 !== 'unassigned' && !/^(needs_review|unassigned|pending)$/.test(text(value?.status));
+const usableDoc = value => !hidden(value) && value?.loadAssignmentStatusV11037 !== 'unassigned' && ![value?.status,value?.reviewStatus].some(v => /^(needs_review|unassigned|pending)$/.test(text(v)));
 const docIds = value => ['id','documentId','localDocumentId','local_id','clientDocumentId','client_document_id'].map(k => text(value?.[k])).filter(Boolean);
 const kind = value => text(value?.type || value?.classification?.selectedType || value?.extracted?.type).toLowerCase().replace(/[ -]+/g, '_');
 const isBol = value => ['bol','bill_of_lading'].includes(kind(value));
@@ -78,12 +78,15 @@ export function resolveChecklistEvidenceV110321(state = {}, guide = null, store 
   const ownedDocs = allDocs.filter(d => usableDoc(d) && brokerMatches(d) && (canonical(d) ? canonical(d) === core : docIds(d).some(id => pointerIds.has(id))));
   const aliases = new Set([core,...refs(guide),...stops.flatMap(refs),...ownedLoads.flatMap(refs),...ownedDocs.flatMap(d => [...refs(d),...refs(d.extracted)])].filter(Boolean));
   const others = [...Object.values(state.loadGuidesById || {}),...list(store.loads),...allDocs.filter(usableDoc)].filter(v => canonical(v) && (canonical(v) !== core || !brokerMatches(v)));
+  const otherCanonical = new Set(others.map(canonical));
   const ambiguous = new Set(others.flatMap(v => [...refs(v),...refs(v.extracted),...list(v.stops).flatMap(refs)]));
   const matches = value => {
     if (hidden(value) || value.noLoadDeclared === true || !brokerMatches(value)) return false;
     const explicitGuide = text(value.guideId || value.loadGroupId);
     if (explicitGuide && explicitGuide !== text(guide.id)) return false;
     if (value.canonicalLoadNo && canonical(value) !== core) return false;
+    const primary = ref(value.loadNo || value.orderNo);
+    if (primary && primary !== core && otherCanonical.has(primary)) return false;
     const own = refs(value);
     if (own.length) return own.some(r => aliases.has(r) && !ambiguous.has(r));
     return !!explicitGuide && explicitGuide === text(guide.id);
@@ -127,7 +130,7 @@ export function resolveChecklistEvidenceV110321(state = {}, guide = null, store 
     // first linked work, on the same log day, with no intervening duty/load event.
     const anchor = linked.find(e=>e.event.status==='D' || e.event.status==='ON' && (pickup(e.event)||delivery(e.event)));
     const prior = anchor && all[all.indexOf(all.find(e=>e.event===anchor.event))-1];
-    if (prior && prior.day===anchor.day && prior.closed && anchor.at-prior.end <= 60 && prior.event.status==='ON' && pretrip(prior.event) && !refs(prior.event).length && !prior.event.noLoadDeclared) pti=prior;
+    if (prior && prior.day===anchor.day && prior.closed && anchor.at-prior.end <= 60 && prior.event.status==='ON' && pretrip(prior.event) && !refs(prior.event).length && !prior.event.noLoadDeclared && !(prior.event.guideId || prior.event.loadGroupId)) pti=prior;
   }
   const bol = ownedDocs.find(isBol) || null;
   const freightStops = deliveries.filter(s=>s.role!=='trailer_return');
@@ -170,7 +173,7 @@ export function resolveChecklistEvidenceV110321(state = {}, guide = null, store 
   const finalPod=pods.get(Number(finalPodStep?.stopSequence) || freightStops.at(-1)?.deliverySequence);
   put(['final_pod'],documentEvidence(finalPod));
   const ready=list(guide.steps).find(s=>s.id==='pickup_ready');
-  if (atPickup && ready && list(ready.checklist).every(s=>/^(Pickup #|Equipment:)/.test(text(s)))) put(['pickup_ready'],logEvidence(atPickup));
+  if (atPickup && ready && list(ready.checklist).length && list(ready.checklist).every(s=>/^(Pickup #|Equipment:)/.test(text(s)))) put(['pickup_ready'],logEvidence(atPickup));
   const steps=list(guide.steps).map(step=>{
     const manual=!!guide.manualDone?.[step.id] || step.kind==='complete_stop' && list(guide.completedStopIds).map(String).includes(String(step.stopSequence));
     const proof=evidence.get(step.id);

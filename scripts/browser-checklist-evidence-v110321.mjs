@@ -55,7 +55,8 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
    const f=checklistFixture();
    f.guide.steps.find(s=>s.id==='pickup_ready').checklist.push('Trailer damage-free');
    if(scenario==='combined-pti-delivery')delete f.state.eventsByDay['2026-09-08'];
-   const state={...baseState(),...f.state,view:'logbook',activeDay:'2026-09-10',currentStatus:'D',currentReason:'Driving started',currentLocation:{city:'Smithfield',state:'RI'},testInstructionStore:f.store};
+   f.state.eventsByDay['2026-09-10'].push({id:'after-drive-rest',status:'OFF',startMin:620,endMin:1440,city:'Smithfield',state:'RI',reasons:['Off Duty'],source:'manual'});
+   const state={...baseState(),...f.state,view:'logbook',activeDay:'2026-09-10',currentStatus:'OFF',currentReason:'Off Duty',currentLocation:{city:'Smithfield',state:'RI'},testInstructionStore:f.store};
    const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2,timezoneId:'America/New_York',colorScheme:'light',serviceWorkers:'block'});
    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date(f.now));await setupRoutes(context);
    try {
@@ -90,7 +91,7 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     assert.deepEqual(protectedData(await snapshot(page)),before);
     assert.deepEqual(errors,[]);
     reports.push({browser:name,scenario,passed:true});console.log(`PASS — ${name} ${scenario}: PTI / delivery recognized, document edits live, reload, protected logs unchanged`);
-   } catch(error) {await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`,fullPage:true}).catch(()=>{});reports.push({browser:name,scenario,passed:false,error:String(error),stack:error.stack,pageErrors:errors});console.error(error);} finally {await context.close();}
+   } catch(error) {await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`,fullPage:true}).catch(()=>{});reports.push({browser:name,scenario,passed:false,error:String(error),stack:error.stack,pageErrors:errors});fs.writeFileSync(`${output}/${name}-${scenario}-FAILED-state.json`,JSON.stringify({state:await snapshot(page),body:await page.locator('body').innerText()},null,2));console.error(error);} finally {await context.close();}
   }
  } finally {await browser.close();}
 }

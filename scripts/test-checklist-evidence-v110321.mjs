@@ -53,6 +53,9 @@ check('Repeated receiver locations require a stop ID, sequence or distinct date'
  pending(f,'arrive_delivery_1','arrive_delivery_2');f.state.eventsByDay['2026-09-10'][0].stopSequence=1;done(f,'arrive_delivery_1');pending(f,'arrive_delivery_2');
 });
 check('Explicit manual completion remains supported',f=>{f.guide.manualDone.pickup_ready=123;done(f,'pickup_ready');});
+check('Unreviewed summaries cannot complete document steps',f=>{f.bol.reviewStatus='needs_review';pending(f,'pickup_bol','pretrip');});
+check('An explicit different load defeats a stale BOL alias',f=>{f.store.loads.push({loadNo:'99999999'});f.state.eventsByDay['2026-09-08'][0].loadNo='99999999';f.state.eventsByDay['2026-09-10'][0].reasons=['Delivery'];pending(f,'pretrip');});
+check('An empty pickup checklist is not evidence of physical readiness',f=>{f.guide.steps.find(s=>s.id==='pickup_ready').checklist=[];pending(f,'pickup_ready');});
 const component=fs.readFileSync('source/src/modules/loads/SafeDriverMissionV10966.jsx','utf8');
 assert.doesNotMatch(component,/safe_mission_bol_relink_v10966|if \(progress.pickupPresent\)/);
 assert.match(component,/completionEvidence.label/);
