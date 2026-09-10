@@ -38,6 +38,9 @@ assert.ok(referencesFromDocumentV105(compact).some(r=>r.kind==='po_number' && r.
 const loads=[{id:'load_76543210',loadNo:'76543210',broker:'Example Freight',source:'rate_confirmation_v105',aliases:[{kind:'pickup_number',value:'82004117'}]}];
 const opts={state:{},businessStore:{loads,documents:[]},typeId:'bol',fields:bol.fields,analysis:bol};
 assert.equal(matchScanDocumentToLoadV11037(opts).loadNo,'76543210','BOL number matches an existing broker pickup reference');
+const olderLoad={...loads[0],updatedAt:1,aliases:[],stops:[{type:'pickup',city:'Howe',state:'IN',pickupNumber:'82004117'}]};
+const newerLoads=Array.from({length:10},(_,i)=>({...loads[0],id:'load_'+(88000000+i),loadNo:String(88000000+i),aliases:[],updatedAt:100+i}));
+assert.equal(matchScanDocumentToLoadV11037({...opts,businessStore:{loads:[...newerLoads,olderLoad]}}).loadNo,'76543210','An exact stop reference on an older load survives the eight-result ranking limit');
 assert.equal(matchScanDocumentToLoadV11037({...opts,businessStore:{loads:[...loads,{...loads[0],id:'load_99999111',loadNo:'99999111'}]}}).loadNo,'','A shared reference needs a choice');
 assert.equal(matchScanDocumentToLoadV11037({...opts,analysis:{...bol,text:bol.text.replaceAll('82004117','00000000')}}).loadNo,'','An absent reference cannot auto-link');
 assert.equal(matchScanDocumentToLoadV11037({...opts,businessStore:{loads:[{...loads[0],aliases:[{kind:'trailerNo',value:'82004117'}]}]}}).loadNo,'','Equipment is not shipping identity');

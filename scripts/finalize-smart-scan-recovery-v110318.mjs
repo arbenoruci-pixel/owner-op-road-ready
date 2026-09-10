@@ -28,6 +28,9 @@ patch(assignment,"(alias.kind === ref.kind || ['load_number','order_number'].inc
 patch(assignment,"      ref.kind === 'bol_number' && value === norm(stop.bolNumber) ||\n      ref.kind === 'po_number' && value === norm(stop.poNumber)", "      [stop.bolNumber,stop.bolNo,stop.poNumber,stop.pickupNumber,stop.deliveryNumber].some(v=>v && value===norm(v))");
 // Every PO survives save/reopen, not only the first one.
 const foundation='source/src/modules/documents/documentFoundationV105.js';
+patch(foundation,"export function matchDocumentToLoadV105({\n","export function matchDocumentToLoadV105({\n  candidateLimit = 8,\n");
+patch(foundation,"candidates:ranked.slice(0, 8),","candidates:ranked.slice(0, candidateLimit),");
+patch(assignment,"const base = matchDocumentToLoadV105(options);","const base = matchDocumentToLoadV105({...options,candidateLimit:Infinity});");
 patch(foundation,"  if (Array.isArray(f.references)) {", "  for(const value of f.poNumbers || [])addFieldReferenceV105(out,'po_number',value);\n  if (Array.isArray(f.references)) {");
 patch(scan+'rateConSaveStabilityV10964.js',"    poNumber:textV10964(stop.poNumber || stop.po).slice(0, 100),", "    poNumber:textV10964(stop.poNumber || stop.po).slice(0, 100),\n    bolNumber:textV10964(stop.bolNumber || stop.bolNo).slice(0,100),");
 patch(scan+'rateConSaveStabilityV10964.js',"  if (Array.isArray(fields.stops))", "  if (Array.isArray(fields.references)) out.references=fields.references.filter(r=>r && typeof r.value==='string').slice(0,80).map(r=>({kind:r.kind,value:r.value,source:r.source}));\n  if (Array.isArray(fields.stops))");
