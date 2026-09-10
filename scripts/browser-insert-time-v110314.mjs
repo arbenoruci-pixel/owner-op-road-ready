@@ -99,6 +99,23 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
    reports.push({browser:name,status,passed:false,error:String(error),stack:error.stack,pageErrors:errors});console.error(error);
   } finally {await context.close();}
  }
+ // A closed day may initialize at 24:00; its End field must still be editable.
+ {
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,timezoneId:'Europe/Belgrade',serviceWorkers:'block'}),page=await context.newPage();
+  page.on('dialog',d=>d.accept());
+  try {
+   const state=fixture('OFF');state.eventsByDay[day]=[row('target','OFF',0,1440)];
+   await setup(page,context,state);await page.clock.setFixedTime(new Date('2026-09-11T03:27:00Z'));await page.reload();await openLog(page);await openInsert(page);
+   assert.equal(await page.getByLabel('End time',{exact:true}).isDisabled(),false);
+   await page.getByLabel('Start time',{exact:true}).fill('15:00');await page.getByLabel('End time',{exact:true}).fill('15:30');
+   assert.deepEqual(await times(page),['15:00','15:30']);assert.equal(await page.locator('.save-main').isDisabled(),false);
+   await page.locator('.save-main').click();const saved=await waitState(page,s=>s.eventsByDay[day].some(e=>e.startMin===900&&e.endMin===930));
+   await page.reload();await openLog(page);assert.deepEqual((await stored(page)).eventsByDay,saved.eventsByDay);
+   reports.push({browser:name,status:'historical',passed:true,reopened:true});console.log(`PASS — ${name} historical End field, Insert and reopen`);
+  } catch(error) {
+   await page.screenshot({path:`${output}/${name}-historical-FAILED.png`}).catch(()=>{});reports.push({browser:name,status:'historical',passed:false,error:String(error),stack:error.stack});console.error(error);
+  } finally {await context.close();}
+ }
  await browser.close();
 }
 fs.writeFileSync(`${output}/results.json`,JSON.stringify(reports,null,2));assert.ok(reports.every(r=>r.passed),JSON.stringify(reports.filter(r=>!r.passed)));

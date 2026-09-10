@@ -54,7 +54,8 @@ if (!source.includes('INSERT_TIME_CHOICES_V110314')) {
   replace("  const rangeErrorV110 = editorRangeError(fromInput(form.start),fromInput(form.end));",
     "  const rangeErrorV110 = mode === 'insert' && insertLimitV110314 < 1 ? 'There is no elapsed time on this log day yet.' : editorRangeError(fromInput(form.start),fromInput(form.end));");
   replace('              onStartChange={(v) => updateForm({ start: v })}\n              onEndChange={(v) => updateForm({ end: v })}',
-    `              maxMinute={mode === 'insert' ? insertLimitV110314 : 1440}
+    `              allowMidnightInput
+              maxMinute={mode === 'insert' ? insertLimitV110314 : 1440}
               onStartChange={(v) => changeInsertTimeV110314('start', v)}
               onEndChange={(v) => changeInsertTimeV110314('end', v)}`);
   // The old overlap-based initializer points into the future by design. Remove
@@ -72,8 +73,11 @@ if (!time.includes('maxMinute=1440')) {
   time = time.replace('aria-label="Start time" type="time" step="60"', 'aria-label="Start time" type="time" step="60" max={editorTimeInput(Math.max(0,Math.min(1439,maxMinute-1)))}');
   time = time.replace('aria-label="End time" type="time" step="60"', 'aria-label="End time" type="time" step="60" max={maxMinute<1440?editorTimeInput(maxMinute):undefined}');
   time = time.replace('<label className="midnight-end-v110">', '{maxMinute===1440 && <label className="midnight-end-v110">').replace(' />End at 24:00</label>', ' />End at 24:00</label>}');
-  fs.writeFileSync(timePath, time);
 }
+if (!time.includes('allowMidnightInput=false')) {
+  time = time.replace('maxMinute=1440', 'maxMinute=1440,allowMidnightInput=false').replace("disabled={end==='24:00'}", "disabled={end==='24:00' && !allowMidnightInput}");
+}
+fs.writeFileSync(timePath, time);
 const VERSION = '110.3.14', BUILD = 'v110314-valid-insert-time-controls';
 for (const file of ['release-version.json', 'public/app-version.json']) {
   const data = JSON.parse(read(file));
