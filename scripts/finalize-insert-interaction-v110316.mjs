@@ -15,7 +15,7 @@ patch(insert,'      <EditorGraphPanel\n        events={previewEvents}',`      <E
         onRestoreRange={range => {const next={...insertDraftEvent,startMin:range.startMin,endMin:range.endMin};setInsertDraftEvent(next);setForm(eventToForm(next));}}
         events={previewEvents}`);
 patch(insert,'        onSelect={selectEvent}',"        onSelect={(id, minute) => mode === 'insert' ? graphEmptyTap(form.status, minute) : selectEvent(id)}");
-patch(insert,'            <EditorTimeControls\n              timeZone={clockV110.timeZone}',"            <EditorTimeControls\n              allowMidnightInput\n              timeZone={clockV110.timeZone}");
+assert.ok(read(insert).includes('allowMidnightInput'),'Insert must keep its editable midnight input');
 patch(insert,'const defaultInsertLimitV110315 = insertDayLimitV110314(logbookContext, clockV110);',"const defaultInsertLimitV110315 = logbookContext.activeDay === clockV110.day ? Math.max(1, clockV110.minute) : 1440;");
 patch(insert,"const rangeErrorV110 = mode === 'insert' && insertLimitV110314 < 1 ? 'There is no elapsed time on this log day yet.' : editorRangeError(fromInput(form.start),fromInput(form.end));","const rangeErrorV110 = editorRangeError(fromInput(form.start),fromInput(form.end));");
 // Use the full preview state, including any session changes, for the graph.
@@ -31,7 +31,8 @@ patch('source/src/modules/graph/LogGraphV110.jsx','onSelect?.(s.event.id);}} onK
 patch('source/src/modules/graph/LogGraphV110.jsx',"onSelect?.(s.event.id);}}} />;","onSelect?.(s.event.id,s.event.startMin);}}} />;");
 const time='source/src/modules/editor/components/EditorTimeControlsV110.jsx';
 patch(time,"timeZone='',maxMinute=1440})","timeZone='',maxMinute=1440,allowMidnightInput=false})");
-patch(time,"disabled={end==='24:00'} onChange={e=>onEndChange(e.target.value)}","disabled={end==='24:00' && !allowMidnightInput} onChange={e=>onEndChange(allowMidnightInput && e.target.value==='00:00' ? '24:00' : e.target.value)}");
+patch(time,"disabled={end==='24:00'}","disabled={end==='24:00' && !allowMidnightInput}");
+patch(time,"onChange={e=>onEndChange(e.target.value)}","onChange={e=>onEndChange(allowMidnightInput && e.target.value==='00:00' ? '24:00' : e.target.value)}");
 // A previous day's unclosed OFF/SB/ON tail already runs to midnight in the
 // Logbook view. Insert splits that same interval when the driver saves there.
 // Explicitly ended records and unrelated earlier intervals retain their bounds.
