@@ -21,6 +21,7 @@ patch(screen, '<form className="billing-profile-v102"', `<InvoiceSendPanelV11032
             onAccepted={receipt=>{const current=readOwnerOpsStoreV102();const next=appendOwnerOpsRowsV102(current,'invoices',[{...receipt,date:new Date().toISOString().slice(0,10),status:'submitted',sentAt:receipt.acceptedAt}]);setOwnerStore(next);setBusinessStore(updateBusinessRecord(readBusinessStore(),'loads',selectedLoad.id,{status:'submitted',invoiceNo:receipt.invoiceNo,invoiceSentAt:receipt.acceptedAt}));}}
           />
           <form className="billing-profile-v102"`);
+patch(screen, "    const next = appendOwnerOpsRowsV102(ownerStore,'invoices',[record]);", "    const current = readOwnerOpsStoreV102();\n    const prior = current.invoices.find(row=>row.invoiceNo===invoiceNo);\n    const next = appendOwnerOpsRowsV102(current,'invoices',[prior?.acceptedAt ? {...record,...prior} : record]);");
 // An invoice generated locally is not an invoice submitted for payment.
 patch(screen, "{ status:'invoiced', invoiceNo, invoicedAt:Date.now() }", "{ invoiceNo, invoiceGeneratedAt:Date.now() }");
 const VERSION='110.3.20',BUILD='v110320-invoice-packet-outlook-send';

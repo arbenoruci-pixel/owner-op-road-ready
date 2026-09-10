@@ -21,7 +21,7 @@ export default function InvoiceSendPanel({ load, documents, profile, invoices, o
   useEffect(() => { let live = true; outlookConfiguration().then(value => { if (live) setConfig(value); }).catch(e => { if (live) setError(e.message); }); return () => { live = false; }; }, []);
   useEffect(() => {
     let live = true; setPacket(null); setError('');
-    try { setReceipt(recordKey ? JSON.parse(localStorage.getItem(recordKey) || 'null') : null); } catch { setReceipt(null); }
+    try { setReceipt(recordKey ? (JSON.parse(localStorage.getItem(recordKey) || 'null') || plan?.priorSubmission) : null); } catch { setReceipt(null); }
     if (plan) buildBillingPacketPdfV102({ ...plan, download: false }).then(result => {
       requireCompletePacket(plan, result); if (live) setPacket({ ...result, plan });
     }).catch(e => { if (live) setError(e.message); });
@@ -73,6 +73,7 @@ export default function InvoiceSendPanel({ load, documents, profile, invoices, o
     </div>
     {config && !config.ready && <p role="status">Direct Outlook sending needs its one-time app connection setup. You can preview and download the complete packet now.</p>}
     {account && <button type="button" className="invoice-send-disconnect-v110320" disabled={busy} onClick={() => { disconnectOutlook(); setAccount(null); }}>Disconnect {account.email}</button>}
+    {uncertain && <button type="button" disabled={busy} onClick={() => { const next = { ...receipt, status: 'failed', retryConfirmedAt: Date.now() }; localStorage.setItem(recordKey, JSON.stringify(next)); setReceipt(next); setError(''); }}>I checked Sent Items: allow another attempt</button>}
     {(accepted || uncertain) && <a href="https://outlook.live.com/mail/0/sentitems" target="_blank" rel="noreferrer">Open Outlook Sent Items</a>}
   </section>;
 }

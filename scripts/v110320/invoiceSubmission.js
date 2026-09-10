@@ -16,7 +16,7 @@ export function planInvoiceSubmission({ load, documents = [], profile = {}, invo
   const kinds = new Set(['rate_confirmation', 'bol', 'bill_of_lading', 'pod', 'proof_of_delivery', 'delivery_receipt', 'lumper_receipt', 'detention_approval', 'layover_approval', 'tonu', 'notice_of_assignment']);
   const docs = documents.filter(doc => documentLoad(doc) === key(load.loadNo) && kinds.has(documentKind(doc)));
   if (!docs.some(doc => documentKind(doc) === 'rate_confirmation')) throw Error('Attach the accepted rate confirmation to this load.');
-  const signed = doc => doc.podSigned === true || doc.extracted?.podSigned === true;
+  const signed = doc => doc.podSigned !== false && doc.extracted?.podSigned !== false && (doc.podSigned === true || doc.extracted?.podSigned === true);
   if (!docs.some(doc => ['pod', 'proof_of_delivery', 'delivery_receipt', 'bol', 'bill_of_lading'].includes(documentKind(doc)) && signed(doc))) throw Error('Add the delivery pages and confirm the receiver signature or RECEIVED stamp.');
   const unique = [...new Map(docs.map((doc, i) => [doc.client_document_id || doc.local_id || doc.id || i, doc])).values()];
   const rank = doc => documentKind(doc) === 'rate_confirmation' ? 0 : ['bol', 'bill_of_lading'].includes(documentKind(doc)) ? 1 : 2;
@@ -26,7 +26,7 @@ export function planInvoiceSubmission({ load, documents = [], profile = {}, invo
   const invoice = { invoiceNo, date: today, total, broker: load.broker, paymentTerms: load.paymentTerms || profile.paymentTerms, items: [{ description: `Transportation service - Load ${load.loadNo}`, amount: total }] };
   const subject = `${profile.carrierName} - Invoice ${invoiceNo} - Load ${load.loadNo}`;
   const text = `Hello,\n\nAttached is invoice ${invoiceNo} and the supporting paperwork for Load ${load.loadNo}.\n\nCarrier: ${profile.carrierName}\nBroker: ${load.broker}\nAmount: ${total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}\nRoute: ${clean(load.origin)} to ${clean(load.destination)}\n\nPlease review the attached rate confirmation and delivery paperwork for payment.\n\nThank you,\n${profile.carrierName}\n${clean(profile.phone)}\n${clean(profile.email)}`;
-  return { to, subject, text, invoice, documents: unique, load, profile, fileName: `${invoiceNo.replace(/[^a-zA-Z0-9._-]/g, '-')}-billing-packet.pdf` };
+  return { to, subject, text, invoice, priorSubmission: existing?.acceptedAt ? { ...existing, status: 'accepted' } : null, documents: unique, load, profile, fileName: `${invoiceNo.replace(/[^a-zA-Z0-9._-]/g, '-')}-billing-packet.pdf` };
 }
 export function requireCompletePacket(plan, result) {
   if (result.included.length !== plan.documents.length) throw Error('Some original pages could not be attached. Open the load documents and restore the missing files before sending.');
@@ -42,6 +42,7 @@ export function graphMailPayload(plan, bytes, submissionId) {
 }
 // Store intent before calling Outlook; an interrupted request must never be auto-retried.
 export async function submitInvoiceOnce({ storage, recordKey, plan, bytes, from, send, now = Date.now }) {
+  if (plan.priorSubmission?.status === 'accepted') throw Error('This invoice has already been sent. Check Outlook Sent Items.');
   const old = JSON.parse(storage.getItem(recordKey) || 'null');
   if (old && ['sending', 'unknown', 'accepted'].includes(old.status)) throw Error(old.status === 'accepted' ? 'This invoice has already been sent. Check Outlook Sent Items.' : 'Check Outlook Sent Items before trying again; the previous attempt may have been sent.');
   const record = { status: 'sending', invoiceNo: plan.invoice.invoiceNo, loadNo: plan.load.loadNo, to: plan.to, from, total: plan.invoice.total, startedAt: now(), submissionId: crypto.randomUUID() };
