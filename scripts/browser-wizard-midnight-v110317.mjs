@@ -23,7 +23,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
  const browser=await type.launch({headless:true});
  for(const scenario of ['SB','OFF','ON','explicit-end']) {
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2,timezoneId:'Europe/Belgrade',serviceWorkers:'block'});
-  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   try {
    const state=coverageFixture();
    if(scenario==='explicit-end')state.eventsByDay[day].at(-1).paperLogEndV110315=true;
