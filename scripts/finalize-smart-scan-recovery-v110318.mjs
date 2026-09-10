@@ -12,7 +12,11 @@ fs.copyFileSync('scripts/v110318/savedScanResumeV110318.js',scan+'savedScanResum
 // A confirmed load can have pending appointments. The guide already renders
 // missing dates and builds pickup/delivery stops from origin/destination.
 const recovery=loads+'savedLoadRecoveryV110312.js';
-patch(recovery,"guide.stops?.length>=2", "(guide.stops?.length>=2 || guide.savedDocumentGuideV110312)");
+patch(recovery,"export function usableSavedGuideV110312(guide) {", "function savedGuideRouteV110318(guide) {return Array.isArray(guide?.stops) && ['pickup','delivery'].every(type=>guide.stops.some(stop=>stop?.type===type && Boolean(stop.city||stop.cityState||stop.address)));}\nexport function usableSavedGuideV110312(guide) {");
+patch(recovery,"guide.stops?.length>=2", "savedGuideRouteV110318(guide)");
+patch(recovery,"cached.steps?.length)return cached;", "usableSavedGuideV110312(cached))return cached;");
+patch(recovery," guide.source='rate_confirmation_guide_v103';", " if(!savedGuideRouteV110318(guide))return null;\n guide.source='rate_confirmation_guide_v103';");
+patch(recovery,"&&g.steps?.length))", "&&usableSavedGuideV110312(g)))");
 patch(recovery,"if(record.status!=='verified'||!record.canonicalLoadNo||!record.broker)return null;", "if(!record.canonicalLoadNo || terminal(record.status) || terminal(record.reviewStatus))return null;\n if(record.status!=='verified' && !['document_reference','driver_selected'].includes(record.loadAssignmentStatusV11037 || record.extracted?.loadAssignmentStatusV11037))return null;");
 patch(recovery,"&&l.broker&&brokerKey(l.broker)!==brokerKey(record.broker)","&&l.broker&&record.broker&&brokerKey(l.broker)!==brokerKey(record.broker)");
 patch(recovery,"if(fields.broker&&brokerKey(fields.broker)!==brokerKey(record.broker))return null;","if(fields.broker&&record.broker&&brokerKey(fields.broker)!==brokerKey(record.broker))return null;");

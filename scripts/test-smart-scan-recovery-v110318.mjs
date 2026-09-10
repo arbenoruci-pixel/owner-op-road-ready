@@ -16,6 +16,16 @@ for(const doc of [rate,{...rate,extracted:{...rate.extracted,pickupDate:'',stops
   assert.equal(pendingSavedLoadScanV110312(restored,{documents:[doc]}),null);
   assert.equal(guide.stops.at(-1).date,'','Missing delivery dates stay blank');
 }
+for(const fields of [{loadNo:rate.canonicalLoadNo,pickupDate:'2026-09-08'},{origin:'Howe, IN'},{stops:[{type:'pickup'},{type:'delivery'}]}]) {
+  const unread={...rate,extracted:fields};
+  assert.equal(buildSavedDocumentGuideV110312(unread),null,'Missing route remains available for scan review');
+  const restored=restoreSavedLoadGuidesV110312({}, {documents:[unread]});
+  assert.equal(getActiveLoadGuideV103(restored),null);
+  assert.equal(pendingSavedLoadScanV110312(restored,{documents:[unread]}).id,rate.id);
+}
+const routeLessCache={...buildSavedDocumentGuideV110312(rate),stops:[]};
+assert.equal(buildSavedDocumentGuideV110312({...rate,extracted:{},loadGuideV110312:routeLessCache}),null);
+assert.equal(pendingSavedLoadScanV110312({loadGuidesById:{bad:routeLessCache}},{documents:[rate]}).id,rate.id);
 assert.equal(buildSavedDocumentGuideV110312({...rate,status:'archived'}),null);
 assert.equal(buildSavedDocumentGuideV110312({...rate,status:'needs_review',canonicalLoadNo:''}),null);
 assert.equal(buildSavedDocumentGuideV110312({...rate,broker:'Different Broker'}),null);
