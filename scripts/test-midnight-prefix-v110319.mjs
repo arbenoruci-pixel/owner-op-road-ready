@@ -5,6 +5,8 @@ import {displayEventsForDayFromState} from '../source/src/core/timeline/displayT
 import {rawCoverageIssues} from '../source/src/core/compliance/rawRodsChecks.js';
 import {readArchiveLogbookDay} from '../source/src/modules/logbook/archiveDayV1103.js';
 import {applyLiveStatusTransition} from '../source/src/core/timeline/liveDrivingSafety.js';
+import {repairRoadReadyFoundationV105} from '../source/src/modules/documents/documentFoundationV105.js';
+import {repairLogIntegrityV1051} from '../source/src/modules/logbook/logIntegrityV1051.js';
 const day='2026-09-10',prior='2026-09-09',at=new Date('2026-09-10T12:21:00Z');
 const row=(id,status,startMin,endMin,extra={})=>({id,status,startMin,endMin,source:'live_status',city:'Example City',state:'IL',...extra});
 const tuples=rows=>rows.map(e=>[e.status,e.startMin,e.endMin]);
@@ -25,6 +27,12 @@ for(const status of ['SB','OFF','ON']){
  assert.deepEqual(s.eventsByDay[prior],original.eventsByDay[prior]);assert.deepEqual(s.signatureByDay,original.signatureByDay);assert.deepEqual(original,before);
 }
 for(const status of ['D','UNKNOWN',null]){const s=fixture(status);if(!status)delete s.eventsByDay[prior];s.eventsByDay[day][0].paperLogEndV110315=true;assert.equal(visible(s).some(e=>e.startMin===0),false,'No prefix is invented without prior non-driving status');}
+for(const status of ['SB','OFF','ON']){
+ const s=fixture(status);s.eventsByDay[prior][0].paperLogEndV110315=true;s.eventsByDay[day][0].paperLogEndV110315=true;
+ assert.equal(visible(s).some(e=>e.startMin===0),false,'A manually ended prior status cannot carry into a new day');
+ assert.equal(readArchiveLogbookDay(s,day,at).some(e=>e.startMin===0),false);
+ assert.ok(rawCoverageIssues(s.eventsByDay,day,{today:day,nowMinute:501,currentStatus:'ON'}).issues.some(i=>i.code==='day_start_gap'));
+}
 const gap=fixture();gap.currentStatus='D';gap.eventsByDay[day]=[row('on','ON',489,495,{paperLogEndV110315:true}),row('drive','D',500,501)];
 assert.deepEqual(tuples(visible(gap)),[['SB',0,489],['ON',489,495],['D',500,501]],'An explicit End and real internal gap remain exact');
 assert.ok(rawCoverageIssues(gap.eventsByDay,day,{today:day,nowMinute:501,currentStatus:'D'}).issues.length);
@@ -65,6 +73,8 @@ for(const startMin of [489,495]){
  assert.equal(saved.events[0].paperLogEndV110315,undefined);assert.equal(saved.events[0].endMin,startMin+1);
  assert.equal(projectLogbookEvents(saved.state,day,at)[0].endMin,501,'Details leave the live timer open');
  assert.equal(visible(saved.state)[0].status,'SB');
+ const normalized=repairLogIntegrityV1051(repairRoadReadyFoundationV105(JSON.parse(JSON.stringify(saved.state))));
+ assert.deepEqual(normalized.eventsByDay,saved.state.eventsByDay,'Reload cleanup preserves explicitly chosen activities and BOL');
 }
 globalThis.Date=OriginalDate;
 console.log('PASS — real React mount and Delivery/BOL Save preserve untouched live End at the first minute and after elapsed time');

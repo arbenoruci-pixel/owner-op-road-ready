@@ -6,6 +6,9 @@ function patch(file,before,after){const s=read(file);if(s.includes(after))return
 // A manually chosen End belongs to that row. The independently known status
 // before the first change still covers midnight, without writing a new event.
 const duty='source/src/modules/logbook/dutyViewV110212.js';
+patch('source/src/core/timeline/knownMidnightCarry.js',
+ '    || !recorded(previous) || !CARRYABLE.has(previous.status)',
+ '    || !recorded(previous) || previous.paperLogEndV110315 || !CARRYABLE.has(previous.status)');
 patch(duty,'  if(exactEvents.some(e=>e.paperLogEndV110315))return exactEvents;','  // Resolve the known midnight prefix before preserving manual End boundaries.');
 patch(duty,'  const exactWithCarry=carry?[carry,...exactEvents]:exactEvents;','  const exactWithCarry=carry?[carry,...exactEvents]:exactEvents;\n  if(exactEvents.some(e=>e.paperLogEndV110315))return exactWithCarry;');
 const display='source/src/core/timeline/displayTimeline.js';
@@ -20,6 +23,15 @@ patch(display,'  if(raw.some(e=>e.paperLogEndV110315))return raw;',`  if(raw.som
 const edit='source/src/modules/editor/EditEventSheet.jsx';
 patch(edit,'    const next = formStateFromEvent(event);','    const next = formStateFromEvent(projectedV110.find(e=>e.id===event.id) || event);');
 patch(edit,'  const editorExactEventsV11034=(previewStateV11023?.eventsByDay?.[dayV110]||[]).filter(row=>!row?.displayOnly&&!row?.syntheticCoverage&&!row?.carriedFromPreviousDay);','  const editorExactEventsV11034=previewEvents;');
+
+// Structured activity choices and an explicit shipping reference are driver
+// input. Legacy text cleanup must retain them when the saved day is reopened.
+patch('source/src/modules/documents/documentFoundationV105.js',
+ "      const originalNote = textV105(event?.note || '');",
+ "      if(structuredPretripReasonV105(event) && (event.reasons||[]).some(reason=>/delivery|unloading/i.test(textV105(reason))))return event;\n      const originalNote = textV105(event?.note || '');");
+patch('source/src/modules/logbook/logIntegrityV1051.js',
+ "  if (pickup && loadNo && textV1051(next.bol) === loadNo && !textV1051(next.shippingDocumentId)) next.bol = '';",
+ "  if (pickup && loadNo && next.loadDetailsExplicit !== true && textV1051(next.bol) === loadNo && !textV1051(next.shippingDocumentId)) next.bol = '';" );
 
 const VERSION='110.3.19',BUILD='v110319-midnight-prefix-after-edit';
 for(const file of ['release-version.json','public/app-version.json']){const d=JSON.parse(read(file));Object.assign(d,{version:VERSION,build:BUILD,force:false,label:'v110.3.19 Midnight continuity after Edit',releasedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,notes:['Editing details keeps the current event running until its End is explicitly changed.','The known midnight SB/OFF/ON prefix remains visible after Edit, status changes and reopening.','Manual event boundaries and genuine gaps remain visible.']});fs.writeFileSync(file,JSON.stringify(d,null,2)+'\n');}
