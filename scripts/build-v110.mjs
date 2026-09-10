@@ -24,6 +24,7 @@ steps.push('finalize-insert-interaction-v110316.mjs','test-insert-interaction-v1
 steps.push('finalize-wizard-midnight-v110317.mjs','test-wizard-midnight-v110317.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-smart-scan-recovery-v110318.mjs','test-smart-scan-recovery-v110318.mjs','test-saved-scan-recovery-v110312.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-midnight-prefix-v110319.mjs','test-midnight-prefix-v110319.mjs','test-status-midnight-carry-v11032.mjs','test-paper-log-v110315.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-invoice-send-v110320.mjs','test-invoice-send-v110320.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

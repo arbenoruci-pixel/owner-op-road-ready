@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Connect Outlook - Road Ready</title></head><body><p id="status">Finishing your Outlook connection…</p><script>
+const params = new URLSearchParams(location.search);
+const message = {type:'road-ready-outlook-code',state:params.get('state'),code:params.get('code'),error:params.get('error')};
+history.replaceState(null,'',location.pathname);
+if(window.opener && message.state){window.opener.postMessage(message,location.origin);document.getElementById('status').textContent='Return to Road Ready. This window can be closed.';}else{document.getElementById('status').textContent='Open Billing in Road Ready and choose Connect Outlook.';}
+</script></body></html>
