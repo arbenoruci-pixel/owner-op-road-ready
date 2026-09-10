@@ -36,3 +36,13 @@ for(const activeDay of ['2026-09-09','2026-09-10']) {
  assert.equal(next.ok,true,next.error);assert.deepEqual(traceGeometry(next.events).discontinuities,[]);
  console.log('PASS — carried SB on '+activeDay+' surrounds Insert without changing the prior day');
 }
+{
+ const current=new Date('2026-09-10T03:55:00Z');
+ const state={activeDay:day,homeTerminalTimeZone:'America/New_York',currentStatus:'D',manualDrivingSession:{active:true,eventId:'merged-away',startDay:day},eventsByDay:{[day]:[{id:'earlier',status:'OFF',startMin:0,endMin:778},{id:'driving',status:'D',source:'gps_drive',startMin:778,endMin:1322}]}};
+ const before=structuredClone(state),command={day,event:{id:'insert',status:'ON',startMin:1395,endMin:1425}};
+ const p=preview(state,command,current);assert.equal(p.ok,true,p.error);assert.deepEqual(state,before);
+ assert.deepEqual(traceGeometry(p.events).discontinuities,[]);assert.equal(p.state.manualDrivingSession.eventId,'driving');
+ const r=save(state,command,current);assert.deepEqual(r.events,p.events);assert.equal(r.state.manualDrivingSession.active,true);
+ assert.equal(r.events.find(e=>e.id==='driving').startMin,1425);
+ console.log('PASS — Insert resumes active Driving after startup merged the old session event ID');
+}

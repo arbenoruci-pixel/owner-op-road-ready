@@ -64,7 +64,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
    assert.ok(await boundary(page,'start')>1425,'One-minute Start must move right');
    assert.ok(await boundary(page,'end')>1426);
    // A tap on existing Driving keeps the insertion draft open.
-   await page.locator('.editor-graph-card [data-hit-event="target"]').click();
+   await page.locator(`.editor-graph-card [data-hit-event="${status==='D'?'early':'target'}"]`).click();
    assert.match(await page.locator('.sheet-head').innerText(),/Insert Duty Status/);
    await page.getByRole('button',{name:'PTI',exact:true}).click();
    await range(page,'23:15','23:45');
@@ -78,7 +78,8 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
    const saved=await waitState(page,s=>s.eventsByDay[day].some(e=>e.status==='ON'&&e.startMin===1395&&e.endMin===1425));
    const inserted=saved.eventsByDay[day].find(e=>e.status==='ON'&&e.startMin===1395&&e.endMin===1425);
    assert.match(inserted.note,/pre.trip/i);
-   assert.deepEqual(saved.eventsByDay[day].slice(0,4),original.eventsByDay[day].slice(0,4));
+   const unchangedPrefix=status==='D'?3:4;
+   assert.deepEqual(saved.eventsByDay[day].slice(0,unchangedPrefix),original.eventsByDay[day].slice(0,unchangedPrefix));
    await page.reload();await openLog(page);assert.deepEqual((await stored(page)).eventsByDay,saved.eventsByDay);
    await openEdit(page,inserted.id);assert.equal(await page.getByLabel('Start time',{exact:true}).inputValue(),'23:15');assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'23:45');await page.locator('.cancel-main').click();
    // Insert again inside Driving and end at midnight, then reopen the saved row.

@@ -38,7 +38,23 @@ patch(time,"onChange={e=>onEndChange(e.target.value)}","onChange={e=>onEndChange
 // Explicitly ended records and unrelated earlier intervals retain their bounds.
 const contract='source/src/modules/logbook/eventEditingV110.js';
 patch(contract,"// Logbook UI contract. Stored minute values are home-terminal wall-clock values.","// Logbook UI contract. Stored minute values are home-terminal wall-clock values.\nimport { previousRecordedDuty } from '../../core/timeline/knownMidnightCarry.js';");
-patch(contract,'export function previewLogbookInsertOverride(state,{day,event,expectedRows},at=new Date()) {',`function insertRowsV110316(state,day,event,at) {
+patch(contract,'export function previewLogbookInsertOverride(state,{day,event,expectedRows},at=new Date()) {',`function insertSessionStateV110316(state,day,at) {
+  const clock=logbookClock(state,at),rows=(state.eventsByDay?.[day]||[]).filter(active);
+  const last=rows.slice().sort((a,b)=>a.startMin-b.startMin).at(-1);
+  if(day!==clock.day || state.currentStatus!=='D' || last?.status!=='D' || last.paperLogEndV110315)return state;
+  let next=state;
+  for(const key of ['manualDrivingSession','gpsTrip']) {
+    const session=state[key];
+    if(!session || (session.active!==true && session.status!=='active') || !session.eventId
+      || (session.startDay && session.startDay!==day)
+      || Object.values(state.eventsByDay||{}).some(events=>events.some(e=>active(e)&&e.id===session.eventId)))continue;
+    // Startup may merge adjacent Driving rows while retaining the old session
+    // ID. Rebind only that active, orphaned session in the Insert draft state.
+    next={...next,[key]:{...session,eventId:last.id}};
+  }
+  return next;
+}
+function insertRowsV110316(state,day,event,at) {
   const projected=elapsedRows(state,day,at),clock=logbookClock(state,at);
   const last=projected.rows.filter(active).slice().sort((a,b)=>a.startMin-b.startMin).at(-1);
   const previous=previousRecordedDuty(state.eventsByDay,day);
@@ -57,7 +73,8 @@ patch(contract,'export function previewLogbookInsertOverride(state,{day,event,ex
   }
   return projected;
 }
-export function previewLogbookInsertOverride(state,{day,event,expectedRows},at=new Date()) {`);
+export function previewLogbookInsertOverride(state,{day,event,expectedRows},at=new Date()) {
+  state=insertSessionStateV110316(state,day,at);`);
 patch(contract,"const projected=elapsedRows(state,day,at), result=replaceInterval(projected.rows,null,{...event,source:'manual'});","const projected=insertRowsV110316(state,day,event,at), result=replaceInterval(projected.rows,null,{...event,source:'manual'});");
 const VERSION='110.3.16',BUILD='v110316-insert-touch-and-midnight';
 for(const file of ['release-version.json','public/app-version.json']){const d=JSON.parse(read(file));Object.assign(d,{version:VERSION,build:BUILD,force:false,label:'v110.3.16 Insert time and graph',releasedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,notes:['Insert handles move one-minute intervals in both directions.','Midnight End remains editable and graph taps keep Insert open.','Insert preserves the existing overnight OFF, SB or ON tail when splitting a previous day.']});fs.writeFileSync(file,JSON.stringify(d,null,2)+'\n');}
