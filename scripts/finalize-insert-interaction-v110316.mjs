@@ -76,6 +76,9 @@ function insertRowsV110316(state,day,event,at) {
 export function previewLogbookInsertOverride(state,{day,event,expectedRows},at=new Date()) {
   state=insertSessionStateV110316(state,day,at);`);
 patch(contract,"const projected=elapsedRows(state,day,at), result=replaceInterval(projected.rows,null,{...event,source:'manual'});","const projected=insertRowsV110316(state,day,event,at), result=replaceInterval(projected.rows,null,{...event,source:'manual'});");
+// An Insert with optional, unknown location must not erase the existing
+// location of resumed Driving during startup's location reconciliation.
+patch('source/src/app/App.jsx',"    if (!previous.city || !previous.state) return event;\n    const sameCity", "    if (!previous.city || !previous.state || /^(GPS|Unknown|Pending)$/i.test(String(previous.city).trim()) || /^(UNK|UNKNOWN)$/i.test(String(previous.state).trim())) return event;\n    const sameCity");
 const VERSION='110.3.16',BUILD='v110316-insert-touch-and-midnight';
 for(const file of ['release-version.json','public/app-version.json']){const d=JSON.parse(read(file));Object.assign(d,{version:VERSION,build:BUILD,force:false,label:'v110.3.16 Insert time and graph',releasedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,notes:['Insert handles move one-minute intervals in both directions.','Midnight End remains editable and graph taps keep Insert open.','Insert preserves the existing overnight OFF, SB or ON tail when splitting a previous day.']});fs.writeFileSync(file,JSON.stringify(d,null,2)+'\n');}
 for(const file of ['package.json','package-lock.json']){const d=JSON.parse(read(file));d.version=VERSION;if(d.packages?.[''])d.packages[''].version=VERSION;fs.writeFileSync(file,JSON.stringify(d,null,2)+'\n');}
