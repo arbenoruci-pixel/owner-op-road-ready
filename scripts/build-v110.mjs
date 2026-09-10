@@ -18,6 +18,7 @@ steps.push('finalize-tql-instructions-v110310.mjs','test-tql-instructions-v11031
 steps.push('finalize-persistent-guide-v110311.mjs','test-persistent-guide-v110311.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-saved-scan-recovery-v110312.mjs','test-saved-scan-recovery-v110312.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-elapsed-insert-v110313.mjs','test-elapsed-insert-v110313.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-insert-time-v110314.mjs','test-insert-time-v110314.mjs','test-elapsed-insert-v110313.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
