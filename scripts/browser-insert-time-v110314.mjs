@@ -11,7 +11,7 @@ const exp=Math.floor(Date.now()/1000)+86400,b64=o=>Buffer.from(JSON.stringify(o)
 const session={access_token:b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:user.id,email:user.email,exp,aud:'authenticated'})+'.synthetic',refresh_token:'synthetic',token_type:'bearer',expires_in:86400,expires_at:exp,user};
 const day='2026-09-09';
 const row=(id,status,startMin,endMin,extra={})=>({id,status,startMin,endMin,city:'Willowbrook',state:'IL',source:'manual',...extra});
-function fixture(status='SB') { return {view:'day',activeDay:day,sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/New_York',driver:{truck:'TEST',trailer:'TEST'},driverProfile:{name:'Synthetic Driver'},carrierName:'Synthetic Carrier',mainOfficeAddress:'Test Office',currentTrailer:'TEST',currentStatus:status,currentReason:'Keep activity',currentLocation:{city:'Willowbrook',state:'IL'},eventsByDay:{[day]:[row('earlier','OFF',0,1320),row('target',status,1320,1321,{source:'live_status',note:'Keep activity'})]},certifyStatus:{[day]:'Needs signature'},signatureByDay:{'2026-09-08':{signed:true}},inspectionByDay:{},routeLegsByDay:{},formByDay:{},loadGuidesById:{},dotWallet:{documents:{}}}; }
+function fixture(status='SB') { return {view:'day',activeDay:day,sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/New_York',driver:{truck:'TEST',trailer:'TEST'},driverProfile:{name:'Synthetic Driver'},carrierName:'Synthetic Carrier',mainOfficeAddress:'Test Office',currentTrailer:'TEST',currentStatus:status,currentReason:'Keep activity',currentLocation:{city:'Willowbrook',state:'IL'},eventsByDay:{[day]:[row('earlier',status==='OFF'?'ON':'OFF',0,1320),row('target',status,1320,1321,{source:'live_status',note:'Keep activity'})]},certifyStatus:{[day]:'Needs signature'},signatureByDay:{'2026-09-08':{signed:true}},inspectionByDay:{},routeLegsByDay:{},formByDay:{},loadGuidesById:{},dotWallet:{documents:{}}}; }
 async function stored(page){return page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,q=db.transaction('app_snapshots').objectStore('app_snapshots').get('owner-op-road-ready-state-v1');q.onsuccess=()=>{db.close();resolve(q.result?.state);};q.onerror=()=>reject(q.error);};}));}
 async function waitState(page,condition){for(let n=0;n<100;n++){const s=await stored(page);if(s&&condition(s))return s;await page.waitForTimeout(100);}throw Error('Override fixture persistence timeout');}
 async function openLog(page){await page.locator('.logbook-ui-v110 .log-graph-v110').waitFor({timeout:30000});}
@@ -47,6 +47,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   try {
    await setup(page,context,fixture(status));const original=await stored(page);
+   assert.ok(original.eventsByDay[day].some(e=>e.id==='target'&&e.source==='live_status'),'Fixture must retain a real current status change after startup');
    await openInsert(page);await valid(page,['23:12','23:27']);
    if(status==='SB') {
     await page.screenshot({path:`${output}/${name}-opening-2327.png`});
@@ -93,6 +94,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
    assert.deepEqual(errors,[]);reports.push({browser:name,status,passed:true,opened:['23:12','23:27'],saved:['23:26','23:27'],reopened:true});
    console.log(`PASS — ${name} current ${status}: 23:27 default, elapsed controls, Save 23:26–23:27, resume and reopen`);
   } catch(error) {
+   fs.writeFileSync(`${output}/${name}-${status}-state.json`,JSON.stringify(await stored(page).catch(()=>null),null,2));
    await page.screenshot({path:`${output}/${name}-${status}-FAILED.png`}).catch(()=>{});
    reports.push({browser:name,status,passed:false,error:String(error),stack:error.stack,pageErrors:errors});console.error(error);
   } finally {await context.close();}
