@@ -6,7 +6,7 @@ import {missionSnapshotV1038} from '../source/src/modules/home/adaptiveHomeLogic
 const text=`BILL OF LADING
 Bill of Lading Number: 87123456
 DATE: 09/10/2026
-SHIP FROM: Example Warehouse
+SHIP FROM: EXAMPLE WAREHOUSE OF AMERICA
 1215 Example Road
 Windsor, CT 06095
 SHIP TO: Example Receiver

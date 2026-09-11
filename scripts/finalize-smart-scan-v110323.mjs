@@ -4,7 +4,7 @@ const read=file=>fs.readFileSync(file,'utf8');
 function patch(file,before,after){const s=read(file);if(s.includes(after))return;assert.equal(s.split(before).length-1,1,'Smart Scan anchor: '+file);fs.writeFileSync(file,s.replace(before,after));}
 const scan='source/src/modules/scan/';
 for(const name of ['paperQuality','imageReader','fieldEvidence','routeMatch'])fs.copyFileSync('scripts/v110323/'+name+'.js',scan+name+'V110323.js');
-function addImport(file,statement){if(!read(file).includes(statement))fs.writeFileSync(file,statement+'\n'+read(file));}
+function addImport(file,statement){const s=read(file).replace(statement+'\n','');fs.writeFileSync(file,s.startsWith("'use client';\n")?s.replace("'use client';\n","'use client';\n"+statement+'\n'):statement+'\n'+s);}
 const quality=scan+'v3/DocumentQualityV11036.js';
 addImport(quality,"import {normalizePaperV110323} from '../paperQualityV110323.js';");
 patch(quality,'export function normalizePaperLighting(image) {','export function normalizePaperLighting(image) { return normalizePaperV110323(image); }\nfunction normalizePaperLightingLegacyV11036(image) {');
