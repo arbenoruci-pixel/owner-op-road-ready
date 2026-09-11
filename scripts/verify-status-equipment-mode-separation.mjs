@@ -7,7 +7,7 @@ const assert = (condition, message) => {
   console.log(`PASS: ${message}`);
 };
 
-assert(status.includes("const trailerReasons = ['Drop Trailer', 'Hook / Pickup Trailer']"), 'normal trailer mode exposes trailer actions');
+assert(status.includes("const trailerReasons = ['Drop Load / Trailer', 'Hook / Pickup Trailer']"), 'normal trailer mode exposes trailer actions');
 assert(status.includes("const intermodalReasons = ['Drop Off', 'Drop & Hook', 'Hook Empty / Reposition']"), 'intermodal mode exposes container/chassis actions');
 assert(status.includes("import { isIntermodalModeActive } from './equipmentMode.js'"), 'status flow resolves active equipment mode');
 assert(status.includes('reasonList(status, intermodalMode).map'), 'reason buttons are separated by active equipment mode');
