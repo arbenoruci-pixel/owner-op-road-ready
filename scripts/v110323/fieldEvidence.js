@@ -18,8 +18,8 @@ function addresses(text){
   for(let i=0;i<lines.length;i++){
     const head=lines[i].match(/^(SHIP\s*FROM|SHIPPER|SHIP\s*TO|CONSIGNEE)(?:\s*(?:NAME|ADDRESS))?\s*[:#-]?\s*(.*)$/i);if(!head)continue;
     const key=/FROM|SHIPPER/i.test(head[1])?'origin':'destination',block=[head[2]];
-    for(let j=i+1;j<Math.min(lines.length,i+7);j++){if(boundary.test(lines[j]))break;block.push(lines[j]);}
-    const place=[...block.join('\n').matchAll(/(?:^|\n)([A-Z][A-Z .'-]{1,38}?)(?:,[ \t]*|[ \t]+)([A-Z]{2})[ \t]*(?:\d{5}(?:-\d{4})?)?[ \t]*(?=$|\n)/gi)].find(m=>states.has(m[2].toUpperCase()));
+    for(let j=i+1;j<Math.min(lines.length,i+7);j++){if(boundary.test(lines[j])||/\b(?:SHIP\s*FROM|SHIP\s*TO|CONSIGNEE|SHIPPER)\b/i.test(lines[j]))break;block.push(lines[j]);}
+    const place=[...block.join('\n').matchAll(/(?:^|\n)([A-Z][A-Z .'-]{1,38}?)(?:,[ \t]*|[ \t]+)([A-Z]{2})[ \t]*(?:[\dO]{5}(?:-[\dO]{4})?)?[ \t]*(?=$|\n)/gi)].find(m=>states.has(m[2].toUpperCase()));
     if(place&&states.has(place[2].toUpperCase())){const value=place[1].trim()+', '+place[2].toUpperCase();(out[key]||=[]).push({value,label:key==='origin'?'Ship from':'Ship to',excerpt:lines[i]+'\n'+block.join('\n'),source:'document_text',status:'read'});}
   }
   return out;

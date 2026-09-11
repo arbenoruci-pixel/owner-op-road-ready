@@ -19,6 +19,9 @@ const raw={type:{id:'bol'},text,fields:{},ocrEvidenceV110323:[pass('clean',text)
 const fixed=qualify(raw);
 assert.equal(fixed.fields.bolNo,'87123456');assert.equal(fixed.fields.documentDate,'2026-09-10');assert.equal(fixed.fields.origin,'Windsor, CT');assert.equal(fixed.fields.destination,'Coldwater, MI');assert.equal(fixed.fields.carrierName,'Sample Carrier LLC');
 assert.ok(!fixed.evidenceReviewV11036.issues.some(s=>s.startsWith('More than one Carrier')));
+const columns='BILL OF LADING\nBOL NO: 26023311\nDATE: 09/08/2026\nSHIP TO: REEB MILLWORK OF NEW ENGLAND\n19 BUSINESS PARK DRIVE\nSMITHFIELD, RIO2917\nSHIP FROM! THERMA TRU HOWE\n8055 NORTH STATE ROAD9\nHOWE, IN 46746';
+const columnRead=qualify({type:{id:'bol'},text:columns,fields:{}});assert.equal(columnRead.fields.destination,'SMITHFIELD, RI');assert.equal(columnRead.fields.origin,'HOWE, IN');
+const damagedColumns=qualify({type:{id:'bol'},text:columns.replace('SMITHFIELD, RIO2917\nSHIP FROM!', 'unreadable line SHIP FROM!'),fields:{}});assert.equal(damagedColumns.fields.destination,undefined,'an unreadable destination cannot take the origin address');
 const unresolved=qualify({...raw,ocrEvidenceV110323:raw.ocrEvidenceV110323.slice(1)});assert.equal(unresolved.fields.documentDate,undefined);
 const store={loads:[{id:'load_38324346',loadNo:'38324346',origin:'Windsor, CT',destination:'Coldwater, MI',pickupDate:'2026-09-10',deliveryDate:'2026-09-11',status:'open',source:'rate_confirmation_v105'}],documents:[]};
 const options={state:{},businessStore:store,typeId:'bol',fields:fixed.fields,analysis:fixed};
