@@ -14,28 +14,38 @@ function optionalPatch(file, before, after) {
   assert.equal(source.split(before).length - 1, 1, `Equipment mode optional anchor: ${file}`);
   fs.writeFileSync(file, source.replace(before, after));
 }
+function patchAny(file, alternatives, after) {
+  const source = read(file);
+  if (source.includes(after)) return;
+  const before = alternatives.find(candidate => source.includes(candidate));
+  assert.ok(before, `Equipment mode anchors: ${file}`);
+  assert.equal(source.split(before).length - 1, 1, `Equipment mode anchor: ${file}`);
+  fs.writeFileSync(file, source.replace(before, after));
+}
 
 const status = 'source/src/modules/status/StatusWorkflowSheet.jsx';
 fs.copyFileSync('scripts/v110324/equipmentMode.js', 'source/src/modules/status/equipmentMode.js');
 patch(status,
   "import { getAccurateGpsLocation } from '../../core/gps/locationService.js';",
   "import { getAccurateGpsLocation } from '../../core/gps/locationService.js';\nimport { isIntermodalModeActive } from './equipmentMode.js';");
-patch(status,
+patchAny(status, [
   "const onReasons = ['Pre-trip inspection', 'Fuel', 'Pickup / Loading', 'Delivery / Unloading', 'Waiting', 'Drop Trailer', 'Drop Off', 'Drop & Hook', 'Hook Empty / Reposition'];",
-  "const onReasons = ['Pre-trip inspection', 'Fuel', 'Pickup / Loading', 'Delivery / Unloading', 'Waiting'];\nconst trailerReasons = ['Drop Trailer', 'Hook / Pickup Trailer'];\nconst intermodalReasons = ['Drop Off', 'Drop & Hook', 'Hook Empty / Reposition'];");
+  "const onReasons = ['Pre-trip inspection', 'Fuel', 'Pickup / Loading', 'Delivery / Unloading', 'Waiting', 'Drop Load / Trailer', 'Hook / Pickup Trailer', 'Drop Off', 'Drop & Hook', 'Hook Empty / Reposition'];",
+], "const onReasons = ['Pre-trip inspection', 'Fuel', 'Pickup / Loading', 'Delivery / Unloading', 'Waiting'];\nconst trailerReasons = ['Drop Load / Trailer', 'Hook / Pickup Trailer'];\nconst intermodalReasons = ['Drop Off', 'Drop & Hook', 'Hook Empty / Reposition'];");
 patch(status, "function reasonList(status) {\n  if (status === 'ON') return onReasons;",
   "function reasonList(status, intermodalMode = false) {\n  if (status === 'ON') return [...onReasons, ...(intermodalMode ? intermodalReasons : trailerReasons)];");
-patch(status,
+patchAny(status, [
   'export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onStartDriving }) {',
-  'export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onStartDriving }) {\n  const intermodalMode = isIntermodalModeActive(state);');
+  "export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onStartDriving, preferredReason = '', preferredDocument = null }) {",
+], "export default function StatusWorkflowSheet({ state, onClose, onApplyStatus, onStartDriving, preferredReason = '', preferredDocument = null }) {\n  const intermodalMode = isIntermodalModeActive(state);");
 optionalPatch(status,
   'const initialReason = guidePrefill.reason || reasonList(initialStatus)[0];',
   'const initialReason = guidePrefill.reason || reasonList(initialStatus, intermodalMode)[0];');
 optionalPatch(status,
   "useState([reasonList(state.currentStatus || 'OFF')[0]])",
   "useState([reasonList(state.currentStatus || 'OFF', intermodalMode)[0]])");
-patch(status, 'setSelectedReasons([reasonList(next)[0]]);', 'setSelectedReasons([reasonList(next, intermodalMode)[0]]);');
-patch(status, 'reasonText(selectedReasons) || reasonList(status)[0]', 'reasonText(selectedReasons) || reasonList(status, intermodalMode)[0]');
+optionalPatch(status, 'setSelectedReasons([reasonList(next)[0]]);', 'setSelectedReasons([reasonList(next, intermodalMode)[0]]);');
+optionalPatch(status, 'reasonText(selectedReasons) || reasonList(status)[0]', 'reasonText(selectedReasons) || reasonList(status, intermodalMode)[0]');
 for (const [before, after] of [
   ['if (dropOffSelected && !dropContainer.trim() && !dropChassis.trim())', 'if (intermodalMode && dropOffSelected && !dropContainer.trim() && !dropChassis.trim())'],
   ['if (dropHookSelected && (!hookContainer.trim() || !hookChassis.trim() || !hookDestination.trim()))', 'if (intermodalMode && dropHookSelected && (!hookContainer.trim() || !hookChassis.trim() || !hookDestination.trim()))'],
