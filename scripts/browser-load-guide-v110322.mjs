@@ -60,13 +60,22 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     const before=protectedData(await snapshot(page));
     await page.getByRole('button',{name:'Full mission',exact:true}).click();
     const row=id=>page.locator(`[data-checklist-step="${id}"]`);
-    await row('route_pickup').waitFor();
+    await row('pickup_ready').waitFor();
     const noLogbookPrompts=async()=>{
       for(const id of ['pretrip','arrive_pickup','depart_pickup','arrive_delivery_1'])assert.equal(await row(id).count(),0,id);
-      assert.doesNotMatch(await page.locator('body').innerText(),/Complete pre-trip|Log arrival|Log Driving|Open Logbook|Old Logbook task|\[object Object\]/);
-      assert.equal(await page.locator('[data-checklist-step]').count(),9);
+      assert.doesNotMatch(await page.locator('body').innerText(),/Complete pre-trip|Log arrival|Log Driving|Open Logbook|Logbook ·|Logbook-safe|Old Logbook task|\[object Object\]/);
+      assert.equal(await page.locator('[data-checklist-step]').count(),7);
+      assert.equal(await page.locator('[data-route-helper]').count(),2);
+      assert.equal(await row('route_pickup').count(),0);
+      assert.equal(await row('route_delivery_1').count(),0);
     };
     await noLogbookPrompts();
+    const routeHelper=page.locator('[data-route-helper="route_pickup"]');
+    const popupPromise=page.waitForEvent('popup');
+    await routeHelper.getByRole('button',{name:'Open route',exact:true}).click();
+    const popup=await popupPromise;await popup.close();
+    assert.deepEqual(protectedData(await snapshot(page)),before,'navigation must not write Logbook records');
+    assert.equal((await snapshot(page)).loadGuidesById[f.guide.id].manualDone.route_pickup,undefined);
     const contrast=await page.locator('[data-checklist-step] button').evaluateAll(buttons=>buttons.map(el=>{
       const c=getComputedStyle(el),rgb=v=>(v.match(/[\d.]+/g)||[]).slice(0,3).map(Number),lum=v=>rgb(v).map(n=>{n/=255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4;}).reduce((a,n,i)=>a+n*[.2126,.7152,.0722][i],0);
       const foreground=lum(c.webkitTextFillColor||c.color),background=lum(c.backgroundColor);
@@ -88,11 +97,27 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.getByRole('button',{name:'Back',exact:true}).click();
     await page.locator('.adaptive-home-v1038.active-load').waitFor();
     await page.reload();await page.locator('.adaptive-home-v1038.active-load').waitFor({timeout:30000});
-    await page.getByRole('button',{name:'Full mission',exact:true}).click();await row('route_pickup').waitFor();
+    await page.getByRole('button',{name:'Full mission',exact:true}).click();await row('pickup_ready').waitFor();
     await noLogbookPrompts();
+    assert.equal((await snapshot(page)).loadGuidesById[f.guide.id].manualDone.route_pickup,undefined);
     assert.deepEqual(protectedData(await snapshot(page)),before);
+    for(const id of ['pickup_ready','delivery_docs_1','complete_stop_1']) {
+      if(await row(id).getAttribute('data-complete')==='false')await row(id).getByRole('button').click();
+    }
+    assert.equal(await page.getByRole('button',{name:'Complete load',exact:true}).count(),0,'POD remains required');
+    await page.evaluate(()=>{const key='owner-op-road-ready-business-v1',store=JSON.parse(localStorage.getItem(key));Object.assign(store.documents.find(d=>d.id==='bol-fixture'),{podSigned:true,stopSequence:1});localStorage.setItem(key,JSON.stringify(store));window.dispatchEvent(new CustomEvent('owner-op-business-updated'));});
+    await page.getByRole('button',{name:'Complete load',exact:true}).waitFor();
+    assert.equal((await snapshot(page)).loadGuidesById[f.guide.id].manualDone.route_delivery_1,undefined);
+    await page.getByRole('button',{name:'Complete load',exact:true}).click();
+    await page.waitForFunction(id=>!document.querySelector('[data-checklist-step]'),f.guide.id);
+    const closed=await snapshot(page);assert.equal(closed.loadGuidesById[f.guide.id].status,'completed');assert.notEqual(closed.activeLoadGuideId,f.guide.id);
+    assert.deepEqual(protectedData(closed),before);
+    await page.reload();await page.locator('.adaptive-home-v1038').waitFor({timeout:30000});
+    const afterCloseReload=await snapshot(page);
+    assert.equal(afterCloseReload.loadGuidesById[f.guide.id].status,'completed','closed guide stays completed after reload');
+    assert.notEqual(afterCloseReload.activeLoadGuideId,f.guide.id,'closed load does not return as active');
     assert.deepEqual(errors,[]);
-    reports.push({browser:name,scenario,passed:true});console.log(`PASS — ${name} ${scenario}: Logbook prompts absent, route/document steps retained, document edits live, reload, logs unchanged`);
+    reports.push({browser:name,scenario,passed:true});console.log(`PASS — ${name} ${scenario}: optional routes, required POD, Complete load, document edits, reload and unchanged logs`);
    } catch(error) {await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`,fullPage:true}).catch(()=>{});reports.push({browser:name,scenario,passed:false,error:String(error),stack:error.stack,pageErrors:errors});fs.writeFileSync(`${output}/${name}-${scenario}-FAILED-state.json`,JSON.stringify({state:await snapshot(page),body:await page.locator('body').innerText()},null,2));console.error(error);} finally {await context.close();}
   }
  } finally {await browser.close();}
