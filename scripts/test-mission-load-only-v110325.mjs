@@ -4,7 +4,7 @@ import { register } from 'node:module';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { checklistFixture } from './v110321/checklistFixture.mjs';
-import { resolveDriverGuideV103, applyLoadGuideActionV103 } from '../source/src/modules/loads/loadGuideV103.js';
+import { resolveDriverGuideV103, applyLoadGuideActionV103, getActiveLoadGuideV103 } from '../source/src/modules/loads/loadGuideV103.js';
 import { safeMissionProgressV10966 } from '../source/src/modules/loads/safeMissionModelV10966.js';
 import { buildInstructionGuideV110311 } from '../source/src/modules/loads/instructionGuideV110311.js';
 
@@ -15,10 +15,18 @@ const progress = resolve();
 assert.deepEqual(progress, resolve({...f.state, eventsByDay:{}}), 'logbook contents cannot affect Mission progress');
 assert.deepEqual(progress, safeMissionProgressV10966(f.state, f.guide, f.store), 'Home and Mission agree');
 assert.equal(progress.completed, 3, 'only manual confirmations and the saved BOL count');
-assert.equal(progress.currentStep.id, 'route_pickup', 'old logged pickup does not confirm arrival');
+assert.equal(progress.currentStep.id, 'pickup_ready', 'navigation never occupies the next required step');
+assert.equal(progress.total, 7);
+assert.equal(progress.percent, 43);
+assert.equal(progress.navigationSteps.length, 2);
+assert.ok(progress.navigationSteps.every(s=>s.kind==='route'));
+assert.ok(progress.steps.every(s=>s.kind!=='route'));
 assert.ok(progress.steps.every(step => step.completionSource !== 'logbook'));
 assert.ok(progress.steps.every(step => !['status','logbook'].includes(step.kind)));
 assert.deepEqual(f, initial, 'guide reads leave every saved field intact');
+const clickedRoutes = structuredClone(f.state);
+for (const step of progress.navigationSteps) clickedRoutes.loadGuidesById[f.guide.id].manualDone[step.id] = 1;
+assert.equal(resolve(clickedRoutes).percent, progress.percent, 'old route Done flags do not affect progress');
 
 // The adapter must not even read duty records or stale logbook document summaries.
 const guarded = {...f.state};
@@ -54,6 +62,24 @@ for (const field of ['inspectionByDay','signatureByDay','certifyStatus']) {
   assert.deepEqual(reopened[field], f.state[field], field);
 }
 assert.deepEqual(reopened.loadGuidesById[f.guide.id].steps, f.guide.steps);
+assert.ok(resolve(reopened).navigationSteps.every(step=>!step.complete), 'all requirements finish with routes untouched');
+const closed = applyLoadGuideActionV103(reopened, {guideId:f.guide.id, action:'complete_guide'});
+assert.equal(closed.loadGuidesById[f.guide.id].status, 'completed');
+assert.equal(getActiveLoadGuideV103(closed), null, 'completed Mission is cleared from active selection');
+assert.deepEqual(closed.eventsByDay, {});
+
+// Screenshot regression: six required items done, routes and POD left pending.
+const screenshot = structuredClone(f.state);
+screenshot.loadGuidesById[f.guide.id].manualDone = Object.fromEntries(progress.steps.filter(s=>s.id!=='final_pod').map(s=>[s.id,1]));
+assert.equal(resolve(screenshot).completed, 6);
+assert.equal(resolve(screenshot).total, 7);
+assert.equal(resolve(screenshot).currentStep.id, 'final_pod');
+const signedStore = structuredClone(f.store);
+Object.assign(signedStore.documents[0], {podSigned:true,stopSequence:1});
+assert.equal(resolve(screenshot, signedStore).complete, true, 'POD can finish the load while routes stay unused');
+const navigationOnly = structuredClone(f.guide);
+navigationOnly.steps = progress.navigationSteps;
+assert.equal(safeMissionProgressV10966({}, navigationOnly, {}).complete, false, 'navigation alone does not create a completed load');
 
 const plan = {loadNo:f.guide.loadNo, broker:'TQL', fields:{}, stops:[
   ...f.guide.stops.map(s=>s.type==='delivery' ? {...s,deliverySequence:1} : s),
@@ -70,16 +96,22 @@ for (const risk of plan.risks) assert.ok(instructionProgress.steps.some(s=>s.tit
 assert.ok(instructionProgress.steps.some(s=>s.title==='Inspect and photograph returned trailer'));
 assert.ok(instructionProgress.steps.some(s=>s.title==='Confirm trailer returned'));
 assert.equal(instructionProgress.guide.stops.at(-1).appointment, '08:00–16:00');
+instruction.manualDone = Object.fromEntries(instructionProgress.steps.filter(s=>s.id!=='complete_stop_2').map(s=>[s.id,1]));
+assert.equal(safeMissionProgressV10966({}, instruction, {}).currentStep.id, 'complete_stop_2', 'physical trailer return remains required');
 
 register(new URL('./test-jsx-loader.mjs', import.meta.url));
 const {default:Mission} = await import('../source/src/modules/loads/SafeDriverMissionV10966.jsx');
+const previousWindow = globalThis.window;
+globalThis.window = {localStorage:{getItem:()=>JSON.stringify(f.store)}};
 const html = renderToStaticMarkup(React.createElement(Mission, {state:initial.state}));
 assert.match(html, /Driver checklist/);
-assert.match(html, /Confirm arrival/);
-assert.doesNotMatch(html, /Logbook|Log Driving|Log now|Complete pre-trip/);
+assert.match(html, /Route helpers/);
+assert.match(html, /Open route/);
+assert.doesNotMatch(html, /Logbook|Log Driving|Log now|Complete pre-trip|Confirm arrival/);
+assert.match(renderToStaticMarkup(React.createElement(Mission, {state:reopened})), /Complete load/);
+if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
 for (const name of ['SafeDriverMissionV10966.jsx','DriverLoadGuideV103.jsx']) {
   const source = fs.readFileSync('source/src/modules/loads/'+name, 'utf8');
   assert.doesNotMatch(source, /open_status|Open Logbook|Logbook-safe|Log now|Log Driving/);
 }
-assert.match(fs.readFileSync('source/src/modules/loads/SafeDriverMissionV10966.jsx','utf8'), /Confirm arrival/);
-console.log('PASS — Mission ignores duty records, preserves load requirements, follows current documents and completes without Logbook');
+console.log('PASS — Mission requirements complete independently of optional routes; POD and physical trailer return stay required; no Logbook coupling');

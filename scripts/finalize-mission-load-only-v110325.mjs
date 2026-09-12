@@ -10,11 +10,16 @@ function patch(file, before, after) {
 }
 const loads = 'source/src/modules/loads/';
 fs.copyFileSync('scripts/v110325/resolveLoadGuide.js', loads + 'resolveLoadGuideV110325.js');
+fs.copyFileSync('scripts/v110325/LoadRouteHelpers.jsx', loads + 'LoadRouteHelpersV110325.jsx');
 for (const name of ['loadGuideV103.js', 'safeMissionModelV10966.js']) {
   const file = loads + name;
   patch(file, "import {resolveChecklistEvidenceV110321} from './checklistEvidenceV110321.js';",
     "import {resolveLoadGuideV110325 as resolveChecklistEvidenceV110321} from './resolveLoadGuideV110325.js';");
 }
+// Keep the selected 100% guide visible for its explicit Complete load action.
+// Completed fallback guides still cannot replace another active selection.
+patch(loads+'loadGuideV103.js', '    return !resolveDriverGuideV103(state, candidate).complete;',
+  '    return candidate === state.loadGuidesById?.[state.activeLoadGuideId] || !resolveDriverGuideV103(state, candidate).complete;');
 
 const mission = loads + 'SafeDriverMissionV10966.jsx';
 const legacy = loads + 'DriverLoadGuideV103.jsx';
@@ -32,10 +37,20 @@ patch(legacy,
 patch(legacy, "disabled={step.kind === 'status' || step.kind === 'document'}", "disabled={step.kind === 'document'}");
 patch(legacy, "progress.steps.some(s => s.id === 'depart_pickup' && s.complete)",
   "progress.steps.filter(s => s.phase === 'pickup').length > 0 && progress.steps.filter(s => s.phase === 'pickup').every(s => s.complete)");
-// Arrival remains an explicit driver confirmation after removing logbook evidence.
+// Navigation is a separate helper surface and has no completion action.
+for (const file of [mission, legacy]) {
+  const statement = "import LoadRouteHelpersV110325 from './LoadRouteHelpersV110325.jsx';\n";
+  if (!read(file).includes(statement)) fs.writeFileSync(file, statement + read(file));
+}
+patch(mission, '    </main>', '      <LoadRouteHelpersV110325 steps={progress.navigationSteps}/>\n    </main>');
+patch(legacy, '        <StopPlan progress={progress}/>', '        <StopPlan progress={progress}/>\n        <LoadRouteHelpersV110325 steps={progress.navigationSteps}/>');
+patch(mission, "{current?.title || 'Pickup workflow complete'}", "{current?.title || (progress.complete ? 'Load requirements complete' : 'Review load requirements')}");
 patch(mission,
-  "{step.complete ? <strong style={{ color:'#08784e' }}>Done</strong> : <button type=\"button\" onClick={() => runMissionStepV10966(guide, step, onOpenScan)} style={{ border:'1px solid #bfcde0', borderRadius:12, padding:'9px 10px', background:'#fff', color:'#175cc8', fontWeight:900 }}>{actionLabelV10966(step)}</button>}",
-  "{step.complete ? <strong style={{ color:'#08784e' }}>Done</strong> : <div style={{display:'grid',gap:6}}><button type=\"button\" onClick={() => runMissionStepV10966(guide, step, onOpenScan)} style={{ border:'1px solid #bfcde0', borderRadius:12, padding:'9px 10px', background:'#fff', color:'#175cc8', fontWeight:900 }}>{actionLabelV10966(step)}</button>{step.kind === 'route' ? <button type=\"button\" onClick={() => dispatchLoadGuideActionV103({action:'toggle_done',guideId:guide.id,stepId:step.id,step})} style={{border:'1px solid #bfcde0',borderRadius:12,padding:'9px 10px',background:'#fff',color:'#175cc8',fontWeight:900}}>Confirm arrival</button> : null}</div>}");
+  '{actionLabelV10966(current)}</button> : null}',
+  `{actionLabelV10966(current)}</button> : progress.complete ? <button type="button" onClick={() => {dispatchLoadGuideActionV103({action:'complete_guide',guideId:guide.id});onBack?.();}} style={{width:'100%',border:0,borderRadius:18,padding:'17px 18px',background:'#159777',color:'#fff',fontSize:19,fontWeight:950}}>Complete load</button> : null}`);
+patch(home,
+  `disabled={!step} onClick={() => runStep(guide, step, onScan)}>{step ? actionLabel(step) : 'Load complete'}`,
+  `disabled={!step && !(snapshot.total > 0 && snapshot.completed === snapshot.total)} onClick={() => step ? runStep(guide, step, onScan) : dispatchLoadGuideActionV103({action:'complete_guide',guideId:guide.id})}>{step ? actionLabel(step) : 'Complete load'}`);
 
 const VERSION = '110.3.25', BUILD = 'v110325-mission-load-requirements-only';
 for (const file of ['release-version.json', 'public/app-version.json']) {
@@ -45,6 +60,7 @@ for (const file of ['release-version.json', 'public/app-version.json']) {
     releasedAt:new Date().toISOString(), updatedAt:new Date().toISOString(),
     sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || null,
     notes:['Mission progress uses driver confirmations and load documents.',
+      'Routes are optional navigation helpers and never block completion.',
       'Removed Logbook actions and completion evidence from all guide screens.',
       'Production equipment materialization has regression coverage.']});
   fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
