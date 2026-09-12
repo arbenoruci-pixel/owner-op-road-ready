@@ -63,10 +63,14 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await row('route_pickup').waitFor();
     const noLogbookPrompts=async()=>{
       for(const id of ['pretrip','arrive_pickup','depart_pickup','arrive_delivery_1'])assert.equal(await row(id).count(),0,id);
-      assert.doesNotMatch(await page.locator('body').innerText(),/Complete pre-trip|Log arrival|Log Driving|Open Logbook|Old Logbook task|\[object Object\]/);
+      assert.doesNotMatch(await page.locator('body').innerText(),/Complete pre-trip|Log arrival|Log Driving|Open Logbook|Logbook ·|Logbook-safe|Old Logbook task|\[object Object\]/);
       assert.equal(await page.locator('[data-checklist-step]').count(),9);
     };
     await noLogbookPrompts();
+    assert.equal(await row('route_pickup').getAttribute('data-complete'),'false','logged pickup cannot complete Mission arrival');
+    await row('route_pickup').getByRole('button',{name:'Confirm arrival',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('[data-checklist-step="route_pickup"]')?.dataset.complete==='true');
+    assert.deepEqual(protectedData(await snapshot(page)),before,'confirming arrival must not write Logbook records');
     const contrast=await page.locator('[data-checklist-step] button').evaluateAll(buttons=>buttons.map(el=>{
       const c=getComputedStyle(el),rgb=v=>(v.match(/[\d.]+/g)||[]).slice(0,3).map(Number),lum=v=>rgb(v).map(n=>{n/=255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4;}).reduce((a,n,i)=>a+n*[.2126,.7152,.0722][i],0);
       const foreground=lum(c.webkitTextFillColor||c.color),background=lum(c.backgroundColor);
@@ -90,6 +94,7 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.reload();await page.locator('.adaptive-home-v1038.active-load').waitFor({timeout:30000});
     await page.getByRole('button',{name:'Full mission',exact:true}).click();await row('route_pickup').waitFor();
     await noLogbookPrompts();
+    assert.equal(await row('route_pickup').getAttribute('data-complete'),'true','arrival confirmation survives reload');
     assert.deepEqual(protectedData(await snapshot(page)),before);
     assert.deepEqual(errors,[]);
     reports.push({browser:name,scenario,passed:true});console.log(`PASS — ${name} ${scenario}: Logbook prompts absent, route/document steps retained, document edits live, reload, logs unchanged`);
