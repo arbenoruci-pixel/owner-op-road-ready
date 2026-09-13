@@ -45,6 +45,12 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
  try {
   for(const scenario of ['saved-guide-with-logs','saved-guide-without-logs']) {
    const f=checklistFixture();
+   // Another broker's closed load must repair from its own source without
+   // changing the active Mission or borrowing its confirmations.
+   const otherId='load_guide_82002',otherBroker='Current Transport Partners';
+   f.state.loadGuidesById[otherId]={...structuredClone(f.guide),id:otherId,loadNo:'82002',orderNo:'82002',broker:'Previous Freight LLC',sourceDocumentId:'other-ratecon',status:'completed',excludedFromActiveLoad:true};
+   f.store.loads.push({id:'load_82002',loadNo:'82002',broker:'Previous Freight LLC',status:'completed',source:'rate_confirmation_v105',documentId:'other-ratecon'});
+   f.store.documents.push({id:'other-ratecon',type:'rate_confirmation',canonicalLoadNo:'82002',broker:'Previous Freight LLC',status:'verified',documentDate:'2026-09-10',createdAt:f.now,extracted:{loadNo:'82002',orderNo:'82002',broker:otherBroker,stops:structuredClone(f.guide.stops),guideSourceTextV110312:'RATE CONFIRMATION\nLOAD #82002\nBroker: '+otherBroker}});
    f.guide.steps.find(s=>s.id==='pickup_ready').checklist.push('Trailer damage-free');
    if(scenario==='saved-guide-without-logs')f.state.eventsByDay={};
    f.guide.steps.unshift(...['pretrip','arrive_pickup','depart_pickup','arrive_delivery_1'].map(id=>({id,kind:'status',status:id==='depart_pickup'?'D':'ON',title:'Old Logbook task'})));
@@ -56,6 +62,11 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
    try {
     await seed(page,state);
     await page.locator('.adaptive-home-v1038.active-load').waitFor();
+    let restoredBroker;
+    for(let attempt=0;attempt<50;attempt++){restoredBroker=await snapshot(page);if(restoredBroker.loadGuidesById[otherId].broker===otherBroker)break;await page.waitForTimeout(100);}
+    assert.equal(restoredBroker.loadGuidesById[otherId].broker,otherBroker);
+    assert.equal(restoredBroker.loadGuidesById[otherId].status,'completed');
+    assert.equal(restoredBroker.activeLoadGuideId,f.guide.id);
     assert.doesNotMatch(await page.locator('.adaptive-mission-v1038').innerText(),/Complete pre-trip|Log arrival|Log Driving|Old Logbook task/);
     const before=protectedData(await snapshot(page));
     await page.getByRole('button',{name:'Full mission',exact:true}).click();
@@ -116,6 +127,7 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     const afterCloseReload=await snapshot(page);
     assert.equal(afterCloseReload.loadGuidesById[f.guide.id].status,'completed','closed guide stays completed after reload');
     assert.notEqual(afterCloseReload.activeLoadGuideId,f.guide.id,'closed load does not return as active');
+    assert.equal(afterCloseReload.loadGuidesById[otherId].broker,otherBroker,'source-backed broker repair survives reload');
     assert.deepEqual(errors,[]);
     reports.push({browser:name,scenario,passed:true});console.log(`PASS — ${name} ${scenario}: optional routes, required POD, Complete load, document edits, reload and unchanged logs`);
    } catch(error) {await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`,fullPage:true}).catch(()=>{});reports.push({browser:name,scenario,passed:false,error:String(error),stack:error.stack,pageErrors:errors});fs.writeFileSync(`${output}/${name}-${scenario}-FAILED-state.json`,JSON.stringify({state:await snapshot(page),body:await page.locator('body').innerText()},null,2));console.error(error);} finally {await context.close();}
