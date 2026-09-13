@@ -1,8 +1,8 @@
 // Form labels and freight instructions cannot establish a company identity.
 export function isDocumentParty(raw) {
   const value=String(raw||'').trim();
-  return value.length>=3&&value.length<=120&&/[a-z]{2}/i.test(value)
-    && !/^(?:[\s.,;:_-]*)(?:signature(?:\s*[/;:]|$|\s+(?:date|of|shipper|carrier|required)\b)|sign\b|n\s*[/;:]|name\s*[:;]|number\b|collect\b|prepaid\b)/i.test(value)
+  return value.length>0&&value.length<=200
+    && !/^(?:[\s.,;:_-]*)(?:signature(?:\s*[/;:]|$|\s+(?:date|of|shipper|carrier|required)\b)|sign(?:\s+(?:here|below|parties|pusties)\b|\s*[:/]|$)|n\s*[/;:]|name\s*[:;]|number\b|collect\b|prepaid\b)/i.test(value)
     && !/signature\s*\/\s*date|trailer\s+loaded|freight\s+counted|required\s+placards|number\s+of\s+packages|carrier\s+name\s*[:;]/i.test(value);
 }
 

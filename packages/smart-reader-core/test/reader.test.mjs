@@ -226,3 +226,14 @@ test('BOL boilerplate cannot become an identifier or a party name',()=>{
   for(const label of ['BOL:', 'BOL ID', 'BOL NUMBER', 'BOL No.'])assert.equal(read(page(bol().replace('BOL No:',label))).documents[0].fields.bolNumber.value,'BOL-42');
   assert.equal(read(page(bol().replace('Example Shipper','Signature Logistics LLC'))).documents[0].fields.shipper.value,'Signature Logistics LLC');
 });
+
+
+test('short and stylized company names stay valid and protect document boundaries',()=>{
+  for(const name of ['3M','GE','H&M','Signature Foods','Sign Company']){
+    const result=read(page(invoice().replace('Example Company',name)));
+    assert.equal(result.documents[0].fields.vendor.value,name);
+    assert.equal(result.documents[0].fields.vendor.status,'supported');
+  }
+  const result=read(page(invoice().replace('Example Company','3M'),'a'),page(invoice().replace('Example Company','GE'),'b'));
+  assert.equal(result.documents.length,2,'different short vendor names cannot join on a reused invoice number');
+});

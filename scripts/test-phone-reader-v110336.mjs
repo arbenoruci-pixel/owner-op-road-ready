@@ -16,3 +16,5 @@ assert.equal(guardDocumentReading(legitimate),legitimate,'legitimate company nam
 const contaminated={fields:{shipper:'Signature/Date',origin:'Signature/Date'},fieldEvidence:{shipper:{value:'Signature/Date'}},evidenceReviewV11036:{evidence:{shipper:{value:'Signature/Date'}}}};
 const guarded=guardDocumentReading(contaminated);assert.equal(guarded.fields.shipper,'');assert.equal(guarded.fields.origin,'');assert.equal(guarded.fieldEvidence.shipper,undefined);assert.equal(guarded.evidenceReviewV11036.evidence.shipper,undefined);assert.equal(contaminated.fields.shipper,'Signature/Date');
 console.log('PASS — phone-observed form instructions cannot become party names in either reader');
+
+for(const name of ['3M','GE','H&M','Signature Foods','Sign Company']){const input={fields:{shipper:name}};assert.equal(guardDocumentReading(input),input);}
