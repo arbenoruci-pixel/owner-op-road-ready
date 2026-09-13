@@ -10,7 +10,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
   const context=await type.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},serviceWorkers:'block',...(name==='chromium'&&process.env.TEST_CHROMIUM_PATH?{executablePath:process.env.TEST_CHROMIUM_PATH}:{})});
   const page=await context.newPage();page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
   try{
-    await context.addInitScript(()=>{const NativeWorker=window.Worker;window.__photoJobs=[];window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const info=event.data?.value?.result?.metadata?.processingV110330;if(info)window.__photoJobs.push({...info,cleanup:event.data.value.result.metadata.captureManifest?.restore?.autoQuality?.method});});}};});
+    await context.addInitScript(()=>{const NativeWorker=window.Worker;window.__photoJobs=[];window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const info=event.data?.value?.result?.metadata?.processingV110330;if(info)window.__photoJobs.push({...info,cleanup:event.data.value.result.metadata.captureManifest?.restore?.autoQuality?.method,boundary:event.data.value.result.metadata.captureManifest?.detection?.method});});}};});
     await setupRoutes(context);const state=baseState();state.view='logbook';state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
     // Camera frames are synthetic; capture, detection, page processing, crop
@@ -48,7 +48,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await page.screenshot({path:`${output}/${name}-camera.png`});
     await page.getByRole('button',{name:'Review (2)',exact:true}).click();
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
-    const jobs=await page.evaluate(()=>window.__photoJobs);assert.equal(jobs.length,2,'both photos finish in the local worker');assert.ok(jobs.every(job=>job.thread==='worker'),'photo processing stays off the UI thread');assert.ok(jobs.every(job=>job.cleanup==='paper-surface-v110331'),'saved worker output uses the new paper cleanup');console.log(name+' local photo jobs: '+JSON.stringify(jobs));
+    const jobs=await page.evaluate(()=>window.__photoJobs);assert.equal(jobs.length,2,'both photos finish in the local worker');assert.ok(jobs.every(job=>job.thread==='worker'),'photo processing stays off the UI thread');assert.ok(jobs.every(job=>job.cleanup==='paper-surface-v110331'),'saved worker output uses the new paper cleanup');assert.ok(jobs.every(job=>job.boundary==='paper-color-boundaries-v110332'),'saved worker output uses the new mixed-background detector');console.log(name+' local photo jobs: '+JSON.stringify(jobs));
     if(videoReady)assert.equal(await page.evaluate(()=>window.__scannerStream.getTracks().every(t=>t.readyState==='ended')),true);
     const dimensions=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
     assert.ok(dimensions.w<1400&&dimensions.h<1900,'the surrounding scene is cropped from the saved preview: '+JSON.stringify(dimensions));
@@ -60,15 +60,27 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await page.getByRole('button',{name:'Read document',exact:true}).click();await page.getByText('Read 2 of 2 pages. Check the details below.',{exact:true}).waitFor();
     await page.getByRole('button',{name:'Back',exact:true}).click();assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
     await page.screenshot({path:`${output}/${name}-pages.png`});
+    // A delayed native still must use the page frozen at capture time, even
+    // after the live camera points at a different scene.
+    await page.evaluate(()=>{window.__nativeStillCalls=0;window.ImageCapture=class{takePhoto(){window.__nativeStillCalls++;clearInterval(window.__cameraTimer);window.__scannerDraw(false);return new Promise(()=>{});}};});
+    await page.getByRole('button',{name:'Camera',exact:true}).click();
+    if(videoReady){await page.getByRole('button',{name:'Review (3)',exact:true}).click();}
+    else{await page.locator('[data-smart-camera] input[type=file]').setInputFiles({name:'native-unavailable.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});await page.getByRole('button',{name:'Review (3)',exact:true}).click();}
+    if(videoReady)assert.equal(await page.evaluate(()=>window.__nativeStillCalls),1,'exercise the delayed native photo path');
+    const delayedJobs=await page.evaluate(()=>window.__photoJobs);assert.equal(delayedJobs.length,3);assert.equal(delayedJobs[2].boundary,'paper-color-boundaries-v110332','the newly captured file still contains the paper');
+    const frozen=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
+    assert.ok(frozen.w<1400&&frozen.h<1900,'delayed still keeps the original paper after the camera moves');
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),3);
+    await page.evaluate(()=>{window.ImageCapture=undefined;});
     // An unavailable worker must still produce a cropped page from the source.
     await page.evaluate(()=>{window.Worker=class{constructor(){throw new Error('Synthetic unavailable worker');}};});
     await page.getByRole('button',{name:'Camera',exact:true}).click();
     await page.locator('[data-smart-camera] input[type=file]').setInputFiles({name:'fallback-page.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
-    await page.getByRole('button',{name:'Review (3)',exact:true}).click();
-    assert.equal(await page.locator('.scan-page-list-v328 li').count(),3,'worker failure retains all pages');
+    await page.getByRole('button',{name:'Review (4)',exact:true}).click();
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),4,'worker failure retains all pages');
     const fallback=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
     assert.ok(fallback.w<1400&&fallback.h<1900,'fallback keeps the selected paper crop');assert.deepEqual(errors,[]);
-    console.log(`PASS — ${name}: ${videoReady?'auto/video capture and duplicate latch':'native photo input'}, continuous pages, crop, full source reset and reader recovery`);
+    console.log(`PASS — ${name}: ${videoReady?'auto/video capture and duplicate latch':'native photo input'}, continuous pages, delayed still snapshot, crop, full source reset and reader recovery`);
   }catch(error){await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});throw error;}
   finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}
 }
