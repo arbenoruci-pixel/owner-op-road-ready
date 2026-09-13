@@ -58,7 +58,7 @@ function ReviewBody({analysis}) {
 
   function select(group,key,field,candidate,evidence) {
     setSelection({groupId:group.id,key,field,candidate,evidence});
-    setDraft(candidate.value??candidate.rawValue);setError('');
+    setDraft(field.correction?.value??candidate.value??candidate.rawValue);setError('');
   }
   function confirm() {
     try{
@@ -80,10 +80,11 @@ function ReviewBody({analysis}) {
     {result.documents.map(group=><article key={group.id} className="owned-reader-document">
       <h3>{group.label} · {group.pageIds.map(id=>result.pages.find(p=>p.id===id)?.number).join(', ')}</h3>
       {group.boundaryReview?<p>Check whether these pages belong together.</p>:null}
+      {group.checks.some(check=>check.id==='invoice_arithmetic'&&check.status==='needs_review')?<p role="alert">Subtotal plus tax does not match the total. Check the amounts.</p>:null}
       {group.kind==='unknown'?<p>Document type needs review. The page remains included.</p>:null}
       {Object.entries(group.fields).filter(([,field])=>field.required||field.status!=='missing').map(([key,field])=><div key={key} className="owned-reader-field">
         <b>{field.label}</b><span>{field.status==='confirmed'?'Confirmed in preview':field.status==='supported'?'Source found':field.status==='missing'?'Missing':'Check reading'}</span>
-        {field.status==='confirmed'?<p>{field.value}</p>:null}
+        {field.correction?<p>{field.correction.value}</p>:null}
         {field.candidates.map((candidate,ci)=><div key={ci}>{sourcePages(candidate).map(e=><button type="button" key={e.pageId} onClick={()=>select(group,key,field,candidate,e)}>{candidate.rawValue} · Page {e.pageNumber}</button>)}</div>)}
       </div>)}
       <details><summary>Read page text</summary>{group.pageIds.map(id=>{

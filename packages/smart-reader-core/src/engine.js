@@ -1,5 +1,6 @@
 import {normalizeInput,evidenceFor} from './input.js';
 import {PROFILES,normalizeValue} from './profiles.js';
+import {validateInvoice} from './validation.js';
 
 function candidatesFor(pages, spec) {
   const candidates=[];
@@ -31,7 +32,10 @@ function classifyPage(page) {
     }
   }
   const kinds=[...new Set(votes.map(v=>v.kind))];
-  const references=Object.fromEntries(PROFILES.map(profile=>[profile.id,candidatesFor([page],profile.fields[profile.identity]).filter(c=>c.value!==null).map(c=>c.value)]));
+  const references=Object.fromEntries(PROFILES.map(profile=>{
+    const field=extractField([page],profile.fields[profile.identity]);
+    return [profile.id,field.status==='supported'&&field.value!==null?[field.value]:[]];
+  }));
   return {kind:kinds.length===1?kinds[0]:'unknown',status:kinds.length>1?'conflicting':kinds.length?'supported':'unknown',evidence:votes,references};
 }
 
@@ -74,20 +78,6 @@ function extractField(pages, spec) {
   return {label:spec.label,kind:spec.kind,required:spec.required,
     status:!candidates.length?'missing':issues.length?'needs_review':'supported',
     value:values.length===1&&!issues.length?values[0]:null,candidates,issues};
-}
-
-function validateInvoice(fields) {
-  const checks=[];
-  const amounts=['subtotal','tax','total'].map(k=>fields[k]);
-  if(amounts.every(f=>f.value!==null)){
-    const [subtotal,tax,total]=amounts.map(f=>normalizeValue('amount',f.value).minorUnits);
-    const passed=subtotal+tax===total;
-    checks.push({id:'invoice_arithmetic',status:passed?'passed':'needs_review',fields:['subtotal','tax','total']});
-    if(!passed) for(const key of ['subtotal','tax','total']){
-      fields[key].status='needs_review';fields[key].issues.push('invoice_arithmetic_mismatch');fields[key].value=null;
-    }
-  }else checks.push({id:'invoice_arithmetic',status:'not_checked',fields:['subtotal','tax','total']});
-  return checks;
 }
 
 export function readDocument(input) {

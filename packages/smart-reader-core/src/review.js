@@ -1,5 +1,6 @@
 import {resolveEvidence} from './input.js';
 import {normalizeValue} from './profiles.js';
+import {validateInvoice} from './validation.js';
 
 export function buildRereadRequests(result) {
   const requests=[];
@@ -37,12 +38,12 @@ export function confirmField(result, {documentId,groupId,field:key,rawValue,evid
   target.fields[key]={...target.fields[key],status:'confirmed',value:normalized.value,correction,
     // Arithmetic must be checked again after edits; previous passes are stale.
     issues:[]};
-  target.checks=target.checks.map(check=>({...check,status:'not_checked'}));
+  if(target.kind==='invoice')target.checks=validateInvoice(target.fields);
   target.requiresReview=true;target.canAutoFile=false;
   return next;
 }
 
 // Export is explicit. Human confirmation alone does not consent to model training.
 export function exportCorrections(result, {allowTraining=false}={}) {
-  return result.corrections.map(c=>({...structuredClone(c),engineVersion:result.engineVersion,trainingEligible:allowTraining===true}));
+  return result.corrections.map(c=>({...structuredClone(c),engineVersion:result.engineVersion,validationChecks:structuredClone(result.documents.find(d=>d.id===c.groupId)?.checks||[]),trainingEligible:allowTraining===true}));
 }

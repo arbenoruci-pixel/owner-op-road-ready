@@ -15,9 +15,10 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await setupRoutes(context);
     await context.addInitScript(()=>{
       window.__ownedReaderCalls=0;
-      const lines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
+      const defaultLines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
       window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
+        const lines=window.__ownedReaderLines||defaultLines;
         const bitmap=await createImageBitmap(file),scaleX=bitmap.width/700,scaleY=bitmap.height/1000;bitmap.close();
         const measure=document.createElement('canvas').getContext('2d');measure.font='24px Arial';
         const rows=['level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext'];
@@ -66,6 +67,41 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.screenshot({path:`${output}/${name}-review.png`,fullPage:true});
     await page.getByRole('button',{name:'Back',exact:true}).click();
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),1,'original selected page survives review');
+    // A second scan exercises arithmetic edits through the actual preview UI.
+    const invoiceLines=['INVOICE','Invoice No: INV-17','Vendor: Example Company','Date: 2026-09-13','Subtotal: 100.00','Tax: 8.25','Total: 108.25','Currency: USD'];
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{
+      localStorage.clear();
+      await new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');request.onsuccess=resolve;request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Previous fixture database is still open'));});
+    });
+    await seed(page,state);
+    await page.evaluate(lines=>{window.__ownedReaderLines=lines;},invoiceLines);
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    const invoicePhoto=await page.evaluate(async lines=>{
+      const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
+      lines.forEach((text,i)=>ctx.fillText(text,30,64+i*65));
+      return [...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())];
+    },invoiceLines);
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'invoice.jpg',mimeType:'image/jpeg',buffer:Buffer.from(invoicePhoto)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByRole('button',{name:'108.25 · Page 1',exact:true}).click();
+    await review.getByLabel('Confirmed value',{exact:true}).fill('118.25');
+    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    const warning=review.getByText('Subtotal plus tax does not match the total. Check the amounts.',{exact:true});
+    await warning.waitFor();
+    const warningDownload=page.waitForEvent('download');
+    await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const warningFile=await warningDownload;
+    const inconsistent=JSON.parse(fs.readFileSync(await warningFile.path(),'utf8'));
+    assert.equal(inconsistent.documents[0].checks[0].status,'needs_review');
+    assert.equal(inconsistent.documents[0].fields.total.correction.value,'118.25');
+    await review.getByRole('button',{name:'8.25 · Page 1',exact:true}).click();
+    await review.getByLabel('Confirmed value',{exact:true}).fill('18.25');
+    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    await warning.waitFor({state:'hidden'});
+    await review.getByText('118.25',{exact:true}).waitFor();
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){

@@ -161,3 +161,59 @@ test('targeted rereading preserves disagreement, original observations and page 
   assert.equal(failed.reread.failures.length,1);
   assert.equal(failed.pages[0].observations.length,1);
 });
+
+test('weak identity evidence on either page cannot join BOL or invoice pages',()=>{
+  for(const [documentText,reference] of [[bol(),'BOL No: BOL-42'],[invoice(),'Invoice No: INV-17']]){
+    for(const weakPage of ['first','continuation']){
+      const first=page(documentText,'a'),continuation=page(reference+'\nPage 2 of 2','b');
+      (weakPage==='first'?first.observations[0].lines[1]:continuation.observations[0].lines[0]).confidence=.3;
+      const result=read(first,continuation);
+      assert.equal(result.documents.length,2,weakPage+' '+reference);
+      assert.equal(result.documents[1].boundaryReview,true);
+    }
+    const first=page(documentText,'a'),continuation=page(reference,'b');
+    const weak=textObservation(reference.replace(/17|42/,'19'),{id:'weak-retry'});weak.lines[0].confidence=.3;
+    continuation.observations.push(weak);
+    assert.equal(read(first,continuation).documents.length,2,'a weak conflicting retry cannot be ignored');
+    continuation.observations.pop();continuation.observations[0].lines[0].confidence=.96;
+    assert.equal(read(first,continuation).documents.length,1,'supported references still join');
+  }
+});
+
+function confirmAmount(result,key,rawValue){
+  const field=result.documents[0].fields[key];
+  return confirmField(result,{documentId:result.documentId,groupId:'document-1',field:key,rawValue,
+    evidence:field.candidates[0].evidence[0],userConfirmed:true,expectedRevision:result.reviewRevision,
+    expectedRawValues:field.candidates.map(candidate=>candidate.rawValue)});
+}
+
+test('amount corrections recompute arithmetic and export warnings until repaired',()=>{
+  const original=read(page(invoice()));
+  const changed=confirmAmount(original,'total','118.25');
+  assert.equal(original.documents[0].checks[0].status,'passed','input remains immutable');
+  assert.equal(changed.documents[0].checks[0].status,'needs_review');
+  assert.equal(changed.documents[0].fields.total.value,null);
+  assert.equal(changed.documents[0].fields.total.correction.value,'118.25','human correction is retained');
+  assert.equal(exportCorrections(changed)[0].validationChecks[0].status,'needs_review');
+  const stillWrong=confirmAmount(changed,'subtotal','100.00');
+  assert.equal(stillWrong.documents[0].checks[0].status,'needs_review');
+  const repaired=confirmAmount(stillWrong,'tax','18.25');
+  assert.equal(repaired.documents[0].checks[0].status,'passed');
+  for(const [key,value] of [['subtotal','100.00'],['tax','18.25'],['total','118.25']]){
+    const field=repaired.documents[0].fields[key];
+    assert.equal(field.value,value);assert.equal(field.status,'confirmed');assert.deepEqual(field.issues,[]);
+  }
+  assert.equal(repaired.documents[0].canAutoFile,false);
+});
+
+test('correcting an original mismatch restores supported amounts without accepting weak OCR',()=>{
+  const mismatch=read(page(invoice().replace('108.25','118.25')));
+  const repaired=confirmAmount(mismatch,'total','108.25');
+  assert.equal(repaired.documents[0].checks[0].status,'passed');
+  assert.equal(repaired.documents[0].fields.subtotal.status,'supported');
+  const weak=page(invoice());weak.observations[0].lines[5].confidence=.3;
+  const unresolved=confirmAmount(read(weak),'total','118.25');
+  assert.equal(unresolved.documents[0].checks[0].status,'not_checked');
+  assert.equal(unresolved.documents[0].fields.tax.value,null);
+  assert.ok(unresolved.documents[0].fields.tax.issues.includes('weak_recognition'));
+});
