@@ -28,6 +28,14 @@ function SourceImage({file,evidence}) {
   </div>;
 }
 
+function sourcePages(candidate) {
+  const pages=new Map();
+  for(const evidence of candidate.evidence){
+    if(!pages.has(evidence.pageId)||!pages.get(evidence.pageId).box&&evidence.box)pages.set(evidence.pageId,evidence);
+  }
+  return [...pages.values()];
+}
+
 function ReviewBody({analysis}) {
   const [result,setResult]=useState(null),[sources,setSources]=useState({}),[selection,setSelection]=useState(null),[draft,setDraft]=useState(''),[error,setError]=useState('');
   const active=useRef(0);
@@ -67,17 +75,21 @@ function ReviewBody({analysis}) {
   const source=selection?resolveEvidence(result,selection.evidence):null;
   return <div className="owned-reader-body">
     <p>Experimental reading review. Check each value against its source. Export the review to keep your corrections.</p>
-    <p role="status">{result.pageCount} pages · {result.documents.length} documents</p>
+    <p role="status">{result.pageCount} {result.pageCount===1?'page':'pages'} · {result.documents.length} {result.documents.length===1?'document':'documents'}</p>
     {result.unreadablePageIds.length>0?<p>Some pages have no readable text. Check their originals.</p>:null}
     {result.documents.map(group=><article key={group.id} className="owned-reader-document">
       <h3>{group.label} · {group.pageIds.map(id=>result.pages.find(p=>p.id===id)?.number).join(', ')}</h3>
       {group.boundaryReview?<p>Check whether these pages belong together.</p>:null}
       {group.kind==='unknown'?<p>Document type needs review. The page remains included.</p>:null}
-      {Object.entries(group.fields).map(([key,field])=><div key={key} className="owned-reader-field">
+      {Object.entries(group.fields).filter(([,field])=>field.required||field.status!=='missing').map(([key,field])=><div key={key} className="owned-reader-field">
         <b>{field.label}</b><span>{field.status==='confirmed'?'Confirmed in preview':field.status==='supported'?'Source found':field.status==='missing'?'Missing':'Check reading'}</span>
         {field.status==='confirmed'?<p>{field.value}</p>:null}
-        {field.candidates.map((candidate,ci)=><div key={ci}>{candidate.evidence.map((e,ei)=><button type="button" key={ei} onClick={()=>select(group,key,field,candidate,e)}>{candidate.rawValue} · Page {e.pageNumber}</button>)}</div>)}
+        {field.candidates.map((candidate,ci)=><div key={ci}>{sourcePages(candidate).map(e=><button type="button" key={e.pageId} onClick={()=>select(group,key,field,candidate,e)}>{candidate.rawValue} · Page {e.pageNumber}</button>)}</div>)}
       </div>)}
+      <details><summary>Read page text</summary>{group.pageIds.map(id=>{
+        const page=result.pages.find(p=>p.id===id);
+        return <div key={id}><b>Page {page.number}</b><pre>{page.observations[0]?.lines.map(l=>l.text).join('\n')||'No readable text'}</pre></div>;
+      })}</details>
     </article>)}
     {selection?<section className="owned-reader-inspect" aria-label="Check source">
       <h3>{selection.field.label} · Page {selection.evidence.pageNumber}</h3>

@@ -6,7 +6,7 @@ import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
 
 const output='browser-test-results/owned-reader';fs.mkdirSync(output,{recursive:true});
-for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
+for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'owned-reader-'));
   const context=await browser.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},serviceWorkers:'block'});
   const page=await context.newPage();page.setDefaultTimeout(45000);
@@ -23,7 +23,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
         return {data:{text:lines.join('\n'),confidence:96,tsv:rows.join('\n')}};
       }})};
     });
-    const state=baseState();state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
+    const state=baseState();state.view='logbook';state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
     const photo=await page.evaluate(async()=>{
       const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
@@ -36,13 +36,15 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
     await page.getByRole('button',{name:'Read document',exact:true}).click();
     await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
     const review=page.locator('.owned-reader-preview');
-    await review.getByText('1 pages · 1 documents',{exact:true}).waitFor();
+    await review.getByText('1 page · 1 document',{exact:true}).waitFor();
     const calls=await page.evaluate(()=>window.__ownedReaderCalls);
     const folder=await page.getByLabel('Load folder',{exact:true}).inputValue();
-    await review.getByRole('button',{name:'BOL-123 · Page 1',exact:true}).first().click();
+    assert.equal(await review.getByRole('button',{name:'BOL-123 · Page 1',exact:true}).count(),1,'retries are consolidated into one source choice per page');
+    await review.getByRole('button',{name:'BOL-123 · Page 1',exact:true}).click();
     await review.locator('mark').getByText('BOL-123',{exact:true}).waitFor();
     await review.getByRole('img',{name:'Source image for page 1',exact:true}).waitFor();
     await review.getByLabel('Source line highlight',{exact:true}).waitFor();
+    await review.locator('.owned-reader-inspect').screenshot({path:`${output}/${name}-source.png`});
     await review.getByLabel('Confirmed value',{exact:true}).fill('BOL-129');
     await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
     await review.getByText('Confirmed in preview',{exact:true}).waitFor();
@@ -62,5 +64,9 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),1,'original selected page survives review');
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
+  }catch(error){
+    await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});
+    fs.writeFileSync(`${output}/${name}-failure.txt`,JSON.stringify({error:String(error),pageErrors:errors,body:await page.locator('body').innerText().catch(()=>''),url:page.url()},null,2));
+    throw error;
   }finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}
 }

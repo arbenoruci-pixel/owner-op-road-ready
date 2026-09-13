@@ -16,3 +16,5 @@
 .owned-reader-source{position:relative;width:100%;margin:12px 0;line-height:0}
 .owned-reader-source img{width:100%;height:auto;display:block}
 .owned-reader-highlight{position:absolute;border:2px solid #e29116;background:#ffbd343d;box-sizing:border-box;pointer-events:none}
+.owned-reader-body summary{min-height:44px;padding:10px 0;box-sizing:border-box;cursor:pointer}
+.owned-reader-body pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;padding:10px;background:#fff;border-radius:8px}
