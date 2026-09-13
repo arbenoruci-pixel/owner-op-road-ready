@@ -14,15 +14,17 @@ const session={access_token:b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:user.id,em
 const profile={setupComplete:true,mode:'own_authority',companyName:'Example Carrier LLC',carrierName:'Example Carrier LLC',truckNumber:'12',trailerNumber:'TEST',fleetSize:1,modules:['documents','loads','logbook','dot','drive','wallet'],createdAt:'2026-01-01T00:00:00Z',updatedAt:Date.now()};
 const fake='live_1788780557647';
 function baseState(){return {view:'home',activeDay:'2026-09-07',sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/New_York',driver:{truck:'12',trailer:'TEST',email:user.email},driverProfile:{name:'Synthetic Driver',email:user.email},carrierName:'Example Carrier LLC',mainOfficeAddress:'100 Example Road, Example City, IL 60000',dotNumber:'0000000',currentTrailer:'TEST',currentStatus:'OFF',currentReason:'Off Duty',currentLocation:{city:'Downers Grove',state:'IL'},eventsByDay:{'2026-09-07':[{id:fake,status:'OFF',startMin:0,endMin:985,city:'Downers Grove',state:'IL',source:'manual',note:'Off Duty'}]},certifyStatus:{'2026-09-07':'Active day / Not certified yet'},signatureByDay:{},inspectionByDay:{},formByDay:{},dotWallet:{documents:{}},loadGuidesById:{},activeLoadGuideId:'',routeLegsByDay:{'2026-09-07':[{id:'leg_'+fake,loadGroupId:fake,pickupEventId:fake,fromCity:'Downers Grove',fromState:'IL',toCity:'',toState:'',shippingDocs:'',loadNo:'',kind:'loaded',status:'open',source:'pickup_event'}]},loadInfo:{loadNo:'',shippingDocs:'',pickupCity:'Downers Grove',pickupState:'IL',guideId:'',sourceEventId:fake,sourceEventDay:'2026-09-07',updatedAt:Date.now()}};}
-async function seed(page,state){
+async function seed(page,state,originalFiles=[]){
  await page.goto(origin+'/_not-found');
- await page.evaluate(async({schemas,state,session,profile})=>{
+ await page.evaluate(async({schemas,state,session,profile,originalFiles})=>{
   localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify(state.testInstructionStore));delete state.testInstructionStore;
   localStorage.setItem('owner-op-prototype-auth-v1',JSON.stringify(session));
   localStorage.setItem('owner-op-road-ready-home-terminal-timezone-v1','America/New_York');
   localStorage.setItem('owner-op-road-ready-operator-profile-v1',JSON.stringify(profile));
-  await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1',20);r.onupgradeneeded=()=>{const db=r.result;for(const[name,schema]of Object.entries(schemas)){const[key,...indexes]=schema.split(',').map(s=>s.trim()),st=db.createObjectStore(name,{keyPath:key.replace(/^&/,'')});for(const raw of indexes){const field=raw.replace(/^[&*]/,'');st.createIndex(field,field.startsWith('[')?field.slice(1,-1).split('+'):field,{unique:raw.startsWith('&'),multiEntry:raw.startsWith('*')});}}};r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction('app_snapshots','readwrite');tx.objectStore('app_snapshots').put({key:'owner-op-road-ready-state-v1',state,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};});
- },{schemas,state,session,profile});
+  await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1',20);r.onupgradeneeded=()=>{const db=r.result;for(const[name,schema]of Object.entries(schemas)){const[key,...indexes]=schema.split(',').map(s=>s.trim()),st=db.createObjectStore(name,{keyPath:key.replace(/^&/,'')});for(const raw of indexes){const field=raw.replace(/^[&*]/,'');st.createIndex(field,field.startsWith('[')?field.slice(1,-1).split('+'):field,{unique:raw.startsWith('&'),multiEntry:raw.startsWith('*')});}}};r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction(['app_snapshots','documents_local','document_blobs'],'readwrite');
+   for(const file of originalFiles){const id=file.id;tx.objectStore('documents_local').put({local_id:id+'-local',client_document_id:id+'-client',load_no:'82002',mime_type:'application/pdf',original_file_name:id+'.pdf',type:id==='foreign'?'rate_confirmation':'other',extracted:{type:'rate_confirmation',loadNo:'82002'}});tx.objectStore('document_blobs').put({local_blob_id:id+'-blob',client_document_id:id+'-client',blob:new Blob([new Uint8Array(file.bytes)],{type:'application/pdf'})});}
+   tx.objectStore('app_snapshots').put({key:'owner-op-road-ready-state-v1',state,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=event=>reject(new Error('Fixture write: '+(event.target?.error?.message||tx.error?.message||event.type)));tx.onabort=()=>reject(new Error('Fixture transaction aborted: '+(tx.error?.message||'unknown')));};});
+ },{schemas,state,session,profile,originalFiles});
  await page.goto(origin);
  await page.locator('.logbook-home-screen-v988').waitFor({timeout:30000});
  const adaptiveHome=page.locator('.adaptive-home-v1038');
@@ -147,15 +149,9 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     const load={id:'collision',loadNo:'82002',canonicalLoadNo:'82002',broker:old.broker,documentId:old.id,status:'completed',source:'rate_confirmation_v105',gross:2700,createdAt:1,updatedAt:1};
     const unrelated={...load,loadNo:'91001',canonicalLoadNo:'91001',documentId:'unrelated-source'};
     state.testInstructionStore={loads:[unrelated,load],documents:[old]};
-    await seed(page,state);
     const wrong='RATE CONFIRMATION\nLOAD #91001\nBroker: Previous Freight LLC';
     const right='RATE CONFIRMATION\nLOAD #82002\nSelect Agent Name\nMC#: 984301\nEmail Invoicing: docs@goselect.com\nTOTAL CARRIER PAY: $1000\nPICKUP\nEaston, IL\nDELIVERY\nChicago, IL';
-    await page.evaluate(async files=>{
-     await new Promise((resolve,reject)=>{const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction(['documents_local','document_blobs'],'readwrite');
-      for(const file of files){const id=file.id;tx.objectStore('documents_local').put({local_id:id+'-local',client_document_id:id+'-client',load_no:'82002',mime_type:'application/pdf',original_file_name:id+'.pdf',type:id==='foreign'?'rate_confirmation':'other',extracted:{type:'rate_confirmation',loadNo:'82002'}});tx.objectStore('document_blobs').put({local_blob_id:id+'-blob',client_document_id:id+'-client',blob:new Blob([new Uint8Array(file.bytes)],{type:'application/pdf'})});}
-      tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);
-     };});
-    },[{id:'foreign',bytes:[...simplePdf(wrong)]},{id:'correct',bytes:[...simplePdf(right)]}]);
+    await seed(page,state,[{id:'foreign',bytes:[...simplePdf(wrong)]},{id:'correct',bytes:[...simplePdf(right)]}]);
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
     await page.waitForFunction(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')).loads.find(l=>l.loadNo==='82002')?.broker==='Select Transport Partners LLC',{},{timeout:30000});
     await page.locator('input[type=file][accept*="application/pdf"]').setInputFiles({name:'delivery.pdf',mimeType:'application/pdf',buffer:simplePdf('PROOF OF DELIVERY\nLOAD #82002\nBOL #550044\nSHIP FROM: Example Shipper\nSHIP TO: Example Receiver\nDELIVERY DATE: 09/10/2026\nRECEIVED BY: Example Receiver')});
