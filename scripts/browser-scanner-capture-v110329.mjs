@@ -10,7 +10,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
   const context=await type.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},serviceWorkers:'block',...(name==='chromium'&&process.env.TEST_CHROMIUM_PATH?{executablePath:process.env.TEST_CHROMIUM_PATH}:{})});
   const page=await context.newPage();page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
   try{
-    await context.addInitScript(()=>{const NativeWorker=window.Worker;window.__photoJobs=[];window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const info=event.data?.value?.result?.metadata?.processingV110330;if(info)window.__photoJobs.push(info);});}};});
+    await context.addInitScript(()=>{const NativeWorker=window.Worker;window.__photoJobs=[];window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const info=event.data?.value?.result?.metadata?.processingV110330;if(info)window.__photoJobs.push({...info,cleanup:event.data.value.result.metadata.captureManifest?.restore?.autoQuality?.method});});}};});
     await setupRoutes(context);const state=baseState();state.view='logbook';state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
     // Camera frames are synthetic; capture, detection, page processing, crop
@@ -48,7 +48,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await page.screenshot({path:`${output}/${name}-camera.png`});
     await page.getByRole('button',{name:'Review (2)',exact:true}).click();
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
-    const jobs=await page.evaluate(()=>window.__photoJobs);assert.equal(jobs.length,2,'both photos finish in the local worker');assert.ok(jobs.every(job=>job.thread==='worker'),'photo processing stays off the UI thread');console.log(name+' local photo jobs: '+JSON.stringify(jobs));
+    const jobs=await page.evaluate(()=>window.__photoJobs);assert.equal(jobs.length,2,'both photos finish in the local worker');assert.ok(jobs.every(job=>job.thread==='worker'),'photo processing stays off the UI thread');assert.ok(jobs.every(job=>job.cleanup==='paper-surface-v110331'),'saved worker output uses the new paper cleanup');console.log(name+' local photo jobs: '+JSON.stringify(jobs));
     if(videoReady)assert.equal(await page.evaluate(()=>window.__scannerStream.getTracks().every(t=>t.readyState==='ended')),true);
     const dimensions=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
     assert.ok(dimensions.w<1400&&dimensions.h<1900,'the surrounding scene is cropped from the saved preview: '+JSON.stringify(dimensions));
