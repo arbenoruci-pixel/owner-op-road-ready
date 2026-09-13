@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import os from 'node:os';
+import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import {checklistFixture} from './v110321/checklistFixture.mjs';
 
@@ -14,15 +16,17 @@ const session={access_token:b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:user.id,em
 const profile={setupComplete:true,mode:'own_authority',companyName:'Example Carrier LLC',carrierName:'Example Carrier LLC',truckNumber:'12',trailerNumber:'TEST',fleetSize:1,modules:['documents','loads','logbook','dot','drive','wallet'],createdAt:'2026-01-01T00:00:00Z',updatedAt:Date.now()};
 const fake='live_1788780557647';
 function baseState(){return {view:'home',activeDay:'2026-09-07',sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/New_York',driver:{truck:'12',trailer:'TEST',email:user.email},driverProfile:{name:'Synthetic Driver',email:user.email},carrierName:'Example Carrier LLC',mainOfficeAddress:'100 Example Road, Example City, IL 60000',dotNumber:'0000000',currentTrailer:'TEST',currentStatus:'OFF',currentReason:'Off Duty',currentLocation:{city:'Downers Grove',state:'IL'},eventsByDay:{'2026-09-07':[{id:fake,status:'OFF',startMin:0,endMin:985,city:'Downers Grove',state:'IL',source:'manual',note:'Off Duty'}]},certifyStatus:{'2026-09-07':'Active day / Not certified yet'},signatureByDay:{},inspectionByDay:{},formByDay:{},dotWallet:{documents:{}},loadGuidesById:{},activeLoadGuideId:'',routeLegsByDay:{'2026-09-07':[{id:'leg_'+fake,loadGroupId:fake,pickupEventId:fake,fromCity:'Downers Grove',fromState:'IL',toCity:'',toState:'',shippingDocs:'',loadNo:'',kind:'loaded',status:'open',source:'pickup_event'}]},loadInfo:{loadNo:'',shippingDocs:'',pickupCity:'Downers Grove',pickupState:'IL',guideId:'',sourceEventId:fake,sourceEventDay:'2026-09-07',updatedAt:Date.now()}};}
-async function seed(page,state){
+async function seed(page,state,originalFiles=[]){
  await page.goto(origin+'/_not-found');
- await page.evaluate(async({schemas,state,session,profile})=>{
+ await page.evaluate(async({schemas,state,session,profile,originalFiles})=>{
   localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify(state.testInstructionStore));delete state.testInstructionStore;
   localStorage.setItem('owner-op-prototype-auth-v1',JSON.stringify(session));
   localStorage.setItem('owner-op-road-ready-home-terminal-timezone-v1','America/New_York');
   localStorage.setItem('owner-op-road-ready-operator-profile-v1',JSON.stringify(profile));
-  await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1',20);r.onupgradeneeded=()=>{const db=r.result;for(const[name,schema]of Object.entries(schemas)){const[key,...indexes]=schema.split(',').map(s=>s.trim()),st=db.createObjectStore(name,{keyPath:key.replace(/^&/,'')});for(const raw of indexes){const field=raw.replace(/^[&*]/,'');st.createIndex(field,field.startsWith('[')?field.slice(1,-1).split('+'):field,{unique:raw.startsWith('&'),multiEntry:raw.startsWith('*')});}}};r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction('app_snapshots','readwrite');tx.objectStore('app_snapshots').put({key:'owner-op-road-ready-state-v1',state,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};});
- },{schemas,state,session,profile});
+  await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1',20);r.onupgradeneeded=()=>{const db=r.result;for(const[name,schema]of Object.entries(schemas)){const[key,...indexes]=schema.split(',').map(s=>s.trim()),st=db.createObjectStore(name,{keyPath:key.replace(/^&/,'')});for(const raw of indexes){const field=raw.replace(/^[&*]/,'');st.createIndex(field,field.startsWith('[')?field.slice(1,-1).split('+'):field,{unique:raw.startsWith('&'),multiEntry:raw.startsWith('*')});}}};r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction(['app_snapshots','documents_local','document_blobs'],'readwrite');
+   for(const file of originalFiles){const id=file.id;tx.objectStore('documents_local').put({local_id:id+'-local',client_document_id:id+'-client',load_no:'82002',mime_type:'application/pdf',original_file_name:id+'.pdf',type:id==='foreign'?'rate_confirmation':'other',extracted:{type:'rate_confirmation',loadNo:'82002'}});tx.objectStore('document_blobs').put({local_blob_id:id+'-blob',client_document_id:id+'-client',blob:new Blob([new Uint8Array(file.bytes)],{type:'application/pdf'})});}
+   tx.objectStore('app_snapshots').put({key:'owner-op-road-ready-state-v1',state,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=event=>reject(new Error('Fixture write: '+(event.target?.error?.message||tx.error?.message||event.type)));tx.onabort=()=>reject(new Error('Fixture transaction aborted: '+(tx.error?.message||'unknown')));};});
+ },{schemas,state,session,profile,originalFiles});
  await page.goto(origin);
  await page.locator('.logbook-home-screen-v988').waitFor({timeout:30000});
  const adaptiveHome=page.locator('.adaptive-home-v1038');
@@ -39,6 +43,11 @@ async function setupRoutes(context){
 async function snapshot(page){return page.evaluate(async()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction('app_snapshots','readonly'),q=tx.objectStore('app_snapshots').get('owner-op-road-ready-state-v1');q.onsuccess=()=>{resolve(q.result?.state);db.close();};};}));}
 const protectedFields=['eventsByDay','signatureByDay','certifyStatus','inspectionByDay','formByDay'];
 const protectedData=state=>Object.fromEntries(protectedFields.map(k=>[k,state[k]]));
+function simplePdf(text){
+ const content='BT /F1 10 Tf 14 TL 40 790 Td\n'+text.split('\n').map((line,i)=>(i?'T* ':'')+'('+line.replace(/[\\()]/g,'\\$&')+') Tj').join('\n')+'\nET';
+ const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',`<< /Length ${content.length} >>\nstream\n${content}\nendstream`];
+ let pdf='%PDF-1.4\n',offsets=[0];objects.forEach((obj,i)=>{offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${obj}\nendobj\n`;});const start=pdf.length;pdf+='xref\n0 6\n0000000000 65535 f \n'+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;return Buffer.from(pdf);
+}
 const reports=[];
 for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
  const browser=await type.launch({headless:true});
@@ -131,6 +140,40 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     assert.deepEqual(errors,[]);
     reports.push({browser:name,scenario,passed:true});console.log(`PASS — ${name} ${scenario}: optional routes, required POD, Complete load, document edits, reload and unchanged logs`);
    } catch(error) {await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`,fullPage:true}).catch(()=>{});reports.push({browser:name,scenario,passed:false,error:String(error),stack:error.stack,pageErrors:errors});fs.writeFileSync(`${output}/${name}-${scenario}-FAILED-state.json`,JSON.stringify({state:await snapshot(page),body:await page.locator('body').innerText()},null,2));console.error(error);} finally {await context.close();}
+  }
+
+  {
+   // Match the normal Safari/PWA storage profile. WebKit private contexts reject
+   // IndexedDB Blob fixtures; the invoice browser suite uses the same boundary.
+   const profileDirectory=name==='webkit'?fs.mkdtempSync(path.join(os.tmpdir(),'load-originals-')):'';
+   const options={viewport:{width:390,height:844},serviceWorkers:'block'};
+   const context=profileDirectory?await type.launchPersistentContext(profileDirectory,{...options,headless:true}):await browser.newContext(options);
+   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await setupRoutes(context);
+   try {
+    const state=baseState();state.view='logbook';state.routeLegsByDay={};state.loadInfo={};
+    const old={id:'foreign-document',localDocumentId:'foreign-local',clientDocumentId:'foreign-client',type:'rate_confirmation',canonicalLoadNo:'82002',broker:'Previous Freight LLC',extracted:{loadNo:'82002',broker:'Previous Freight LLC'}};
+    const load={id:'collision',loadNo:'82002',canonicalLoadNo:'82002',broker:old.broker,documentId:old.id,status:'completed',source:'rate_confirmation_v105',gross:2700,createdAt:1,updatedAt:1};
+    const unrelated={...load,loadNo:'91001',canonicalLoadNo:'91001',documentId:'unrelated-source'};
+    state.testInstructionStore={loads:[unrelated,load],documents:[old]};
+    const wrong='RATE CONFIRMATION\nLOAD #91001\nBroker: Previous Freight LLC';
+    const right='RATE CONFIRMATION\nLOAD #82002\nSelect Agent Name\nMC#: 984301\nEmail Invoicing: docs@goselect.com\nTOTAL CARRIER PAY: $1000\nPICKUP\nEaston, IL\nDELIVERY\nChicago, IL';
+    await seed(page,state,[{id:'foreign',bytes:[...simplePdf(wrong)]},{id:'correct',bytes:[...simplePdf(right)]}]);
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')).loads.find(l=>l.loadNo==='82002')?.broker==='Select Transport Partners LLC',{},{timeout:30000});
+    await page.locator('input[type=file][accept*="application/pdf"]').setInputFiles({name:'delivery.pdf',mimeType:'application/pdf',buffer:simplePdf('PROOF OF DELIVERY\nLOAD #82002\nBOL #550044\nSHIP FROM: Example Shipper\nSHIP TO: Example Receiver\nDELIVERY DATE: 09/10/2026\nRECEIVED BY: Example Receiver')});
+    await page.getByLabel('Load folder',{exact:true}).waitFor({timeout:60000});
+    await page.getByLabel('Load folder',{exact:true}).selectOption('82002');
+    assert.match(await page.getByLabel('Load folder',{exact:true}).locator('option:checked').innerText(),/Select Transport Partners/);
+    const repaired=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')));
+    assert.deepEqual(repaired.loads.find(l=>l.loadNo==='91001'),unrelated);
+    assert.equal(repaired.loads.find(l=>l.loadNo==='82002').status,'completed');
+    assert.equal(repaired.documents.find(d=>d.id===old.id).broker,old.broker);
+    await page.screenshot({path:`${output}/${name}-legacy-originals.png`,fullPage:true});
+    await page.reload();await page.locator('.adaptive-home-v1038').waitFor({timeout:30000});
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')).loads.find(l=>l.loadNo==='82002').broker),'Select Transport Partners LLC');
+    assert.deepEqual(errors,[]);
+    reports.push({browser:name,scenario:'legacy-originals',passed:true});console.log(`PASS — ${name}: original PDF recovery corrects the open scanner and preserves a different load with the same ID`);
+   } catch(error) {reports.push({browser:name,scenario:'legacy-originals',passed:false,error:String(error),pageErrors:errors});await page.screenshot({path:`${output}/${name}-legacy-originals-FAILED.png`,fullPage:true});console.error(error);} finally {await context.close();if(profileDirectory)fs.rmSync(profileDirectory,{recursive:true,force:true});}
   }
  } finally {await browser.close();}
 }

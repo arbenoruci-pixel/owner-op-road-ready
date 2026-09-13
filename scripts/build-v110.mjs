@@ -31,6 +31,7 @@ steps.push('finalize-smart-scan-v110323.mjs','test-smart-scan-v110323.mjs','test
 steps.push('test-equipment-materialization-v110324.mjs','finalize-equipment-mode-v110324.mjs','verify-status-equipment-mode-separation.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-mission-load-only-v110325.mjs','test-mission-load-only-v110325.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-load-identity-v110326.mjs','test-load-identity-v110326.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-legacy-contract-originals-v110327.mjs','test-legacy-contract-originals-v110327.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
