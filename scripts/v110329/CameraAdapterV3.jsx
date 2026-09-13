@@ -80,8 +80,8 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
   return <section data-smart-camera="110329" style={{position:'fixed',inset:0,zIndex:1400,background:'#020617',color:'#fff',display:'grid',gridTemplateRows:'auto 1fr auto'}}>
     <header style={{padding:'calc(10px + env(safe-area-inset-top)) 12px 10px',display:'flex',gap:12,alignItems:'center'}}>
       <button type="button" disabled={capturing} onClick={close} aria-label="Close camera" style={button}>×</button>
-      <div style={{flex:1,textAlign:'center'}}><b>Page {pageCount+1}</b><div role="status" style={{fontSize:14,marginTop:5,color:'#cbd5e1'}}>{error||guidance}</div></div>
-      <span aria-label={`${pageCount} pages captured`} style={{minWidth:32,textAlign:'center',fontWeight:700}}>{pageCount>0?`${pageCount} ✓`:''}</span>
+      <div style={{flex:1,textAlign:'center'}}><b>{pageCount>=maxPages?'Pages ready':`Page ${pageCount+1}`}</b><div role="status" style={{fontSize:14,marginTop:5,color:'#cbd5e1'}}>{error||guidance}</div></div>
+      {pageCount>0&&<button type="button" disabled={capturing} onClick={close} style={{...button,padding:'8px 10px',fontSize:14,whiteSpace:'nowrap'}}>{`Review (${pageCount})`}</button>}
     </header>
     <div ref={containerRef} style={{position:'relative',minHeight:0,background:'#000',overflow:'hidden'}}>
       <video ref={videoRef} playsInline muted style={{width:'100%',height:'100%',objectFit:'contain'}}/>
@@ -96,7 +96,7 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
       <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:16,alignItems:'center'}}>
         <div>{thumbnail&&<img src={thumbnail} alt="Last captured page" style={{height:52,width:40,objectFit:'cover',borderRadius:4,border:'1px solid #64748b'}}/>}</div>
         <button type="button" disabled={!opened||capturing||pageCount>=maxPages} onClick={capture} aria-label="Capture document" style={{width:70,height:70,borderRadius:'50%',border:'5px solid white',background:capturing?'#64748b':'#2563eb',color:'#fff'}}>{capturing?'•••':''}</button>
-        <button type="button" disabled={capturing} onClick={close} style={{...button,padding:'8px',fontSize:14}}>{pageCount?`Review (${pageCount})`:'Back'}</button>
+        <span aria-label={`${pageCount} pages captured`} style={{fontSize:14,textAlign:'center'}}>{pageCount?`${pageCount} pages`:''}</span>
       </div>
       <input ref={nativeInput} type="file" accept="image/*" capture="environment" hidden onChange={nativeChanged}/>
     </footer>
