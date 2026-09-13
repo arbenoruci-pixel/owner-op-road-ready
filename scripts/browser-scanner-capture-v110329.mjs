@@ -59,7 +59,15 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await page.getByRole('button',{name:'Crop & rotate',exact:true}).click();await page.getByRole('button',{name:'Auto edges',exact:true}).click();await page.getByRole('button',{name:'Use page',exact:true}).click();
     await page.getByRole('button',{name:'Read document',exact:true}).click();await page.getByText('Read 2 of 2 pages. Check the details below.',{exact:true}).waitFor();
     await page.getByRole('button',{name:'Back',exact:true}).click();assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
-    await page.screenshot({path:`${output}/${name}-pages.png`});assert.deepEqual(errors,[]);
+    await page.screenshot({path:`${output}/${name}-pages.png`});
+    // An unavailable worker must still produce a cropped page from the source.
+    await page.evaluate(()=>{window.Worker=class{constructor(){throw new Error('Synthetic unavailable worker');}};});
+    await page.getByRole('button',{name:'Camera',exact:true}).click();
+    await page.locator('[data-smart-camera] input[type=file]').setInputFiles({name:'fallback-page.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
+    await page.getByRole('button',{name:'Review (3)',exact:true}).click();
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),3,'worker failure retains all pages');
+    const fallback=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
+    assert.ok(fallback.w<1400&&fallback.h<1900,'fallback keeps the selected paper crop');assert.deepEqual(errors,[]);
     console.log(`PASS — ${name}: ${videoReady?'auto/video capture and duplicate latch':'native photo input'}, continuous pages, crop, full source reset and reader recovery`);
   }catch(error){await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});throw error;}
   finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}
