@@ -1,0 +1,91 @@
+{
+  "model": "owned-line-reader-v1",
+  "initialization": "random",
+  "pretrainedWeights": false,
+  "alphabet": "0123456789",
+  "seed": 334,
+  "steps": 1000,
+  "batchSize": 24,
+  "parameters": 261739,
+  "torchVersion": "2.14.0+cpu",
+  "dataset": "synthetic",
+  "manifestSha256": null,
+  "evaluationSplit": "validation",
+  "productionReady": false,
+  "realDocumentEvaluation": false,
+  "trainingLossFirst": 8.244832038879395,
+  "trainingLossLast": 0.0045667425729334354,
+  "elapsedSeconds": 89,
+  "metrics": {
+    "samples": 160,
+    "characterErrorRate": 0.06308169596690796,
+    "lineExactMatch": 0.7,
+    "examples": [
+      {
+        "expected": "0994",
+        "predicted": "0994"
+      },
+      {
+        "expected": "921629",
+        "predicted": "928629"
+      },
+      {
+        "expected": "4941135",
+        "predicted": "4941135"
+      },
+      {
+        "expected": "3421375",
+        "predicted": "342375"
+      },
+      {
+        "expected": "126139884",
+        "predicted": "926139884"
+      },
+      {
+        "expected": "34317",
+        "predicted": "34887"
+      },
+      {
+        "expected": "198",
+        "predicted": "198"
+      },
+      {
+        "expected": "605161492",
+        "predicted": "60568492"
+      },
+      {
+        "expected": "2410485",
+        "predicted": "240488"
+      },
+      {
+        "expected": "996485",
+        "predicted": "996485"
+      },
+      {
+        "expected": "1806215",
+        "predicted": "1806215"
+      },
+      {
+        "expected": "25515354",
+        "predicted": "25515354"
+      }
+    ]
+  },
+  "trainingFonts": [
+    {
+      "name": "DejaVuSans.ttf",
+      "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
+    },
+    {
+      "name": "DejaVuSerif.ttf",
+      "sha256": "8f2c103bfa3fd5de71f1b92b18f21906b5a26871fb7e19a9a4c9af539c3cc7ab"
+    }
+  ],
+  "validationFonts": [
+    {
+      "name": "NimbusSans-Regular.otf",
+      "sha256": "7c25be4d78155523080ab85b10277150657ff7dabbcad7037bdd536c9b6d0d08"
+    }
+  ],
+  "checkpointSha256": "7ae6b976f076601dfbf09fa0af8412a5a2ee8e013aef046227047311cbd52884"
+}

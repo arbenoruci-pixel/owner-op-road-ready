@@ -1,0 +1,18 @@
+.owned-reader-preview{margin:16px 0;border:1px solid #aec9c4;border-radius:16px;background:#f7fcfa;color:#183c35;overflow:hidden}
+.owned-reader-preview button{min-height:44px;padding:10px 14px;border:1px solid #b8ccc7;border-radius:10px;background:#fff;color:#153d35;font:inherit;text-align:left;overflow-wrap:anywhere}
+.owned-reader-preview>button{width:100%;border:0;background:#e5f3ec;font-weight:700}
+.owned-reader-body{padding:14px;font-size:14px;line-height:1.5}
+.owned-reader-body p{margin:8px 0}
+.owned-reader-body h3{font-size:16px;margin:12px 0}
+.owned-reader-document{padding:8px 0;border-bottom:1px solid #cbdcd5}
+.owned-reader-field{padding:10px 0;border-top:1px solid #dbe6e0}
+.owned-reader-field>b,.owned-reader-field>span{display:block}
+.owned-reader-field>span{font-size:12px;color:#46675f}
+.owned-reader-field button{margin:4px 4px 4px 0}
+.owned-reader-inspect{margin:12px 0;padding:12px;border:2px solid #21735e;border-radius:12px;background:#fff}
+.owned-reader-inspect blockquote{margin:8px 0;padding:10px;background:#eff5f2;white-space:pre-wrap;overflow-wrap:anywhere}
+.owned-reader-inspect input{display:block;box-sizing:border-box;width:100%;min-height:44px;margin:6px 0;padding:10px;border:1px solid #8ca99f;border-radius:8px;background:#fff;color:#173d33}
+.owned-reader-inspect button{margin:4px}
+.owned-reader-source{position:relative;width:100%;margin:12px 0;line-height:0}
+.owned-reader-source img{width:100%;height:auto;display:block}
+.owned-reader-highlight{position:absolute;border:2px solid #e29116;background:#ffbd343d;box-sizing:border-box;pointer-events:none}
