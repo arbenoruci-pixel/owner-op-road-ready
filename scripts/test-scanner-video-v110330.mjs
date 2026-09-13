@@ -9,7 +9,7 @@ function fixture(seed=1) {
     const inside=expected.every((a,i)=>cross(a,expected[(i+1)%4],x,y)>=0),i=(y*width+x)*4;
     const noise=((x*73+y*137+x*y*seed)%127)/127;
     let rgb=[80+noise*135,65+noise*130,38+noise*105];
-    if(inside){const shade=1-.12*(Math.sin(x*.09)**8);rgb=[225*shade,229*shade,221*shade];if(x>86&&x<325&&y>267&&y<598&&(y%21<3)&&(x%49<42))rgb=[60,63,59];}
+    if(inside){const shade=1-.12*(Math.sin(x*.09)**8);rgb=[225*shade,229*shade,221*shade];if(x>86&&x<325&&y>267&&y<598&&(y%21<3)&&(x%49<42))rgb=[60,63,59];const bottomDistance=620+(x-57)*11/287-y;if(x>78&&x<330&&bottomDistance>8&&bottomDistance<16)rgb=[20,20,20];}
     data.set([...rgb,255],i);
   }
   return {width,height,data,expected};

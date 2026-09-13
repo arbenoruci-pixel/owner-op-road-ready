@@ -151,11 +151,13 @@ function refineQuad(corners,frame) {
         let inner=0,outer=0,inner2=0,outer2=0;
         for(const d of [2,3,4,5]){const iv=at(px+nx*d,py+ny*d),ov=at(px-nx*d,py-ny*d);inner+=iv;outer+=ov;inner2+=iv*iv;outer2+=ov*ov;}
         inner/=4;outer/=4;
-        const jump=inner-outer;
+        // Look beyond narrow printed rules: a dark footer is still inside paper.
+        const far=Math.max(...[3,5,7,9,11,13].map(d=>at(px-nx*d,py-ny*d)));
+        const jump=inner-Math.max(outer,far-12);
         // A bright, smoother sheet interior supports the edge across textures.
         const gain=Math.max(0,Math.sqrt(Math.max(0,outer2/4-outer*outer))-Math.sqrt(Math.max(0,inner2/4-inner*inner)));
         const score=jump+gain*.5-Math.abs(offset)*.35;
-        if(jump>8&&(!best||score>best.score))best={t,offset,score};
+        if(jump>14&&(!best||score>best.score))best={t,offset,score};
       }
       if(best)hits.push(best);
     }
