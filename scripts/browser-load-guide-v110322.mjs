@@ -144,7 +144,7 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
    try {
     const state=baseState();state.view='logbook';state.routeLegsByDay={};state.loadInfo={};
     const old={id:'foreign-document',localDocumentId:'foreign-local',clientDocumentId:'foreign-client',type:'rate_confirmation',canonicalLoadNo:'82002',broker:'Previous Freight LLC',extracted:{loadNo:'82002',broker:'Previous Freight LLC'}};
-    const load={id:'collision',loadNo:'82002',canonicalLoadNo:'82002',broker:old.broker,documentId:old.id,status:'completed',source:'rate_confirmation_v105',gross:2700};
+    const load={id:'collision',loadNo:'82002',canonicalLoadNo:'82002',broker:old.broker,documentId:old.id,status:'completed',source:'rate_confirmation_v105',gross:2700,createdAt:1,updatedAt:1};
     const unrelated={...load,loadNo:'91001',canonicalLoadNo:'91001',documentId:'unrelated-source'};
     state.testInstructionStore={loads:[unrelated,load],documents:[old]};
     await seed(page,state);
@@ -167,6 +167,8 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     assert.equal(repaired.loads.find(l=>l.loadNo==='82002').status,'completed');
     assert.equal(repaired.documents.find(d=>d.id===old.id).broker,old.broker);
     await page.screenshot({path:`${output}/${name}-legacy-originals.png`,fullPage:true});
+    await page.reload();await page.locator('.adaptive-home-v1038').waitFor({timeout:30000});
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')).loads.find(l=>l.loadNo==='82002').broker),'Select Transport Partners LLC');
     assert.deepEqual(errors,[]);
     reports.push({browser:name,scenario:'legacy-originals',passed:true});console.log(`PASS — ${name}: original PDF recovery corrects the open scanner and preserves a different load with the same ID`);
    } catch(error) {reports.push({browser:name,scenario:'legacy-originals',passed:false,error:String(error),pageErrors:errors});await page.screenshot({path:`${output}/${name}-legacy-originals-FAILED.png`,fullPage:true});console.error(error);} finally {await context.close();}

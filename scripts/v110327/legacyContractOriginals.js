@@ -5,7 +5,12 @@ const ref = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
 const primary = row => ref(row?.canonicalLoadNo || row?.loadNo);
 const sourceId = row => row?.sourceDocumentId || row?.rateConfirmationDocumentId || row?.documents?.rateConfirmationDocumentId || row?.documentId;
 const contract = row => [row?.type,row?.extracted?.type,row?.classification?.selectedType].includes('rate_confirmation');
-const localMatch = (record,row) => Boolean(row.local_id && (record.localDocumentId || record.id) === row.local_id || row.client_document_id && record.clientDocumentId === row.client_document_id);
+function localMatch(record,row) {
+  const clientMatches = !record.clientDocumentId || !row.client_document_id || record.clientDocumentId === row.client_document_id;
+  if (record.localDocumentId) return record.localDocumentId === row.local_id && clientMatches;
+  if (record.id === row.local_id) return clientMatches;
+  return Boolean(row.client_document_id && record.clientDocumentId === row.client_document_id);
+}
 const rawText = record => record.extracted?.guideSourceTextV110312 || '';
 
 // Read only original, explicitly associated contract PDFs. Saved OCR fields and

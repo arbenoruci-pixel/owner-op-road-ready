@@ -55,6 +55,8 @@ const unavailable=await readLegacyContractOriginalsV110327(store,rows,async()=>n
 assert.strictEqual(applyLegacyContractOriginalsV110327(store,unavailable),store);
 const changedFolder=evidence.map(item=>item.localId==='correct-local'?{...item,folder:'83003'}:item);
 assert.equal(applyLegacyContractOriginalsV110327(store,changedFolder).loads[1].documentId,old.id);
+const conflictingIds={...store,documents:[{...old,clientDocumentId:'different-original'}]};
+assert.strictEqual(applyLegacyContractOriginalsV110327(conflictingIds,evidence),conflictingIds,'conflicting local and client IDs cannot authorize source proof');
 assert.equal(savedScanResultV110318(old),null,'legacy contract without source text must be read again');
 assert.equal(savedScanResultV110318(next.documents.find(d=>d.id===old.id)),null,'a foreign cached contract cannot reopen in the wrong folder');
 assert.ok(savedScanResultV110318({type:'pod',canonicalLoadNo:'82002',extracted:{bolNo:'B123'}}),'reviewed POD remains resumable');
