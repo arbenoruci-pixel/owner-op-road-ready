@@ -10,7 +10,16 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
   const context=await type.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},serviceWorkers:'block',...(name==='chromium'&&process.env.TEST_CHROMIUM_PATH?{executablePath:process.env.TEST_CHROMIUM_PATH}:{})});
   const page=await context.newPage();page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
   try{
-    await context.addInitScript(()=>{const NativeWorker=window.Worker;window.__photoJobs=[];window.__postedPhotos=0;window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const info=event.data?.value?.result?.metadata?.processingV110330;if(info)window.__photoJobs.push({...info,cleanup:event.data.value.result.metadata.captureManifest?.restore?.autoQuality?.method,boundary:event.data.value.result.metadata.captureManifest?.detection?.method});});}postMessage(message,...args){super.postMessage(message,...args);if(message?.source==='camera'&&++window.__postedPhotos===1)setTimeout(()=>{window.__changedWhileProcessing=window.__photoJobs.length===0;window.__scanPage=2;window.__scannerDraw?.();},180);}};});
+    await context.addInitScript(()=>{
+      window.__capturePreviews=[];
+      document.addEventListener('load',event=>{
+        const img=event.target;
+        if(!img.matches?.('.scan-capture-preview-v334 img'))return;
+        const overlay=img.parentElement,box=overlay.getBoundingClientRect();
+        window.__capturePreviews.push({url:img.src,width:img.naturalWidth,height:img.naturalHeight,visible:box.width>0&&box.height>0,pointerEvents:getComputedStyle(overlay).pointerEvents,thumbnail:document.querySelector('.scan-camera-thumbnail-v333 img')?.src});
+      },true);
+      const NativeWorker=window.Worker;window.__photoJobs=[];window.__postedPhotos=0;window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const info=event.data?.value?.result?.metadata?.processingV110330;if(info)window.__photoJobs.push({...info,cleanup:event.data.value.result.metadata.captureManifest?.restore?.autoQuality?.method,boundary:event.data.value.result.metadata.captureManifest?.detection?.method});});}postMessage(message,...args){super.postMessage(message,...args);if(message?.source==='camera'&&++window.__postedPhotos===1)setTimeout(()=>{window.__changedWhileProcessing=window.__photoJobs.length===0;window.__scanPage=2;window.__scannerDraw?.();},180);}};
+    });
     await setupRoutes(context);const state=baseState();state.view='logbook';state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
     // Camera frames are synthetic; capture, detection, page processing, crop
@@ -39,18 +48,24 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
       // camera restart or manual shutter tap. This reproduced the phone video.
       await page.getByRole('button',{name:'Review (2)',exact:true}).waitFor();
       assert.equal(await page.evaluate(()=>window.__changedWhileProcessing),true,'page changes while the first photo is still processing');
-      await page.waitForTimeout(1400);assert.equal(await page.getByRole('button',{name:'Review (2)',exact:true}).count(),1,'holding the second sheet does not add duplicates');
+      await page.waitForTimeout(5000);assert.equal(await page.getByRole('button',{name:'Review (2)',exact:true}).count(),1,'holding the second sheet for five seconds does not add duplicates');
       assert.equal(await page.evaluate(()=>window.__cameraCalls),1,'same camera stream remains open');
     }else{
       const input=camera.locator('input[type=file]');
       await input.setInputFiles({name:'page-one.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});await page.getByRole('button',{name:'Review (1)',exact:true}).waitFor();
       await input.setInputFiles({name:'page-two.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});await page.getByRole('button',{name:'Review (2)',exact:true}).waitFor();
     }
+    await page.waitForFunction(()=>window.__capturePreviews.length===2);
+    const previews=await page.evaluate(()=>window.__capturePreviews);
+    assert.equal(previews.length,2,'each completed page receives one capture confirmation');
+    assert.ok(previews.every(p=>p.width>0&&p.height>0&&p.visible&&p.pointerEvents==='none'&&p.url===p.thumbnail),'confirmation displays the processed thumbnail and does not intercept controls');
+    assert.equal(new Set(previews.map(p=>p.url)).size,2,'consecutive confirmations display separate page files');
+    await page.locator('.scan-capture-preview-v334').waitFor({state:'hidden'});
     assert.equal(await page.getByRole('button',{name:'Account security',exact:true}).isVisible(),false,'account shortcut does not cover the camera controls');
     await page.screenshot({path:`${output}/${name}-camera.png`});
     await page.getByRole('button',{name:'Open 2 captured pages',exact:true}).click();
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
-    const jobs=await page.evaluate(()=>window.__photoJobs);assert.equal(jobs.length,2,'both photos finish in the local worker');assert.ok(jobs.every(job=>job.thread==='worker'),'photo processing stays off the UI thread');assert.ok(jobs.every(job=>job.cleanup==='paper-surface-v110331'),'saved worker output uses the new paper cleanup');assert.ok(jobs.every(job=>job.boundary==='paper-color-boundaries-v110332'),'saved worker output uses the new mixed-background detector');console.log(name+' local photo jobs: '+JSON.stringify(jobs));
+    const jobs=await page.evaluate(()=>window.__photoJobs);assert.equal(jobs.length,2,'both photos finish in the local worker');assert.ok(jobs.every(job=>job.thread==='worker'),'photo processing stays off the UI thread');assert.ok(jobs.every(job=>job.cleanup==='paper-surface-v110331'),'saved worker output uses the new paper cleanup');assert.ok(jobs.every(job=>job.boundary==='paper-surface-boundaries-v110334'),'saved worker output uses the paper-surface detector');console.log(name+' local photo jobs: '+JSON.stringify(jobs));
     if(videoReady)assert.equal(await page.evaluate(()=>window.__scannerStream.getTracks().every(t=>t.readyState==='ended')),true);
     const dimensions=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
     assert.ok(dimensions.w<1400&&dimensions.h<1900,'the surrounding scene is cropped from the saved preview: '+JSON.stringify(dimensions));
@@ -60,6 +75,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     const full=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));assert.ok(full.w>dimensions.w,'Full page restores the original scene');
     await page.getByRole('button',{name:'Crop & rotate',exact:true}).click();await page.getByRole('button',{name:'Auto edges',exact:true}).click();await page.getByRole('button',{name:'Use page',exact:true}).click();
     await page.getByRole('button',{name:'Read document',exact:true}).click();await page.getByText('Read 2 of 2 pages. Check the details below.',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol','BOL headings stay with the BOL reader after camera capture');
     await page.getByRole('button',{name:'Back',exact:true}).click();assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
     await page.waitForFunction(()=>document.querySelector('.scan-paper-preview-v328 img')?.naturalWidth>0);
     await page.screenshot({path:`${output}/${name}-pages.png`});
@@ -70,7 +86,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     if(videoReady){await page.getByRole('button',{name:'Review (3)',exact:true}).click();}
     else{await page.locator('[data-smart-camera] input[type=file]').setInputFiles({name:'native-unavailable.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});await page.getByRole('button',{name:'Review (3)',exact:true}).click();}
     if(videoReady)assert.equal(await page.evaluate(()=>window.__nativeStillCalls),1,'exercise the delayed native photo path');
-    const delayedJobs=await page.evaluate(()=>window.__photoJobs);assert.equal(delayedJobs.length,3);assert.equal(delayedJobs[2].boundary,'paper-color-boundaries-v110332','the newly captured file still contains the paper');
+    const delayedJobs=await page.evaluate(()=>window.__photoJobs);assert.equal(delayedJobs.length,3);assert.equal(delayedJobs[2].boundary,'paper-surface-boundaries-v110334','the newly captured file still contains the paper');
     const frozen=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
     assert.ok(frozen.w<1400&&frozen.h<1900,'delayed still keeps the original paper after the camera moves');
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),3);

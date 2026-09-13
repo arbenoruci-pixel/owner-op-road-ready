@@ -1,0 +1,8 @@
+/* Brief confirmation uses the processed page; live analysis and the next capture
+   continue independently. It never changes or delays the stored photo. */
+.scan-capture-preview-v334{position:absolute;inset:8% 12% 5%;z-index:2;display:flex;align-items:center;justify-content:center;pointer-events:none;animation:scan-captured-v334 .95s ease-in both;transform-origin:bottom left}
+.scan-capture-preview-v334 img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 20px #0009)}
+.scan-capture-preview-v334>span{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;border-radius:20px;padding:7px 12px;background:#087968;color:white;font-size:12px;white-space:nowrap}
+@keyframes scan-captured-v334{0%{opacity:0;transform:scale(.94)}12%,58%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translate(-8%,14%) scale(.10)}}
+@media(prefers-reduced-motion:reduce){.scan-capture-preview-v334{animation:none}}
+.scan-type-evidence-v334{margin:0;padding:14px 16px;background:#fff0e8;border:1px solid #efcfbb;border-radius:14px;color:#75462c;font-size:13px;line-height:1.5}
