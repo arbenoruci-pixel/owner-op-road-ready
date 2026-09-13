@@ -35,8 +35,20 @@ assert.equal(state.locked,false,'a different paper layout rearms without requiri
 state=lockCapturedPage(detection,first);
 for(let i=0;i<2;i++)state=observePageTransition(state,{found:false},null);
 state=observePageTransition(state,detection,first);
-assert.equal(state.locked,false,'looking away during processing keeps capture rearmed after the page returns');
+assert.equal(state.locked,true,'looking away and returning to the same page must not duplicate it');
 state=lockCapturedPage(detection,first);
 for(let i=0;i<8;i++)state=observePageTransition(state,{...detection,confidence:.6},second);
 assert.equal(state.locked,true,'weak boundaries cannot prove a different page');
 console.log('PASS — continuous-page transitions, same-page duplicate prevention, exposure and movement tolerance');
+
+state=lockCapturedPage(detection,first);
+const far=corners.map(p=>({x:p.x+.18,y:p.y+.05}));
+for(let i=0;i<12;i++)state=observePageTransition(state,{...detection,corners:far},first);
+assert.equal(state.locked,true,'moving a held sheet far across the frame cannot rearm capture');
+state=lockCapturedPage(detection,first);
+for(let i=0;i<8;i++)state=observePageTransition(state,{...detection,corners:i%2?corners:far},second);
+assert.equal(state.locked,true,'unstable changed pixels cannot prove a new page');
+for(let i=0;i<4;i++)state=observePageTransition(state,detection,second);
+assert.equal(state.locked,false,'a settled new page still rearms');
+state=observePageTransition(state,detection,first);
+assert.equal(state.locked,true,'returning to the saved page relocks before processing finishes');

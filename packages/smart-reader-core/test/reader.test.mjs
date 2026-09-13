@@ -217,3 +217,12 @@ test('correcting an original mismatch restores supported amounts without accepti
   assert.equal(unresolved.documents[0].fields.tax.value,null);
   assert.ok(unresolved.documents[0].fields.tax.issues.includes('weak_recognition'));
 });
+
+test('BOL boilerplate cannot become an identifier or a party name',()=>{
+  const result=read(page(bol().replace('BOL No: BOL-42','BILL OF LADING NOT NEGOTIABLE').replace('Example Shipper','Signature/Date Trailer Loaded: Freight Counted Carrier Signature/Date').replace('Example Receiver','. Carrier Name: eg')+'\nCARRIER ack; t of packages and required placards.'));
+  const fields=result.documents[0].fields;
+  assert.deepEqual(fields.bolNumber.candidates,[]);
+  for(const key of ['shipper','consignee','carrier']){assert.equal(fields[key].value,null);assert.ok(fields[key].issues.includes('form_instructions'));}
+  for(const label of ['BOL:', 'BOL ID', 'BOL NUMBER', 'BOL No.'])assert.equal(read(page(bol().replace('BOL No:',label))).documents[0].fields.bolNumber.value,'BOL-42');
+  assert.equal(read(page(bol().replace('Example Shipper','Signature Logistics LLC'))).documents[0].fields.shipper.value,'Signature Logistics LLC');
+});

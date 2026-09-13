@@ -18,7 +18,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
         const overlay=img.parentElement,box=overlay.getBoundingClientRect();
         window.__capturePreviews.push({url:img.src,width:img.naturalWidth,height:img.naturalHeight,visible:box.width>0&&box.height>0,pointerEvents:getComputedStyle(overlay).pointerEvents,thumbnail:document.querySelector('.scan-camera-thumbnail-v333 img')?.src});
       },true);
-      const NativeWorker=window.Worker;window.__photoJobs=[];window.__postedPhotos=0;window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const info=event.data?.value?.result?.metadata?.processingV110330;if(info)window.__photoJobs.push({...info,cleanup:event.data.value.result.metadata.captureManifest?.restore?.autoQuality?.method,boundary:event.data.value.result.metadata.captureManifest?.detection?.method});});}postMessage(message,...args){super.postMessage(message,...args);if(message?.source==='camera'&&++window.__postedPhotos===1)setTimeout(()=>{window.__changedWhileProcessing=window.__photoJobs.length===0;window.__scanPage=2;window.__scannerDraw?.();},180);}};
+      const NativeWorker=window.Worker;window.__NativePhotoWorker=NativeWorker;window.__photoJobs=[];window.__postedPhotos=0;window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{const info=event.data?.value?.result?.metadata?.processingV110330;if(info)window.__photoJobs.push({...info,cleanup:event.data.value.result.metadata.captureManifest?.restore?.autoQuality?.method,boundary:event.data.value.result.metadata.captureManifest?.detection?.method});});}postMessage(message,...args){super.postMessage(message,...args);if(message?.source==='camera'&&++window.__postedPhotos===1)setTimeout(()=>{window.__changedWhileProcessing=window.__photoJobs.length===0;window.__scanPage=2;window.__scannerDraw?.();},180);}};
     });
     await setupRoutes(context);const state=baseState();state.view='logbook';state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
@@ -26,7 +26,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     // review and reader navigation below are the production components.
     const photo=await page.evaluate(async()=>{
       const c=document.createElement('canvas');c.width=1600;c.height=2200;const ctx=c.getContext('2d');
-      window.__scanPage=1;function draw(show=true){ctx.fillStyle='#494437';ctx.fillRect(0,0,c.width,c.height);for(let y=0;y<2200;y+=13){ctx.strokeStyle=y%2?'#656155':'#34322e';ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(1600,y+80);ctx.stroke();}if(!show)return;
+      window.__scanPage=1;function draw(show=window.__paperVisible!==false){ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#494437';ctx.fillRect(0,0,c.width,c.height);for(let y=0;y<2200;y+=13){ctx.strokeStyle=y%2?'#656155':'#34322e';ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(1600,y+80);ctx.stroke();}if(!show)return;ctx.translate(window.__paperShiftX||0,window.__paperShiftY||0);
         ctx.fillStyle='#faf6ef';ctx.fillRect(230,260,1120,1590);ctx.fillStyle='#111';ctx.font='bold 45px Arial';ctx.fillText('EXAMPLE BILL OF LADING',300,380);ctx.font='32px Arial';for(let i=0;i<22;i++)ctx.fillText('TEST DOCUMENT ROW '+i+' / REF 551122',300,475+i*53);ctx.strokeStyle='#b52d28';ctx.beginPath();ctx.moveTo(700,1730);ctx.lineTo(1100,1780);ctx.lineTo(820,1750);ctx.stroke();if(window.__scanPage===2){ctx.fillStyle='#faf6ef';ctx.fillRect(275,425,1040,1230);ctx.fillStyle='#111';ctx.font='bold 36px Arial';ctx.fillText('DELIVERY RECEIPT — PAGE TWO',300,510);ctx.font='30px Arial';for(let i=0;i<10;i++){ctx.fillText('RECEIVED ITEM '+i+' / QTY 125',310,660+i*65);ctx.fillText('CHECKED',1040,660+i*65);}ctx.strokeStyle='#333';ctx.lineWidth=3;ctx.strokeRect(300,580,980,840);ctx.fillText('SHIP TO: EXAMPLE RECEIVER',320,1500);ctx.fillText('SIGNATURE: DRIVER EXAMPLE',320,1600);}}
       draw();window.__scannerDraw=draw;window.__scannerCanvas=c;
       let stream;window.__cameraCalls=0;
@@ -49,6 +49,12 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
       await page.getByRole('button',{name:'Review (2)',exact:true}).waitFor();
       assert.equal(await page.evaluate(()=>window.__changedWhileProcessing),true,'page changes while the first photo is still processing');
       await page.waitForTimeout(5000);assert.equal(await page.getByRole('button',{name:'Review (2)',exact:true}).count(),1,'holding the second sheet for five seconds does not add duplicates');
+      await page.evaluate(()=>{window.__paperShiftX=240;window.__paperShiftY=180;});
+      await page.waitForTimeout(1500);
+      assert.equal(await page.getByRole('button',{name:'Review (2)',exact:true}).count(),1,'moving the held sheet cannot add a duplicate');
+      await page.evaluate(()=>{window.__paperVisible=false;});await page.waitForTimeout(700);
+      await page.evaluate(()=>{window.__paperVisible=true;window.__paperShiftX=0;window.__paperShiftY=0;});await page.waitForTimeout(1500);
+      assert.equal(await page.getByRole('button',{name:'Review (2)',exact:true}).count(),1,'looking away and back cannot duplicate the same sheet');
       assert.equal(await page.evaluate(()=>window.__cameraCalls),1,'same camera stream remains open');
     }else{
       const input=camera.locator('input[type=file]');
@@ -63,7 +69,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await page.locator('.scan-capture-preview-v334').waitFor({state:'hidden'});
     assert.equal(await page.getByRole('button',{name:'Account security',exact:true}).isVisible(),false,'account shortcut does not cover the camera controls');
     await page.screenshot({path:`${output}/${name}-camera.png`});
-    await page.getByRole('button',{name:'Open 2 captured pages',exact:true}).click();
+    await page.getByRole('button',{name:'Open 2 captured pages',exact:true}).click();await camera.waitFor({state:'hidden'});
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
     const jobs=await page.evaluate(()=>window.__photoJobs);assert.equal(jobs.length,2,'both photos finish in the local worker');assert.ok(jobs.every(job=>job.thread==='worker'),'photo processing stays off the UI thread');assert.ok(jobs.every(job=>job.cleanup==='paper-surface-v110331'),'saved worker output uses the new paper cleanup');assert.ok(jobs.every(job=>job.boundary==='paper-surface-boundaries-v110334'),'saved worker output uses the paper-surface detector');console.log(name+' local photo jobs: '+JSON.stringify(jobs));
     if(videoReady)assert.equal(await page.evaluate(()=>window.__scannerStream.getTracks().every(t=>t.readyState==='ended')),true);
@@ -85,6 +91,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await page.getByRole('button',{name:'Camera',exact:true}).click();
     if(videoReady){await page.getByRole('button',{name:'Review (3)',exact:true}).click();}
     else{await page.locator('[data-smart-camera] input[type=file]').setInputFiles({name:'native-unavailable.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});await page.getByRole('button',{name:'Review (3)',exact:true}).click();}
+    await camera.waitFor({state:'hidden'});
     if(videoReady)assert.equal(await page.evaluate(()=>window.__nativeStillCalls),1,'exercise the delayed native photo path');
     const delayedJobs=await page.evaluate(()=>window.__photoJobs);assert.equal(delayedJobs.length,3);assert.equal(delayedJobs[2].boundary,'paper-surface-boundaries-v110334','the newly captured file still contains the paper');
     const frozen=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
@@ -96,9 +103,29 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await page.getByRole('button',{name:'Camera',exact:true}).click();
     await page.locator('[data-smart-camera] input[type=file]').setInputFiles({name:'fallback-page.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
     await page.getByRole('button',{name:'Review (4)',exact:true}).click();
+    await camera.waitFor({state:'hidden'});
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),4,'worker failure retains all pages');
     const fallback=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
     assert.ok(fallback.w<1400&&fallback.h<1900,'fallback keeps the selected paper crop');assert.deepEqual(errors,[]);
+    // Hold the real worker reply so Done is exercised during processing.
+    await page.evaluate(()=>{
+      clearInterval(window.__cameraTimer);window.__scannerDraw(false);
+      window.__heldPhotoReply=null;
+      window.Worker=class extends window.__NativePhotoWorker{
+        set onmessage(handler){super.onmessage=event=>{window.__heldPhotoReply=()=>handler(event);};}
+      };
+    });
+    await page.getByRole('button',{name:'Camera',exact:true}).click();
+    await page.locator('[data-smart-camera] input[type=file]').setInputFiles({name:'finish-pending.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
+    await page.waitForFunction(()=>typeof window.__heldPhotoReply==='function');
+    const done=page.getByRole('button',{name:'Review (4)',exact:true});
+    assert.equal(await done.isEnabled(),true,'Done remains enabled while the next captured page is processing');
+    await done.click();
+    await page.getByText('Finishing…',{exact:true}).waitFor();
+    await page.evaluate(()=>window.__heldPhotoReply());
+    await camera.waitFor({state:'hidden'});
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),5,'Done finishes the in-flight page exactly once');
+    assert.equal(await page.evaluate(()=>window.__scannerStream.getTracks().every(t=>t.readyState==='ended')),true,'Done stops the camera after the pending page is saved');
     console.log(`PASS — ${name}: ${videoReady?'automatic next-page capture during processing and duplicate prevention':'native photo input'}, continuous pages, delayed still snapshot, crop, full source reset and reader recovery`);
   }catch(error){await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});throw error;}
   finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}

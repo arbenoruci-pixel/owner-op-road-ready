@@ -85,7 +85,7 @@ function ReviewBody({analysis}) {
       {Object.entries(group.fields).filter(([,field])=>field.required||field.status!=='missing').map(([key,field])=><div key={key} className="owned-reader-field">
         <b>{field.label}</b><span>{field.status==='confirmed'?'Confirmed in preview':field.status==='supported'?'Source found':field.status==='missing'?'Missing':'Check reading'}</span>
         {field.correction?<p>{field.correction.value}</p>:null}
-        {field.candidates.map((candidate,ci)=><div key={ci}>{sourcePages(candidate).map(e=><button type="button" key={e.pageId} onClick={()=>select(group,key,field,candidate,e)}>{candidate.rawValue} · Page {e.pageNumber}</button>)}</div>)}
+        {field.candidates.filter(candidate=>candidate.issue!=='form_instructions').map((candidate,ci)=><div key={ci}>{sourcePages(candidate).map(e=><button type="button" key={e.pageId} onClick={()=>select(group,key,field,candidate,e)}>{candidate.rawValue} · Page {e.pageNumber}</button>)}</div>)}
       </div>)}
       <details><summary>Read page text</summary>{group.pageIds.map(id=>{
         const page=result.pages.find(p=>p.id===id);

@@ -18,25 +18,23 @@ export function paperSignature(image,corners){
   return values.map(value=>Math.max(0,Math.min(1,(white-value)/Math.max(white,80))));
 }
 
+const movement=(a,b)=>a&&b?Math.max(...a.map((point,i)=>Math.hypot(point.x-b[i].x,point.y-b[i].y))):Infinity;
+
 export function lockCapturedPage(detection,signature){
-  return {locked:true,corners:detection?.found?detection.corners:null,signature,missing:0,changed:0};
+  return {locked:true,corners:detection?.found?detection.corners:null,signature,missing:0,changed:0,observedCorners:detection?.corners||null};
 }
 
 export function observePageTransition(previous,detection,signature){
-  if(!previous?.locked)return previous;
-  if(!detection.found){const missing=previous.missing+1;return {...previous,missing,changed:0,locked:missing<2};}
-  // A weak outline cannot prove that the driver has presented a new page.
-  if(detection.confidence<.8)return {...previous,missing:0,changed:0};
-  let different=false;
-  if(previous.corners){
-    const movement=detection.corners.reduce((sum,p,i)=>sum+Math.hypot(p.x-previous.corners[i].x,p.y-previous.corners[i].y),0)/4;
-    different=movement>.13;
-  }
-  if(!different&&signature&&previous.signature){
-    let delta=0,ink=0;
-    for(let i=0;i<signature.length;i++){delta+=Math.abs(signature[i]-previous.signature[i]);ink+=Math.max(signature[i],previous.signature[i]);}
-    different=delta/signature.length>.035&&delta/Math.max(ink,1)>.5;
-  }
+  if(!previous)return previous;
+  // An absent outline or a moved phone is not evidence of another sheet.
+  if(!detection.found)return {...previous,missing:previous.missing+1,changed:0,locked:true,observedCorners:null};
+  const stable=movement(previous.observedCorners,detection.corners)<=.018;
+  const next={...previous,missing:0,observedCorners:detection.corners};
+  if(detection.confidence<.8||!stable||!signature||!previous.signature)return {...next,changed:0,locked:true};
+  let delta=0,ink=0;
+  for(let i=0;i<signature.length;i++){delta+=Math.abs(signature[i]-previous.signature[i]);ink+=Math.max(signature[i],previous.signature[i]);}
+  const different=delta/signature.length>.035&&delta/Math.max(ink,1)>.5;
   const changed=different?previous.changed+1:0;
-  return {...previous,missing:0,changed,locked:changed<3};
+  // Re-check even after rearming: returning to the captured sheet relocks it.
+  return {...next,changed,locked:changed<3};
 }
