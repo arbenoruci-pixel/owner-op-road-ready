@@ -26,3 +26,11 @@ for(const type of ['bol','rate_confirmation']){
  assert.equal(initialScanLoadV11037(manual,match,'550012',true),'550012','an explicit driver folder choice is preserved');
 }
 console.log('PASS — final production router corrects BOL, rejects unsupported Gate Pass and leaves conflicting pages unassigned');
+
+for(const extra of ['FUEL RECEIPT\nDiesel 20 gallons\nTOTAL $80',...['BOL:','BOL ID','BILL OF LADING:'].map(label=>bol.replace('BOL NO:',label).replace('550012','771111'))]){
+ const packet=qualifyScanResultV11036(run(`[[PAGE:1]]\n${bol}\n[[PAGE:2]]\n${extra}`),{});
+ assert.equal(packet.type.id,'other');assert.equal(packet.typeEvidenceV110334.mixedDocuments,true);
+ assert.equal(packet.fields.bolNo,'');
+ const match=matchScanDocumentToLoadV11037({analysis:packet,fields:packet.fields,state:{},businessStore:{loads:[{loadNo:'550012',status:'active'}],documents:[]}});
+ assert.equal(match.automatic,false);assert.equal(match.loadNo,'');
+}

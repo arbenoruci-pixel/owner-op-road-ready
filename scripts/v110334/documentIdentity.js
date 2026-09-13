@@ -31,7 +31,7 @@ function documentPages(analysis){
   return pages.map(page=>({...page,reads:[page.text,...(analysis.ocrEvidenceV110323||[]).filter(p=>Number(p.page)===page.page&&Number(p.confidence??1)>=.45).map(p=>String(p.text||''))]}));
 }
 function bolReferences(text){
-  return [...String(text).matchAll(/\b(?:B[O0]L|B[\/|]L|BILL\s+OF\s+LADING)[ \t]*(?:NUMBER|N[O0]\.?|#)[ \t:#-]*([A-Z0-9][A-Z0-9._/-]{2,35})/gi)].map(m=>m[1].toUpperCase()).filter(v=>/\d/.test(v));
+ return [...String(text).matchAll(/\b(?:B[O0]L|B[\/|]L|BILL\s+OF\s+LADING)[ \t]*(?:NUMBER|N[O0]\.?|ID|#|:)[ \t:#-]*([A-Z0-9][A-Z0-9._/-]{2,35})/gi)].map(m=>m[1].toUpperCase()).filter(v=>/\d/.test(v));
 }
 export function decideDocumentIdentity(analysis={}){
   const pages=documentPages(analysis),pageTypes=pages.map(page=>{
@@ -42,7 +42,8 @@ export function decideDocumentIdentity(analysis={}){
   const refs=pages.map(page=>[...new Set(bolReferences(page.text))]);
   const allRefs=[...new Set(refs.flat())];
   const mixedShipments=pages.length>1&&refs.filter(r=>r.length===1).length>1&&allRefs.length>1;
-  if(pageTypes.some(p=>p.conflicting)||types.length>1||mixedShipments)return {typeId:'other',confidence:0,requiresTypeReview:true,mixedDocuments:true,clearShipmentFields:true,pageTypes,reason:mixedShipments?'Pages have different BOL numbers. Scan each shipment separately.':'Pages have conflicting document types. Check and separate the documents.'};
+  const unidentifiedExtraPage=types.length>0&&pages.some((page,i)=>!pageTypes[i].typeId&&page.reads.some(text=>text.trim()));
+  if(pageTypes.some(p=>p.conflicting)||types.length>1||mixedShipments||unidentifiedExtraPage)return {typeId:'other',confidence:0,requiresTypeReview:true,mixedDocuments:true,clearShipmentFields:true,pageTypes,reason:mixedShipments?'Pages have different BOL numbers. Scan each shipment separately.':unidentifiedExtraPage?'Some pages could not be identified. Check whether these documents belong together.':'Pages have conflicting document types. Check and separate the documents.'};
   if(types.length===1&&types[0]!=='other')return {typeId:types[0],confidence:.9,requiresTypeReview:false,pageTypes,reason:pageTypes.find(p=>p.typeId)?.evidence[0]};
   const current=analysis.type?.id||'other';
   // The legacy catalog may rank Gate Pass highest on ordinary carrier/trailer

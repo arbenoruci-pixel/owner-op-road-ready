@@ -24,3 +24,14 @@ const result=applyDocumentIdentity(before,shipments,id=>({id}),a=>a);
 assert.equal(result.fields.bolNo,'');assert.equal(result.type.id,'other');assert.equal(before.fields.bolNo,'550012');assert.equal(result.text,bol);assert.deepEqual(result.pages,before.pages);
 assert.deepEqual(result.fields.references,[]);assert.deepEqual(result.fieldEvidence,{});
 console.log('PASS — page titles, OCR variants, boilerplate exclusion, unsupported Gate Pass, mixed types/shipments, retries and source preservation');
+
+for(const label of ['BOL:', 'BOL ID', 'BILL OF LADING:']){
+ const formatted=bol.replace('BOL NO:',label);
+ const different=decideDocumentIdentity(analysis(`[[PAGE:1]]\n${formatted}\n[[PAGE:2]]\n${formatted.replace('550012','771111')}`));
+ assert.equal(different.mixedDocuments,true,label);assert.equal(different.clearShipmentFields,true);
+ assert.equal(decideDocumentIdentity(analysis(`[[PAGE:1]]\n${formatted}\n[[PAGE:2]]\n${formatted}`)).typeId,'bol',label);
+}
+for(const extra of ['FUEL RECEIPT\nDiesel 20 gallons\nTOTAL $80','Unrecognized extra sheet']){
+ const packet=decideDocumentIdentity(analysis(`[[PAGE:1]]\n${bol}\n[[PAGE:2]]\n${extra}`));
+ assert.equal(packet.typeId,'other');assert.equal(packet.mixedDocuments,true);assert.equal(packet.requiresTypeReview,true);
+}
