@@ -4,7 +4,7 @@ import {collectLoadCandidatesV105,buildVaultDocumentV105} from '../source/src/mo
 import {normalizeLoadInfoFromRouteLegs} from '../source/src/core/routes/routeNormalization.js';
 import {normalizeBusinessStore,readBusinessStore,writeBusinessStore} from '../source/src/modules/business/businessStore.js';
 import {restoreSavedLoadGuidesV110312} from '../source/src/modules/loads/savedLoadRecoveryV110312.js';
-import {repairBusinessIdentityV110326,printedLoadReferencesV110326} from '../source/src/modules/loads/loadIdentityV110326.js';
+import {repairBusinessIdentityV110326,printedLoadReferencesV110326,savedDocumentIdentityV110326} from '../source/src/modules/loads/loadIdentityV110326.js';
 
 const oldBroker='Previous Freight LLC', correctBroker='Current Transport Partners';
 const fields={loadNo:'82002',orderNo:'82002',broker:correctBroker,origin:'Easton, IL',destination:'Chicago, IL',pickupDate:'2026-09-12',deliveryDate:'2026-09-13',stops:[
@@ -38,6 +38,14 @@ assert.throws(()=>buildVaultDocumentV105({...options,selectedLoadNo:'91001'}),/l
 assert.equal(buildVaultDocumentV105({...options,type:{id:'pod'}}).broker,oldBroker,'driver-selected POD keeps its selected folder');
 assert.deepEqual(printedLoadReferencesV110326('LOAD NO: #82002 Page 1\nLOAD NO: #82002 Page 2\nPickup #178564'),['82002']);
 console.log('PASS — saving a contract preserves its own broker and rejects a different printed load number');
+
+const logoOnlyBroker='RATE CONFIRMATION\nLOAD #82003\nSelect Agent Name\nCorporate Information\nMC#: 984301\nEmail Invoicing: docs@goselect.com';
+const logoOptions={...options,fields:{loadNo:'82003',broker:''},selectedLoadNo:'82003',analysis:{text:logoOnlyBroker}};
+assert.equal(buildVaultDocumentV105(logoOptions).broker,'Select Transport Partners LLC');
+assert.equal(buildVaultDocumentV105({...logoOptions,analysis:{text:'LOAD #82003\nEmail: docs@goselect.com'}}).broker,'','an email alone cannot identify the broker');
+assert.equal(savedDocumentIdentityV110326({type:'rate_confirmation',canonicalLoadNo:'82003',broker:oldBroker,extracted:{broker:oldBroker,guideSourceTextV110312:logoOnlyBroker}}).broker,'Select Transport Partners LLC');
+assert.equal(savedDocumentIdentityV110326({type:'rate_confirmation',canonicalLoadNo:'82004',extracted:{guideSourceTextV110312:'TQL PO#82004\nTQL CONTACT INFO'}}).broker,'Total Quality Logistics (TQL)');
+console.log('PASS — corporate source evidence identifies a broker when PDF text omits its logo; an email alone is insufficient');
 
 const record={id:'new-source',type:'rate_confirmation',canonicalLoadNo:'82002',broker:oldBroker,status:'verified',documentDate:'2026-09-13',createdAt:Date.now(),extracted:{...fields,guideSourceTextV110312:raw}};
 const store={loads:[{id:'load_82002',loadNo:'82002',broker:oldBroker,origin:'Wrong place',source:'rate_confirmation_v105',documentId:record.id},{id:'load_91001',loadNo:'91001',broker:oldBroker,source:'rate_confirmation_v105'}],documents:[record]};

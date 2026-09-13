@@ -5,6 +5,16 @@ const brokerKey = value => ref(text(value).replace(/\b(?:LLC|INC|CORP|COMPANY)\b
 const contract = type => ['rate_confirmation','load_tender'].includes(type);
 const sourceText = record => text(record.extracted?.guideSourceTextV110312 || record.extracted?.instructionPlanV110311?.sourceText);
 
+function printedBroker(raw = '') {
+  if (/\bTOTAL\s+QUALITY\s+LOGISTICS\b|\bTQL\s+(?:CONTACT\s+INFO|PO\s*#)/i.test(raw)) return 'Total Quality Logistics (TQL)';
+  // Select's logo may be absent from PDF text. Require its corporate MC,
+  // domain and issuer label together; never identify a broker by a load number.
+  // Public identities: https://www.goselect.com/ and FMCSA MC-984301.
+  if (/\bMC\s*#?\s*[:#-]?\s*984301\b/i.test(raw) &&
+    /(?:@|\.)goselect\.com\b/i.test(raw) && /\bSelect\s+(?:Agent\s+Name|Load\s*#)/i.test(raw)) return 'Select Transport Partners LLC';
+  return '';
+}
+
 export function sameLoadIdentityV110326(left = {}, right = {}) {
   return Boolean(loadRef(left) && loadRef(left) === loadRef(right) &&
     (!left.broker || !right.broker || brokerKey(left.broker) === brokerKey(right.broker)));
@@ -32,8 +42,7 @@ export function assertScanLoadIdentityV110326(type, fields = {}, analysis = {}, 
 export function documentBrokerV110326(type, fields = {}, analysis = {}, match = {}, existing = {}) {
   if (!contract(type)) return text(match.broker || fields.broker || existing?.broker);
   const raw = text(analysis.text || analysis.rawText || fields.guideSourceTextV110312);
-  if (/\bTOTAL\s+QUALITY\s+LOGISTICS\b|\bTQL\s+(?:CONTACT\s+INFO|PO\s*#)/i.test(raw)) return 'Total Quality Logistics (TQL)';
-  return text(fields.broker || analysis.fields?.broker);
+  return printedBroker(raw) || text(fields.broker || analysis.fields?.broker);
 }
 
 // Repairs require the same primary number and broker evidence on the stored
@@ -43,8 +52,7 @@ export function savedDocumentIdentityV110326(record = {}) {
   const raw = sourceText(record), printed = printedLoadReferencesV110326(raw);
   if (printed.length !== 1 || printed[0] !== loadRef(record)) return null;
   const broker = documentBrokerV110326(record.type, record.extracted, {text:raw});
-  if (!broker || !brokerKey(raw).includes(brokerKey(broker)) &&
-    !(/\bTQL\s+(?:CONTACT\s+INFO|PO\s*#)/i.test(raw) && /total quality logistics/i.test(broker))) return null;
+  if (!broker || !brokerKey(raw).includes(brokerKey(broker)) && brokerKey(printedBroker(raw)) !== brokerKey(broker)) return null;
   return {loadNo:record.canonicalLoadNo || record.loadNo, broker};
 }
 
