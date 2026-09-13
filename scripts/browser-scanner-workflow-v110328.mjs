@@ -64,8 +64,15 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     assert.ok(stored.primary,'multipage PDF is durable');
     const savedPdf=await PDFDocument.load(new Uint8Array(stored.primary));assert.equal(savedPdf.getPageCount(),2);
     // Original source bytes survive every edit and reorder.
-    for(const original of images)assert.ok(stored.assets.some(asset=>Buffer.from(asset.bytes).equals(Buffer.from(original))),'original capture bytes are preserved');
+    for(const [index,original] of images.entries()){const asset=stored.assets.find(asset=>Buffer.from(asset.bytes).equals(Buffer.from(original)));assert.ok(asset,'original capture bytes are preserved');assert.equal(asset.page_index,1-index,'capture assets follow the reviewed page order');}
     await page.getByRole('button',{name:'Scan another',exact:true}).click();
+    await page.locator('input[type=file][accept*="application/pdf"]').setInputFiles({name:'example-scanned-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from(stored.primary)});
+    await page.getByText('Page 1 of 2',{exact:true}).waitFor();
+    await page.locator('canvas[aria-label="PDF preview, page 1"]:visible').waitFor();
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByText('Read 2 of 2 pages. Check the details below.',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'fuel_receipt','scanned PDFs use the image reader');
+    await page.getByRole('button',{name:'New',exact:true}).click();
     const pdfBytes=simplePdf('BILL OF LADING\nBOL NO 550099\nDATE: 09/13/2026\nSHIP FROM: EXAMPLE SHIPPER\nSHIP TO: EXAMPLE RECEIVER\nCARRIER: EXAMPLE CARRIER LLC\nTOTAL WEIGHT: 2000 LB\nDESCRIPTION: TEST MATERIALS\nNUMBER OF PIECES: 20\nTRAILER NUMBER: EXAMPLE12');
     await page.locator('input[type=file][accept*="application/pdf"]').setInputFiles({name:'example-shipping.pdf',mimeType:'application/pdf',buffer:pdfBytes});
     await page.getByRole('heading',{name:'Check your pages',exact:true}).waitFor();
