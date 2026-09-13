@@ -1,0 +1,94 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {chromium,webkit} from 'playwright';
+import {PDFDocument} from 'pdf-lib';
+import {baseState,seed,setupRoutes,simplePdf} from './v110328/browserFixture.mjs';
+const output='browser-test-results/scanner-workflow-v110328';fs.mkdirSync(output,{recursive:true});
+const reports=[];
+for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
+  const profilePath=fs.mkdtempSync(path.join(os.tmpdir(),'scanner-normal-profile-'));
+  // Persistent contexts reproduce ordinary Safari/PWA storage. WebKit private
+  // contexts intentionally cannot persist Blob/File payloads to IndexedDB.
+  const context=await type.launchPersistentContext(profilePath,{headless:true,viewport:{width:390,height:844},serviceWorkers:'block'});
+  const page=await context.newPage();page.setDefaultTimeout(45000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try {
+    await setupRoutes(context);
+    const state=baseState();state.view='logbook';state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.getByRole('heading',{name:/A clear scan/}).waitFor();
+    assert.equal(await page.evaluate(()=>document.querySelector('.scan-intake-v328').scrollWidth<=innerWidth),true);
+    await page.screenshot({path:`${output}/${name}-choose.png`});
+    const images=await page.evaluate(async()=>{
+      const files=[];
+      for(let i=1;i<=2;i++){
+        const c=document.createElement('canvas');c.width=1000;c.height=1400;const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle=i===1?'#2057b0':'#b02720';ctx.fillRect(60,50,120,40);ctx.fillStyle='#111';ctx.font='bold 30px Arial';ctx.fillText('EXAMPLE FUEL RECEIPT',60,160);ctx.font='24px Arial';['DATE: 09/13/2026','TOTAL: $55.00','GALLONS: 12.00','DIESEL FUEL','Page '+i+' of 2'].forEach((line,n)=>ctx.fillText(line,60,230+n*60));
+        const blob=await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',.92));files.push(Array.from(new Uint8Array(await blob.arrayBuffer())));
+      }
+      // Only OCR is deterministic here. Native selection, decoding, crop,
+      // reader orchestration, generated PDF and durable storage are real.
+      window.__scanOcrCalls=0;
+      window.Tesseract={createWorker:async(_language,_engine,options)=>({setParameters:async()=>{},terminate:async()=>{},recognize:async()=>{window.__scanOcrCalls++;options.logger({status:'recognizing text',progress:.8});options.logger({status:'recognizing text',progress:.2});return {data:{text:'EXAMPLE FUEL RECEIPT\nDATE: 09/13/2026\nTOTAL: $55.00\nGALLONS: 12.00\nDIESEL FUEL\nEXAMPLE FUEL STATION',confidence:96}};}})};
+      return files;
+    });
+    const photos=page.locator('input[type=file][multiple]'),fileInput=page.locator('input[type=file][accept*="application/pdf"]');
+    await photos.setInputFiles(images.map((bytes,i)=>({name:`example-page-${i+1}.jpg`,mimeType:'image/jpeg',buffer:Buffer.from(bytes)})));
+    await page.getByRole('button',{name:'Read document',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Crop & rotate',exact:true}).click();
+    await page.getByText('Crop & rotate',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Full page',exact:true}).click();
+    await page.getByRole('button',{name:'Top left',exact:true}).focus();await page.keyboard.press('ArrowRight');
+    await page.screenshot({path:`${output}/${name}-crop.png`});
+    await page.getByRole('button',{name:'Use page',exact:true}).click();
+    await page.getByRole('button',{name:'Move page 1 later',exact:true}).click();
+    assert.deepEqual(await page.locator('.scan-page-list-v328 small').allTextContents(),['example-page-2.jpg','example-page-1.jpg']);
+    await page.getByRole('button',{name:'Enlarge selected page'}).click();await page.getByRole('dialog',{name:'Full page preview'}).waitFor();await page.getByRole('button',{name:'Close preview'}).click();
+    await fileInput.setInputFiles({name:'unrelated.pdf',mimeType:'application/pdf',buffer:simplePdf('another document')});
+    await page.getByRole('alert').filter({hasText:'one document'}).waitFor();
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
+    await photos.setInputFiles({name:'broken.jpg',mimeType:'image/jpeg',buffer:Buffer.from('not a photo')});
+    await page.getByRole('alert').filter({hasText:'format'}).waitFor();
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),2);
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByText('Read 2 of 2 pages. Check the details below.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Back',exact:true}).click();
+    assert.deepEqual(await page.locator('.scan-page-list-v328 small').allTextContents(),['example-page-2.jpg','example-page-1.jpg']);
+    await page.screenshot({path:`${output}/${name}-pages.png`});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByText('Read 2 of 2 pages. Check the details below.',{exact:true}).waitFor();
+    const review=page.locator('.scan-driver-check-v105 input');if(await review.count())await review.check();
+    await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();
+    await page.locator('.scan-saved-v105').waitFor();
+    const stored=await page.evaluate(async()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction(['document_blobs','capture_asset_blobs'],'readonly'),primary=tx.objectStore('document_blobs').getAll(),assets=tx.objectStore('capture_asset_blobs').getAll();tx.oncomplete=async()=>{try{const main=primary.result.find(row=>row.blob?.type==='application/pdf');resolve({primary:main?Array.from(new Uint8Array(await main.blob.arrayBuffer())):null,assets:await Promise.all(assets.result.filter(row=>row.blob||row.file).map(async row=>({...row,blob:undefined,file:undefined,bytes:Array.from(new Uint8Array(await(row.blob||row.file).arrayBuffer()))}))),store:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1'))});}catch(e){reject(e);}finally{db.close();}};};}));
+    assert.ok(stored.primary,'multipage PDF is durable');
+    const savedPdf=await PDFDocument.load(new Uint8Array(stored.primary));assert.equal(savedPdf.getPageCount(),2);
+    // Original source bytes survive every edit and reorder.
+    for(const [index,original] of images.entries()){const asset=stored.assets.find(asset=>Buffer.from(asset.bytes).equals(Buffer.from(original)));assert.ok(asset,'original capture bytes are preserved');assert.equal(asset.page_index,1-index,'capture assets follow the reviewed page order');}
+    await page.getByRole('button',{name:'Scan another',exact:true}).click();
+    await page.locator('input[type=file][accept*="application/pdf"]').setInputFiles({name:'example-scanned-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from(stored.primary)});
+    await page.getByText('Page 1 of 2',{exact:true}).waitFor();
+    await page.locator('canvas[aria-label="PDF preview, page 1"]:visible').waitFor();
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByText('Read 2 of 2 pages. Check the details below.',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'fuel_receipt','scanned PDFs use the image reader');
+    await page.getByRole('button',{name:'New',exact:true}).click();
+    const pdfBytes=simplePdf('BILL OF LADING\nBOL NO 550099\nDATE: 09/13/2026\nSHIP FROM: EXAMPLE SHIPPER\nSHIP TO: EXAMPLE RECEIVER\nCARRIER: EXAMPLE CARRIER LLC\nTOTAL WEIGHT: 2000 LB\nDESCRIPTION: TEST MATERIALS\nNUMBER OF PIECES: 20\nTRAILER NUMBER: EXAMPLE12');
+    await page.locator('input[type=file][accept*="application/pdf"]').setInputFiles({name:'example-shipping.pdf',mimeType:'application/pdf',buffer:pdfBytes});
+    await page.getByRole('heading',{name:'Check your pages',exact:true}).waitFor();
+    await page.getByText('Page 1 of 1',{exact:true}).waitFor();
+    await page.locator('canvas[aria-label="PDF preview, page 1"]:visible').waitFor();
+    await page.getByRole('button',{name:'Enlarge PDF preview',exact:true}).click();
+    await page.getByRole('dialog',{name:'PDF page preview'}).waitFor();
+    assert.ok(await page.locator('.scan-pdf-expanded-v328 canvas').evaluate(canvas=>canvas.getBoundingClientRect().width>=900));
+    await page.getByRole('button',{name:'Close PDF preview',exact:true}).click();
+    assert.equal(await page.getByRole('button',{name:'Read document',exact:true}).isEnabled(),true);
+    await page.screenshot({path:`${output}/${name}-pdf.png`});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();await page.getByLabel('Document type',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
+    assert.deepEqual(errors,[]);
+    reports.push({browser:name,passed:true});console.log(`PASS — ${name}: multiple selection, crop, reorder, preview, recovery, PDF pages and immutable source storage`);
+  }catch(error){reports.push({browser:name,passed:false,error:String(error),errors});console.error(error);await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});}
+  finally{await context.close();fs.rmSync(profilePath,{recursive:true,force:true});}
+}
+fs.writeFileSync(`${output}/results.json`,JSON.stringify(reports,null,2));assert.ok(reports.every(report=>report.passed),JSON.stringify(reports));
