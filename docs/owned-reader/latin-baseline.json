@@ -1,0 +1,95 @@
+{
+  "model": "owned-line-reader-v1",
+  "initialization": "random",
+  "pretrainedWeights": false,
+  "alphabet": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,:;#/$%&()+-'\"@!?=\u00eb\u00cb\u00e7\u00c7",
+  "seed": 334,
+  "steps": 1800,
+  "batchSize": 24,
+  "parameters": 271543,
+  "torchVersion": "2.14.0+cpu",
+  "dataset": "synthetic",
+  "manifestSha256": null,
+  "evaluationSplit": "validation",
+  "productionReady": false,
+  "realDocumentEvaluation": false,
+  "trainingLossFirst": 15.179356575012207,
+  "trainingLossLast": 0.20469458401203156,
+  "elapsedSeconds": 256,
+  "metrics": {
+    "samples": 160,
+    "characterErrorRate": 0.14501510574018128,
+    "lineExactMatch": 0.35625,
+    "examples": [
+      {
+        "expected": "IDF",
+        "predicted": "IDF"
+      },
+      {
+        "expected": "TOTAL: BYMXL",
+        "predicted": "TOTAL: BYNXL"
+      },
+      {
+        "expected": "Que0Qw",
+        "predicted": "Oue0Ow"
+      },
+      {
+        "expected": "2SVPPYR",
+        "predicted": "2SVPPYR"
+      },
+      {
+        "expected": "V6IT7964WN",
+        "predicted": "V6T7964WN"
+      },
+      {
+        "expected": "BOL: 5IAD9ZX9J",
+        "predicted": "BOL: 5IAD9ZX9U"
+      },
+      {
+        "expected": ":E,1tN8j",
+        "predicted": ".E,1iN8j"
+      },
+      {
+        "expected": "NL7MF",
+        "predicted": "NL7NF"
+      },
+      {
+        "expected": "INVOICE: 1C4NV",
+        "predicted": "INVOICE: C4NV"
+      },
+      {
+        "expected": "BOL: 88TK0JL",
+        "predicted": "BOL: 88TKOUL"
+      },
+      {
+        "expected": "K3EP74L",
+        "predicted": "K3EP74L"
+      },
+      {
+        "expected": "US157M2CN",
+        "predicted": "USi57N2CN"
+      }
+    ]
+  },
+  "trainingFonts": [
+    {
+      "name": "DejaVuSans.ttf",
+      "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
+    },
+    {
+      "name": "DejaVuSerif.ttf",
+      "sha256": "8f2c103bfa3fd5de71f1b92b18f21906b5a26871fb7e19a9a4c9af539c3cc7ab"
+    },
+    {
+      "name": "DejaVuSansMono.ttf",
+      "sha256": "c805f9436dbc268644c1d9584f01a601a653e028e08fd74b9b949f6cf8304d88"
+    }
+  ],
+  "validationFonts": [
+    {
+      "name": "NimbusSans-Regular.otf",
+      "sha256": "7c25be4d78155523080ab85b10277150657ff7dabbcad7037bdd536c9b6d0d08"
+    }
+  ],
+  "checkpointSha256": "938f7684b0ba3af10d0a733f7a0027911f74bff9b85357b5845353f35484680c"
+}
