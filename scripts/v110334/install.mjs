@@ -8,7 +8,7 @@ export function installScannerIdentityV110334(){
   const router=scan+'engines/isolatedDocumentRouterV10959.js';
   const statement="import {decideDocumentIdentity,applyDocumentIdentity} from '../documentIdentityV110334.js';\n";
   if(!read(router).includes(statement))fs.writeFileSync(router,statement+read(router));
-  patch(router,'  return qualifyRateConReferenceV11039(qualifyDocumentFieldsV11038(preserveDocumentDecisionV11039(result,enforceStructuralBolV11034)));',`  const qualified=qualifyRateConReferenceV11039(qualifyDocumentFieldsV11038(preserveDocumentDecisionV11039(result,enforceStructuralBolV11034)));
+  patch(router,'  return qualifyLoadDocumentV110310(qualifyRateConReferenceV11039(qualifyDocumentFieldsV11038(preserveDocumentDecisionV11039(result,enforceStructuralBolV11034))));',`  const qualified=qualifyLoadDocumentV110310(qualifyRateConReferenceV11039(qualifyDocumentFieldsV11038(preserveDocumentDecisionV11039(result,enforceStructuralBolV11034))));
   const identity=decideDocumentIdentity(qualified);
   return applyDocumentIdentity(qualified,identity,truckDocumentTypeMetaV1040,(analysis,type,context)=>qualifyDocumentFieldsV11038(reanalyzeGenericTruckDocumentTypeV1040(analysis,type,context)),options);`);
   const ui=scan+'SmartScanSheetV105.jsx';
