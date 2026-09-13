@@ -15,12 +15,20 @@ const edges=scan+'v3/EdgeDetectorV3.js';
 addImport(edges,"import {FULL_PAGE,validCorners} from '../scanIntakeV110328.js';");
 patch(edges,"const corners = detected && polygonAreaV3(detected) >= .12 ? detected : DEFAULT_CORNERS_V3.map(point => ({ ...point }));","const corners = detected && confidence >= .72 && validCorners(detected) ? detected : FULL_PAGE.map(point => ({ ...point }));");
 const pdf=scan+'pdfTextV102.js';
-addImport(pdf,"import {readPdfPagesV110328} from './pdfPageReaderV110328.js';\nimport {checkCancelled} from './scanIntakeV110328.js';");
+addImport(pdf,"import {readPdfPagesV110328,mergePdfFallbackV110328} from './pdfPageReaderV110328.js';\nimport {checkCancelled} from './scanIntakeV110328.js';");
 patch(pdf,'async function loadPdfJs() {','export async function loadPdfJs() {');
 patch(pdf,"    const pages = [];\n    let totalWords = 0;",`    if(options.enablePageOcr){
       try{
-        const reading=await readPdfPagesV110328(pdf,options,pageTextFromItems);
-        return {...reading,text:printable(reading.pages.map(page=>\`[[PAGE:\${page.pageNumber}]]\\n\${page.text}\`).join('\\n\\n')),pageCount:pdf.numPages,method:reading.ocrUsed?'pdf-native-and-image-v110328':'pdfjs-native-text-v102',nativeText:!reading.ocrUsed,wordCount:reading.pages.reduce((n,p)=>n+p.wordCount,0),labelCount:reading.pages.reduce((n,p)=>n+p.labelCount,0)};
+        let reading=await readPdfPagesV110328(pdf,options,pageTextFromItems);
+        if(reading.pageReadingV110328.unreadablePages.length){
+          try{
+            checkCancelled(options.signal);
+            const fallback=readablePdfFallbackV110310(await readPdfTextV100(file,{onProgress:(value)=>onProgress(.86+value*.08,'Recovering text from the original PDF…')}));
+            checkCancelled(options.signal);
+            reading=mergePdfFallbackV110328(reading,fallback);
+          }catch(error){checkCancelled(options.signal);}
+        }
+        return {...reading,text:printable(reading.pages.map(page=>\`[[PAGE:\${page.pageNumber}]]\\n\${page.text}\`).join('\\n\\n')+(reading.supplementalTextV110328?'\\n\\n[[SUPPLEMENTAL PDF TEXT]]\\n'+reading.supplementalTextV110328:'')),pageCount:pdf.numPages,method:reading.fallbackMethodV110328?'pdf-page-recovery-v110328':reading.ocrUsed?'pdf-native-and-image-v110328':'pdfjs-native-text-v102',nativeText:!reading.ocrUsed&&!reading.supplementalTextV110328,wordCount:reading.pages.reduce((n,p)=>n+p.wordCount,0),labelCount:reading.pages.reduce((n,p)=>n+p.labelCount,0)};
       }finally{await pdf.destroy?.();}
     }
     const pages = [];

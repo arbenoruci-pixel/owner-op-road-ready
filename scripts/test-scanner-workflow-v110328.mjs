@@ -54,4 +54,16 @@ globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>({}),to
 const readPdf=loadReader('source/src/modules/scan/pdfPageReaderV110328.js','readPdfPagesV110328',{checkCancelled,monotonicProgress,recognizeDocumentText:async()=>({text:'BILL OF LADING\nBOL NO 550001\nEXAMPLE SHIPPER\nEXAMPLE RECEIVER',confidence:.9})});
 const pdf={numPages:3,getPage:async number=>({getTextContent:async()=>{if(number===3)throw new Error('broken page');return {items:number===1?Array(25).fill('native'):[]};},getViewport:()=>({width:600,height:800}),render:()=>{rendered++;return {promise:Promise.resolve()};},cleanup:()=>cleaned++})};
 const pdfResult=await readPdf(pdf,{enablePageOcr:true},items=>items.join(' '));assert.equal(rendered,1);assert.equal(cleaned,3);assert.deepEqual(pdfResult.pageReadingV110328,{total:3,readable:2,unreadablePages:[3],needsReview:true});assert.equal(pdfResult.pages[1].method,'ocr');assert.match(pdfResult.pages[1].text,/550001/);
-console.log('PASS — document selection, byte-correct multipage PDF, crop safety, per-page OCR recovery, PDF image reading and cancellation');
+// A PDF.js page failure must still reach the actual bridge/direct-stream reader.
+// Neither reader may erase good page text or fabricate page-level coverage.
+const {readPdfTextV102}=await import('../source/src/modules/scan/pdfTextV102.js');
+let bridgeCalls=0;
+globalThis.window={pdfjsLib:{getDocument:()=>({promise:Promise.resolve({...pdf,numPages:1,getPage:async()=>({getTextContent:async()=>{throw new Error('unsupported content stream');},cleanup:()=>{}}),destroy:async()=>{}})})},RoadReadyNative:{extractPdfText:async()=>{bridgeCalls++;return {text:'BILL OF LADING\nBOL NO 550100\nSHIP FROM: EXAMPLE SHIPPER\nSHIP TO: EXAMPLE RECEIVER',pageCount:1};}}};
+const fallbackPdf=new File(['%PDF-1.4\n/Type /Page\nstream\n(BILL OF LADING) Tj\n(BOL NO 550099) Tj\n(SHIP FROM: EXAMPLE SHIPPER) Tj\n(SHIP TO: EXAMPLE RECEIVER) Tj\nendstream'],'broken-text-layer.pdf',{type:'application/pdf'});
+const bridged=await readPdfTextV102(fallbackPdf,{enablePageOcr:true});
+assert.equal(bridgeCalls,1);assert.match(bridged.text,/550100/);assert.equal(bridged.fallbackMethodV110328,'native-pdf-text');assert.equal(bridged.nativeText,false);assert.deepEqual(bridged.pageReadingV110328.unreadablePages,[1]);assert.equal(bridged.pageReadingV110328.needsReview,true);
+delete window.RoadReadyNative;
+const streamed=await readPdfTextV102(fallbackPdf,{enablePageOcr:true});assert.match(streamed.text,/550099/);assert.equal(streamed.fallbackMethodV110328,'pdf-text-v100');assert.equal(streamed.pageCount,1);
+window.pdfjsLib.getDocument=()=>({promise:Promise.resolve({...pdf,numPages:2,getPage:async number=>({getTextContent:async()=>{if(number===2)throw new Error('broken second page');return {items:[{str:'NATIVE PAGE ONE '+Array(20).fill('carrier').join(' '),transform:[1,0,0,1,10,10],width:500,height:10}]};},cleanup:()=>{}}),destroy:async()=>{}})});
+const partial=await readPdfTextV102(fallbackPdf,{enablePageOcr:true});assert.match(partial.text,/NATIVE PAGE ONE/);assert.match(partial.text,/550099/);assert.equal(partial.pageReadingV110328.total,2);assert.equal(partial.pageReadingV110328.readable,1);assert.deepEqual(partial.pageReadingV110328.unreadablePages,[2]);
+console.log('PASS — document selection, byte-correct multipage PDF, crop safety, per-page OCR recovery, PDF image reading, native/stream fallback and cancellation');

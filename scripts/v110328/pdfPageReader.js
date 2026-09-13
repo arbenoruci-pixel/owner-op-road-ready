@@ -1,6 +1,18 @@
 import {recognizeDocumentText} from './webOcr.js';
 import {checkCancelled,monotonicProgress} from './scanIntakeV110328.js';
 
+export function mergePdfFallbackV110328(reading, fallback) {
+  // The legacy bridge/stream reader has no trustworthy page mapping. Keep
+  // recovered text as supplemental evidence without claiming failed pages read.
+  const seen=new Set(reading.pages.flatMap(page=>String(page.text||'').split(/\r?\n/)).map(line=>line.trim().replace(/\s+/g,' ').toLowerCase()));
+  const extra=[];
+  for(const line of String(fallback?.text||'').split(/\r?\n/)){
+    const key=line.trim().replace(/\s+/g,' ').toLowerCase();
+    if(key&&!seen.has(key)){seen.add(key);extra.push(line.trim());}
+  }
+  return {...reading,supplementalTextV110328:extra.join('\n'),fallbackMethodV110328:fallback?.method||''};
+}
+
 // Read missing image layers in imported PDFs, one page at a time. Native text
 // keeps its positions; OCR is evidence only and cannot verify signatures.
 export async function readPdfPagesV110328(pdf, options, readText) {
