@@ -8,7 +8,10 @@ function patch(file, before, after) {
   fs.writeFileSync(file, source.replace(before, after));
 }
 function addImport(file, statement) {
-  if (!read(file).includes(statement)) fs.writeFileSync(file, statement + '\n' + read(file));
+  const source = read(file);
+  if (source.includes(statement)) return;
+  const directive = source.match(/^(['"])use client\1;\r?\n/)?.[0] || '';
+  fs.writeFileSync(file, directive + statement + '\n' + source.slice(directive.length));
 }
 const loads = 'source/src/modules/loads/';
 fs.copyFileSync('scripts/v110326/loadIdentity.js', loads + 'loadIdentityV110326.js');
