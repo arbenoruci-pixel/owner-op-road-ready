@@ -29,7 +29,8 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
       // Only OCR is deterministic here. Native selection, decoding, crop,
       // reader orchestration, generated PDF and durable storage are real.
       window.__scanOcrCalls=0;
-      window.Tesseract={createWorker:async(_language,_engine,options)=>({setParameters:async()=>{},terminate:async()=>{},recognize:async()=>{window.__scanOcrCalls++;options.logger({status:'recognizing text',progress:.8});options.logger({status:'recognizing text',progress:.2});return {data:{text:'EXAMPLE FUEL RECEIPT\nDATE: 09/13/2026\nTOTAL: $55.00\nGALLONS: 12.00\nDIESEL FUEL\nEXAMPLE FUEL STATION',confidence:96}};}})};
+      window.__scanOcrText='EXAMPLE FUEL RECEIPT\nDATE: 09/13/2026\nTOTAL: $55.00\nGALLONS: 12.00\nDIESEL FUEL\nEXAMPLE FUEL STATION';
+      window.Tesseract={createWorker:async(_language,_engine,options)=>({setParameters:async()=>{},terminate:async()=>{},recognize:async()=>{window.__scanOcrCalls++;options.logger({status:'recognizing text',progress:.8});options.logger({status:'recognizing text',progress:.2});return {data:{text:window.__scanOcrText,confidence:96}};}})};
       return files;
     });
     const photos=page.locator('input[type=file][multiple]'),fileInput=page.locator('input[type=file][accept*="application/pdf"]');
@@ -105,12 +106,14 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     // Ordinary carrier/trailer words cannot establish a Gate Pass identity.
     await page.getByRole('button',{name:'New',exact:true}).click();
     await page.evaluate(()=>{
-      window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async()=>({data:{text:'CARRIER: EXAMPLE TRUCKING\nTRAILER # 7791\nArrival time: 8 AM',confidence:96}})})};
+      window.__uncertainOcrStart=window.__scanOcrCalls;
+      window.__scanOcrText='CARRIER: EXAMPLE TRUCKING\nTRAILER # 7791\nArrival time: 8 AM';
     });
     await photos.setInputFiles({name:'example-uncertain.jpg',mimeType:'image/jpeg',buffer:Buffer.from(images[0])});
     await page.getByRole('button',{name:'Read document',exact:true}).click();
     await page.getByLabel('Document type',{exact:true}).waitFor();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'other');
+    assert.equal(await page.evaluate(()=>window.__scanOcrCalls>window.__uncertainOcrStart),true,'the uncertain image receives a fresh OCR reading');
     await page.locator('.scan-type-evidence-v334').filter({hasText:'Document type is uncertain'}).waitFor();
     await page.getByLabel('Document type',{exact:true}).selectOption('bol');
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
