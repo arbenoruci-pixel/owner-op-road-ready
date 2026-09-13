@@ -131,8 +131,10 @@ function replaceExact(source,before,after,label){
     source=source.replace(first,first+importLine);
   }
   if(!source.includes('editorGraphEventsV11034')){
-    const previewLine="  const previewEvents = previewResultV11023.ok ? projectLogbookEvents(previewStateV11023,dayV110,clockV110.at) : projectedV110;";
-    assert.ok(source.includes(previewLine),'110.3.4 editor preview anchor missing');
+    const previewCandidates=["  const previewEvents = previewResultV11023.ok ? projectLogbookEvents(previewStateV11023,dayV110,clockV110.at) : projectedV110;", "  const previewEvents = liveV110\n    ? projectedV110.map(e=>e.id===event.id?{...preview,isLive:true}:e)\n    : (previewResultV11023.ok ? projectLogbookEvents(previewStateV11023,dayV110,clockV110.at) : projectedV110);"];
+    const matchingPreviews=previewCandidates.filter(line=>source.includes(line));
+    assert.equal(matchingPreviews.length,1,'110.3.4 editor preview anchor missing or ambiguous');
+    const previewLine=matchingPreviews[0];
     source=source.replace(previewLine,previewLine+"\n  const editorExactEventsV11034=(previewStateV11023?.eventsByDay?.[dayV110]||[]).filter(row=>!row?.displayOnly&&!row?.syntheticCoverage&&!row?.carriedFromPreviousDay);\n  const editorGraphEventsV11034=dutyViewEvents(editorExactEventsV11034,previewEvents,{eventsByDay:previewStateV11023?.eventsByDay||state.eventsByDay||{},day:dayV110});");
     const eventProp=/events=\{previewEvents\}/;
     assert.ok(eventProp.test(source),'110.3.4 editor graph events prop missing');
