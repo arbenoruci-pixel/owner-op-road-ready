@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import os from 'node:os';
+import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import {checklistFixture} from './v110321/checklistFixture.mjs';
 
@@ -141,7 +143,11 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
   }
 
   {
-   const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+   // Match the normal Safari/PWA storage profile. WebKit private contexts reject
+   // IndexedDB Blob fixtures; the invoice browser suite uses the same boundary.
+   const profileDirectory=name==='webkit'?fs.mkdtempSync(path.join(os.tmpdir(),'load-originals-')):'';
+   const options={viewport:{width:390,height:844},serviceWorkers:'block'};
+   const context=profileDirectory?await type.launchPersistentContext(profileDirectory,{...options,headless:true}):await browser.newContext(options);
    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await setupRoutes(context);
    try {
     const state=baseState();state.view='logbook';state.routeLegsByDay={};state.loadInfo={};
@@ -167,7 +173,7 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')).loads.find(l=>l.loadNo==='82002').broker),'Select Transport Partners LLC');
     assert.deepEqual(errors,[]);
     reports.push({browser:name,scenario:'legacy-originals',passed:true});console.log(`PASS — ${name}: original PDF recovery corrects the open scanner and preserves a different load with the same ID`);
-   } catch(error) {reports.push({browser:name,scenario:'legacy-originals',passed:false,error:String(error),pageErrors:errors});await page.screenshot({path:`${output}/${name}-legacy-originals-FAILED.png`,fullPage:true});console.error(error);} finally {await context.close();}
+   } catch(error) {reports.push({browser:name,scenario:'legacy-originals',passed:false,error:String(error),pageErrors:errors});await page.screenshot({path:`${output}/${name}-legacy-originals-FAILED.png`,fullPage:true});console.error(error);} finally {await context.close();if(profileDirectory)fs.rmSync(profileDirectory,{recursive:true,force:true});}
   }
  } finally {await browser.close();}
 }
