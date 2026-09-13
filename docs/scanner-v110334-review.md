@@ -2,7 +2,7 @@
 
 Base: merged PR #80, commit `ab75c6e4c2ec68df9ed1a1b0f11dea0edbf33b31`.
 Branch: `fix/scanner-capture-reader-v110334`.
-Status: implemented locally; not deployed, not approved for release.
+Status: proposed in PR #81; not merged or deployed. The PR checks report the current CI result.
 
 ## Findings from the recordings
 
@@ -33,8 +33,8 @@ Passed locally against the affected modules:
 
 Not completed:
 
-- The complete production build. Automatic approval review rejected its live Supabase verification because project `ghwkcgczuwctzxsxmqzx` could not be independently verified. The existing script uses the publishable API key for Auth settings, an anonymous access-RPC denial check, and a nonexistent public-storage-object check. These checks were not replaced with successful mock responses.
-- An offline subset also stopped at a pre-existing materializer anchor in `finalize-paper-log-v110315.mjs`. Affected scanner modules were assembled locally for focused checks; this is not an exact-release build result.
+- The complete production build is being checked in CI. After the user authorized project `ghwkcgczuwctzxsxmqzx`, all three live Supabase checks passed locally. Exact materialization reached the new finalizer and exposed two outdated integration anchors; both were corrected, and the finalizer and integration tests passed on that runtime.
+- Earlier isolated checks used assembled scanner modules. A subsequent local rebuild stopped in historical `apply-v10959-isolated-document-engines.mjs`, before reaching the new finalizer. These local checks do not establish a complete-release build; the clean GitHub Actions run is the release gate.
 - Browser execution: both agent-browser and direct Chromium launch failed; Chromium reports `socket() failed: Operation not permitted` before opening the app. The new browser assertions have been added but not executed here. They extend the existing Chromium/WebKit suites for capture confirmation, a five-second duplicate hold, BOL routing, uncertainty review and mixed PDF pages.
 - Installed-iPhone verification. Automated camera/OCR fixtures cannot establish real iPhone camera or OCR performance.
 
