@@ -49,7 +49,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     const dimensions=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));
     assert.ok(dimensions.w<1400&&dimensions.h<1900,'the surrounding scene is cropped from the saved preview: '+JSON.stringify(dimensions));
     await page.getByRole('button',{name:'Crop & rotate',exact:true}).click();
-    const cornerPositions=await page.getByRole('button',{name:'Top left',exact:true}).evaluate(el=>({left:el.style.left,top:el.style.top}));assert.ok(cornerPositions.left,'crop handles are present');
+    const handle=page.getByRole('button',{name:'Top left',exact:true});await handle.waitFor({state:'visible'});const box=await handle.boundingBox();assert.ok(box&&box.width>=44&&box.height>=44,'crop handles are visible and usable');
     await page.getByRole('button',{name:'Full page',exact:true}).click();await page.getByRole('button',{name:'Use page',exact:true}).click();
     const full=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));assert.ok(full.w>dimensions.w,'Full page restores the original scene');
     await page.getByRole('button',{name:'Crop & rotate',exact:true}).click();await page.getByRole('button',{name:'Auto edges',exact:true}).click();await page.getByRole('button',{name:'Use page',exact:true}).click();
