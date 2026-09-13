@@ -102,6 +102,35 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.screenshot({path:`${output}/${name}-pdf.png`});
     await page.getByRole('button',{name:'Read document',exact:true}).click();await page.getByLabel('Document type',{exact:true}).waitFor();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
+    // Ordinary carrier/trailer words cannot establish a Gate Pass identity.
+    await page.getByRole('button',{name:'New',exact:true}).click();
+    await page.evaluate(()=>{
+      window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async()=>({data:{text:'CARRIER: EXAMPLE TRUCKING\nTRAILER # 7791\nArrival time: 8 AM',confidence:96}})})};
+    });
+    await photos.setInputFiles({name:'example-uncertain.jpg',mimeType:'image/jpeg',buffer:Buffer.from(images[0])});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByLabel('Document type',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'other');
+    await page.locator('.scan-type-evidence-v334').filter({hasText:'Document type is uncertain'}).waitFor();
+    await page.getByLabel('Document type',{exact:true}).selectOption('bol');
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
+    await page.locator('.scan-type-evidence-v334').waitFor({state:'hidden'});
+    // Different BOL numbers on separate, real PDF pages require review.
+    const mixedPdf=await PDFDocument.create();
+    for(const ref of ['550099','771111']){
+      const source=await PDFDocument.load(simplePdf(`BILL OF LADING\nBOL NO ${ref}\nSHIP FROM EXAMPLE SHIPPER\nSHIP TO EXAMPLE RECEIVER\nCARRIER EXAMPLE TRUCKING\nWEIGHT 2000 LB`));
+      const [sheet]=await mixedPdf.copyPages(source,[0]);mixedPdf.addPage(sheet);
+    }
+    await page.getByRole('button',{name:'New',exact:true}).click();
+    await fileInput.setInputFiles({name:'example-mixed-shipments.pdf',mimeType:'application/pdf',buffer:Buffer.from(await mixedPdf.save())});
+    await page.getByText('Page 1 of 2',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByLabel('Document type',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'other');
+    await page.locator('.scan-type-evidence-v334').filter({hasText:'different BOL numbers'}).waitFor();
+    await page.getByLabel('Document type',{exact:true}).selectOption('bol');
+    await page.locator('.scan-type-evidence-v334').filter({hasText:'different BOL numbers'}).waitFor();
+    await page.screenshot({path:`${output}/${name}-mixed-documents.png`});
     assert.deepEqual(errors,[]);
     reports.push({browser:name,passed:true});console.log(`PASS — ${name}: multiple selection, crop, reorder, preview, recovery, PDF pages and immutable source storage`);
   }catch(error){reports.push({browser:name,passed:false,error:String(error),errors});console.error(error);await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});}

@@ -38,6 +38,7 @@ steps.push('finalize-scanner-video-v110330.mjs','test-scanner-video-v110330.mjs'
 steps.push('finalize-scanner-quality-v110331.mjs','test-scanner-quality-v110331.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-scanner-tql-v110332.mjs','test-scanner-tql-v110332.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-scanner-flow-v110333.mjs','test-scanner-flow-v110333.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-scanner-identity-v110334.mjs','test-document-identity-v110334.mjs','test-scanner-surface-v110334.mjs','test-scanner-identity-integration-v110334.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
