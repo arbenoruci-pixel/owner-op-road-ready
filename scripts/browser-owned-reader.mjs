@@ -16,10 +16,12 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await context.addInitScript(()=>{
       window.__ownedReaderCalls=0;
       const lines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
-      window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async()=>{
+      window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
+        const bitmap=await createImageBitmap(file),scaleX=bitmap.width/700,scaleY=bitmap.height/1000;bitmap.close();
+        const measure=document.createElement('canvas').getContext('2d');measure.font='24px Arial';
         const rows=['level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext'];
-        lines.forEach((line,i)=>{let x=30;line.split(' ').forEach((word,j)=>{rows.push(`5\t1\t1\t1\t${i+1}\t${j+1}\t${x}\t${40+i*65}\t${word.length*10}\t24\t96\t${word}`);x+=word.length*10+12;});});
+        lines.forEach((line,i)=>{let x=30;line.split(' ').forEach((word,j)=>{const width=measure.measureText(word).width;rows.push(`5\t1\t1\t1\t${i+1}\t${j+1}\t${Math.round(x*scaleX)}\t${Math.round((40+i*65)*scaleY)}\t${Math.round(width*scaleX)}\t${Math.round(24*scaleY)}\t96\t${word}`);x+=width+measure.measureText(' ').width;});});
         return {data:{text:lines.join('\n'),confidence:96,tsv:rows.join('\n')}};
       }})};
     });
@@ -44,6 +46,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.locator('mark').getByText('BOL-123',{exact:true}).waitFor();
     await review.getByRole('img',{name:'Source image for page 1',exact:true}).waitFor();
     await review.getByLabel('Source line highlight',{exact:true}).waitFor();
+    const highlightTop=await review.getByLabel('Source line highlight',{exact:true}).evaluate(el=>parseFloat(el.style.top));
+    assert.ok(Math.abs(highlightTop-10.5)<.2,'highlight follows the BOL number at its original page position after OCR image resizing');
     await review.locator('.owned-reader-inspect').screenshot({path:`${output}/${name}-source.png`});
     await review.getByLabel('Confirmed value',{exact:true}).fill('BOL-129');
     await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
