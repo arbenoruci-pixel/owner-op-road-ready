@@ -39,7 +39,7 @@ addImport(foundation, "import {repairBusinessIdentityV110326,candidateIdentityV1
 patch(foundation, 'export function collectLoadCandidatesV105(state = {}, businessStore = {}) {',
   'export function collectLoadCandidatesV105(state = {}, businessStore = {}) {\n  businessStore = repairBusinessIdentityV110326(businessStore);');
 patch(foundation, 'const all = [...byLoad.values()].map(candidate => {',
-  'const all = [...byLoad.values()].map(candidate => candidateIdentityV110326(candidate,businessStore)).map(candidate => {');
+  'const all = [...byLoad.values()].map(candidate => candidateIdentityV110326(candidate,businessStore,state)).map(candidate => {');
 patch(foundation, "guide.excludedFromActiveLoad === true || textV105(guide.reviewStatus)",
   "guide.excludedFromActiveLoad === true || guide.identityReviewV110326 || textV105(guide.reviewStatus)");
 patch(foundation, "const brokerIdentityConflict = brokerRelationship === 'conflict';", "const brokerIdentityConflict = candidate.identityReviewV110326 || brokerRelationship === 'conflict';");

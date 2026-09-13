@@ -4,6 +4,7 @@ const loadRef = value => ref(value?.canonicalLoadNo || value?.loadNo || value?.o
 const brokerKey = value => ref(text(value).replace(/\b(?:LLC|INC|CORP|COMPANY)\b\.?/gi, ''));
 const contract = type => ['rate_confirmation','load_tender'].includes(type);
 const sourceText = record => text(record.extracted?.guideSourceTextV110312 || record.extracted?.instructionPlanV110311?.sourceText);
+const sourceDocumentId = value => value?.sourceDocumentId || value?.rateConfirmationDocumentId || value?.documents?.rateConfirmationDocumentId || value?.documentId || value?.instructionsDocumentId;
 
 function printedBroker(raw = '') {
   if (/\bTOTAL\s+QUALITY\s+LOGISTICS\b|\bTQL\s+(?:CONTACT\s+INFO|PO\s*#)/i.test(raw)) return 'Total Quality Logistics (TQL)';
@@ -74,8 +75,9 @@ export function repairBusinessIdentityV110326(store = {}) {
       brokerRepairV110326:{previousBroker:record.broker || '', sourceDocumentId:record.id}};
   });
   const loads = (store.loads || []).map(load => {
-    const id = load.rateConfirmationDocumentId || load.documentId || load.instructionsDocumentId;
-    const linked = documents.filter(d => (!id || d.id === id) && loadRef(d) === loadRef(load) && savedDocumentIdentityV110326(d));
+    const id = sourceDocumentId(load);
+    if (!id) return load;
+    const linked = documents.filter(d => d.id === id && loadRef(d) === loadRef(load) && savedDocumentIdentityV110326(d));
     if (linked.length !== 1 || brokerKey(load.broker) === brokerKey(linked[0].broker)) return load;
     const record = linked[0], fields = record.extracted || {};
     changed = true;
@@ -91,7 +93,7 @@ export function repairBusinessIdentityV110326(store = {}) {
 export function repairGuideIdentityV110326(state = {}, store = {}, buildGuide) {
   let next = state;
   for (const guide of Object.values(state.loadGuidesById || {})) {
-    const id = guide.sourceDocumentId || guide.documents?.rateConfirmationDocumentId || guide.instructionsDocumentId;
+    const id = sourceDocumentId(guide);
     const record = (store.documents || []).find(d => d.id === id);
     if (!record) continue;
     if (savedDocumentConflictV110326(record) ||
@@ -106,7 +108,16 @@ export function repairGuideIdentityV110326(state = {}, store = {}, buildGuide) {
     if (!proof || brokerKey(guide.broker) === brokerKey(proof.broker)) continue;
     const rebuilt = buildGuide(record, store);
     if (!rebuilt) continue;
-    const corrected = {...rebuilt, id:guide.id, status:guide.status,
+    // Retain confirmations only for unchanged tasks. A new tracking provider or
+    // changed pickup requirement must not inherit an old confirmation.
+    const taskKey = step => JSON.stringify(['kind','title','detail','stopSequence','location','city','state','checklist','documentType'].map(key => step?.[key] ?? null));
+    const unchanged = (rebuilt.steps || []).filter(step => (guide.steps || []).some(old => old.id === step.id && taskKey(old) === taskKey(step)));
+    const unchangedIds = new Set(unchanged.map(step => step.id));
+    const stopKeys = new Set(unchanged.filter(step => step.kind === 'complete_stop').map(step => String(step.stopSequence || step.id)));
+    const corrected = {...guide, ...rebuilt, id:guide.id, status:guide.status,
+      manualDone:Object.fromEntries(Object.entries(guide.manualDone || {}).filter(([id]) => unchangedIds.has(id))),
+      completedStopIds:(guide.completedStopIds || []).filter(id => stopKeys.has(String(id))),
+      documents:{...guide.documents, ...rebuilt.documents, documentIds:[...new Set([...(guide.documents?.documentIds || []), ...(rebuilt.documents?.documentIds || [])])]},
       excludedFromActiveLoad:guide.excludedFromActiveLoad, completedAt:guide.completedAt,
       brokerRepairV110326:{previousGuide:guide, sourceDocumentId:record.id}};
     next = {...next, loadGuidesById:{...next.loadGuidesById, [guide.id]:corrected}};
@@ -114,8 +125,9 @@ export function repairGuideIdentityV110326(state = {}, store = {}, buildGuide) {
   return next;
 }
 
-export function candidateIdentityV110326(candidate, store = {}) {
-  const ownDocuments = (store.documents || []).filter(d => contract(d.type) && loadRef(d) === loadRef(candidate));
+export function candidateIdentityV110326(candidate, store = {}, state = {}) {
+  const linkedIds = new Set([...(store.loads || []), ...Object.values(state.loadGuidesById || {})].filter(item => loadRef(item) === loadRef(candidate)).map(sourceDocumentId).filter(Boolean));
+  const ownDocuments = (store.documents || []).filter(d => linkedIds.has(d.id) && contract(d.type) && loadRef(d) === loadRef(candidate));
   const proofs = ownDocuments.filter(d => savedDocumentIdentityV110326(d));
   const brokers = new Set(proofs.map(d => brokerKey(d.broker)));
   if (brokers.size === 1) return {...candidate, broker:proofs[0].broker};
