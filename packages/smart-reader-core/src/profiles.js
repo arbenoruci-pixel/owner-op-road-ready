@@ -1,5 +1,7 @@
+import {isDocumentParty} from './fieldGuards.js';
+
 // Domain behavior lives in explicit profiles. The engine has no load/business API.
-const identifier = label => new RegExp(`^\\s*(?:${label})[ \\t]*(?:NUMBER|NO\\.?|#)[ \\t:#]*(.+?)\\s*$`, 'id');
+const identifier = label => new RegExp(`^\\s*(?:${label})[ \\t]*(?:NUMBER\\b|NO\\b\\.?|ID\\b|#|:)[ \\t:#]*(.+?)\\s*$`, 'id');
 const labeled = label => new RegExp(`^\\s*(?:${label})[ \\t]*[:#]?[ \\t]+(.+?)\\s*$`, 'id');
 const field = (label, pattern, kind='text', required=false) => ({label,pattern,kind,required});
 
@@ -11,7 +13,7 @@ export const PROFILES = Object.freeze([
     identity:'invoiceNumber',
     fields:{
       invoiceNumber:field('Invoice number',identifier('INVOICE'),'identifier',true),
-      vendor:field('Vendor',labeled('VENDOR|SELLER|SUPPLIER')),
+      vendor:field('Vendor',labeled('VENDOR|SELLER|SUPPLIER'),'party'),
       invoiceDate:field('Invoice date',labeled('INVOICE DATE|DATE'),'date'),
       subtotal:field('Subtotal',labeled('SUBTOTAL|SUB TOTAL'),'amount'),
       tax:field('Tax',labeled('TAX|VAT'),'amount'),
@@ -25,9 +27,9 @@ export const PROFILES = Object.freeze([
     identity:'bolNumber',
     fields:{
       bolNumber:field('BOL number',identifier('BOL|B/L|BILL OF LADING'),'identifier',true),
-      shipper:field('Shipper',labeled('SHIP FROM|SHIPPER'),'text',true),
-      consignee:field('Consignee',labeled('SHIP TO|CONSIGNEE'),'text',true),
-      carrier:field('Carrier',labeled('CARRIER')),
+      shipper:field('Shipper',labeled('SHIP FROM|SHIPPER'),'party',true),
+      consignee:field('Consignee',labeled('SHIP TO|CONSIGNEE'),'party',true),
+      carrier:field('Carrier',labeled('CARRIER(?: NAME)?'),'party'),
       documentDate:field('Document date',labeled('DATE'),'date'),
       poNumber:field('PO number',identifier('PO|P\\.O\\.|PURCHASE ORDER'),'identifier'),
       weight:field('Weight',labeled('TOTAL WEIGHT|WEIGHT'),'weight'),
@@ -38,6 +40,7 @@ export const PROFILES = Object.freeze([
 export function normalizeValue(kind, raw) {
   const value = raw.trim().replace(/[ \t]+/g,' ');
   if (!value) return {value:null,issue:'empty'};
+  if (kind==='party') return isDocumentParty(value)?{value}:{value:null,issue:'form_instructions'};
   if (kind==='identifier') return /^[A-Za-z0-9][A-Za-z0-9._/-]{1,39}$/.test(value) ? {value} : {value:null,issue:'invalid_identifier'};
   if (kind==='currency') return /^(?:USD|EUR|GBP|CAD|AUD|CHF)$/.test(value.toUpperCase()) ? {value:value.toUpperCase()} : {value:null,issue:'ambiguous_currency'};
   if (kind==='amount') {

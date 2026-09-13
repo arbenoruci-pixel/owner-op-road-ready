@@ -14,8 +14,8 @@ function timeout(promise,ms){let timer;return Promise.race([promise,new Promise(
 async function nextFrame(video){await new Promise(resolve=>{let id;const finish=()=>{clearTimeout(timer);if(id!=null)video.cancelVideoFrameCallback?.(id);resolve();};const timer=setTimeout(finish,120);if(video.requestVideoFrameCallback)id=video.requestVideoFrameCallback(finish);});}
 
 export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages=20,lastPage=null}){
-  const videoRef=useRef(null),containerRef=useRef(null),streamRef=useRef(null),nativeInput=useRef(null),alive=useRef(true),busy=useRef(false),autoRef=useRef(true),captureRef=useRef(null),tracking=useRef(null),captureWindow=useRef(null),pageLock=useRef(null),observation=useRef(null),limit=useRef(false);
-  const [corners,setCorners]=useState(null),[frame,setFrame]=useState({x:0,y:0,width:0,height:0}),[ready,setReady]=useState(false),[opened,setOpened]=useState(false),[capturing,setCapturing]=useState(false),[guidance,setGuidance]=useState('Opening camera…'),[error,setError]=useState(''),[auto,setAuto]=useState(true),[torch,setTorch]=useState(false),[hasTorch,setHasTorch]=useState(false),[thumbnail,setThumbnail]=useState(''),[options,setOptions]=useState(false),[capturePreview,setCapturePreview]=useState('');
+  const videoRef=useRef(null),containerRef=useRef(null),streamRef=useRef(null),nativeInput=useRef(null),alive=useRef(true),busy=useRef(false),autoRef=useRef(true),captureRef=useRef(null),tracking=useRef(null),captureWindow=useRef(null),pageLock=useRef(null),observation=useRef(null),limit=useRef(false),finishRequested=useRef(false);
+  const [corners,setCorners]=useState(null),[frame,setFrame]=useState({x:0,y:0,width:0,height:0}),[ready,setReady]=useState(false),[opened,setOpened]=useState(false),[capturing,setCapturing]=useState(false),[guidance,setGuidance]=useState('Opening camera…'),[error,setError]=useState(''),[auto,setAuto]=useState(true),[torch,setTorch]=useState(false),[hasTorch,setHasTorch]=useState(false),[thumbnail,setThumbnail]=useState(''),[options,setOptions]=useState(false),[capturePreview,setCapturePreview]=useState(''),[finishing,setFinishing]=useState(false);
   const previousPage=useRef(lastPage),previewTimer=useRef(null);
   limit.current=pageCount>=maxPages;
   function stop(){streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;}
@@ -47,7 +47,7 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
   useEffect(()=>{
     let cancelled=false,timer;const sample=document.createElement('canvas');
     const tick=()=>{
-      if(cancelled)return;
+      if(cancelled||finishRequested.current)return;
       const started=performance.now(),video=videoRef.current;
       if(video?.videoWidth&&video.readyState>=2&&!document.hidden){try{
         const s=384/Math.max(video.videoWidth,video.videoHeight);sample.width=Math.round(video.videoWidth*s);sample.height=Math.round(video.videoHeight*s);
@@ -62,8 +62,8 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
         const quality=assessDocumentQuality(pixels,{corners:detection.corners,live:true,detectionFound:detection.found,detectionConfidence:detection.confidence,nativeWidth:video.videoWidth,nativeHeight:video.videoHeight});
         captureWindow.current=updateCaptureWindow(captureWindow.current,detection,quality,now);
         setReady(captureWindow.current.ready);
-        setGuidance(limit.current?'All pages captured. Tap Done.':pageLock.current?.locked?'Ready for next scan':quality.issues[0]||(autoRef.current?'Hold steady…':'Ready to capture'));
-        if(!limit.current&&!pageLock.current?.locked&&autoRef.current&&captureWindow.current.ready)captureRef.current?.();
+        setGuidance(limit.current?'All pages captured. Tap Done.':pageLock.current?.locked?'Page captured · Done or show the next sheet':quality.issues[0]||(autoRef.current?'Hold steady…':'Ready to capture'));
+        if(!finishRequested.current&&!limit.current&&!pageLock.current?.locked&&autoRef.current&&captureWindow.current.ready)captureRef.current?.();
       }catch{tracking.current=null;captureWindow.current=null;setReady(false);setCorners(null);}}
       timer=setTimeout(tick,Math.max(50,220-(performance.now()-started)));
     };
@@ -71,10 +71,10 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
   },[]);
   async function deliver(file){
     setCorners(null);setReady(false);setGuidance('Preparing page…');await onCapture?.(file);
-    if(!alive.current)return;tracking.current=null;captureWindow.current=null;setCorners(null);setReady(false);setGuidance('Ready for next scan');
+    if(!alive.current)return;tracking.current=null;captureWindow.current=null;setCorners(null);setReady(false);setGuidance(finishRequested.current?'Finishing captured page…':'Page captured · Done or show the next sheet');
   }
   async function capture(){
-    const video=videoRef.current;if(!video?.videoWidth||busy.current||!alive.current||limit.current)return;
+    const video=videoRef.current;if(!video?.videoWidth||busy.current||finishRequested.current||!alive.current||limit.current)return;
     busy.current=true;pageLock.current=lockCapturedPage(observation.current?.detection,observation.current?.signature);setCapturing(true);setCorners(null);setReady(false);setOptions(false);setError('');setGuidance('Capturing…');
     try{
       let file;const track=streamRef.current?.getVideoTracks()[0];
@@ -102,18 +102,22 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
       }finally{if(best)best.width=best.height=1;}}
       if(alive.current)await deliver(file);
     }catch(cause){pageLock.current=null;if(alive.current)setError(cause.message||'Could not add this page. Try again.');}
-    finally{busy.current=false;if(alive.current)setCapturing(false);}
+    finally{busy.current=false;if(alive.current){setCapturing(false);if(finishRequested.current)finishClose();}}
   }
   captureRef.current=capture;
-  async function nativeChanged(event){const file=event.target.files?.[0];event.target.value='';if(!file||busy.current||limit.current)return;busy.current=true;pageLock.current=lockCapturedPage(observation.current?.detection,observation.current?.signature);setCapturing(true);setCorners(null);setOptions(false);setError('');try{await deliver(file);}catch(cause){pageLock.current=null;if(alive.current)setError(cause.message||'Could not add this page.');}finally{busy.current=false;if(alive.current)setCapturing(false);}}
+  async function nativeChanged(event){const file=event.target.files?.[0];event.target.value='';if(!file||busy.current||finishRequested.current||limit.current)return;busy.current=true;pageLock.current=lockCapturedPage(observation.current?.detection,observation.current?.signature);setCapturing(true);setCorners(null);setOptions(false);setError('');try{await deliver(file);}catch(cause){pageLock.current=null;if(alive.current)setError(cause.message||'Could not add this page.');}finally{busy.current=false;if(alive.current){setCapturing(false);if(finishRequested.current)finishClose();}}}
   async function toggleTorch(){try{await streamRef.current?.getVideoTracks()[0]?.applyConstraints({advanced:[{torch:!torch}]});setTorch(!torch);}catch{setHasTorch(false);}}
-  function close(){if(busy.current)return;alive.current=false;stop();onCancel?.();}
+  function finishClose(){alive.current=false;stop();onCancel?.();}
+  function close(){
+    finishRequested.current=true;autoRef.current=false;setFinishing(true);setOptions(false);setGuidance('Finishing captured page…');
+    if(!busy.current)finishClose();
+  }
   const points=corners?.map(p=>`${frame.x+p.x*frame.width},${frame.y+p.y*frame.height}`).join(' ');
   return <section data-smart-camera="110329" className="scan-camera-v333" aria-label="Document camera">
     <header>
-      <button type="button" disabled={capturing} onClick={close} aria-label="Close camera"><Icon name="close"/></button>
+      <button type="button" disabled={finishing} onClick={close} aria-label="Close camera"><Icon name="close"/></button>
       <b>Scan document</b>
-      {pageCount>0?<button type="button" className="scan-camera-done-v333" disabled={capturing} onClick={close} aria-label={`Review (${pageCount})`}><Icon name="check"/><span>Done</span></button>:<span className="scan-camera-header-space-v333"/>}
+      {pageCount>0||capturing?<button type="button" className="scan-camera-done-v333" disabled={finishing} onClick={close} aria-label={pageCount?`Review (${pageCount})`:'Finish capture'}><Icon name="check"/><span>{finishing?'Finishing…':'Done'}</span></button>:<span className="scan-camera-header-space-v333"/>}
     </header>
     <div ref={containerRef} className="scan-camera-view-v333">
       <video ref={videoRef} playsInline muted/>
@@ -130,7 +134,7 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
       </div>
       {options&&<div className="scan-camera-options-v333"><button type="button" disabled={capturing||pageCount>=maxPages} onClick={()=>{autoRef.current=false;setAuto(false);nativeInput.current?.click();}}>Use phone camera</button></div>}
       <div className="scan-camera-shutter-row-v333">
-        {thumbnail?<button type="button" className="scan-camera-thumbnail-v333" disabled={capturing} onClick={close} aria-label={`Open ${pageCount} captured pages`}><img src={thumbnail} alt="Last captured page"/><span>{pageCount}</span></button>:<span/>}
+        {thumbnail?<button type="button" className="scan-camera-thumbnail-v333" disabled={finishing} onClick={close} aria-label={`Open ${pageCount} captured pages`}><img src={thumbnail} alt="Last captured page"/><span>{pageCount}</span></button>:<span/>}
         <button type="button" className="scan-camera-shutter-v333" disabled={!opened||capturing||pageCount>=maxPages} onClick={capture} aria-label="Capture document">{capturing&&<span className="scan-camera-spinner-v333"/>}</button>
         <span aria-label={`${pageCount} pages captured`} className="scan-camera-count-v333">{pageCount?`${pageCount}/${maxPages}`:''}</span>
       </div>
