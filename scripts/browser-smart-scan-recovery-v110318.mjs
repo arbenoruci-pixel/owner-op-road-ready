@@ -87,6 +87,7 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
     await page.locator('.adaptive-home-v1038.active-load').waitFor();
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
     await page.locator('input[type=file][accept*="application/pdf"]').setInputFiles({name:'shipping.pdf',mimeType:'application/pdf',buffer:simplePdf(bolText)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
     await page.getByLabel('Document type',{exact:true}).waitFor({timeout:60000});
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
     assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'76543210');

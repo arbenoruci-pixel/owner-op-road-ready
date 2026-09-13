@@ -59,6 +59,7 @@ jobs:
             sleep 1
           done
           failed=0
+          node scripts/browser-scanner-workflow-v110328.mjs 2>&1 | tee /tmp/browser-scanner-workflow-v110328.log
           node scripts/browser-smart-scan-v110323.mjs 2>&1 | tee /tmp/browser-smart-scan-v110323.log
           node scripts/browser-load-guide-v110322.mjs 2>&1 | tee /tmp/browser-load-guide-v110322.log
           node scripts/browser-invoice-send-v110320.mjs 2>&1 | tee /tmp/browser-invoice-send-v110320.log
