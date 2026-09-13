@@ -78,6 +78,10 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.getByRole('heading',{name:'Check your pages',exact:true}).waitFor();
     await page.getByText('Page 1 of 1',{exact:true}).waitFor();
     await page.locator('canvas[aria-label="PDF preview, page 1"]:visible').waitFor();
+    await page.getByRole('button',{name:'Enlarge PDF preview',exact:true}).click();
+    await page.getByRole('dialog',{name:'PDF page preview'}).waitFor();
+    assert.ok(await page.locator('.scan-pdf-expanded-v328 canvas').evaluate(canvas=>canvas.getBoundingClientRect().width>=900));
+    await page.getByRole('button',{name:'Close PDF preview',exact:true}).click();
     assert.equal(await page.getByRole('button',{name:'Read document',exact:true}).isEnabled(),true);
     await page.screenshot({path:`${output}/${name}-pdf.png`});
     await page.getByRole('button',{name:'Read document',exact:true}).click();await page.getByLabel('Document type',{exact:true}).waitFor();

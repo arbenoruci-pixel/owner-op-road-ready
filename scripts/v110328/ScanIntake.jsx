@@ -21,7 +21,8 @@ function Thumbnail({file,alt=''}) {const url=useBlobUrl(file);return url?<img sr
 // PDF preview is bounded and cancellable. Failure leaves the original selectable
 // for the offline reader; it never claims the page count or preview was checked.
 function PdfPreview({file,onDetails}) {
-  const canvasRef=useRef(null),[message,setMessage]=useState('Opening preview…'),[count,setCount]=useState(0),[pageNumber,setPageNumber]=useState(1);
+  const canvasRef=useRef(null),[message,setMessage]=useState('Opening preview…'),[count,setCount]=useState(0),[pageNumber,setPageNumber]=useState(1),[expanded,setExpanded]=useState(false);
+  useEffect(()=>{if(!expanded)return;const close=event=>{if(event.key==='Escape')setExpanded(false);};window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close);},[expanded]);
   useEffect(()=>{
     let alive=true,task,renderTask,pdf,timer;
     (async()=>{try{
@@ -40,7 +41,7 @@ function PdfPreview({file,onDetails}) {
     finally{clearTimeout(timer);await pdf?.destroy?.();}})();
     return()=>{alive=false;clearTimeout(timer);renderTask?.cancel();task?.destroy?.();};
   },[file,pageNumber]);
-  return <div className="scan-pdf-v328"><div className="scan-paper-preview-v328"><canvas ref={canvasRef} aria-label={`PDF preview, page ${pageNumber}`} hidden={Boolean(message)}/>{message&&<p role="status"><Glyph name="file"/>{message}</p>}</div>{count>0&&<div className="scan-pdf-pages-v328"><button type="button" disabled={pageNumber===1} aria-label="Previous PDF page" onClick={()=>setPageNumber(n=>n-1)}>‹</button><span>Page {pageNumber} of {count}</span><button type="button" disabled={pageNumber===count} aria-label="Next PDF page" onClick={()=>setPageNumber(n=>n+1)}>›</button></div>}</div>;
+  return <div className={expanded?"scan-pdf-v328 scan-pdf-expanded-v328":"scan-pdf-v328"} role={expanded?"dialog":undefined} aria-modal={expanded?true:undefined} aria-label={expanded?"PDF page preview":undefined}>{expanded&&<button autoFocus type="button" className="scan-pdf-close-v328" onClick={()=>setExpanded(false)}>Close PDF preview</button>}<div className="scan-paper-preview-v328"><canvas ref={canvasRef} aria-label={`PDF preview, page ${pageNumber}`} hidden={Boolean(message)}/>{!expanded&&!message&&<button type="button" className="scan-preview-expand-v328" onClick={()=>setExpanded(true)}>Enlarge PDF preview</button>}{message&&<p role="status"><Glyph name="file"/>{message}</p>}</div>{count>0&&<div className="scan-pdf-pages-v328"><button type="button" disabled={pageNumber===1} aria-label="Previous PDF page" onClick={()=>setPageNumber(n=>n-1)}>‹</button><span>Page {pageNumber} of {count}</span><button type="button" disabled={pageNumber===count} aria-label="Next PDF page" onClick={()=>setPageNumber(n=>n+1)}>›</button></div>}</div>;
 }
 
 export default function ScanIntakeV110328({onReady,onClose,initialDraft}) {
@@ -141,7 +142,7 @@ export default function ScanIntakeV110328({onReady,onClose,initialDraft}) {
         <div className="scan-import-actions-v328"><button type="button" disabled={busy} onClick={()=>photosRef.current?.click()}><Glyph name="photos"/><b>Choose photos</b><small>Select up to {MAX_PHOTO_PAGES} pages</small></button><button type="button" disabled={busy} onClick={()=>fileRef.current?.click()}><Glyph name="file"/><b>Choose a file</b><small>PDF, photo, TXT or CSV</small></button></div>
         <div className="scan-intake-tip-v328"><Glyph name="file"/><p><b>One document at a time</b><span>Keep every corner visible. Include all pages of the same BOL, POD, receipt or rate confirmation.</span></p></div>
       </>:<>
-        <div className="scan-pages-heading-v328"><div><h1>Check your pages</h1><p>{imagePages?`${pages.length} of ${MAX_PHOTO_PAGES} photos · One document`:pdfCount?`${pdfCount} PDF pages · Original file`:'Original file'}</p></div>{imagePages&&<span className="scan-page-badge-v328">{pages.findIndex(p=>p.id===current?.id)+1}/{pages.length}</span>}</div>
+        <div className="scan-pages-heading-v328"><div><h1>Check your pages</h1><p>{imagePages?`${pages.length} of ${MAX_PHOTO_PAGES} photos · One document`:pdfCount?`${pdfCount} PDF ${pdfCount===1?"page":"pages"} · Original file`:'Original file'}</p></div>{imagePages&&<span className="scan-page-badge-v328">{pages.findIndex(p=>p.id===current?.id)+1}/{pages.length}</span>}</div>
         {isImage?<>
           <button type="button" className="scan-paper-preview-v328 scan-preview-button-v328" disabled={busy} onClick={()=>setZoom(true)} aria-label="Enlarge selected page"><Thumbnail file={preview} alt={`Page ${pages.findIndex(p=>p.id===current.id)+1} preview`}/><span>Tap to enlarge</span></button>
           <div className="scan-page-tools-v328"><button type="button" disabled={busy} onClick={editPage}>Crop & rotate</button><button type="button" disabled={busy} onClick={()=>remove(current.id)}>Remove page</button></div>
@@ -149,7 +150,7 @@ export default function ScanIntakeV110328({onReady,onClose,initialDraft}) {
           <div className="scan-add-actions-v328"><button type="button" disabled={busy||pages.length>=MAX_PHOTO_PAGES} onClick={()=>photosRef.current?.click()}><Glyph name="plus"/>Add photos</button><button type="button" disabled={busy||pages.length>=MAX_PHOTO_PAGES} onClick={()=>setMode('camera')}><Glyph name="camera"/>Camera</button></div>
         </>:<>
           {current.file.type==='application/pdf'?<PdfPreview key={current.id} file={current.file} onDetails={setPdfCount}/>:<div className="scan-text-preview-v328"><Glyph name="file"/><b>Ready to read</b><p>The original file will be included with your document.</p></div>}
-          <div className="scan-file-row-v328"><Glyph name="file"/><div><b>{current.file.name}</b><span>{(current.file.size/1024/1024).toFixed(1)} MB</span></div><button type="button" disabled={busy} onClick={()=>remove(current.id)}>Remove</button></div>
+          <div className="scan-file-row-v328"><Glyph name="file"/><div><b>{current.file.name}</b><span>{current.file.size<1024*1024?`${Math.max(1,Math.round(current.file.size/1024))} KB`:`${(current.file.size/1024/1024).toFixed(1)} MB`}</span></div><button type="button" disabled={busy} onClick={()=>remove(current.id)}>Remove</button></div>
         </>}
       </>}
       {error&&<div className="scan-error-v328" role="alert">{error}</div>}
