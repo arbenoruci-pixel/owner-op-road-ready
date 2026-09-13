@@ -20,7 +20,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
         ctx.fillStyle='#faf6ef';ctx.fillRect(230,260,1120,1590);ctx.fillStyle='#111';ctx.font='bold 45px Arial';ctx.fillText('EXAMPLE BILL OF LADING',300,380);ctx.font='32px Arial';for(let i=0;i<22;i++)ctx.fillText('TEST DOCUMENT ROW '+i+' / REF 551122',300,475+i*53);ctx.strokeStyle='#b52d28';ctx.beginPath();ctx.moveTo(700,1730);ctx.lineTo(1100,1780);ctx.lineTo(820,1750);ctx.stroke();}
       draw();window.__scannerDraw=draw;window.__scannerCanvas=c;
       let stream;window.__cameraCalls=0;
-      navigator.mediaDevices.getUserMedia=async()=>{window.__cameraCalls++;if(!c.captureStream)throw new Error('Synthetic camera unavailable; use Phone camera');stream=c.captureStream(12);window.__scannerStream=stream;window.__cameraTimer=setInterval(()=>draw(),90);return stream;};
+      Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__cameraCalls++;try{if(!c.captureStream)throw new Error('canvas.captureStream is unavailable');stream=c.captureStream(12);}catch(cause){throw new Error('Synthetic camera unavailable: '+cause.message);}window.__scannerStream=stream;window.__cameraTimer=setInterval(()=>draw(),90);return stream;}}});
       // Exercise the browser video-frame fallback independently of ImageCapture.
       window.ImageCapture=undefined;
       window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async()=>({data:{text:'BILL OF LADING\nBOL NO 551122\nDATE 09/13/2026\nSHIP FROM EXAMPLE SHIPPER\nSHIP TO EXAMPLE RECEIVER\nWEIGHT 2000 LB',confidence:96}})})};
@@ -29,8 +29,10 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await page.getByRole('button',{name:/Scan with camera/}).click();
     const camera=page.locator('[data-smart-camera="110329"]');await camera.waitFor();
     const capture=page.getByRole('button',{name:'Capture document',exact:true});
-    await page.waitForFunction(()=>document.querySelector('[data-smart-camera] video')?.videoWidth>0||document.querySelector('[data-smart-camera] [role=status]')?.textContent.includes('Synthetic camera'));
+    await page.waitForFunction(()=>!document.querySelector('[data-smart-camera] button[aria-label="Capture document"]')?.disabled||document.querySelector('[data-smart-camera] [role=status]')?.textContent.includes('Synthetic camera'));
+    assert.ok(await page.evaluate(()=>window.__cameraCalls>0),'the synthetic camera must be used');
     const videoReady=await capture.isEnabled();
+    if(name==='chromium')assert.ok(videoReady,'Chromium must exercise live auto/video capture');
     if(videoReady){
       await page.getByRole('button',{name:'Review (1)',exact:true}).waitFor();
       // The same sheet must not be captured repeatedly after its first auto shot.
