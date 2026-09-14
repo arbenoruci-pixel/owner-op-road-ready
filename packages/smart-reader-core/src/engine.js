@@ -15,7 +15,9 @@ function candidatesFor(pages, spec) {
     let candidate=candidates.find(c=>c.key===key);
     if(!candidate){candidate={key,rawValue:evidence.quote,...normalized,evidence:[]};candidates.push(candidate);}
     if(normalized.issue&&!candidate.issue)candidate.issue=normalized.issue;
-    candidate.evidence.push(evidence);
+    // Keep each match's qualification with its own source. An uncertain layout
+    // proposal must not disqualify an agreeing, clearly labeled observation.
+    candidate.evidence.push({...evidence,...(normalized.issue?{matchIssue:normalized.issue}:{})});
     if(match.labelLine){
       candidate.labelEvidence??=[];
       candidate.labelEvidence.push(evidenceFor(page,observation,match.labelLine,0,match.labelLine.text.length));
@@ -88,9 +90,10 @@ function extractField(pages, spec) {
   const candidates=candidatesFor(pages,spec);
   const valid=candidates.filter(c=>c.value!==null);
   const values=[...new Set(valid.map(c=>c.value))];
-  const issues=[...new Set(candidates.map(c=>c.issue).filter(Boolean))];
+  const supportedValues=new Set(valid.filter(c=>c.evidence.some(e=>!e.matchIssue&&(e.recognizerConfidence===null||e.recognizerConfidence>=.8))).map(c=>c.value));
+  const issues=[...new Set(candidates.map(c=>c.issue==='layout_needs_review'&&supportedValues.has(c.value)?null:c.issue).filter(Boolean))];
   if(values.length>1)issues.push('conflicting_reads');
-  if(candidates.some(c=>[...c.evidence,...(c.labelEvidence||[])].some(e=>e.recognizerConfidence!==null&&e.recognizerConfidence<.8)))issues.push('weak_recognition');
+  if(candidates.some(c=>!supportedValues.has(c.value)&&[...c.evidence,...(c.labelEvidence||[])].some(e=>e.recognizerConfidence!==null&&e.recognizerConfidence<.8)))issues.push('weak_recognition');
   if(!candidates.length&&spec.required)issues.push('required_field_missing');
   return {label:spec.label,kind:spec.kind,required:spec.required,
     status:!candidates.length?'missing':issues.length?'needs_review':'supported',
@@ -113,7 +116,7 @@ export function readDocument(input) {
     return {...group,label:profile?.label||'Uncategorized document',fields,checks,
       requiresReview:true,canAutoFile:false};
   });
-  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.8',documentId,pages,
+  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.9',documentId,pages,
     pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,
     pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),
     calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};

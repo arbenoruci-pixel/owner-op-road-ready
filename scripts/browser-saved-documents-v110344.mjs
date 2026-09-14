@@ -58,11 +58,12 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await context.addInitScript(()=>{
       window.__savedReadCalls=0;
       window.__savedReadTerminations=0;
-      const lines=['BILL OF LADING','BOL No: BOL-347','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
+      const bolLines=['BILL OF LADING','BOL No: BOL-347','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
       window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{window.__savedReadTerminations++;},recognize:async(file)=>{
         window.__savedReadCalls++;
         if(window.__savedReadHang){window.__savedReadHangStarted=true;await new Promise(()=>{});}
         if(window.__savedReadFail)throw new Error('Synthetic OCR failure');
+        const lines=window.__savedReadFinancial?['RECEIPT # R-349','LOAD DETAILS','LOAD DESCRIPTION: UNLOADING','RELAY PAYMENT DETAILS','Carrier: Example Transport','Amount $240.00','Checkout Fee $7.00',`NET TOTAL $${file.name==='road-ready-clean-ocr.png'?'147':'247'}.00`]:bolLines;
         const image=await createImageBitmap(file),sx=image.width/700,sy=image.height/1000;image.close();
         const rows=['level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext'];
         lines.forEach((text,i)=>rows.push(`5\t1\t1\t1\t${i+1}\t1\t${30*sx}\t${(40+i*65)*sy}\t${500*sx}\t${24*sy}\t96\t${text}`));
@@ -254,6 +255,23 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await reread.getByRole('button',{name:'Export reading review',exact:true}).waitFor();
     assert.match(await reread.innerText(),/Bill of lading/);
     await page.screenshot({path:`${output}/${name}-reread-image.png`});
+    await reread.getByRole('button',{name:'Cancel reading',exact:true}).click();
+    await page.evaluate(()=>window.__savedReadFinancial=true);
+    await recent.getByRole('button',{name:'Read again',exact:true}).click();
+    await reread.getByRole('button',{name:'Export reading review',exact:true}).waitFor();
+    const financialExport=page.waitForEvent('download');
+    await reread.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const financial=JSON.parse(fs.readFileSync(await(await financialExport).path(),'utf8'));
+    const receipt=financial.documents[0];
+    assert.equal(receipt.kind,'unloading_receipt');assert.equal(financial.pageCount,1);
+    assert.equal(financial.pages[0].observations.length,3,'financial reads include the original pixels');
+    assert.equal(receipt.fields.amount.value,'240.00');assert.equal(receipt.fields.fee.value,'7.00');
+    assert.equal(receipt.fields.total.value,null);
+    assert.ok(receipt.fields.total.issues.includes('conflicting_reads'));
+    assert.deepEqual(receipt.fields.total.candidates.map(candidate=>candidate.value).sort(),['147.00','247.00']);
+    assert.ok(receipt.fields.total.candidates.every(candidate=>candidate.evidence.every(evidence=>evidence.sourceImageId)));
+    assert.deepEqual(await localRows(page),imageBefore,'conflicting readings cannot silently overwrite the saved document');
+    await page.screenshot({path:`${output}/${name}-reread-financial.png`});
     assert.deepEqual(errors,[]);reports.push({browser:name,passed:true});
     console.log(`PASS — ${name}: 42 review documents, recent files, three-page original open/share/download, missing file, authenticated cloud-only recovery, reload and 320/390/430 layout`);
   } catch(error) {
