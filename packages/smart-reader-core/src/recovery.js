@@ -56,3 +56,9 @@ export function savedReadingReview(result){
     documents:result.documents.map(g=>({id:g.id,kind:g.kind,label:g.label,pages:g.pageIds.map(id=>result.pages.find(p=>p.id===id).number),typeCorrection:g.typeCorrection||null,fields:Object.fromEntries(Object.entries(g.fields).filter(([,f])=>f.status==='confirmed').map(([key,f])=>[key,{label:f.label,value:f.value,correction:f.correction}])),checks:g.checks})),
     remaining:reviewQueue(result).length,trainingEligible:false};
 }
+
+// Generic invoice review does not imply a trucking carrier invoice.
+export function filingTypeForReview(summary){
+  if(summary?.documents?.length!==1||!summary.documents[0].typeCorrection)return null;
+  return ({bol:'bol',unloading_receipt:'lumper_receipt',invoice:'other'})[summary.documents[0].kind]??null;
+}

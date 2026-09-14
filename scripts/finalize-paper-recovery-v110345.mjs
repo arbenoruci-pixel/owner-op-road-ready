@@ -14,7 +14,18 @@ fs.copyFileSync('scripts/v110345/ReaderPreview.jsx',scan+'OwnedReaderPreview.jsx
 fs.copyFileSync('scripts/v110345/SavedReadingReview.jsx','source/src/modules/owneros/SavedReadingReviewV110345.jsx');
 const sheet=scan+'SmartScanSheetV105.jsx';
 patch(sheet,'  const [analysis, setAnalysis] = useState(null);','  const [analysis, setAnalysis] = useState(null);\n  const [readerReviewV110345,setReaderReviewV110345] = useState(null);');
-patch(sheet,'<OwnedReaderPreview analysis={analysis} />',`<OwnedReaderPreview analysis={analysis} reviewState={readerReviewV110345} onReviewChange={value=>{setReaderReviewV110345(value);const groups=value.summary.documents;if(groups.length===1&&groups[0].typeCorrection)setSelectedType(({bol:'bol',invoice:'invoice',unloading_receipt:'lumper_receipt'})[groups[0].kind]||'other');}} />`);
+patch(sheet,'<OwnedReaderPreview analysis={analysis} />','<OwnedReaderPreview analysis={analysis} reviewState={readerReviewV110345} onReviewChange={acceptReaderReviewV110345} />');
+patch(sheet,"import OwnedReaderPreview from './OwnedReaderPreview.jsx';","import OwnedReaderPreview from './OwnedReaderPreview.jsx';\nimport {filingTypeForReview} from '../../../../packages/smart-reader-core/src/recovery.js';");
+patch(sheet,'  function changeType(typeId) {',`  function acceptReaderReviewV110345(value) {
+    setReaderReviewV110345(value);
+    const typeId=filingTypeForReview(value.summary);
+    if(typeId&&typeId!==selectedType){
+      setSelectedType(typeId);setReviewed(false);setRiskAcknowledged(false);setLinkToLogbook(false);setSelectedStopSequence(0);setMatch(null);
+      if(!loadSelectionSourceV11037.startsWith('driver_')){setSelectedLoadNo('');setLoadSelectionSourceV11037('driver_unassigned');}
+    }
+  }
+
+  function changeType(typeId) {`);
 patch(sheet,'      const analysisForSaveV10964 = compactRateConAnalysisV10964',"      if(readerReviewV110345?.analysis===analysis)storageFieldsV10964.readerReviewV110345=readerReviewV110345.summary;\n      const analysisForSaveV10964 = compactRateConAnalysisV10964");
 patch(sheet,"        local_blob_state:stored.localDocument?.local_blob_state || '',","        local_blob_state:stored.localDocument?.local_blob_state || '',\n        extracted:{readerReviewV110345:storageFieldsV10964.readerReviewV110345},");
 let sheetSource=fs.readFileSync(sheet,'utf8');if(!sheetSource.includes('setReaderReviewV110345(null);')){sheetSource=sheetSource.replaceAll('setAnalysis(null);','setAnalysis(null);setReaderReviewV110345(null);').replace('    setAnalysis(result);','    setReaderReviewV110345(null);\n    setAnalysis(result);');fs.writeFileSync(sheet,sheetSource);}

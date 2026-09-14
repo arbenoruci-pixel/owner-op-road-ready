@@ -274,6 +274,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByLabel('Document type in reader',{exact:true}).selectOption('bol');
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     await review.getByRole('heading',{name:'BOL number · Page 1',exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
+    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'','manual type recovery does not assign a load');
     await review.getByLabel('Confirmed value',{exact:true}).fill('MANUAL-345');
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     await review.getByRole('heading',{name:'Shipper · Page 1',exact:true}).waitFor();
@@ -290,6 +292,13 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.equal(storedReview.documents[0].fields.bolNumber.value,'MANUAL-345');
     assert.deepEqual(storedReview.documents[0].pages,[1]);
     assert.equal(storedReview.trainingEligible,false);assert.ok(storedReview.remaining>0);
+    await page.getByRole('button',{name:/^Documents/}).first().click();
+    await page.getByRole('heading',{name:'Recent documents',exact:true}).waitFor();
+    const recentReview=page.getByRole('region',{name:'Recent documents'});
+    await recentReview.locator('.saved-document-row-v344').first().click();
+    await recentReview.getByText('Reviewed document details',{exact:true}).click();
+    await recentReview.getByText('MANUAL-345',{exact:true}).waitFor();
+    await recentReview.screenshot({path:`${output}/${name}-saved-corrections.png`});
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){

@@ -39,3 +39,13 @@ test('receipt header date survives a missing colon and qualified dates remain ex
  const result=input('RECEIPT\nLOAD DETAILS\nLOAD DESCRIPTION: Breakdown\nCHECKOUT FEE\nPRINTED DATE 18-Aug-2026\nDELIVERY DATE 19-Aug-2026');
  assert.equal(result.documents[0].fields.receiptDate.candidates.length,0);
 });
+
+test('manual type applies only to a single document and uses supported filing types',async()=>{
+ const {filingTypeForReview}=await import('../src/recovery.js');
+ const group=kind=>({kind,typeCorrection:{confirmed:true}});
+ assert.equal(filingTypeForReview({documents:[group('bol')]}),'bol');
+ assert.equal(filingTypeForReview({documents:[group('invoice')]}),'other');
+ assert.equal(filingTypeForReview({documents:[group('unloading_receipt')]}),'lumper_receipt');
+ assert.equal(filingTypeForReview({documents:[group('bol'),group('invoice')]}),null);
+ assert.equal(filingTypeForReview({documents:[{kind:'bol'}]}),null);
+});
