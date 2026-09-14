@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
+import {shippingLayoutInput} from '../packages/smart-reader-core/test/shipping-layout-fixture.mjs';
 
 const output='browser-test-results/owned-reader';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
@@ -18,6 +19,14 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       const defaultLines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
       window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
+        if(window.__ownedReaderLayout){
+          const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
+          const lines=structuredClone(window.__ownedReaderLayout);
+          if(window.__ownedReaderCalls%2===0)lines.find(line=>line.text==='Example Foods Ing').text='Example Foods Inc';
+          const header='level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext';
+          const rows=lines.map((line,i)=>`5\t1\t1\t1\t${i+1}\t1\t${Math.round(line.box.x*width)}\t${Math.round(line.box.y*height)}\t${Math.max(1,Math.round(line.box.width*width))}\t${Math.max(1,Math.round(line.box.height*height))}\t${line.confidence*100}\t${line.text}`);
+          return {data:{text:lines.map(line=>line.text).join('\n'),confidence:70,tsv:[header,...rows].join('\n')}};
+        }
         const lines=window.__ownedReaderLines||defaultLines;
         const bitmap=await createImageBitmap(file),scaleX=bitmap.width/700,scaleY=bitmap.height/1000;bitmap.close();
         const measure=document.createElement('canvas').getContext('2d');measure.font='24px Arial';
@@ -102,6 +111,41 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
     await warning.waitFor({state:'hidden'});
     await review.getByText('118.25',{exact:true}).waitFor();
+    // Real two-column OCR lines pass through the phone adapter and source UI.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{
+      localStorage.clear();
+      await new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');request.onsuccess=resolve;request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Previous fixture database is still open'));});
+    });
+    await seed(page,state);
+    const layout=shippingLayoutInput().pages[0].observations[0].lines;
+    const layoutPhoto=await page.evaluate(async lines=>{
+      window.__ownedReaderLayout=lines;window.__ownedReaderCalls=0;
+      const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';
+      for(const line of lines){ctx.font=`${Math.max(1,line.box.height*1000)}px Arial`;ctx.fillText(line.text.replace('Example Foods Ing','Example Foods Inc'),line.box.x*700,(line.box.y+line.box.height)*1000,line.box.width*700);}
+      return [...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())];
+    },layout);
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'shipping-layout.jpg',mimeType:'image/jpeg',buffer:Buffer.from(layoutPhoto)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByRole('heading',{name:'Bill of lading · 1',exact:true}).waitFor();
+    assert.equal(await page.locator('.scan-evidence-value-v11038').filter({hasText:/^(garbled barcode|1200)$/}).count(),0,'flattened column guesses are absent from filing evidence');
+    await review.getByRole('button',{name:'Example Foods Inc · Page 1',exact:true}).click();
+    const sourceTop=await review.getByLabel('Source line highlight',{exact:true}).evaluate(el=>parseFloat(el.style.top));
+    assert.ok(Math.abs(sourceTop-11.8)<.2,'source highlight points below the centered shipping label');
+    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    const layoutDownload=page.waitForEvent('download');
+    await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const layoutFile=await layoutDownload,layoutResult=JSON.parse(fs.readFileSync(await layoutFile.path(),'utf8'));
+    assert.equal(layoutResult.pageCount,1);
+    assert.equal(layoutResult.documents[0].fields.shipper.status,'confirmed');
+    assert.equal(layoutResult.documents[0].fields.trailerNumber.value,null);
+    assert.equal(layoutResult.documents[0].fields.documentDate.value,null);
+    assert.equal(layoutResult.corrections[0].trainingEligible,false);
+    assert.ok(layoutResult.documents[0].fields.shipper.candidates.some(candidate=>candidate.labelEvidence?.length));
+    await page.screenshot({path:`${output}/${name}-shipping-layout.png`,fullPage:true});
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){

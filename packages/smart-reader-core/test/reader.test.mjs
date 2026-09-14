@@ -1,11 +1,64 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readDocument,textObservation,resolveEvidence,buildRereadRequests,confirmField,exportCorrections,rereadRegions} from '../src/index.js';
+import {shippingLayoutInput} from './shipping-layout-fixture.mjs';
 
 const invoice=(id='INV-17',extra='')=>`INVOICE\nInvoice No: ${id}\nVendor: Example Company\nDate: 2026-09-13\nSubtotal: 100.00\nTax: 8.25\nTotal: 108.25\nCurrency: USD${extra}`;
 const bol=(id='BOL-42',extra='')=>`BILL OF LADING\nBOL No: ${id}\nShip From: Example Shipper\nShip To: Example Receiver\nWeight: 12000 LB${extra}`;
 const page=(text,id='p1')=>({id,observations:[textObservation(text)]});
 const read=(...pages)=>readDocument({documentId:'doc-1',pages});
+
+test('non-negotiable headings and interleaved shipping blocks retain exact evidence and uncertainty',()=>{
+  const result=readDocument(shippingLayoutInput()),group=result.documents[0];
+  assert.equal(group.kind,'bol');assert.equal(result.pageCount,1);
+  assert.equal(group.fields.bolNumber.status,'missing');
+  assert.equal(group.fields.documentDate.status,'missing','unlabeled and commodity dates are not document dates');
+  assert.equal(group.fields.trailerNumber.status,'missing','a street number in the other column is not a trailer');
+  assert.deepEqual(group.fields.shipper.candidates.map(c=>c.rawValue).sort(),['Example Foods Ing','Example Foods Inc','Signature/Date Trailer Loaded: Freight Counted:'].sort());
+  assert.equal(group.fields.shipper.value,null);
+  assert.ok(group.fields.shipper.issues.includes('conflicting_reads'));
+  assert.ok(group.fields.shipper.issues.includes('layout_needs_review'));
+  assert.equal(group.fields.consignee.status,'needs_review');
+  assert.ok(group.fields.consignee.issues.includes('weak_recognition'));
+  for(const field of Object.values(group.fields))for(const candidate of field.candidates)for(const evidence of [...candidate.evidence,...(candidate.labelEvidence||[])]){
+    const {line}=resolveEvidence(result,evidence);assert.equal(evidence.quote,line.text.slice(evidence.start,evidence.end));
+  }
+  const candidate=group.fields.shipper.candidates.find(c=>c.rawValue==='Example Foods Inc');
+  const corrected=confirmField(result,{documentId:result.documentId,groupId:group.id,field:'shipper',rawValue:'Example Foods Inc',evidence:candidate.evidence[0],userConfirmed:true,expectedRevision:0,expectedRawValues:group.fields.shipper.candidates.map(c=>c.rawValue)});
+  assert.equal(corrected.documents[0].fields.shipper.status,'confirmed');
+  assert.equal(corrected.documents[0].fields.shipper.value,'Example Foods Inc');
+  assert.equal(corrected.documents[0].canAutoFile,false);
+});
+
+test('shipping block geometry never skips an unreadable first row or guesses a central column',()=>{
+  for(const mode of ['no-boxes','central-label','address-only','side-by-side']){
+    const input=shippingLayoutInput();input.pages[0].observations.splice(1);
+    const lines=input.pages[0].observations[0].lines;
+    // Keep the title within the text-only heading window for this test.
+    lines.splice(0,24);
+    lines.splice(lines.findIndex(line=>line.text.startsWith('Shipper Signature')),1);
+    const label=lines.find(line=>line.text==='SHIP FROM'),name=lines.find(line=>line.text==='Example Foods Ing');
+    if(mode==='no-boxes')for(const line of lines)delete line.box;
+    if(mode==='central-label')label.box.x=.46;
+    if(mode==='address-only')lines.splice(lines.indexOf(name),1);
+    if(mode==='side-by-side')lines.push({...structuredClone(name),text:'Other Company',box:{...name.box,x:.30,width:.15}});
+    const field=readDocument(input).documents[0].fields.shipper;
+    assert.equal(field.status,'missing',mode);
+    assert.equal(field.value,null,mode);
+  }
+});
+
+test('multiword street names, common suffixes and PO boxes cannot become party proposals',()=>{
+  for(const address of ['123 North Main Street','123 Main Boulevard','123 N Main St. Suite 2','44 South County Road 10','95 Industrial Parkway','5 East Oak Lane','P.O. Box 42']){
+    const input=shippingLayoutInput();
+    for(const observation of input.pages[0].observations){
+      observation.lines=observation.lines.filter(line=>!line.text.startsWith('Shipper Signature'));
+      observation.lines.find(line=>line.text.startsWith('Example Foods')).text=address;
+    }
+    const field=readDocument(input).documents[0].fields.shipper;
+    assert.equal(field.status,'missing',address);assert.equal(field.candidates.length,0,address);
+  }
+});
 
 test('invoice extraction has exact resolvable source ranges and safe arithmetic',()=>{
   const result=read(page(invoice()));
