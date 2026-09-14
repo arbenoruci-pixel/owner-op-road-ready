@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {mergedReceiptInput} from '../packages/smart-reader-core/test/merged-receipt-fixture.mjs';
+import {reviewScanAnalysis} from '../source/src/modules/scan/ownedReaderAdapter.js';
+import {extraPageIdentity} from '../source/src/modules/scan/ownedPageIdentityV110338.js';
+import {guardDocumentReading} from '../source/src/modules/scan/documentFieldGuardsV110336.js';
+const input=mergedReceiptInput(),o=input.pages[0].observations[0];
+const pass={id:o.id,page:1,text:o.lines.map(l=>l.text).join('\n'),lines:o.lines.map(l=>({text:l.text,confidence:l.confidence*100,left:l.box.x*1000,top:l.box.y*1000,width:l.box.width*1000,height:l.box.height*1000}))};
+const result=reviewScanAnalysis({pageCount:1,ocrEvidenceV110323:[pass]},{dimensions:{[`page-1:${o.id}`]:{width:1000,height:1000}}}),doc=result.documents[0];
+assert.equal(doc.kind,'unloading_receipt');assert.equal(doc.fields.receiptNumber.value,'R-17');assert.equal(doc.fields.poNumber.value,'ORDER-22');assert.equal(doc.fields.total.value,'185.00');assert.equal(doc.checks[0].status,'passed');
+assert.equal(extraPageIdentity(pass.text).typeId,'lumper_receipt');
+assert.equal(guardDocumentReading({fields:{shipper:'Bill of Lading Number: B-22'}}).fields.shipper,'');
+console.log('PASS — merged receipt rows reach phone review with exact amounts, routing identity and company label guards');

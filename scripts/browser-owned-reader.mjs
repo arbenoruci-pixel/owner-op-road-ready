@@ -6,6 +6,7 @@ import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
 import {shippingLayoutInput} from '../packages/smart-reader-core/test/shipping-layout-fixture.mjs';
 import {noisyPageInput} from '../packages/smart-reader-core/test/noisy-page-fixture.mjs';
+import {mergedReceiptInput} from '../packages/smart-reader-core/test/merged-receipt-fixture.mjs';
 
 const output='browser-test-results/owned-reader';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
@@ -158,6 +159,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     });
     await seed(page,state);
     const packet=noisyPageInput().pages.map(p=>p.observations.map(o=>o.lines));
+    packet[2]=mergedReceiptInput().pages[0].observations.map(o=>o.lines);
+    packet[0][0].push({text:'SHIP FROM Bill of Lading Number: B-22',confidence:.95,box:{x:.05,y:.10,width:.85,height:.012}});
     packet[1][0].push({text:'CARRIER: Example Logistics SALES ORDER: ORDER-778',confidence:.95,box:{x:.04,y:.18,width:.90,height:.012}},
       {text:'FROM: Northern Foods DELIVERY: DELIVERY-321',confidence:.95,box:{x:.04,y:.20,width:.90,height:.012}});
     packet[2][0].push({text:'Trailer No: T-700 Restacks: 0',confidence:.95,box:{x:.12,y:.45,width:.65,height:.012}});
@@ -199,7 +202,9 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const packetFile=await packetDownload,packetResult=JSON.parse(fs.readFileSync(await packetFile.path(),'utf8'));
     assert.deepEqual(packetResult.documents.map(d=>d.kind),['bol','bol','unloading_receipt']);
-    assert.ok(packetResult.documents.every(d=>d.identityStatus==='needs_review'),'noisy and combined type evidence stays reviewable');
+    assert.ok(packetResult.documents.slice(0,2).every(d=>d.identityStatus==='needs_review'),'noisy and combined type evidence stays reviewable');
+    assert.equal(packetResult.documents[2].identityStatus,'supported','explicit receipt evidence survives merged OCR rows');
+    assert.equal(await review.getByRole('button',{name:/Bill of Lading Number:/}).count(),0,'a form label cannot be offered as a company');
     assert.ok(packetResult.pageIdentities[1].evidence.some(v=>v.method==='combined_observations'),'the UI combines clues from retries of the same page');
     assert.equal(packetResult.documents[2].fields.total.value,'195.00');
     assert.equal(packetResult.documents[2].fields.fee.value,'15.00');
