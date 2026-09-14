@@ -32,8 +32,8 @@ async function seedMetadata(page) {
       const db=request.result, tx=db.transaction(['documents_local','document_blobs'],'readwrite'), docs=tx.objectStore('documents_local'), rows=docs.getAll();
       rows.onsuccess=()=>{for(const row of rows.result) {
         const number=Number(row.local_id.match(/example-(\d+)/)[1]);
-        docs.put({...row,load_no:'',extracted:{type:'rate_confirmation'},classification:{confidence:.95},created_at:new Date(Date.UTC(2026,8,14,8,number)).toISOString(),original_file_name:number===41?'three-page-scan.pdf':number===40?'missing-original.pdf':number===0?'very-long-original-file-name-'.repeat(12)+'.pdf':'scanned-document.pdf'});
-      }tx.objectStore('document_blobs').delete('example-40-blob');};
+        docs.put({...row,load_no:'',extracted:{type:'rate_confirmation'},classification:{confidence:.95},created_at:new Date(Date.UTC(2026,8,14,8,number)).toISOString(),original_file_name:number===41?'three-page-scan.pdf':number===40?'missing-original.pdf':number===39?'cloud-original.pdf':number===0?'very-long-original-file-name-'.repeat(12)+'.pdf':'scanned-document.pdf',...(number===39?{sync_state:'synced',local_blob_state:'cloud_only',storage_path:'driver-example/wallet/cloud-original.pdf'}:{})});
+      }tx.objectStore('document_blobs').delete('example-40-blob');tx.objectStore('document_blobs').delete('example-39-blob');};
       tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);
     };
   }));
@@ -55,6 +55,13 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
   const page=await context.newPage(), errors=[];page.setDefaultTimeout(30000);page.on('pageerror',error=>errors.push(error.message));
   try {
     await setupRoutes(context);
+    let cloudRequests=0, cloudFailure=false;
+    await context.route('**/api/documents/read-original', async route => {
+      cloudRequests++;
+      assert.equal(route.request().headers().authorization,'Bearer synthetic-document-token');
+      assert.deepEqual(route.request().postDataJSON(),{client_document_id:'example-39-client'});
+      return route.fulfill(cloudFailure?{status:503,json:{error:'unavailable'}}:{status:200,contentType:'application/pdf',body:original});
+    });
     const state=baseState();state.view='logbook';state.testInstructionStore={loads:[],documents:[]};
     await seed(page,state,Array.from({length:42},(_,i)=>({id:`example-${i}`,bytes:Array.from(i===41?original:simplePdf(`EXAMPLE ORIGINAL ${i}`))})));
     await seedMetadata(page);
@@ -106,6 +113,33 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await recent.locator('.saved-document-row-v344').click();await pdfLink.waitFor();
     assert.equal(await recent.getByRole('button',{name:'Share / Save to Files',exact:true}).count(),0);
     await recent.getByRole('link',{name:'Download',exact:true}).waitFor();
+    assert.equal(cloudRequests,0,'local originals open without a cloud request');
+    await search.fill('cloud-original');
+    await page.evaluate(()=>{
+      window.ownerOpGetAccessToken=async()=>null;window.__shareCancel=false;
+      Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+      Object.defineProperty(navigator,'onLine',{configurable:true,value:false});
+    });
+    await recent.locator('.saved-document-row-v344').click();
+    await recent.getByRole('alert').filter({hasText:'Connect to the internet'}).waitFor();assert.equal(cloudRequests,0);
+    await page.evaluate(()=>Object.defineProperty(navigator,'onLine',{configurable:true,value:true}));
+    await recent.getByRole('button',{name:'Try again',exact:true}).click();
+    await recent.getByRole('alert').filter({hasText:'Sign in'}).waitFor();assert.equal(cloudRequests,0);
+    await page.evaluate(()=>{window.ownerOpGetAccessToken=async()=>'synthetic-document-token';});
+    cloudFailure=true;
+    await recent.getByRole('button',{name:'Try again',exact:true}).click();
+    await recent.getByRole('alert').filter({hasText:'Could not retrieve the cloud original'}).waitFor();
+    cloudFailure=false;
+    await recent.getByRole('button',{name:'Try again',exact:true}).click();await pdfLink.waitFor();
+    assert.match(await recent.innerText(),/Original opened from cloud/);
+    const cloudBytes=await pdfLink.evaluate(async link=>Array.from(new Uint8Array(await(await fetch(link.href)).arrayBuffer())));
+    assert.deepEqual(Buffer.from(cloudBytes),original,'cloud-only file opens the exact original after a retry');
+    await recent.getByRole('button',{name:'Share / Save to Files',exact:true}).click();
+    await page.waitForFunction(()=>window.__sharedOriginal?.name==='cloud-original.pdf');
+    assert.deepEqual(Buffer.from((await page.evaluate(()=>window.__sharedOriginal)).bytes),original);
+    const cloudDownload=page.waitForEvent('download');await recent.getByRole('link',{name:'Download',exact:true}).click();
+    assert.deepEqual(fs.readFileSync(await(await cloudDownload).path()),original);
+    assert.equal(cloudRequests,2);
     assert.deepEqual(await localRows(page),before,'view/share/download leave every saved record unchanged');
     assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),storeBefore);
     assert.deepEqual(await page.evaluate(()=>window.__reviewActions),[]);
@@ -123,7 +157,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     const reloaded=await pdfLink.evaluate(async link=>Array.from(new Uint8Array(await(await fetch(link.href)).arrayBuffer())));
     assert.deepEqual(Buffer.from(reloaded),original,'the same original opens after reload');
     assert.deepEqual(errors,[]);reports.push({browser:name,passed:true});
-    console.log(`PASS — ${name}: 42 review documents, recent files, three-page original open/share/download, missing file, reload and 320/390/430 layout`);
+    console.log(`PASS — ${name}: 42 review documents, recent files, three-page original open/share/download, missing file, authenticated cloud-only recovery, reload and 320/390/430 layout`);
   } catch(error) {
     await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});
     reports.push({browser:name,passed:false,error:String(error),stack:error.stack,pageErrors:errors});console.error(error);

@@ -24,16 +24,35 @@ export function SavedFileActionsV110344({document: doc}) {
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const [sharing, setSharing] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Opening saved file…');
   const id = identity(doc || {});
   const name = fileName(doc || {});
   const mime = text(doc?.mime_type);
+  const cloudAvailable = Boolean(doc?.storage_path || doc?.sync_state === 'synced' || doc?.local_blob_state === 'cloud_only');
   useEffect(() => {
-    let active = true, url = '';
+    let active = true, url = '', timer;
+    const controller = new AbortController();
     setReady(null); setError(''); setSharing(false);
+    setLoadingMessage('Opening saved file…');
     (async () => {
       try {
-        const blob = await vaultBlobV102({client_document_id: doc?.client_document_id});
+        let blob, source = 'device';
+        try { blob = await vaultBlobV102({client_document_id: doc?.client_document_id}); }
+        catch (failure) { if (!cloudAvailable) throw failure; }
         if (!active) return;
+        if (!blob?.size && cloudAvailable) {
+          if (navigator.onLine === false) { setError('This original is saved in cloud storage. Connect to the internet, then try again.'); return; }
+          setLoadingMessage('Downloading original from cloud…');
+          const token = await window.ownerOpGetAccessToken?.();
+          if (!active) return;
+          if (!token) { setError('Sign in to the account that saved this cloud file, then try again.'); return; }
+          timer = setTimeout(() => controller.abort(), 30000);
+          const response = await fetch('/api/documents/read-original', {method:'POST', headers:{Authorization:`Bearer ${token}`, 'Content-Type':'application/json'}, body:JSON.stringify({client_document_id:doc.client_document_id}), cache:'no-store', signal:controller.signal});
+          if (!active) return;
+          if (!response.ok) { setError([401,403].includes(response.status) ? 'Sign in to the account that saved this cloud file, then try again.' : 'Could not retrieve the cloud original. Try again when your connection is ready.'); return; }
+          blob = await response.blob(); source = 'cloud';
+          if (!active) return;
+        }
         if (!blob?.size) { setError('The original file is unavailable on this device. Try the device where you saved it, or add the original again.'); return; }
         const type = blob.type || mime || 'application/octet-stream';
         const extension = type === 'application/pdf' ? '.pdf' : type === 'image/jpeg' ? '.jpg' : type === 'image/png' ? '.png' : '';
@@ -43,11 +62,12 @@ export function SavedFileActionsV110344({document: doc}) {
         url = URL.createObjectURL(file);
         let canShare = false;
         try { canShare = Boolean(navigator.share && navigator.canShare?.({files:[file]})); } catch {}
-        setReady({id, name, url, file, canShare, pdf:type === 'application/pdf'});
+        setReady({id, name, url, file, canShare, source, pdf:type === 'application/pdf'});
       } catch { if (active) setError('Could not open the saved file. Try again.'); }
+      finally { clearTimeout(timer); }
     })();
-    return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [id, name, mime, doc?.client_document_id, retry]);
+    return () => { active = false; controller.abort(); clearTimeout(timer); if (url) URL.revokeObjectURL(url); };
+  }, [id, name, mime, doc?.client_document_id, cloudAvailable, retry]);
 
   async function share() {
     if (!ready || sharing) return;
@@ -59,9 +79,9 @@ export function SavedFileActionsV110344({document: doc}) {
   }
   const current = ready?.id === id && ready?.name === name ? ready : null;
   return <div className="saved-file-actions-v344" aria-label="Saved file actions">
-    {!current && !error ? <p role="status">Opening saved file…</p> : null}
+    {!current && !error ? <p role="status">{loadingMessage}</p> : null}
     {current ? <>
-      <p>Original available on this device.</p>
+      <p>{current.source === 'cloud' ? 'Original opened from cloud. Download a copy to keep it on this phone.' : 'Original available on this device.'}</p>
       <div className="saved-file-buttons-v344">
         <a href={current.url} target="_blank" rel="noopener noreferrer">{current.pdf ? 'Open PDF' : 'Open file'}</a>
         {current.canShare ? <button type="button" disabled={sharing} onClick={share}>{sharing ? 'Opening share…' : 'Share / Save to Files'}</button> : null}

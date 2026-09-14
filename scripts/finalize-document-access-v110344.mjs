@@ -10,6 +10,10 @@ function patch(path, before, after) {
 for (const file of ['SavedDocumentFilesV110344.jsx', 'savedDocumentFilesV110344.css']) {
   fs.copyFileSync(`scripts/v110344/${file}`, `source/src/modules/owneros/${file}`);
 }
+fs.mkdirSync('lib/documents', {recursive:true});
+fs.mkdirSync('app/api/documents/read-original', {recursive:true});
+fs.copyFileSync('scripts/v110344/readOriginalDocumentV110344.js', 'lib/documents/readOriginalDocumentV110344.js');
+fs.copyFileSync('scripts/v110344/read-original-route.js', 'app/api/documents/read-original/route.js');
 const folders = 'source/src/modules/owneros/LoadFoldersV10969.jsx';
 patch(folders, "import './loadFolderReviewV10974.css';", "import './loadFolderReviewV10974.css';\nimport SavedDocumentFilesV110344 from './SavedDocumentFilesV110344.jsx';");
 patch(folders,
@@ -30,6 +34,9 @@ patch(scan, '      setSaved(savedViewV10964);', `      savedViewV10964.fileDocum
         client_document_id:stored.localDocument?.client_document_id || '',
         original_file_name:stored.localDocument?.original_file_name || record.fileName || '',
         mime_type:stored.localDocument?.mime_type || '',
+        sync_state:stored.localDocument?.sync_state || '',
+        storage_path:stored.localDocument?.storage_path || stored.cloud?.storagePath || '',
+        local_blob_state:stored.localDocument?.local_blob_state || '',
       };
       setSaved(savedViewV10964);`);
 patch(scan, '        <h1>{saved.meta.label}</h1>', `        <h1>{saved.meta.label}</h1>
