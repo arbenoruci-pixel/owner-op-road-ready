@@ -55,6 +55,19 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
   const page=await context.newPage(), errors=[];page.setDefaultTimeout(30000);page.on('pageerror',error=>errors.push(error.message));
   try {
     await setupRoutes(context);
+    await context.addInitScript(()=>{
+      window.__savedReadCalls=0;
+      const lines=['BILL OF LADING','BOL No: BOL-347','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
+      window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async(file)=>{
+        window.__savedReadCalls++;
+        if(window.__savedReadFail)throw new Error('Synthetic OCR failure');
+        const image=await createImageBitmap(file),sx=image.width/700,sy=image.height/1000;image.close();
+        const rows=['level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext'];
+        lines.forEach((text,i)=>rows.push(`5\t1\t1\t1\t${i+1}\t1\t${30*sx}\t${(40+i*65)*sy}\t${500*sx}\t${24*sy}\t96\t${text}`));
+        return {data:{text:lines.join('\n'),confidence:96,tsv:rows.join('\n')}};
+      }})};
+    });
+
     let cloudRequests=0, cloudFailure=false;
     await context.route('**/api/documents/read-original', async route => {
       cloudRequests++;
@@ -156,6 +169,74 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await recent.locator('.saved-document-row-v344').first().click();await pdfLink.waitFor();
     const reloaded=await pdfLink.evaluate(async link=>Array.from(new Uint8Array(await(await fetch(link.href)).arrayBuffer())));
     assert.deepEqual(Buffer.from(reloaded),original,'the same original opens after reload');
+
+    // Reread the stored multi-page PDF in place. Cancel has no side effects;
+    // explicit Save reading updates the same local record, never a second scan.
+    await recent.getByRole('button',{name:'Read again',exact:true}).click();
+    const reread=recent.getByRole('region',{name:'Read saved document again'});
+    await reread.getByRole('button',{name:'Export reading review',exact:true}).waitFor();
+    const exported=page.waitForEvent('download');await reread.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const firstRead=JSON.parse(fs.readFileSync(await(await exported).path(),'utf8'));
+    assert.equal(firstRead.pageCount,3);assert.equal(firstRead.pages.length,3);
+    await reread.getByRole('button',{name:'Cancel reading',exact:true}).click();
+    assert.deepEqual(await localRows(page),before,'cancel preserves the previous reading and every record');
+    await recent.getByRole('button',{name:'Read again',exact:true}).click();
+    await reread.getByRole('button',{name:'Save reading',exact:true}).waitFor();
+    await page.waitForFunction(()=>!document.querySelector('.saved-reread-v347 button')?.disabled);
+    await reread.getByRole('button',{name:'Save reading',exact:true}).click();
+    await reread.getByRole('status').filter({hasText:'Reading saved with this document'}).waitFor();
+    const afterRead=await localRows(page), changed=afterRead.find(r=>r.local_id==='example-41-local'), prior=before.find(r=>r.local_id===changed.local_id);
+    assert.equal(afterRead.length,42);assert.equal(changed.extracted.readerReviewV110345.pageCount,3);
+    assert.deepEqual({...changed,extracted:prior.extracted},prior,'rereading retains load, dates, type, identity and original metadata');
+    assert.deepEqual(afterRead.filter(r=>r.local_id!==changed.local_id),before.filter(r=>r.local_id!==changed.local_id));
+    assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),storeBefore,'rereading never changes business records or logbook links');
+    await reread.getByRole('button',{name:'Close reading',exact:true}).click();
+    await page.reload();await page.locator('.adaptive-home-v1038').waitFor();await openDocuments(page);
+    await recent.locator('.saved-document-row-v344').first().click();await pdfLink.waitFor();
+    await recent.locator('.saved-reading-review-v345 summary').click();
+    assert.match(await recent.locator('.saved-reading-review-v345').innerText(),/Page [\d, ]*3/);
+    assert.match(await recent.locator('.saved-reading-review-v345').innerText(),/Check reading/);
+    assert.deepEqual(Buffer.from(await pdfLink.evaluate(async a=>Array.from(new Uint8Array(await(await fetch(a.href)).arrayBuffer())))),original,'saving a reading preserves all original PDF bytes');
+    await page.screenshot({path:`${output}/${name}-reread-saved.png`});
+
+    // A saved image must run OCR again rather than reopen its cached result.
+    await page.evaluate(async()=>{
+      const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
+      ['BILL OF LADING','BOL No: BOL-347','Ship From: Example Shipper','Ship To: Example Receiver'].forEach((s,i)=>ctx.fillText(s,30,64+i*65));
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{
+        const db=r.result,tx=db.transaction(['documents_local','document_blobs'],'readwrite'),docs=tx.objectStore('documents_local'),get=docs.get('example-38-local');
+        get.onsuccess=()=>docs.put({...get.result,mime_type:'image/png',original_file_name:'reread-image.png',load_no:'LOAD-347'});
+        tx.objectStore('document_blobs').put({local_blob_id:'example-38-blob',client_document_id:'example-38-client',blob});
+        tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);
+      };r.onerror=()=>reject(r.error);});
+    });
+    await page.reload();await page.locator('.adaptive-home-v1038').waitFor();await openDocuments(page);
+    await recent.getByRole('searchbox').fill('reread-image');await recent.locator('.saved-document-row-v344').click();
+    await recent.getByRole('link',{name:'Open file',exact:true}).waitFor();
+    const imageBefore=await localRows(page);
+    await recent.getByRole('button',{name:'Read again',exact:true}).click();
+    await reread.getByRole('button',{name:'Export reading review',exact:true}).waitFor();
+    assert.match(await reread.innerText(),/Bill of lading/);
+    const firstCalls=await page.evaluate(()=>window.__savedReadCalls);assert.ok(firstCalls>0);
+    for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await fit(page,reread);}
+    await reread.getByRole('button',{name:'Cancel reading',exact:true}).click();
+    assert.deepEqual(await localRows(page),imageBefore);
+    await recent.getByRole('button',{name:'Read again',exact:true}).click();
+    await reread.getByRole('button',{name:'Export reading review',exact:true}).waitFor();
+    assert.ok(await page.evaluate(()=>window.__savedReadCalls)>firstCalls,'second click performs fresh OCR');
+    await reread.getByRole('button',{name:'Cancel reading',exact:true}).click();
+    await page.evaluate(()=>window.__savedReadFail=true);
+    await recent.getByRole('button',{name:'Read again',exact:true}).click();
+    await reread.getByRole('alert').filter({hasText:'Could not read this file'}).waitFor();
+    assert.equal(await reread.getByRole('button',{name:'Save reading',exact:true}).count(),0,'failed OCR cannot replace a saved reading');
+    assert.deepEqual(await localRows(page),imageBefore);
+    await page.evaluate(()=>window.__savedReadFail=false);
+    await reread.getByRole('button',{name:'Try again',exact:true}).click();
+    await reread.getByRole('button',{name:'Export reading review',exact:true}).waitFor();
+    assert.match(await reread.innerText(),/Bill of lading/);
+    await page.screenshot({path:`${output}/${name}-reread-image.png`});
     assert.deepEqual(errors,[]);reports.push({browser:name,passed:true});
     console.log(`PASS — ${name}: 42 review documents, recent files, three-page original open/share/download, missing file, authenticated cloud-only recovery, reload and 320/390/430 layout`);
   } catch(error) {
