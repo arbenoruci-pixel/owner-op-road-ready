@@ -80,6 +80,14 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     const stored=await page.evaluate(async()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction(['document_blobs','capture_asset_blobs'],'readonly'),primary=tx.objectStore('document_blobs').getAll(),assets=tx.objectStore('capture_asset_blobs').getAll();tx.oncomplete=async()=>{try{const main=primary.result.find(row=>row.blob?.type==='application/pdf');resolve({primary:main?Array.from(new Uint8Array(await main.blob.arrayBuffer())):null,assets:await Promise.all(assets.result.filter(row=>row.blob||row.file).map(async row=>({...row,blob:undefined,file:undefined,bytes:Array.from(new Uint8Array(await(row.blob||row.file).arrayBuffer()))}))),store:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1'))});}catch(e){reject(e);}finally{db.close();}};};}));
     assert.ok(stored.primary,'multipage PDF is durable');
     const savedPdf=await PDFDocument.load(new Uint8Array(stored.primary));assert.equal(savedPdf.getPageCount(),2);
+    // The actual save confirmation opens the same durable multipage PDF.
+    const savedLocation=page.locator('.scan-saved-location-v344');
+    assert.match(await savedLocation.innerText(),/Documents → Recent documents/);
+    const savedFile=savedLocation.getByRole('link',{name:'Open PDF',exact:true});await savedFile.waitFor();
+    const savedBytes=await savedFile.evaluate(async link=>Array.from(new Uint8Array(await(await fetch(link.href)).arrayBuffer())));
+    assert.deepEqual(savedBytes,stored.primary,'save confirmation links to the complete stored original');
+    await savedLocation.scrollIntoViewIfNeeded();
+    await page.screenshot({path:`${output}/${name}-saved-file.png`});
     // Original source bytes survive every edit and reorder.
     for(const [index,original] of images.entries()){const asset=stored.assets.find(asset=>Buffer.from(asset.bytes).equals(Buffer.from(original)));assert.ok(asset,'original capture bytes are preserved');assert.equal(asset.page_index,1-index,'capture assets follow the reviewed page order');}
     await page.getByRole('button',{name:'Scan another',exact:true}).click();
