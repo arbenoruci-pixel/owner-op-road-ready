@@ -1,12 +1,14 @@
-import {readDocument} from './engine.js';
+import {readDocument,fieldsForProfile} from './engine.js';
 import {textObservation} from './input.js';
-import {PROFILES,normalizeValue} from './profiles.js';
 import {separateWordColumns} from './wordLayout.js';
-import {fieldMatches} from './layout.js';
 
 function passObservation(pass,index){
   const id=String(index),size=pass.imageSize;
-  if(!size||![size.width,size.height].every(n=>Number.isFinite(n)&&n>0)||!pass.lines?.length)return textObservation(pass.text||'',{id});
+  if(!size||![size.width,size.height].every(n=>Number.isFinite(n)&&n>0)||!pass.lines?.length){
+    const observation=textObservation(pass.text||'',{id});
+    for(const line of observation.lines)line.confidence=Number.isFinite(pass.confidence)&&pass.confidence>=0&&pass.confidence<=1?pass.confidence:null;
+    return observation;
+  }
   return {id,sourceImageId:'coverage-'+id,lines:separateWordColumns(pass.lines,pass.words,size).map(line=>{
     const {left,top,width,height}=line,valid=[left,top,width,height].every(Number.isFinite)&&left>=0&&top>=0&&width>0&&height>0&&left+width<=size.width&&top+height<=size.height;
     return {text:String(line.text||''),confidence:Number.isFinite(line.confidence)&&line.confidence>=0&&line.confidence<=100?line.confidence/100:null,
@@ -22,9 +24,9 @@ export function needsReadingRetry(passes){
 }
 
 export function hasReadableBolReference(passes){
-  const spec=PROFILES.find(p=>p.id==='bol').fields.bolNumber;
-  return passes.some((pass,i)=>fieldMatches(passObservation(pass,i).lines,spec).some(match=>
-    !match.issue&&normalizeValue('identifier',match.line.text.slice(match.start,match.end)).value!==null));
+  const pages=[{id:'coverage',number:1,observations:passes.map(passObservation)}];
+  const field=fieldsForProfile(pages,'bol').bolNumber;
+  return field.status==='supported'&&field.candidates.every(candidate=>candidate.evidence.every(e=>e.recognizerConfidence!==null&&e.recognizerConfidence>=.8));
 }
 
 // A damaged label can suggest a reread region, never an accepted value.
@@ -32,14 +34,23 @@ export function hasReadableBolReference(passes){
 export function planBolIdentifierRegion(words,size){
   if(!Array.isArray(words)||words.length>100000||!size||![size.width,size.height].every(n=>Number.isFinite(n)&&n>0))return null;
   const valid=words.filter(w=>typeof w.text==='string'&&[w.left,w.top,w.width,w.height].every(Number.isFinite)&&w.left>=0&&w.top>=0&&w.width>0&&w.height>0&&w.left+w.width<=size.width&&w.top+w.height<=size.height);
-  for(const label of valid){
-    if(label.top>size.height*.35||! /^(?:BOL|B\/?L|BAL)(?:[.:;]|NO\b|$)/i.test(label.text))continue;
+  const longLabels=[];
+  for(const bill of valid.filter(w=>/^Bill$/i.test(w.text)&&w.top<size.height*.35)){
+    const row=valid.filter(w=>w.left>=bill.left&&w.left<=bill.left+bill.height*12&&Math.abs(w.top-bill.top)<=bill.height*.7).sort((a,b)=>a.left-b.left);
+    const [first,of,lading]=row;
+    if(first!==bill||!/^of$/i.test(of?.text||'')||!/^Ladi(?:n|ng)?[.:]?$/i.test(lading?.text||''))continue;
+    if(of.left-bill.left-bill.width>bill.height*2||lading.left-of.left-of.width>bill.height*2)continue;
+    longLabels.push({...bill,width:lading.left+lading.width-bill.left,longForm:true});
+  }
+  for(const label of [...valid,...longLabels]){
+    if(label.top>size.height*.35||!label.longForm&&! /^(?:BOL|B\/?L|BAL)(?:[.:;]|NO\b|$)/i.test(label.text))continue;
     const neighbors=valid.filter(w=>w!==label&&w.left>=label.left&&w.left+w.width<=label.left+size.width*.38&&w.height<=label.height*2&&Math.abs(w.top-label.top)<=label.height*.7);
     // An explicit B/L number label is sufficient to inspect missing pixels.
     // A damaged bare label still needs numeric support to avoid broad guesses.
     const labelEnd=label.left+label.width;
-    const explicit=/^(?:BOL|B\/L)(?:[.:;]|$)/i.test(label.text)&&
+    const explicit=(label.longForm||/^(?:BOL|B\/L)(?:[.:;]|$)/i.test(label.text))&&
       neighbors.some(w=>/^(?:NO\.?|NUMBER|#)[:;]?$/.test(w.text.toUpperCase())&&w.left-labelEnd<=label.height*2);
+    if(label.longForm&&!explicit)continue;
     if(!explicit&&!neighbors.some(w=>/\d{3}/.test(w.text)))continue;
     const context=valid.filter(w=>w.left<label.left&&label.left-w.left-w.width<size.width*.25&&Math.abs(w.top-label.top)<=label.height*.7).map(w=>w.text).join(' ');
     if(/\b(?:previous|prior|old|attach|copy|reference|revised)\b/i.test(context))continue;

@@ -37,7 +37,7 @@ export const PROFILES = Object.freeze([
     structuralSignals:[/^\s*(?:SHIP\s*FROM|FROM)\s*:/i,/^\s*CONSIGNED(?:\s+TO)?\s*:?\s*$/i,/^\s*CARRIER\s*:/i,/^\s*TOTAL\s+(?:NET\s+)?WEIGHT\s*:/i,/\b(?:THIS|ORIGINAL)\s+BILL\s+OF\s+LADING\b/i],
     identity:'bolNumber',
     fields:{
-      bolNumber:{...field('BOL number',identifier('BOL|B/L|BILL OF LADING'),'identifier',true),inlineLabel:/(?:^|\|)[ \t]*(?:BOL|B\/L|BILL OF LADING)[ \t]*(?:NUMBER\b|NO\b\.?|ID\b|#|:)[ \t:#;]*/i,rightLabel:/^\s*(?:BOL|B\/L|BILL OF LADING)\s*(?:NUMBER\b|NO\b\.?|#)\s*[:;#]*\s*$/i,noisyPattern:/^[\s"'|]*(?:BAL|BL)(?:\s*NO\.?\s*[:;]\s*|\s+(?=\d{6,20}\s*$))([A-Z0-9][A-Z0-9._/-]{2,39})\s*$/id},
+      bolNumber:{...field('BOL number',identifier('BOL|B/L|BILL OF LADING'),'identifier',true),checkIdentifierFragments:true,inlineLabel:/(?:^|\|)[ \t]*(?:BOL|B\/L|BILL OF LADING)[ \t]*(?:NUMBER\b|NO\b\.?|ID\b|#|:)[ \t:#;]*/i,rightLabel:/^\s*(?:BOL|B\/L|BILL OF LADING)\s*(?:NUMBER\b|NO\b\.?|#)\s*[:;#]*\s*$/i,noisyPattern:/^[\s"'|]*(?:BAL|BL)(?:\s*NO\.?\s*[:;]\s*|\s+(?=\d{6,20}\s*$))([A-Z0-9][A-Z0-9._/-]{2,39})\s*$/id},
       shipper:{...beside('Shipper',labeled('SHIP[ \\t]*FROM|SHIPPER|FROM'),'party',/^\s*(?:SHIP\s*FROM|SHIPPER|FROM)\s*:\s*$/i,true),blockLabel:/^\s*(?:SHIP\s*FROM|SHIPPER)\s*[:.]*\s*$/i},
       consignee:{...beside('Consignee',labeled('SHIP[ \\t]*TO|CONSIGNEE|CONSIGNED TO'),'party',/^\s*(?:SHIP\s*TO|CONSIGNEE|CONSIGNED(?:\s+TO)?)\s*:?\s*$/i,true),blockLabel:/^\s*(?:SHIP\s*TO|CONSIGNEE)\s*[:.]*\s*$/i},
       carrier:beside('Carrier',labeled('CARRIER(?: NAME)?'),'party',/^\s*CARRIER(?:\s+NAME)?\s*:\s*$/i),
