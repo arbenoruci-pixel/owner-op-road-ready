@@ -20,11 +20,26 @@ patch(saved,'        <a href={current.url} download={current.file.name}>Download
 patch(saved,'    {error ? <div role="alert">', `    {current && rereading ? <SavedDocumentReread key={id} file={current.file} clientId={doc.client_document_id} onClose={() => setRereading(false)} onSaved={setSavedReview}/> : null}
     {error ? <div role="alert">`);
 const preview='source/src/modules/scan/OwnedReaderPreview.jsx';
-patch(preview,'function ReviewBody({analysis,reviewState,onReviewChange})', 'function ReviewBody({analysis,reviewState,onReviewChange,onReady})');
+const scan='source/src/modules/scan/';
+fs.copyFileSync('scripts/v110347/webOcr.js',scan+'webOcr.js');
+fs.copyFileSync('scripts/v110347/pdfPageReader.js',scan+'pdfPageReaderV110328.js');
+patch(scan+'imageReaderV110323.js','recognizeDocumentText(input,{pageSegMode:mode', 'recognizeDocumentText(input,{signal:options.signal,pageSegMode:mode');
+patch(scan+'smartDocumentReaderV104.js','enablePageOcr:true,signal:options.signal,','enablePageOcr:true,signal:options.signal,retainPageSourcesV110347:options.retainPageSourcesV110347,');
+patch(scan+'smartDocumentReaderV104.js','      pageCount:pdf?.pageCount,','      pageCount:pdf?.pageCount,\n      ...(pdf?.pageFiles ? {scanMeta:{...options.scanMeta,pageFiles:pdf.pageFiles},ocrEvidenceV110323:pdf.ocrEvidenceV110323} : {}),');
+// Native PDF text is linked to its rendered page without inventing word boxes.
+const adapter=scan+'ownedReaderAdapter.js';
+let adapterText=fs.readFileSync(adapter,'utf8');
+if(!adapterText.includes("source:pass.source==='pdf-text-layer'")){
+  assert.equal(adapterText.split("source:'existing-phone-ocr'").length-1,2);
+  adapterText=adapterText.replaceAll("source:'existing-phone-ocr'", "source:pass.source==='pdf-text-layer'?'pdf-text-layer':'existing-phone-ocr'");
+  fs.writeFileSync(adapter,adapterText);
+}
+patch(preview,'function ReviewBody({analysis,reviewState,onReviewChange})', 'function ReviewBody({analysis,reviewState,onReviewChange,onReady,signal})');
 patch(preview,'      setSources(files);setResult(next);', '      setSources(files);setResult(next);onReady?.({analysis,result:next,summary:savedReadingReview(next)});');
-patch(preview,'export default function ReaderPreview({analysis,reviewState,onReviewChange})', 'export default function ReaderPreview({analysis,reviewState,onReviewChange,onReady,defaultExpanded=false})');
+patch(preview,'export default function ReaderPreview({analysis,reviewState,onReviewChange})', 'export default function ReaderPreview({analysis,reviewState,onReviewChange,onReady,signal,defaultExpanded=false})');
 patch(preview,'useState(Boolean(analysis?.typeEvidenceV110334?.mixedDocuments))', 'useState(Boolean(defaultExpanded || analysis?.typeEvidenceV110334?.mixedDocuments))');
-patch(preview,'onReviewChange={onReviewChange}/>', 'onReviewChange={onReviewChange} onReady={onReady}/>');
+patch(preview,'onReviewChange={onReviewChange}/>', 'onReviewChange={onReviewChange} onReady={onReady} signal={signal}/>');
+patch(preview,"recognizeDocumentText(source,{pageSegMode:box?'7':'11'", "recognizeDocumentText(source,{signal,pageSegMode:box?'7':'11'");
 patch(owner+'SavedReadingReviewV110345.jsx','<dd>{field.value}</dd>', '<dd>{field.value}{field.status === \'supported\' ? <small> · Check reading</small> : null}</dd>');
 const css=owner+'savedDocumentFilesV110344.css';
 const styles=`

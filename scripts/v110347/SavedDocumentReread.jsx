@@ -25,7 +25,7 @@ export default function SavedDocumentReread({file, clientId, onClose, onSaved}) 
       baseline.current = record;
       // A new File identity bypasses the OCR cache on every explicit retry.
       const original = new File([file], file.name, {type:file.type, lastModified:file.lastModified});
-      const result = await analyzeDocument(original, {preferredType:'auto', fileName:original.name, signal:abort.signal,
+      const result = await analyzeDocument(original, {preferredType:'auto', fileName:original.name, signal:abort.signal, retainPageSourcesV110347:true,
         onProgress:(value, label) => {
           if (generation.current !== active) return;
           setProgress(previous => Math.max(previous, Math.min(1, Number(value) || 0))); setMessage(label || 'Reading saved original…');
@@ -33,6 +33,12 @@ export default function SavedDocumentReread({file, clientId, onClose, onSaved}) 
       });
       if (generation.current !== active) return;
       if (!String(result.text || '').trim()) throw new Error('No readable text was found. Try again with a clearer original.');
+      if (original.type === 'application/pdf' || /\.pdf$/i.test(original.name)) {
+        const pages = result.scanMeta?.pageFiles || [];
+        if (!result.pageCount || Array.from({length:result.pageCount}, (_, i) => pages[i]).some(page => !(page instanceof Blob))) {
+          throw new Error('Could not prepare every PDF page for review. Check your connection and try again.');
+        }
+      }
       setAnalysis(result); setStatus('review');
     })().catch(failure => {
       if (generation.current !== active) return;
@@ -61,7 +67,7 @@ export default function SavedDocumentReread({file, clientId, onClose, onSaved}) 
     {status === 'reading' ? <><p role="status">{message}</p><progress aria-label="Reading progress" value={progress} max="1"/></> : null}
     {analysis && status !== 'saved' ? <>
       <p>Check the new reading against the original. Save reading replaces the previous reading on this device. The file and load stay the same.</p>
-      <ReaderPreview analysis={analysis} reviewState={review} onReady={receiveReview} onReviewChange={receiveReview} defaultExpanded/>
+      <ReaderPreview analysis={analysis} reviewState={review} onReady={receiveReview} onReviewChange={receiveReview} signal={controller.current?.signal} defaultExpanded/>
     </> : null}
     {error ? <p role="alert">{error}</p> : null}
     {status === 'saved' ? <p role="status">Reading saved with this document. Find it under Reviewed document details.</p> : null}

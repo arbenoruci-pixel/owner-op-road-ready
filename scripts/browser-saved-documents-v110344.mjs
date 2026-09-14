@@ -10,7 +10,7 @@ const output='browser-test-results/saved-documents-v110344';
 fs.mkdirSync(output,{recursive:true});
 const bundle=await PDFDocument.create();
 for(let i=1;i<=3;i++) {
-  const source=await PDFDocument.load(simplePdf(`EXAMPLE DOCUMENT ${i}\nSynthetic page ${i} of 3`));
+  const source=await PDFDocument.load(simplePdf(`EXAMPLE DOCUMENT ${i}\nSynthetic page ${i} of 3\nPrinted date 2026-08-18`));
   const [page]=await bundle.copyPages(source,[0]); bundle.addPage(page);
 }
 const original=Buffer.from(await bundle.save());
@@ -57,9 +57,11 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await setupRoutes(context);
     await context.addInitScript(()=>{
       window.__savedReadCalls=0;
+      window.__savedReadTerminations=0;
       const lines=['BILL OF LADING','BOL No: BOL-347','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
-      window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async(file)=>{
+      window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{window.__savedReadTerminations++;},recognize:async(file)=>{
         window.__savedReadCalls++;
+        if(window.__savedReadHang){window.__savedReadHangStarted=true;await new Promise(()=>{});}
         if(window.__savedReadFail)throw new Error('Synthetic OCR failure');
         const image=await createImageBitmap(file),sx=image.width/700,sy=image.height/1000;image.close();
         const rows=['level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext'];
@@ -178,15 +180,22 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     const exported=page.waitForEvent('download');await reread.getByRole('button',{name:'Export reading review',exact:true}).click();
     const firstRead=JSON.parse(fs.readFileSync(await(await exported).path(),'utf8'));
     assert.equal(firstRead.pageCount,3);assert.equal(firstRead.pages.length,3);
+    assert.ok(firstRead.pages.every(p=>p.observations.some(o=>o.sourceImageId)),'every PDF page has its own source image');
     await reread.getByRole('button',{name:'Cancel reading',exact:true}).click();
     assert.deepEqual(await localRows(page),before,'cancel preserves the previous reading and every record');
     await recent.getByRole('button',{name:'Read again',exact:true}).click();
     await reread.getByRole('button',{name:'Save reading',exact:true}).waitFor();
-    await page.waitForFunction(()=>!document.querySelector('.saved-reread-v347 button')?.disabled);
+    await reread.getByRole('button',{name:'Enter document date from page',exact:true}).click();
+    await reread.getByLabel('Source page',{exact:true}).selectOption('page-3');
+    await reread.getByAltText('Source image for page 3').waitFor();
+    await reread.getByLabel('Confirmed value',{exact:true}).fill('2026-08-18');
+    await reread.getByRole('button',{name:'Confirm value',exact:true}).click();
     await reread.getByRole('button',{name:'Save reading',exact:true}).click();
     await reread.getByRole('status').filter({hasText:'Reading saved with this document'}).waitFor();
     const afterRead=await localRows(page), changed=afterRead.find(r=>r.local_id==='example-41-local'), prior=before.find(r=>r.local_id===changed.local_id);
     assert.equal(afterRead.length,42);assert.equal(changed.extracted.readerReviewV110345.pageCount,3);
+    assert.equal(changed.extracted.readerReviewV110345.documents[0].fields.documentDate.value,'2026-08-18');
+    assert.equal(changed.extracted.readerReviewV110345.documents[0].fields.documentDate.correction.sourcePage.pageNumber,3);
     assert.deepEqual({...changed,extracted:prior.extracted},prior,'rereading retains load, dates, type, identity and original metadata');
     assert.deepEqual(afterRead.filter(r=>r.local_id!==changed.local_id),before.filter(r=>r.local_id!==changed.local_id));
     assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),storeBefore,'rereading never changes business records or logbook links');
@@ -216,6 +225,13 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await recent.getByRole('searchbox').fill('reread-image');await recent.locator('.saved-document-row-v344').click();
     await recent.getByRole('link',{name:'Open file',exact:true}).waitFor();
     const imageBefore=await localRows(page);
+    await page.evaluate(()=>window.__savedReadHang=true);
+    await recent.getByRole('button',{name:'Read again',exact:true}).click();
+    await page.waitForFunction(()=>window.__savedReadHangStarted);
+    await reread.getByRole('button',{name:'Cancel reading',exact:true}).click();
+    await page.waitForFunction(()=>window.__savedReadTerminations>0,{},{timeout:5000});
+    await page.evaluate(()=>window.__savedReadHang=false);
+    assert.deepEqual(await localRows(page),imageBefore,'cancel stops a hanging worker without changing the document');
     await recent.getByRole('button',{name:'Read again',exact:true}).click();
     await reread.getByRole('button',{name:'Export reading review',exact:true}).waitFor();
     assert.match(await reread.innerText(),/Bill of lading/);
