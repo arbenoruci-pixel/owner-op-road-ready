@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
+import {angledPageFixture} from './v110339/angledPageFixture.mjs';
 const output='browser-test-results/scanner-capture-v110329';fs.mkdirSync(output,{recursive:true});
 for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'scanner-capture-'));
@@ -126,6 +127,65 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     await camera.waitFor({state:'hidden'});
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),5,'Done finishes the in-flight page exactly once');
     assert.equal(await page.evaluate(()=>window.__scannerStream.getTracks().every(t=>t.readyState==='ended')),true,'Done stops the camera after the pending page is saved');
+    // The live outline and saved crop share four real corners at steep angles.
+    const tilted=angledPageFixture({angle:55,width:800,height:1400});
+    const tiltedPhoto=await page.evaluate(async({width,height,encoded})=>{
+      clearInterval(window.__cameraTimer);window.ImageCapture=undefined;
+      window.Worker=class extends window.__NativePhotoWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{if(event.data?.value?.result)window.__angledCapture=event.data.value;});}};
+      const sample=document.createElement('canvas');sample.width=width;sample.height=height;
+      const bytes=Uint8ClampedArray.from(atob(encoded),c=>c.charCodeAt(0)),pixels=new ImageData(bytes,width,height);sample.getContext('2d').putImageData(pixels,0,0);
+      const canvas=document.createElement('canvas');canvas.width=width*2;canvas.height=height*2;const ctx=canvas.getContext('2d'),draw=()=>ctx.drawImage(sample,0,0,canvas.width,canvas.height);draw();
+      Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{const stream=canvas.captureStream(12);window.__scannerStream=stream;window.__cameraTimer=setInterval(draw,90);return stream;}}});
+      return Array.from(new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.98))).arrayBuffer()));
+    },{width:tilted.width,height:tilted.height,encoded:Buffer.from(tilted.data).toString('base64')});
+    await page.getByRole('button',{name:'Camera',exact:true}).click();
+    if(videoReady){
+      await camera.locator('polygon').waitFor();
+      // This deliberately distant sheet uses the shutter, as in the phone report.
+      await capture.click();
+      await page.getByRole('button',{name:'Review (6)',exact:true}).waitFor();
+    }else{
+      await camera.locator('input[type=file]').setInputFiles({name:'tilted-paper.jpg',mimeType:'image/jpeg',buffer:Buffer.from(tiltedPhoto)});
+      await page.getByRole('button',{name:'Review (6)',exact:true}).waitFor();
+    }
+    await page.getByRole('button',{name:'Review (6)',exact:true}).click();await camera.waitFor({state:'hidden'});
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),6);
+    const cropInfo=await page.evaluate(()=>({corners:window.__angledCapture.corners,rotation:window.__angledCapture.rotation,detection:window.__angledCapture.result.metadata.captureManifest.detection}));
+    assert.equal(new Set(cropInfo.corners.map(p=>JSON.stringify(p))).size,4,'saved page keeps four distinct corners');
+    assert.ok(cropInfo.detection.confidence>=.8);
+    const selectedImage=page.locator('.scan-paper-preview-v328 img');
+    async function readRedMark(){await selectedImage.waitFor({state:'visible'});await page.waitForFunction(()=>{const img=document.querySelector('.scan-paper-preview-v328 img');return img?.complete&&img.naturalWidth>0;});return selectedImage.evaluate(img=>{
+      const canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0);
+      const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;let count=0,x=0,y=0,paper=0;
+      for(let i=0;i<data.length;i+=4){const r=data[i],g=data[i+1],b=data[i+2];if(Math.min(r,g,b)>190)paper++;if(r>g*1.7&&r>b*1.7&&r>120){count++;x+=(i/4)%canvas.width;y+=Math.floor(i/4/canvas.width);}}
+      return {width:canvas.width,height:canvas.height,paper:paper/(canvas.width*canvas.height),x:x/Math.max(1,count)/canvas.width,y:y/Math.max(1,count)/canvas.height,count};
+    });}
+    const beforeRotation=await readRedMark();
+    assert.ok(beforeRotation.width<2000&&beforeRotation.height<2000&&beforeRotation.paper>.75,'tilted saved preview excludes carpet and the other page');
+    assert.ok(beforeRotation.height>beforeRotation.width,'strong vertical text axes are oriented for reading');
+    assert.ok(beforeRotation.count>20,'source corner mark survives cleanup');
+    await page.screenshot({path:`${output}/${name}-tilted-page.png`});
+    await page.getByRole('button',{name:'Crop & rotate',exact:true}).click();
+    await page.getByRole('button',{name:'Use page',exact:true}).click();
+    const initialReopened=await readRedMark();
+    assert.ok(Math.abs(initialReopened.x-beforeRotation.x)<.025&&Math.abs(initialReopened.y-beforeRotation.y)<.025,'initial Adjust retains automatic text orientation');
+    const previousSrc=await selectedImage.getAttribute('src');
+    await page.getByRole('button',{name:'Rotate selected page',exact:true}).click();
+    await page.waitForFunction(previous=>{const img=document.querySelector('.scan-paper-preview-v328 img');return img?.src!==previous&&img?.complete&&img.naturalWidth>0;},previousSrc);
+    const afterRotation=await readRedMark();
+    assert.ok(Math.abs(afterRotation.x-(1-beforeRotation.y))<.025&&Math.abs(afterRotation.y-beforeRotation.x)<.025,'Rotate moves the corrected page exactly one clockwise turn');
+    assert.ok(afterRotation.paper>.75,'Rotate keeps the crop');
+    await page.getByRole('button',{name:'Crop & rotate',exact:true}).click();
+    await page.getByRole('button',{name:'Use page',exact:true}).click();
+    const reopened=await readRedMark();
+    assert.ok(Math.abs(reopened.x-afterRotation.x)<.025&&Math.abs(reopened.y-afterRotation.y)<.025,'reopening crop retains the chosen orientation');
+    // The worker fallback applies the same tilted-page rectification.
+    await page.evaluate(()=>{window.Worker=class{constructor(){throw new Error('Synthetic unavailable worker');}};});
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'tilted-fallback.jpg',mimeType:'image/jpeg',buffer:Buffer.from(tiltedPhoto)});
+    await page.waitForFunction(()=>document.querySelectorAll('.scan-page-list-v328 li').length===7);
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),7);
+    const tiltedFallback=await readRedMark();assert.ok(tiltedFallback.paper>.75&&tiltedFallback.width<2000&&tiltedFallback.height<2000,'main-thread fallback preserves the tilted crop');
+    assert.deepEqual(errors,[]);
     console.log(`PASS — ${name}: ${videoReady?'automatic next-page capture during processing and duplicate prevention':'native photo input'}, continuous pages, delayed still snapshot, crop, full source reset and reader recovery`);
   }catch(error){await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});throw error;}
   finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}

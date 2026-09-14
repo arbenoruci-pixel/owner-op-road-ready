@@ -1,5 +1,6 @@
 // Geometric proposals keep the exact source line. A shipping block is a
 // bounded heuristic, so below-label proposals always require human review.
+import {inlineFieldRange} from './inline.js';
 const STREET_ADDRESS=/^(?:[|{}\s]*)(?:P\.?\s*O\.?\s+BOX\s+\d|\d+[A-Z]?(?:[-/]\d+)?\s+(?:\S+\s+){0,8}(?:ROAD|STREET|AVENUE|BOULEVARD|DRIVE|LANE|COURT|CIRCLE|TERRACE|PLACE|PARKWAY|HIGHWAY|WAY|TRAIL|LOOP|PIKE|PLAZA|SQUARE|RD|ST|AVE|BLVD|DR|LN|CT|CIR|TER|PL|PKWY|HWY|TRL|PLZ|SQ)\b)/i;
 const isRule=(line,label)=>!/[\p{L}\p{N}]/u.test(line.text)||(line.box&&label.box&&line.box.height<label.box.height*.4&&line.confidence!==null&&line.confidence<.5);
 const valueRange=line=>/^[\s|{}]*([^\r\n]*?)[\s|{}]*$/d.exec(line.text)?.indices[1];
@@ -10,9 +11,9 @@ export function fieldMatches(lines, spec) {
     if(line.box&&spec.maxY!=null&&line.box.y>spec.maxY)continue;
     if(spec.kind==='party'&&line.box&&signatures.some(anchor=>line.box.y>=anchor.box.y-.015&&line.box.y<=anchor.box.y+.09))continue;
     const blockLabel=spec.blockLabel?.test(line.text),rightLabel=spec.rightLabel?.test(line.text);
-    const inline=blockLabel||rightLabel?null:spec.pattern.exec(line.text);
+    const inline=blockLabel||rightLabel?null:inlineFieldRange(line,spec);
     if(inline){
-      if(spec.kind!=='identifier'||! /^[\s.#:|]*$/.test(inline[1]))matches.push({line,start:inline.indices[1][0],end:inline.indices[1][1]});
+      if(spec.kind!=='identifier'||! /^[\s.#:|]*$/.test(line.text.slice(inline.start,inline.end)))matches.push({line,...inline});
       continue;
     }
     if(rightLabel&&line.box){

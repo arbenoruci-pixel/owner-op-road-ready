@@ -157,6 +157,9 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     });
     await seed(page,state);
     const packet=mixedPacketInput().pages.map(p=>p.observations[0].lines);
+    packet[1].push({text:'CARRIER: Example Logistics SALES ORDER: ORDER-778',confidence:.95,box:{x:.04,y:.18,width:.90,height:.012}},
+      {text:'FROM: Northern Foods DELIVERY: DELIVERY-321',confidence:.95,box:{x:.04,y:.20,width:.90,height:.012}});
+    packet[2].push({text:'Trailer No: T-700 Restacks: 0',confidence:.95,box:{x:.12,y:.45,width:.65,height:.012}});
     const packetPhotos=await page.evaluate(async pages=>{
       window.__ownedReaderPacket=pages;window.__ownedReaderPacketPage=-1;
       const photos=[];
@@ -173,6 +176,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.getByRole('button',{name:'Read document',exact:true}).click();
     await review.getByText('3 pages · 3 documents',{exact:true}).waitFor();
     for(const title of ['Bill of lading · 1','Bill of lading · 2','Unloading receipt · 3'])await review.getByRole('heading',{name:title,exact:true}).waitFor();
+    assert.equal(await review.getByRole('button',{name:/SALES ORDER:|DELIVERY:|Restacks:/}).count(),0,'neighboring columns cannot enter a field value');
     assert.equal(await page.locator('.scan-evidence-value-v11038').count(),0,'mixed packet has no aggregate field guesses');
     const receiptCheck=review.getByText('Unloading amount plus fee matches the receipt total.',{exact:true});
     await receiptCheck.waitFor();
