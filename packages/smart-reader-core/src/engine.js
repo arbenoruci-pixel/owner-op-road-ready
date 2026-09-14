@@ -36,6 +36,18 @@ function classifyPage(page) {
       }
     }
   }
+  // Retry observations belong to this page only. Complementary clues may
+  // establish its type, while every contributing observation stays traceable.
+  const origins=new Map(page.observations.flatMap(observation=>observation.lines.map(line=>[line,observation])));
+  const pooled=[...origins.keys()];
+  const lineIndices=new Map(page.observations.flatMap(observation=>observation.lines.map((line,index)=>[line,index])));
+  for(const profile of PROFILES){
+    if(votes.some(vote=>vote.kind===profile.id))continue;
+    const support=profileEvidence(pooled,profile,{lineIndices});
+    if(!support)continue;
+    const evidence=support.lines.map(line=>evidenceFor(page,origins.get(line),line,0,line.text.length));
+    votes.push({kind:profile.id,method:'combined_observations',evidence:evidence[0],supportingEvidence:evidence.slice(1)});
+  }
   const kinds=[...new Set(votes.map(v=>v.kind))];
   const references=Object.fromEntries(PROFILES.map(profile=>{
     const field=extractField([page],profile.fields[profile.identity]);
@@ -96,7 +108,7 @@ export function readDocument(input) {
     return {...group,label:profile?.label||'Uncategorized document',fields,checks,
       requiresReview:true,canAutoFile:false};
   });
-  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.1',documentId,pages,
+  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.2',documentId,pages,
     pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,
     pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),
     calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
