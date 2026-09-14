@@ -3,12 +3,13 @@ import {planBolIdentifierRegion} from '../../../../packages/smart-reader-core/sr
 
 export async function prepareIdentifierDetail(passes,checkCancelled){
   for(const pass of passes){
-    if(!pass.words?.some(w=>/^(?:BOL|B\/?L|BAL)(?:[.:;]|NO\b|$)/i.test(w.text||''))||!pass.sourceImageFile||!pass.imageSize||Math.max(pass.imageSize.width,pass.imageSize.height)>4000)continue;
+    if(!pass.words?.length||!pass.sourceImageFile||!pass.imageSize||Math.max(pass.imageSize.width,pass.imageSize.height)>4000)continue;
+    const planned=planBolIdentifierRegion(pass.words,pass.imageSize);
+    if(!planned)continue;
     checkCancelled();
     const source=await decodeImageFileV3(pass.sourceImageFile,{maxDimension:4000});checkCancelled();
     if(source.width!==pass.imageSize.width||source.height!==pass.imageSize.height)continue;
-    const box=planBolIdentifierRegion(pass.words,source);
-    if(!box)continue;
+    const box=planned;
     const data=new Uint8ClampedArray(box.width*box.height*4);
     for(let row=0;row<box.height;row++){
       const start=((box.top+row)*source.width+box.left)*4;

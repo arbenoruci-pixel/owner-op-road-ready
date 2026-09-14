@@ -1,13 +1,13 @@
 import {normalizeInput,evidenceFor} from './input.js';
 import {PROFILES,normalizeValue} from './profiles.js';
 import {validateInvoice,validateUnloadingReceipt} from './validation.js';
-import {fieldMatches} from './layout.js';
+import {pageFieldMatches} from './identifierChecks.js';
 import {profileEvidence} from './classification.js';
 
 function candidatesFor(pages, spec) {
   const candidates=[];
-  for (const page of pages) for (const observation of page.observations) for (const match of fieldMatches(observation.lines,spec)) {
-    const {line,start,end}=match;
+  for (const page of pages) for (const match of pageFieldMatches(page,spec)) {
+    const {observation,line,start,end}=match;
     const evidence=evidenceFor(page,observation,line,start,end);
     const normalized=normalizeValue(spec.kind,evidence.quote);
     if(match.issue&&!normalized.issue)normalized.issue=match.issue;
@@ -113,7 +113,7 @@ export function readDocument(input) {
     return {...group,label:profile?.label||'Uncategorized document',fields,checks,
       requiresReview:true,canAutoFile:false};
   });
-  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.6',documentId,pages,
+  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.7',documentId,pages,
     pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,
     pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),
     calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
