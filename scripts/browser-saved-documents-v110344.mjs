@@ -180,6 +180,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     const exported=page.waitForEvent('download');await reread.getByRole('button',{name:'Export reading review',exact:true}).click();
     const firstRead=JSON.parse(fs.readFileSync(await(await exported).path(),'utf8'));
     assert.equal(firstRead.pageCount,3);assert.equal(firstRead.pages.length,3);
+    assert.ok(firstRead.pages.every(p=>p.observations.length>=2),'each scanned PDF page retains cleanup and retry evidence');
     assert.ok(firstRead.pages.every(p=>p.observations.some(o=>o.sourceImageId)),'every PDF page has its own source image');
     await reread.getByRole('button',{name:'Cancel reading',exact:true}).click();
     assert.deepEqual(await localRows(page),before,'cancel preserves the previous reading and every record');
