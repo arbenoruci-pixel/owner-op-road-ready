@@ -1,5 +1,6 @@
 // Geometric proposals keep the exact source line. A shipping block is a
 // bounded heuristic, so below-label proposals always require human review.
+const STREET_ADDRESS=/^(?:[|{}\s]*)(?:P\.?\s*O\.?\s+BOX\s+\d|\d+[A-Z]?(?:[-/]\d+)?\s+(?:\S+\s+){0,8}(?:ROAD|STREET|AVENUE|BOULEVARD|DRIVE|LANE|COURT|CIRCLE|TERRACE|PLACE|PARKWAY|HIGHWAY|WAY|TRAIL|LOOP|PIKE|PLAZA|SQUARE|RD|ST|AVE|BLVD|DR|LN|CT|CIR|TER|PL|PKWY|HWY|TRL|PLZ|SQ)\b)/i;
 export function fieldMatches(lines, spec) {
   const matches=[];
   for(const line of lines){
@@ -26,7 +27,7 @@ export function fieldMatches(lines, spec) {
     // Do not skip unreadable lines to pick a convenient address farther down,
     // or choose between two side-by-side values in the first row.
     if(below.some(other=>other!==first&&Math.abs(other.box.y-first.box.y)<Math.min(other.box.height,first.box.height)*.5))continue;
-    if(/^(?:[|{}\s]*)(?:SHIP\s*(?:FROM|TO)|SHIPPER|CONSIGNEE|CARRIER|TRAILER|SEAL|\d+\s+\S+\s+(?:ROAD|STREET|AVENUE|RD|ST|AVE)\b)/i.test(first.text))continue;
+    if(STREET_ADDRESS.test(first.text)||/^(?:[|{}\s]*)(?:SHIP\s*(?:FROM|TO)|SHIPPER|CONSIGNEE|CARRIER|TRAILER|SEAL)\b/i.test(first.text))continue;
     const value=/^[\s|{}]*([^\r\n]*?)[\s|{}]*$/d.exec(first.text);
     if(value?.[1])matches.push({line:first,start:value.indices[1][0],end:value.indices[1][1],labelLine:line,issue:'layout_needs_review'});
   }

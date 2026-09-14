@@ -48,6 +48,18 @@ test('shipping block geometry never skips an unreadable first row or guesses a c
   }
 });
 
+test('multiword street names, common suffixes and PO boxes cannot become party proposals',()=>{
+  for(const address of ['123 North Main Street','123 Main Boulevard','123 N Main St. Suite 2','44 South County Road 10','95 Industrial Parkway','5 East Oak Lane','P.O. Box 42']){
+    const input=shippingLayoutInput();
+    for(const observation of input.pages[0].observations){
+      observation.lines=observation.lines.filter(line=>!line.text.startsWith('Shipper Signature'));
+      observation.lines.find(line=>line.text.startsWith('Example Foods')).text=address;
+    }
+    const field=readDocument(input).documents[0].fields.shipper;
+    assert.equal(field.status,'missing',address);assert.equal(field.candidates.length,0,address);
+  }
+});
+
 test('invoice extraction has exact resolvable source ranges and safe arithmetic',()=>{
   const result=read(page(invoice()));
   const group=result.documents[0];
