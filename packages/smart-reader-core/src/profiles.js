@@ -11,6 +11,9 @@ const dateToken=/^(?:\d{1,4}(?:[-/.][A-Za-z0-9]+){2}|\d{1,2} [A-Za-z]+ \d{4})(?:
 // A suffix inside a qualified label is not the identity/date of this document.
 const documentDateLabel=/(?:^|\|)[ \t]*DATE[ \t]*:[ \t]*/i;
 const receiptDateLabel=/(?:^|\|)[ \t]*(?:RECEIPT[ \t]*(?:NUMBER\b|NO\b\.?|#|:|¢)[ \t:#]*[A-Z0-9][A-Z0-9._/-]*[ \t]+)?DATE[ \t]*:[ \t]*/i;
+// OCR may flatten two printed columns into one row. Accept only an explicit
+// preceding PO field, so instructions and historical references stay excluded.
+const receiptBreakdown=/\b(?:UNLOADING|LUMPER)\b|^\s*(?:(?:P\.?[ \t]*O\.?)\s*(?:NUMBER\b|NO\b\.?|#|:)[ \t:#]*[A-Z0-9][A-Z0-9._/-]*[ \t|]+)?LOAD\s+DESCRIPTION\s*:\s*(?:BREAKDOWN|UNLOAD)\b/i;
 
 export const PROFILES = Object.freeze([
   {
@@ -40,14 +43,14 @@ export const PROFILES = Object.freeze([
       carrier:beside('Carrier',labeled('CARRIER(?: NAME)?'),'party',/^\s*CARRIER(?:\s+NAME)?\s*:\s*$/i),
       trailerNumber:field('Trailer number',identifier('TRAILER'),'identifier'),
       documentDate:{...beside('Document date',labeled('DATE'),'date',/^\s*DATE\s*:\s*$/i),maxY:.4,inlineLabel:documentDateLabel,valuePattern:dateToken},
-      poNumber:field('PO number',identifier('PO|P\\.O\\.|PURCHASE ORDER'),'identifier'),
+      poNumber:field('PO number',identifier('(?:CUSTOMER[ \\t]+)?(?:P\\.?[ \\t]*O\\.?|PURCHASE ORDER)'),'identifier'),
       weight:field('Weight',labeled('TOTAL WEIGHT|WEIGHT'),'weight'),
     },
   },
   {
     id:'unloading_receipt',label:'Unloading receipt',partyKeys:['carrier'],joinPages:false,
     heading:/^\s*(?:(?:LUMPER|UNLOADING)\s+)?RECEIPT\b\s*(?:$|#|NO\b|NUMBER\b)/i,
-    signals:[/^\s*LOAD\s+DETAILS\b/i,/\b(?:UNLOADING|LUMPER)\b|^\s*LOAD\s+DESCRIPTION\s*:\s*(?:BREAKDOWN|UNLOAD)/i,/^\s*(?:RELAY\s+PAYMENT\s+DETAILS|CHECKOUT\s+FEE|NET\s+TOTAL)\b/i],
+    signals:[/^\s*LOAD\s+DETAILS\b/i,receiptBreakdown,/^\s*(?:RELAY\s+PAYMENT\s+DETAILS|CHECKOUT\s+FEE|NET\s+TOTAL)\b/i],
     identity:'receiptNumber',
     fields:{
       receiptNumber:field('Receipt number',/^\s*RECEIPT\s*(?:NUMBER\b|NO\b\.?|#|:)[ \t:#]*([A-Z0-9][A-Z0-9._/-]*)(?=\s*(?:$|\||DATE\b))/id,'identifier',true),
@@ -58,7 +61,7 @@ export const PROFILES = Object.freeze([
       trailerNumber:beside('Trailer number',identifier('TRAILER'),'identifier',/^\s*TRAILER\s*(?:NO\.?|NUMBER|#)\s*:\s*$/i),
       amount:beside('Unloading amount',labeledAmount('AMOUNT'),'amount',/^\s*AMOUNT\s*:?\s*$/i,true),
       fee:beside('Checkout fee',labeledAmount('CHECKOUT FEE'),'amount',/^\s*CHECKOUT\s+FEE\s*:?\s*$/i),
-      total:beside('Receipt total',labeledAmount('NET TOTAL|TOTAL'),'amount',/^\s*(?:NET\s+TOTAL|TOTAL)\s*:?\s*$/i,true),
+      total:beside('Receipt total',labeledAmount('(?:THANK YOU FOR YOUR BUSINESS[!.]?[ \\t]+)?(?:NET TOTAL|TOTAL)'),'amount',/^\s*(?:NET\s+TOTAL|TOTAL)\s*:?\s*$/i,true),
       currency:field('Currency',labeled('CURRENCY'),'currency'),
     },
   },
