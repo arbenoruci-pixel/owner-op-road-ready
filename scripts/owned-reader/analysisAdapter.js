@@ -1,4 +1,5 @@
 import {readDocument,textObservation} from '../../../../packages/smart-reader-core/src/index.js';
+import {separateWordColumns} from '../../../../packages/smart-reader-core/src/wordLayout.js';
 
 // The existing phone recognizer remains explicitly identified at this boundary.
 // This adapter makes no OCR request, changes no legacy field and stores no file.
@@ -17,7 +18,7 @@ export function inputFromScanAnalysis(analysis, {documentId='scan-review',dimens
       // Only use layout on the exact image from this OCR pass. Other processing
       // variants may have different sizes/crops and cannot share coordinates.
       const useLayout=!!size && Array.isArray(pass.lines) && pass.lines.length>0;
-      const observation=useLayout?{id:observationId,source:'existing-phone-ocr',lines:pass.lines.map((line,li)=>{
+      const observation=useLayout?{id:observationId,source:'existing-phone-ocr',lines:separateWordColumns(pass.lines,pass.words,size).map((line,li)=>{
         const {left,top,width,height}=line;
         const valid=[left,top,width,height].every(Number.isFinite)&&left>=0&&top>=0&&width>0&&height>0&&left+width<=size.width&&top+height<=size.height;
         return {id:`line-${li+1}`,text:String(line.text||'').replace(/[\r\n]/g,' '),
