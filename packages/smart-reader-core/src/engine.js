@@ -1,19 +1,23 @@
 import {normalizeInput,evidenceFor} from './input.js';
 import {PROFILES,normalizeValue} from './profiles.js';
 import {validateInvoice} from './validation.js';
+import {fieldMatches} from './layout.js';
 
 function candidatesFor(pages, spec) {
   const candidates=[];
-  for (const page of pages) for (const observation of page.observations) for (const line of observation.lines) {
-    const match=spec.pattern.exec(line.text);
-    if (!match) continue;
-    const [start,end]=match.indices[1];
+  for (const page of pages) for (const observation of page.observations) for (const match of fieldMatches(observation.lines,spec)) {
+    const {line,start,end}=match;
     const evidence=evidenceFor(page,observation,line,start,end);
     const normalized=normalizeValue(spec.kind,evidence.quote);
+    if(match.issue&&!normalized.issue)normalized.issue=match.issue;
     const key=JSON.stringify([normalized.value,normalized.issue,evidence.quote.trim()]);
     let candidate=candidates.find(c=>c.key===key);
     if(!candidate){candidate={key,rawValue:evidence.quote,...normalized,evidence:[]};candidates.push(candidate);}
     candidate.evidence.push(evidence);
+    if(match.labelLine){
+      candidate.labelEvidence??=[];
+      candidate.labelEvidence.push(evidenceFor(page,observation,match.labelLine,0,match.labelLine.text.length));
+    }
   }
   return candidates.map(({key,...candidate})=>candidate);
 }
@@ -25,7 +29,7 @@ function classifyPage(page) {
     const text=lines.map(l=>l.text).join('\n');
     for(const profile of PROFILES){
       // A mention inside instructions cannot establish a document heading.
-      const title=lines.slice(0,20).find(l=>profile.heading.test(l.text));
+      const title=lines.find((l,index)=>(l.box?l.box.y<.3:index<20)&&profile.heading.test(l.text));
       if(title && profile.signals.every(pattern=>pattern.test(text))){
         votes.push({kind:profile.id,evidence:evidenceFor(page,observation,title,0,title.text.length)});
       }
@@ -73,7 +77,7 @@ function extractField(pages, spec) {
   const values=[...new Set(valid.map(c=>c.value))];
   const issues=[...new Set(candidates.map(c=>c.issue).filter(Boolean))];
   if(values.length>1)issues.push('conflicting_reads');
-  if(candidates.some(c=>c.evidence.some(e=>e.recognizerConfidence!==null&&e.recognizerConfidence<.8)))issues.push('weak_recognition');
+  if(candidates.some(c=>[...c.evidence,...(c.labelEvidence||[])].some(e=>e.recognizerConfidence!==null&&e.recognizerConfidence<.8)))issues.push('weak_recognition');
   if(!candidates.length&&spec.required)issues.push('required_field_missing');
   return {label:spec.label,kind:spec.kind,required:spec.required,
     status:!candidates.length?'missing':issues.length?'needs_review':'supported',
@@ -91,7 +95,7 @@ export function readDocument(input) {
     return {...group,label:profile?.label||'Uncategorized document',fields,checks,
       requiresReview:true,canAutoFile:false};
   });
-  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.1.0',documentId,pages,
+  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.2.0',documentId,pages,
     pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,
     pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),
     calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};

@@ -22,14 +22,15 @@ export const PROFILES = Object.freeze([
     },
   },
   {
-    id:'bol', label:'Bill of lading',heading:/^\s*(?:straight\s+)?bill\s+of\s+lading\b(?:\s*(?:$|[#:]|no\b|number\b))/i,
+    id:'bol', label:'Bill of lading',heading:/^\s*(?:straight\s+)?bill\s+of\s+lading\b\s*(?:$|[#:]|no\b|number\b|[-–—«»:]?\s*not\s+negotiable\b)/i,
     signals:[/^\s*(?:ship\s*from|shipper)\b/im,/^\s*(?:ship\s*to|consignee)\b/im],
     identity:'bolNumber',
     fields:{
       bolNumber:field('BOL number',identifier('BOL|B/L|BILL OF LADING'),'identifier',true),
-      shipper:field('Shipper',labeled('SHIP FROM|SHIPPER'),'party',true),
-      consignee:field('Consignee',labeled('SHIP TO|CONSIGNEE'),'party',true),
+      shipper:{...field('Shipper',labeled('SHIP[ \\t]*FROM|SHIPPER'),'party',true),blockLabel:/^\s*(?:SHIP\s*FROM|SHIPPER)\s*[:.]*\s*$/i},
+      consignee:{...field('Consignee',labeled('SHIP[ \\t]*TO|CONSIGNEE'),'party',true),blockLabel:/^\s*(?:SHIP\s*TO|CONSIGNEE)\s*[:.]*\s*$/i},
       carrier:field('Carrier',labeled('CARRIER(?: NAME)?'),'party'),
+      trailerNumber:field('Trailer number',identifier('TRAILER'),'identifier'),
       documentDate:field('Document date',labeled('DATE'),'date'),
       poNumber:field('PO number',identifier('PO|P\\.O\\.|PURCHASE ORDER'),'identifier'),
       weight:field('Weight',labeled('TOTAL WEIGHT|WEIGHT'),'weight'),
