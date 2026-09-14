@@ -32,10 +32,10 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
           const rows=lines.map((line,i)=>`5\t1\t1\t1\t${i+1}\t1\t${Math.round(line.box.x*width)}\t${Math.round(line.box.y*height)}\t${Math.max(1,Math.round(line.box.width*width))}\t${Math.max(1,Math.round(line.box.height*height))}\t${line.confidence*100}\t${line.text}`);
           return {data:{text:lines.map(line=>line.text).join('\n'),confidence:70,tsv:[header,...rows].join('\n')}};
         }
-        const lines=window.__ownedReaderLines||defaultLines;
+        const lines=window.__ownedReaderIdentifier&&file.name?.includes('identifier-detail')?['BALNO: 00991234']:(window.__ownedReaderLines||defaultLines);
         const bitmap=await createImageBitmap(file),scaleX=bitmap.width/700,scaleY=bitmap.height/1000;bitmap.close();
         const measure=document.createElement('canvas').getContext('2d');measure.font='24px Arial';
-        const rows=['level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext'];
+        const rows=['level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext',`1\t1\t0\t0\t0\t0\t0\t0\t${Math.round(scaleX*700)}\t${Math.round(scaleY*1000)}\t-1\t`];
         lines.forEach((line,i)=>{let x=30;line.split(' ').forEach((word,j)=>{const width=measure.measureText(word).width;rows.push(`5\t1\t1\t1\t${i+1}\t${j+1}\t${Math.round(x*scaleX)}\t${Math.round((40+i*65)*scaleY)}\t${Math.round(width*scaleX)}\t${Math.round(24*scaleY)}\t96\t${word}`);x+=width+measure.measureText(' ').width;});});
         return {data:{text:lines.join('\n'),confidence:96,tsv:rows.join('\n')}};
       }})};
@@ -214,6 +214,35 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.screenshot({path:`${output}/${name}-packet-review.png`,fullPage:true});
     await page.getByRole('button',{name:'Back',exact:true}).click();
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),3,'all three original pages survive packet review');
+    // A fourth, bounded identifier read must retain the complete source page.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+    await seed(page,state);
+    const detailPhoto=await page.evaluate(async()=>{
+      window.__ownedReaderIdentifier=true;
+      window.__ownedReaderLines=['BILL OF LADING','BAL ? 00991234','Ship From: Example Shipper','Ship To: Example Receiver','BODY MUST SURVIVE'];
+      const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
+      window.__ownedReaderLines.forEach((line,i)=>ctx.fillText(line,30,64+i*65));
+      return [...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())];
+    });
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'identifier-source.jpg',mimeType:'image/jpeg',buffer:Buffer.from(detailPhoto)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    const openDetail=page.getByRole('button',{name:'Reader preview · Check source',exact:true});
+    await openDetail.waitFor();await openDetail.click();
+    await review.getByText('1 page · 1 document',{exact:true}).waitFor();
+    await review.getByRole('button',{name:'00991234 · Page 1',exact:true}).click();
+    const detailImage=review.getByRole('img',{name:'Source image for page 1',exact:true});await detailImage.waitFor();
+    assert.ok(await detailImage.evaluate(el=>el.naturalWidth<1000&&el.naturalHeight<200),'identifier inspection shows the small source crop');
+    const detailDownload=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const detailExport=JSON.parse(fs.readFileSync(await(await detailDownload).path(),'utf8'));
+    assert.equal(detailExport.pageCount,1);assert.equal(detailExport.pages[0].observations.length,4);
+    assert.ok(detailExport.pages[0].observations[0].lines.some(l=>l.text==='BODY MUST SURVIVE'));
+    const detailField=detailExport.documents[0].fields.bolNumber;assert.equal(detailField.value,null);assert.ok(detailField.issues.includes('label_needs_review'));
+    assert.ok(detailField.candidates[0].evidence[0].sourceImageId.endsWith('1-identifier-detail'));
+    await page.getByRole('button',{name:'Back',exact:true}).click();
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),1);
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){

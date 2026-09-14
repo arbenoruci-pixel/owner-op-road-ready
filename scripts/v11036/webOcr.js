@@ -132,7 +132,9 @@ function parseTsv(tsv = '') {
     bottom:group.bottom,
   })).filter(line => line.text).sort((a, b) => a.top - b.top || a.left - b.left);
 
-  return { words, lines };
+  const page=rows.map(row=>row.split('\t')).find(parts=>parts[0]==='1');
+  const imageSize=page&&[Number(page[8]),Number(page[9])].every(n=>Number.isFinite(n)&&n>0)?{width:Number(page[8]),height:Number(page[9])}:null;
+  return { words, lines, imageSize };
 }
 
 export async function recognizeDocumentText(file, options = {}) {
@@ -140,7 +142,8 @@ export async function recognizeDocumentText(file, options = {}) {
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const pageSegMode = String(options.pageSegMode || '11');
   const returnLayout = options.returnLayout === true;
-  const cacheKey = JSON.stringify([pageSegMode,returnLayout,options.rectangle||null,options.dpi||300,options.preserveSpaces!==false,options.charWhitelist||'',options.charBlacklist||'',Boolean(options.numericMode)]);
+  const thresholdingMethod=options.thresholdingMethod==='2'?'2':'0';
+  const cacheKey = JSON.stringify([pageSegMode,returnLayout,options.rectangle||null,options.dpi||300,options.preserveSpaces!==false,options.charWhitelist||'',options.charBlacklist||'',Boolean(options.numericMode),thresholdingMethod]);
   const cached = resultCache.get(file)?.get(cacheKey);
   if (cached) { onProgress(1, 'Using text already read from this image'); return cached; }
 
@@ -149,16 +152,15 @@ export async function recognizeDocumentText(file, options = {}) {
     let engine;
     try {
       engine = await worker();
-      try {
-        await bounded(engine.setParameters({
+      await bounded(engine.setParameters({
           preserve_interword_spaces:options.preserveSpaces === false ? '0' : '1',
           user_defined_dpi:String(options.dpi || 300),
           tessedit_pageseg_mode:pageSegMode,
           tessedit_char_whitelist:String(options.charWhitelist || ''),
           tessedit_char_blacklist:String(options.charBlacklist || ''),
           classify_bln_numeric_mode:options.numericMode ? '1' : '0',
+          thresholding_method:thresholdingMethod,
         }), 8000, 'ocr_parameters_timeout');
-      } catch {}
 
       onProgress(0.03, 'Loading OCR model…');
       const recognizeOptions = options.rectangle ? { rectangle:options.rectangle } : {};
@@ -174,6 +176,7 @@ export async function recognizeDocumentText(file, options = {}) {
         pageSegMode,
         words:layout.words,
         lines:layout.lines,
+        imageSize:layout.imageSize||null,
       } : null;
     } catch (error) {
       if (engine) {

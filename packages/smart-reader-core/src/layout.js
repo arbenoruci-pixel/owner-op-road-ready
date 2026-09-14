@@ -2,7 +2,7 @@
 // bounded heuristic, so below-label proposals always require human review.
 import {inlineFieldRange} from './inline.js';
 const STREET_ADDRESS=/^(?:[|{}\s]*)(?:P\.?\s*O\.?\s+BOX\s+\d|\d+[A-Z]?(?:[-/]\d+)?\s+(?:\S+\s+){0,8}(?:ROAD|STREET|AVENUE|BOULEVARD|DRIVE|LANE|COURT|CIRCLE|TERRACE|PLACE|PARKWAY|HIGHWAY|WAY|TRAIL|LOOP|PIKE|PLAZA|SQUARE|RD|ST|AVE|BLVD|DR|LN|CT|CIR|TER|PL|PKWY|HWY|TRL|PLZ|SQ)\b)/i;
-const isRule=(line,label)=>!/[\p{L}\p{N}]/u.test(line.text)||(line.box&&label.box&&line.box.height<label.box.height*.4&&line.confidence!==null&&line.confidence<.5);
+const isRule=(line,label)=>!/[\p{L}\p{N}]/u.test(line.text)||(line.box&&label.box&&line.box.height<label.box.height*.4&&line.confidence!==null&&(line.confidence<.5||line.confidence<.8&&(line.text.match(/[\p{L}\p{N}]/gu)||[]).length<=1));
 const valueRange=line=>/^[\s|{}]*([^\r\n]*?)[\s|{}]*$/d.exec(line.text)?.indices[1];
 export function fieldMatches(lines, spec) {
   const matches=[];
@@ -16,6 +16,8 @@ export function fieldMatches(lines, spec) {
       if(spec.kind!=='identifier'||! /^[\s.#:|]*$/.test(line.text.slice(inline.start,inline.end)))matches.push({line,...inline});
       continue;
     }
+    const noisy=line.box&&line.box.y<.4&&spec.noisyPattern?.exec(line.text);
+    if(noisy){matches.push({line,start:noisy.indices[1][0],end:noisy.indices[1][1],issue:'label_needs_review'});continue;}
     if(rightLabel&&line.box){
       const label=line.box,side=label.x+label.width/2<.5?0:.5;
       const right=lines.filter(candidate=>{
@@ -42,6 +44,7 @@ export function fieldMatches(lines, spec) {
       const box=candidate.box;
       return candidate!==line&&box&&candidate.text.trim()&&!isRule(candidate,line)
         &&box.x>=left&&box.x+box.width<=right
+        &&box.x<=label.x+label.width+.025
         &&box.y>=label.y+label.height*.6
         &&box.y<=label.y+label.height+.035;
     }).sort((a,b)=>a.box.y-b.box.y||a.box.x-b.box.x);
