@@ -5,7 +5,7 @@ import path from 'node:path';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
 import {shippingLayoutInput} from '../packages/smart-reader-core/test/shipping-layout-fixture.mjs';
-import {mixedPacketInput} from '../packages/smart-reader-core/test/mixed-packet-fixture.mjs';
+import {noisyPageInput} from '../packages/smart-reader-core/test/noisy-page-fixture.mjs';
 
 const output='browser-test-results/owned-reader';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
@@ -19,12 +19,13 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       window.__ownedReaderCalls=0;
       const defaultLines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
       window.Tesseract={createWorker:async()=>({setParameters:async parameters=>{
-        if(window.__ownedReaderPacket&&String(parameters.tessedit_pageseg_mode)==='3')window.__ownedReaderPacketPage++;
+        if(window.__ownedReaderPacket&&String(parameters.tessedit_pageseg_mode)==='3'){window.__ownedReaderPacketPage++;window.__ownedReaderPacketRead=0;}
       },terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
         if(window.__ownedReaderLayout||window.__ownedReaderPacket){
           const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
-          const lines=structuredClone(window.__ownedReaderPacket?window.__ownedReaderPacket[window.__ownedReaderPacketPage]:window.__ownedReaderLayout);
+          const observations=window.__ownedReaderPacket?.[window.__ownedReaderPacketPage];
+          const lines=structuredClone(observations?observations[Math.min(window.__ownedReaderPacketRead++,observations.length-1)]:window.__ownedReaderLayout);
           if(!window.__ownedReaderPacket&&window.__ownedReaderCalls%2===0)lines.find(line=>line.text==='Example Foods Ing').text='Example Foods Inc';
           const header='level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext';
           const rows=lines.map((line,i)=>`5\t1\t1\t1\t${i+1}\t1\t${Math.round(line.box.x*width)}\t${Math.round(line.box.y*height)}\t${Math.max(1,Math.round(line.box.width*width))}\t${Math.max(1,Math.round(line.box.height*height))}\t${line.confidence*100}\t${line.text}`);
@@ -156,14 +157,15 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       await new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');request.onsuccess=resolve;request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Previous fixture database is still open'));});
     });
     await seed(page,state);
-    const packet=mixedPacketInput().pages.map(p=>p.observations[0].lines);
-    packet[1].push({text:'CARRIER: Example Logistics SALES ORDER: ORDER-778',confidence:.95,box:{x:.04,y:.18,width:.90,height:.012}},
+    const packet=noisyPageInput().pages.map(p=>p.observations.map(o=>o.lines));
+    packet[1][0].push({text:'CARRIER: Example Logistics SALES ORDER: ORDER-778',confidence:.95,box:{x:.04,y:.18,width:.90,height:.012}},
       {text:'FROM: Northern Foods DELIVERY: DELIVERY-321',confidence:.95,box:{x:.04,y:.20,width:.90,height:.012}});
-    packet[2].push({text:'Trailer No: T-700 Restacks: 0',confidence:.95,box:{x:.12,y:.45,width:.65,height:.012}});
+    packet[2][0].push({text:'Trailer No: T-700 Restacks: 0',confidence:.95,box:{x:.12,y:.45,width:.65,height:.012}});
     const packetPhotos=await page.evaluate(async pages=>{
       window.__ownedReaderPacket=pages;window.__ownedReaderPacketPage=-1;
       const photos=[];
-      for(const lines of pages){
+      for(const observations of pages){
+        const lines=observations[0];
         const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
         const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';
         for(const line of lines){ctx.font=`${Math.max(1,line.box.height*1000)}px Arial`;ctx.fillText(line.text,line.box.x*700,(line.box.y+line.box.height)*1000,line.box.width*700);}
@@ -197,6 +199,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const packetFile=await packetDownload,packetResult=JSON.parse(fs.readFileSync(await packetFile.path(),'utf8'));
     assert.deepEqual(packetResult.documents.map(d=>d.kind),['bol','bol','unloading_receipt']);
+    assert.ok(packetResult.documents.every(d=>d.identityStatus==='needs_review'),'noisy and combined type evidence stays reviewable');
+    assert.ok(packetResult.pageIdentities[1].evidence.some(v=>v.method==='combined_observations'),'the UI combines clues from retries of the same page');
     assert.equal(packetResult.documents[2].fields.total.value,'195.00');
     assert.equal(packetResult.documents[2].fields.fee.value,'15.00');
     assert.ok(packetResult.documents.slice(0,2).every(d=>!d.fields.total&&!d.fields.gross));
