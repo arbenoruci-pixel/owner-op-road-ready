@@ -31,7 +31,13 @@ total as a packet-wide amount. This release addresses those reading failures.
   exact source resolution, conflicting OCR, ruling/address boundaries and
   receipt correction arithmetic.
 - Materialized app tests exercise initial routing, final screen qualification
-  and manual type selection. None may restore packet-wide financial fields.
+  and manual type selection. None may restore packet-wide financial fields,
+  including same-type BOLs with missing/weak IDs or conflicting parties. A
+  supported shared ID with agreeing parties still permits continuation pages.
+- Automatic review identified loss of structural classification uncertainty
+  and same-type packet isolation. The fallback now carries review status into
+  the final decision; isolation follows owned document boundaries as well as
+  differing types. Text-only review preserves available OCR confidence.
 - Browser coverage sends three images through the phone OCR adapter and UI,
   verifies the three identities, highlights a receipt value on page three,
   introduces and repairs an arithmetic mismatch, exports the corrections and
