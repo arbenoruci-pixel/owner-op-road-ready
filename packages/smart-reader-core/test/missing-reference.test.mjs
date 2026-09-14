@@ -33,8 +33,8 @@ test('empty B/L proposals respect qualifiers, adjacent fields and image limits',
 });
 
 test('parenthetical contract fragments cannot conflict with source-backed shipping parties',()=>{
-  for(const opening of ['(','{','[']){
-    const observation=textObservation('BILL OF LADING\nBOL NO: B-17\nSHIP FROM: Example Foods\nSHIP TO: Example Market\nShipper '+opening+'or where\nCarrier '+opening+'and when');
+  for(const opening of ['(','{','['])for(const delimiter of [' ',': ','# ',' : ']){
+    const observation=textObservation('BILL OF LADING\nBOL NO: B-17\nSHIP FROM: Example Foods\nSHIP TO: Example Market\nShipper'+delimiter+opening+'or where\nCarrier'+delimiter+opening+'and when\n| Carrier Name'+delimiter+opening+'or when');
     const result=readDocument({documentId:'contract-fragment',pages:[{observations:[observation]}]});
     const field=result.documents[0].fields.shipper;
     assert.equal(field.candidates.length,1);assert.equal(field.candidates[0].value,'Example Foods');
