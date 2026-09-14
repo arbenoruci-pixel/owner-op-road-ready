@@ -1,7 +1,8 @@
 import {normalizeInput,evidenceFor} from './input.js';
 import {PROFILES,normalizeValue} from './profiles.js';
-import {validateInvoice} from './validation.js';
+import {validateInvoice,validateUnloadingReceipt} from './validation.js';
 import {fieldMatches} from './layout.js';
+import {profileEvidence} from './classification.js';
 
 function candidatesFor(pages, spec) {
   const candidates=[];
@@ -10,9 +11,10 @@ function candidatesFor(pages, spec) {
     const evidence=evidenceFor(page,observation,line,start,end);
     const normalized=normalizeValue(spec.kind,evidence.quote);
     if(match.issue&&!normalized.issue)normalized.issue=match.issue;
-    const key=JSON.stringify([normalized.value,normalized.issue,evidence.quote.trim()]);
+    const key=JSON.stringify([normalized.value,normalized.issue==='layout_needs_review'?null:normalized.issue||null,evidence.quote.trim()]);
     let candidate=candidates.find(c=>c.key===key);
     if(!candidate){candidate={key,rawValue:evidence.quote,...normalized,evidence:[]};candidates.push(candidate);}
+    if(normalized.issue&&!candidate.issue)candidate.issue=normalized.issue;
     candidate.evidence.push(evidence);
     if(match.labelLine){
       candidate.labelEvidence??=[];
@@ -26,12 +28,11 @@ function classifyPage(page) {
   const votes=[];
   for(const observation of page.observations){
     const lines=observation.lines.filter(l=>l.text.trim());
-    const text=lines.map(l=>l.text).join('\n');
     for(const profile of PROFILES){
-      // A mention inside instructions cannot establish a document heading.
-      const title=lines.find((l,index)=>(l.box?l.box.y<.3:index<20)&&profile.heading.test(l.text));
-      if(title && profile.signals.every(pattern=>pattern.test(text))){
-        votes.push({kind:profile.id,evidence:evidenceFor(page,observation,title,0,title.text.length)});
+      const support=profileEvidence(lines,profile);
+      if(support){
+        const evidence=support.lines.map(line=>evidenceFor(page,observation,line,0,line.text.length));
+        votes.push({kind:profile.id,method:support.method,evidence:evidence[0],supportingEvidence:evidence.slice(1)});
       }
     }
   }
@@ -40,7 +41,7 @@ function classifyPage(page) {
     const field=extractField([page],profile.fields[profile.identity]);
     return [profile.id,field.status==='supported'&&field.value!==null?[field.value]:[]];
   }));
-  return {kind:kinds.length===1?kinds[0]:'unknown',status:kinds.length>1?'conflicting':kinds.length?'supported':'unknown',evidence:votes,references};
+  return {kind:kinds.length===1?kinds[0]:'unknown',status:kinds.length>1?'conflicting':kinds.length?votes.some(v=>v.method==='heading')?'supported':'needs_review':'unknown',evidence:votes,references};
 }
 
 function makeGroups(pages, identities) {
@@ -50,7 +51,7 @@ function makeGroups(pages, identities) {
     const refs=[...new Set(identity.references[identity.kind]||[])];
     const previousIdentity=previous&&PROFILES.find(p=>p.id===previous.kind);
     const continuationRefs=previousIdentity?[...new Set(identity.references[previousIdentity.id]||[])]:[];
-    const partyKeys=previousIdentity?.id==='invoice'?['vendor']:['shipper','consignee'];
+    const partyKeys=previousIdentity?.partyKeys||[];
     const previousPages=previous?pages.filter(p=>previous.pageIds.includes(p.id)):[];
     const conflictingParties=previousIdentity&&partyKeys.some(key=>{
       const spec=previousIdentity.fields[key];
@@ -59,7 +60,7 @@ function makeGroups(pages, identities) {
       return before.length&&after.length&&new Set([...before,...after]).size>1;
     });
     // Only an explicit shared ID can join pages. Retries never add pages.
-    const canJoin=previous && previous.kind!=='unknown' && identity.status!=='conflicting' && !conflictingParties
+    const canJoin=previous && previousIdentity?.joinPages!==false && previous.kind!=='unknown' && identity.status!=='conflicting' && !conflictingParties
       && previous.reference && continuationRefs.length===1 && continuationRefs[0]===previous.reference
       && (identity.kind===previous.kind || identity.kind==='unknown');
     if(canJoin){previous.pageIds.push(page.id);continue;}
@@ -91,11 +92,11 @@ export function readDocument(input) {
     const profile=PROFILES.find(p=>p.id===group.kind);
     const groupPages=pages.filter(p=>group.pageIds.includes(p.id));
     const fields=profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(groupPages,spec)])):{};
-    const checks=group.kind==='invoice'?validateInvoice(fields):[];
+    const checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):[];
     return {...group,label:profile?.label||'Uncategorized document',fields,checks,
       requiresReview:true,canAutoFile:false};
   });
-  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.2.0',documentId,pages,
+  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.0',documentId,pages,
     pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,
     pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),
     calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};

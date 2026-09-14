@@ -1,6 +1,6 @@
 import {resolveEvidence} from './input.js';
 import {normalizeValue} from './profiles.js';
-import {validateInvoice} from './validation.js';
+import {validateInvoice,validateUnloadingReceipt} from './validation.js';
 
 export function buildRereadRequests(result) {
   const requests=[];
@@ -39,6 +39,7 @@ export function confirmField(result, {documentId,groupId,field:key,rawValue,evid
     // Arithmetic must be checked again after edits; previous passes are stale.
     issues:[]};
   if(target.kind==='invoice')target.checks=validateInvoice(target.fields);
+  if(target.kind==='unloading_receipt')target.checks=validateUnloadingReceipt(target.fields);
   target.requiresReview=true;target.canAutoFile=false;
   return next;
 }

@@ -80,7 +80,10 @@ function ReviewBody({analysis}) {
     {result.documents.map(group=><article key={group.id} className="owned-reader-document">
       <h3>{group.label} · {group.pageIds.map(id=>result.pages.find(p=>p.id===id)?.number).join(', ')}</h3>
       {group.boundaryReview?<p>Check whether these pages belong together.</p>:null}
+      {group.identityStatus==='needs_review'?<p>Shipping fields suggest this type. Confirm it against the page.</p>:null}
       {group.checks.some(check=>check.id==='invoice_arithmetic'&&check.status==='needs_review')?<p role="alert">Subtotal plus tax does not match the total. Check the amounts.</p>:null}
+      {group.checks.some(check=>check.id==='receipt_arithmetic'&&check.status==='needs_review')?<p role="alert">Unloading amount plus fee does not match the receipt total. Check the amounts.</p>:null}
+      {group.checks.some(check=>check.id==='receipt_arithmetic'&&check.status==='passed')?<p>Unloading amount plus fee matches the receipt total.</p>:null}
       {group.kind==='unknown'?<p>Document type needs review. The page remains included.</p>:null}
       {Object.entries(group.fields).filter(([,field])=>field.required||field.status!=='missing').map(([key,field])=><div key={key} className="owned-reader-field">
         <b>{field.label}</b><span>{field.status==='confirmed'?'Confirmed in preview':field.status==='supported'?'Source found':field.status==='missing'?'Missing':'Check reading'}</span>
@@ -106,7 +109,7 @@ function ReviewBody({analysis}) {
 }
 
 export default function ReaderPreview({analysis}) {
-  const [open,setOpen]=useState(false);
+  const [open,setOpen]=useState(Boolean(analysis?.typeEvidenceV110334?.mixedDocuments));
   return <section className="owned-reader-preview">
     <button type="button" aria-expanded={open} onClick={()=>setOpen(value=>!value)}>Reader preview · {open?'Close':'Check source'}</button>
     {open?<ReviewBody analysis={analysis}/>:null}

@@ -4,6 +4,13 @@ import {PROFILES,normalizeValue} from '../../../../packages/smart-reader-core/sr
 // only remain in the filing form when the OCR lines establish the label/value
 // together. Below-label proposals remain available for source review instead.
 export function guardOcrLayoutReading(result={}) {
+  if(result.typeEvidenceV110334?.mixedDocuments){
+    const review=result.evidenceReviewV11036||{};
+    return {...result,fields:{references:[],poNumbers:[],needsFieldReview:true},fieldEvidence:{},fieldConfidence:{},
+      needsReview:true,needsFieldReview:true,matchedLoad:null,matchedLoadNo:'',routing:{...result.routing,autoFile:false},
+      packetReviewV110338:{separateFields:true},
+      evidenceReviewV11036:{...review,evidence:{},suggestedLoad:null,issues:[...new Set([...(review.issues||[]),'Separate documents are included. Review the fields under each document; the PDF keeps all pages.'])]}};
+  }
   if(!['bol','pod'].includes(result.type?.id))return result;
   const passes=(result.ocrEvidenceV110323||[]).filter(pass=>pass.lines?.length);
   if(!passes.length)return result;

@@ -5,6 +5,7 @@ import path from 'node:path';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
 import {shippingLayoutInput} from '../packages/smart-reader-core/test/shipping-layout-fixture.mjs';
+import {mixedPacketInput} from '../packages/smart-reader-core/test/mixed-packet-fixture.mjs';
 
 const output='browser-test-results/owned-reader';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
@@ -17,12 +18,14 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await context.addInitScript(()=>{
       window.__ownedReaderCalls=0;
       const defaultLines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
-      window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async(file)=>{
+      window.Tesseract={createWorker:async()=>({setParameters:async parameters=>{
+        if(window.__ownedReaderPacket&&String(parameters.tessedit_pageseg_mode)==='3')window.__ownedReaderPacketPage++;
+      },terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
-        if(window.__ownedReaderLayout){
+        if(window.__ownedReaderLayout||window.__ownedReaderPacket){
           const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
-          const lines=structuredClone(window.__ownedReaderLayout);
-          if(window.__ownedReaderCalls%2===0)lines.find(line=>line.text==='Example Foods Ing').text='Example Foods Inc';
+          const lines=structuredClone(window.__ownedReaderPacket?window.__ownedReaderPacket[window.__ownedReaderPacketPage]:window.__ownedReaderLayout);
+          if(!window.__ownedReaderPacket&&window.__ownedReaderCalls%2===0)lines.find(line=>line.text==='Example Foods Ing').text='Example Foods Inc';
           const header='level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext';
           const rows=lines.map((line,i)=>`5\t1\t1\t1\t${i+1}\t1\t${Math.round(line.box.x*width)}\t${Math.round(line.box.y*height)}\t${Math.max(1,Math.round(line.box.width*width))}\t${Math.max(1,Math.round(line.box.height*height))}\t${line.confidence*100}\t${line.text}`);
           return {data:{text:lines.map(line=>line.text).join('\n'),confidence:70,tsv:[header,...rows].join('\n')}};
@@ -146,6 +149,58 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.equal(layoutResult.corrections[0].trainingEligible,false);
     assert.ok(layoutResult.documents[0].fields.shipper.candidates.some(candidate=>candidate.labelEvidence?.length));
     await page.screenshot({path:`${output}/${name}-shipping-layout.png`,fullPage:true});
+    // A mixed packet must keep three page identities and all amounts in their own document.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{
+      localStorage.clear();
+      await new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');request.onsuccess=resolve;request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Previous fixture database is still open'));});
+    });
+    await seed(page,state);
+    const packet=mixedPacketInput().pages.map(p=>p.observations[0].lines);
+    const packetPhotos=await page.evaluate(async pages=>{
+      window.__ownedReaderPacket=pages;window.__ownedReaderPacketPage=-1;
+      const photos=[];
+      for(const lines of pages){
+        const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
+        const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';
+        for(const line of lines){ctx.font=`${Math.max(1,line.box.height*1000)}px Arial`;ctx.fillText(line.text,line.box.x*700,(line.box.y+line.box.height)*1000,line.box.width*700);}
+        photos.push([...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())]);
+      }
+      return photos;
+    },packet);
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles(packetPhotos.map((photo,i)=>({name:`packet-${i+1}.jpg`,mimeType:'image/jpeg',buffer:Buffer.from(photo)})));
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await review.getByText('3 pages · 3 documents',{exact:true}).waitFor();
+    for(const title of ['Bill of lading · 1','Bill of lading · 2','Unloading receipt · 3'])await review.getByRole('heading',{name:title,exact:true}).waitFor();
+    assert.equal(await page.locator('.scan-evidence-value-v11038').count(),0,'mixed packet has no aggregate field guesses');
+    const receiptCheck=review.getByText('Unloading amount plus fee matches the receipt total.',{exact:true});
+    await receiptCheck.waitFor();
+    await review.getByRole('button',{name:'$185.00 · Page 3',exact:true}).click();
+    await review.getByRole('img',{name:'Source image for page 3',exact:true}).waitFor();
+    const receiptTop=await review.getByLabel('Source line highlight',{exact:true}).evaluate(el=>parseFloat(el.style.top));
+    assert.ok(Math.abs(receiptTop-64)<.2,'receipt value highlights its source on the third page');
+    await review.locator('.owned-reader-inspect').screenshot({path:`${output}/${name}-packet-source.png`});
+    await review.getByLabel('Confirmed value',{exact:true}).fill('195.00');
+    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    const receiptWarning=review.getByText('Unloading amount plus fee does not match the receipt total. Check the amounts.',{exact:true});
+    await receiptWarning.waitFor();
+    await review.getByRole('button',{name:'$5.00 · Page 3',exact:true}).click();
+    await review.getByLabel('Confirmed value',{exact:true}).fill('15.00');
+    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    await receiptWarning.waitFor({state:'hidden'});await receiptCheck.waitFor();
+    const packetDownload=page.waitForEvent('download');
+    await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const packetFile=await packetDownload,packetResult=JSON.parse(fs.readFileSync(await packetFile.path(),'utf8'));
+    assert.deepEqual(packetResult.documents.map(d=>d.kind),['bol','bol','unloading_receipt']);
+    assert.equal(packetResult.documents[2].fields.total.value,'195.00');
+    assert.equal(packetResult.documents[2].fields.fee.value,'15.00');
+    assert.ok(packetResult.documents.slice(0,2).every(d=>!d.fields.total&&!d.fields.gross));
+    assert.ok(packetResult.corrections.every(c=>!c.trainingEligible));
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),true,'mixed review fits the phone viewport');
+    await page.screenshot({path:`${output}/${name}-packet-review.png`,fullPage:true});
+    await page.getByRole('button',{name:'Back',exact:true}).click();
+    assert.equal(await page.locator('.scan-page-list-v328 li').count(),3,'all three original pages survive packet review');
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){
