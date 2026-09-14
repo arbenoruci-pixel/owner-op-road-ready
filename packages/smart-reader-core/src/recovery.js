@@ -57,8 +57,8 @@ export function savedReadingReview(result){
     remaining:reviewQueue(result).length,trainingEligible:false};
 }
 
-// Generic invoice review does not imply a trucking carrier invoice.
+// The host labels its manual invoice choice explicitly as Carrier invoice.
 export function filingTypeForReview(summary){
   if(summary?.documents?.length!==1||!summary.documents[0].typeCorrection)return null;
-  return ({bol:'bol',unloading_receipt:'lumper_receipt',invoice:'other'})[summary.documents[0].kind]??null;
+  return ({bol:'bol',unloading_receipt:'lumper_receipt',invoice:'load_invoice'})[summary.documents[0].kind]??null;
 }

@@ -44,8 +44,16 @@ test('manual type applies only to a single document and uses supported filing ty
  const {filingTypeForReview}=await import('../src/recovery.js');
  const group=kind=>({kind,typeCorrection:{confirmed:true}});
  assert.equal(filingTypeForReview({documents:[group('bol')]}),'bol');
- assert.equal(filingTypeForReview({documents:[group('invoice')]}),'other');
+ assert.equal(filingTypeForReview({documents:[group('invoice')]}),'load_invoice');
  assert.equal(filingTypeForReview({documents:[group('unloading_receipt')]}),'lumper_receipt');
  assert.equal(filingTypeForReview({documents:[group('bol'),group('invoice')]}),null);
  assert.equal(filingTypeForReview({documents:[{kind:'bol'}]}),null);
+});
+
+test('manual missing-field correction names the chosen later page in a joined document',()=>{
+ const result=readDocument({documentId:'joined',pages:[1,2].map(n=>({id:'p'+n,observations:[{...textObservation('BILL OF LADING\nBOL NO: SHARED-42\nSHIP FROM: Sender\nSHIP TO: Receiver'),sourceImageId:'source-'+n}]}))});
+ assert.equal(result.documents.length,1);
+ const next=confirmPageField(result,{...request,documentId:'joined',field:'documentDate',rawValue:'2026-08-18',pageId:'p2',sourceImageId:'source-2'});
+ assert.equal(next.corrections[0].sourcePage.pageNumber,2);assert.equal(next.corrections[0].sourcePage.sourceImageId,'source-2');
+ assert.deepEqual(next.documents[0].pageIds,['p1','p2']);
 });

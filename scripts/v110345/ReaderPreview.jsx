@@ -72,10 +72,13 @@ function ReviewBody({analysis,reviewState,onReviewChange}) {
   },[analysis]);
 
   function update(next){setResult(next);onReviewChange?.({analysis,result:next,summary:savedReadingReview(next)});}
-  function sourceFor(group){
-    for(const page of result.pages.filter(p=>group.pageIds.includes(p.id)))for(const observation of page.observations)if(sources[observation.sourceImageId])return {pageId:page.id,pageNumber:page.number,sourceImageId:observation.sourceImageId};
-    return null;
+  function sourceOptions(group){
+    return result.pages.filter(p=>group.pageIds.includes(p.id)).flatMap(page=>{
+      const observation=page.observations.find(o=>sources[o.sourceImageId]);
+      return observation?[{pageId:page.id,pageNumber:page.number,sourceImageId:observation.sourceImageId}]:[];
+    });
   }
+  function sourceFor(group){return sourceOptions(group)[0]||null;}
   function openItem(item,current=result){
     retryGeneration.current++;setBusy(false);setRereadText('');
     if(!item){setSelection(null);return;}
@@ -122,6 +125,7 @@ function ReviewBody({analysis,reviewState,onReviewChange}) {
   if(!result)return <p role="status">{error||'Preparing source evidence…'}</p>;
   const source=selection?.candidate?resolveEvidence(result,selection.evidence):null;
   const queue=reviewQueue(result);
+  const selectablePages=selection&&!selection.candidate?sourceOptions(result.documents.find(g=>g.id===selection.groupId)):[];
   return <div className="owned-reader-body">
     <p>Check uncertain readings against the page. Confirmed details stay with this scan and are saved on this device when you save the document.</p>
     <div className="owned-reader-recovery"><b>{queue.length} items to check</b><button type="button" disabled={!queue.length||busy} onClick={()=>openItem(queue[0])}>Fix next reading</button></div>
@@ -149,8 +153,9 @@ function ReviewBody({analysis,reviewState,onReviewChange}) {
     {selection?<section ref={inspect} className="owned-reader-inspect" aria-label="Check source">
       <h3>{selection.field?.label||'Document type'} · Page {selection.evidence?.pageNumber||'?'}</h3>
       {source?<blockquote>{source.line.text.slice(0,selection.evidence.start)}<mark>{selection.evidence.quote}</mark>{source.line.text.slice(selection.evidence.end)}</blockquote>:<p>Read the value directly from this original page.</p>}
+      {selectablePages.length>1?<label>Source page<select aria-label="Source page" value={selection.evidence?.pageId||''} onChange={event=>{retryGeneration.current++;setBusy(false);setRereadText('');setDraft('');setError('');setSelection({...selection,evidence:selectablePages.find(p=>p.pageId===event.target.value)});}}>{selectablePages.map(p=><option key={p.pageId} value={p.pageId}>Page {p.pageNumber}</option>)}</select></label>:null}
       {selection.evidence?<SourceImage file={sources[selection.evidence.sourceImageId]} evidence={selection.evidence}/>:<p>The source image is unavailable. Skip this item and check the original file.</p>}
-      <label>{selection.key===null?'Document type':'Confirmed value'}{selection.key===null?<select aria-label="Document type in reader" value={draft} onChange={e=>setDraft(e.target.value)}><option value="">Choose type</option>{reviewKinds.map(k=><option key={k.id} value={k.id}>{k.label}</option>)}</select>:<input aria-label="Confirmed value" value={draft} onChange={e=>setDraft(e.target.value)}/>}</label>
+      <label>{selection.key===null?'Document type':'Confirmed value'}{selection.key===null?<select aria-label="Document type in reader" value={draft} onChange={e=>setDraft(e.target.value)}><option value="">Choose type</option>{reviewKinds.map(k=><option key={k.id} value={k.id}>{k.id==='invoice'?'Carrier invoice':k.label}</option>)}</select>:<input aria-label="Confirmed value" value={draft} onChange={e=>setDraft(e.target.value)}/>}</label>
       {selection.key&&sources[selection.evidence?.sourceImageId]?<button type="button" disabled={busy} onClick={retryArea}>{busy?'Reading area…':'Reread this area'}</button>:null}
       {rereadText?<p role="status">{rereadText}</p>:null}
       <button type="button" disabled={busy||!selection.evidence||!draft.trim()} onClick={()=>confirm(true)}>Save &amp; next</button>

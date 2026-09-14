@@ -261,6 +261,38 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.ok(detailField.candidates[0].evidence[0].sourceImageId.endsWith('1-identifier-detail'));
     await page.getByRole('button',{name:'Back',exact:true}).click();
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),1);
+    // A joined document lets a missing field cite its actual later page.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+    await seed(page,state);
+    const joinedPhotos=await page.evaluate(async()=>{
+      const texts=['BILL OF LADING','BOL No: JOINED-345','Ship From: Example Sender','Ship To: Example Receiver'];
+      const rows=texts.map((text,i)=>({text,confidence:.96,box:{x:.05,y:.04+i*.065,width:.65,height:.024}}));
+      window.__ownedReaderPacket=[[rows],[rows]];window.__ownedReaderPacketPage=-1;
+      const photos=[];
+      for(let n=1;n<=2;n++){
+        const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;const ctx=canvas.getContext('2d');
+        ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
+        texts.forEach((text,i)=>ctx.fillText(text,35,64+i*65));if(n===2)ctx.fillText('DATE: 2026-08-18',35,350);
+        photos.push([...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())]);
+      }return photos;
+    });
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles(joinedPhotos.map((bytes,i)=>({name:`joined-${i+1}.jpg`,mimeType:'image/jpeg',buffer:Buffer.from(bytes)})));
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    const joinedOpen=page.getByRole('button',{name:'Reader preview · Check source',exact:true});
+    await page.locator('.owned-reader-preview').waitFor();if(await joinedOpen.isVisible())await joinedOpen.click();
+    await review.getByText('2 pages · 1 document',{exact:true}).waitFor();
+    await review.getByRole('button',{name:'Enter document date from page',exact:true}).click();
+    await review.getByLabel('Source page',{exact:true}).selectOption('page-2');
+    await review.getByRole('img',{name:'Source image for page 2',exact:true}).waitFor();
+    await review.getByLabel('Confirmed value',{exact:true}).fill('2026-08-18');
+    await review.getByRole('button',{name:'Confirm value',exact:true}).click();
+    const joinedDownload=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const joinedExport=JSON.parse(fs.readFileSync(await(await joinedDownload).path(),'utf8'));
+    assert.equal(joinedExport.corrections[0].sourcePage.pageNumber,2);
+    assert.ok(joinedExport.corrections[0].sourcePage.sourceImageId.includes('page-2:'));
+    assert.equal(joinedExport.documents.length,1);assert.equal(joinedExport.pageCount,2);
     // Unknown pages can be typed and corrected, then persist beside their original.
     await page.goto(new URL('/_not-found',page.url()).href);
     await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
@@ -299,6 +331,19 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await recentReview.getByText('Reviewed document details',{exact:true}).click();
     await recentReview.getByText('MANUAL-345',{exact:true}).waitFor();
     await recentReview.screenshot({path:`${output}/${name}-saved-corrections.png`});
+    // The explicit Carrier invoice choice uses the real application catalog ID.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+    await seed(page,state);await page.evaluate(()=>{window.__ownedReaderLines=['Unreadable invoice header'];});
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'invoice-recovery.jpg',mimeType:'image/jpeg',buffer:Buffer.from(invoicePhoto)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByRole('button',{name:'Choose document type',exact:true}).click();
+    await review.getByLabel('Document type in reader',{exact:true}).selectOption({label:'Carrier invoice'});
+    await review.getByRole('button',{name:'Save & next',exact:true}).click();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'load_invoice');
+    await review.getByRole('heading',{name:'Invoice number · Page 1',exact:true}).waitFor();
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){
