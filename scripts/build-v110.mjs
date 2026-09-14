@@ -52,6 +52,7 @@ steps.push('finalize-document-access-v110344.mjs','test-document-original-v11034
 steps.push('finalize-paper-recovery-v110345.mjs','test-paper-quality-v110345.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-reader-identifiers-v110346.mjs','test-reader-identifiers-v110346.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-saved-reread-v110347.mjs','test-saved-reread-v110347.mjs','test-reread-cancellation-v110347.mjs','test-reread-pdf-sources-v110347.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-pdf-reading-v110348.mjs','test-pdf-reading-v110348.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
