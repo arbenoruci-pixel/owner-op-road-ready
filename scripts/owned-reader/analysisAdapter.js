@@ -24,6 +24,10 @@ export function inputFromScanAnalysis(analysis, {documentId='scan-review',dimens
           confidence:Number.isFinite(line.confidence)&&line.confidence>=0&&line.confidence<=100?line.confidence/100:null,
           ...(valid?{box:{x:left/size.width,y:top/size.height,width:width/size.width,height:height/size.height}}:{})};
       })}:textObservation(pass.text||'',{id:observationId,source:'existing-phone-ocr'});
+      if(!useLayout)for(const line of observation.lines){
+        const readings=(pass.lines||[]).filter(source=>String(source.text||'').trim()===line.text.trim()).map(source=>source.confidence).filter(value=>Number.isFinite(value)&&value>=0&&value<=100);
+        line.confidence=readings.length?Math.min(...readings)/100:Number.isFinite(pass.confidence)&&pass.confidence>=0&&pass.confidence<=1?pass.confidence:null;
+      }
       if(size)observation.sourceImageId=`${documentId}:${id}:${observationId}`;
       return observation;
     });

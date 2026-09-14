@@ -25,3 +25,25 @@ export function validateInvoice(fields) {
   }
   return [{id:'invoice_arithmetic',status,fields:[...amountKeys]}];
 }
+
+export function validateUnloadingReceipt(fields){
+  const keys=['amount','fee','total'],issue='receipt_arithmetic_mismatch';
+  const values=keys.map(key=>{
+    const field=fields[key];
+    if(field.issues.includes(issue)){
+      field.issues=field.issues.filter(item=>item!==issue);
+      const candidates=[...new Set(field.candidates.map(c=>c.value).filter(value=>value!==null))];
+      field.value=field.issues.length?null:field.correction?.value??(candidates.length===1?candidates[0]:null);
+      field.status=field.issues.length?'needs_review':field.correction?'confirmed':field.value!==null?'supported':'missing';
+    }
+    if(field.value!==null)return normalizeValue('amount',field.value).minorUnits;
+    // Geometry can require confirmation while the three observed numbers can
+    // still be compared. Do not conceal weak or conflicting recognition.
+    if(field.issues.some(item=>item!=='layout_needs_review'))return null;
+    const candidates=[...new Set(field.candidates.map(c=>c.value).filter(value=>value!==null))];
+    return candidates.length===1?normalizeValue('amount',candidates[0]).minorUnits:null;
+  });
+  const status=values.every(value=>value!==null)?values[0]+values[1]===values[2]?'passed':'needs_review':'not_checked';
+  if(status==='needs_review')for(const key of keys){fields[key].issues.push(issue);fields[key].value=null;fields[key].status='needs_review';}
+  return [{id:'receipt_arithmetic',status,fields:keys}];
+}

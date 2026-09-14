@@ -14,7 +14,7 @@ test('non-negotiable headings and interleaved shipping blocks retain exact evide
   assert.equal(group.fields.bolNumber.status,'missing');
   assert.equal(group.fields.documentDate.status,'missing','unlabeled and commodity dates are not document dates');
   assert.equal(group.fields.trailerNumber.status,'missing','a street number in the other column is not a trailer');
-  assert.deepEqual(group.fields.shipper.candidates.map(c=>c.rawValue).sort(),['Example Foods Ing','Example Foods Inc','Signature/Date Trailer Loaded: Freight Counted:'].sort());
+  assert.deepEqual(group.fields.shipper.candidates.map(c=>c.rawValue).sort(),['Example Foods Ing','Example Foods Inc'].sort());
   assert.equal(group.fields.shipper.value,null);
   assert.ok(group.fields.shipper.issues.includes('conflicting_reads'));
   assert.ok(group.fields.shipper.issues.includes('layout_needs_review'));

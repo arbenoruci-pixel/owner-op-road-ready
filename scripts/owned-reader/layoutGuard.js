@@ -1,9 +1,22 @@
 import {PROFILES,normalizeValue} from '../../../../packages/smart-reader-core/src/profiles.js';
+import {reviewScanAnalysis} from './ownedReaderAdapter.js';
 
 // The legacy parser flattens columns. Its inferred party/trailer values may
 // only remain in the filing form when the OCR lines establish the label/value
 // together. Below-label proposals remain available for source review instead.
 export function guardOcrLayoutReading(result={}) {
+  const owned=reviewScanAnalysis(result);
+  const separated=owned.documents.length>1&&(owned.documents.some(document=>document.kind!=='unknown')||['bol','lumper_receipt','invoice'].includes(result.type?.id));
+  if(result.typeEvidenceV110334?.mixedDocuments||separated){
+    const review=result.evidenceReviewV11036||{};
+    const reason='Separate documents are included. Review the fields under each document; the PDF keeps all pages.';
+    return {...result,fields:{references:[],poNumbers:[],needsFieldReview:true},fieldEvidence:{},fieldConfidence:{},
+      needsReview:true,needsFieldReview:true,matchedLoad:null,matchedLoadNo:'',routing:{...result.routing,autoFile:false},
+      confidence:Math.min(.49,Number(result.confidence||0)),
+      typeEvidenceV110334:{...result.typeEvidenceV110334,mixedDocuments:true,requiresTypeReview:true,clearShipmentFields:true,reason:result.typeEvidenceV110334?.mixedDocuments?result.typeEvidenceV110334.reason||reason:reason},
+      packetReviewV110338:{separateFields:true},
+      evidenceReviewV11036:{...review,evidence:{},suggestedLoad:null,issues:[...new Set([...(review.issues||[]),reason])]}};
+  }
   if(!['bol','pod'].includes(result.type?.id))return result;
   const passes=(result.ocrEvidenceV110323||[]).filter(pass=>pass.lines?.length);
   if(!passes.length)return result;
