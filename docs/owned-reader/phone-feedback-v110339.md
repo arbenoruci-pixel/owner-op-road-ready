@@ -18,13 +18,15 @@ from the uncorrected third image.
   that would trim the already corrected borders. Original photos remain intact.
 - End flattened OCR values at explicit neighboring labels, such as Sales Order,
   Delivery, Load Description and Restacks. Preserve exact source ranges.
-- Read explicit BOL and date labels in merged header rows. Exclude instruction
+- Read explicit BOL and date labels at field boundaries in merged rows,
+  including the recognized receipt-number/date header. Exclude qualified
+  previous-BOL references and revision/expiration dates, as well as instruction
   references, delivery dates and legal party prose. Preserve malformed timestamps,
   weak recognition and conflicting reads for review instead of accepting a guess.
 
 ## Verification
 
-- Thirty-four core reader tests cover exact source evidence, separate document
+- Thirty-six core reader tests cover exact source evidence, separate document
   fields, conflicting observations, malformed timestamps and correction math.
 - Nine procedural angled scenes and 216 corner permutations retain all four
   marks, exclude the scene and leave original pixels unchanged.

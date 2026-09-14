@@ -8,6 +8,10 @@ const beside=(label,pattern,kind,rightLabel,required=false)=>({...field(label,pa
 const labeledAmount=label=>new RegExp(`^[\\s|]*(?:${label})[ \\t]*:?[ \\t]+([$€£]?[ \\t]*\\d[\\d.,]*(?:[ \\t]+(?:USD|EUR|GBP|CAD|AUD|CHF))?)[ \\t|]*$`,'id');
 const dateToken=/^(?:\d{1,4}(?:[-/.][A-Za-z0-9]+){2}|\d{1,2} [A-Za-z]+ \d{4})(?:[ T]\d[^\s|]*)?(?=\s|$)/;
 
+// A suffix inside a qualified label is not the identity/date of this document.
+const documentDateLabel=/(?:^|\|)[ \t]*DATE[ \t]*:[ \t]*/i;
+const receiptDateLabel=/(?:^|\|)[ \t]*(?:RECEIPT[ \t]*(?:NUMBER\b|NO\b\.?|#|:|¢)[ \t:#]*[A-Z0-9][A-Z0-9._/-]*[ \t]+)?DATE[ \t]*:[ \t]*/i;
+
 export const PROFILES = Object.freeze([
   {
     id:'invoice', label:'Invoice',partyKeys:['vendor'],
@@ -30,12 +34,12 @@ export const PROFILES = Object.freeze([
     structuralSignals:[/^\s*(?:SHIP\s*FROM|FROM)\s*:/i,/^\s*CONSIGNED(?:\s+TO)?\s*:?\s*$/i,/^\s*CARRIER\s*:/i,/^\s*TOTAL\s+(?:NET\s+)?WEIGHT\s*:/i,/\b(?:THIS|ORIGINAL)\s+BILL\s+OF\s+LADING\b/i],
     identity:'bolNumber',
     fields:{
-      bolNumber:{...field('BOL number',identifier('BOL|B/L|BILL OF LADING'),'identifier',true),maxY:.4,inlineLabel:/(?:^|[\s|])(?:BOL|B\/L|BILL OF LADING)[ \t]*(?:NUMBER\b|NO\b\.?|ID\b|#|:)[ \t:#]*/i},
+      bolNumber:{...field('BOL number',identifier('BOL|B/L|BILL OF LADING'),'identifier',true),inlineLabel:/(?:^|\|)[ \t]*(?:BOL|B\/L|BILL OF LADING)[ \t]*(?:NUMBER\b|NO\b\.?|ID\b|#|:)[ \t:#]*/i},
       shipper:{...beside('Shipper',labeled('SHIP[ \\t]*FROM|SHIPPER|FROM'),'party',/^\s*(?:SHIP\s*FROM|SHIPPER|FROM)\s*:\s*$/i,true),blockLabel:/^\s*(?:SHIP\s*FROM|SHIPPER)\s*[:.]*\s*$/i},
       consignee:{...beside('Consignee',labeled('SHIP[ \\t]*TO|CONSIGNEE|CONSIGNED TO'),'party',/^\s*(?:SHIP\s*TO|CONSIGNEE|CONSIGNED(?:\s+TO)?)\s*:?\s*$/i,true),blockLabel:/^\s*(?:SHIP\s*TO|CONSIGNEE)\s*[:.]*\s*$/i},
       carrier:beside('Carrier',labeled('CARRIER(?: NAME)?'),'party',/^\s*CARRIER(?:\s+NAME)?\s*:\s*$/i),
       trailerNumber:field('Trailer number',identifier('TRAILER'),'identifier'),
-      documentDate:{...beside('Document date',labeled('DATE'),'date',/^\s*DATE\s*:\s*$/i),maxY:.4,inlineLabel:/\bDATE\s*:\s*/i,valuePattern:dateToken},
+      documentDate:{...beside('Document date',labeled('DATE'),'date',/^\s*DATE\s*:\s*$/i),maxY:.4,inlineLabel:documentDateLabel,valuePattern:dateToken},
       poNumber:field('PO number',identifier('PO|P\\.O\\.|PURCHASE ORDER'),'identifier'),
       weight:field('Weight',labeled('TOTAL WEIGHT|WEIGHT'),'weight'),
     },
@@ -47,7 +51,7 @@ export const PROFILES = Object.freeze([
     identity:'receiptNumber',
     fields:{
       receiptNumber:field('Receipt number',/^\s*RECEIPT\s*(?:NUMBER\b|NO\b\.?|#|:)[ \t:#]*([A-Z0-9][A-Z0-9._/-]*)(?=\s*(?:$|\||DATE\b))/id,'identifier',true),
-      receiptDate:{...beside('Receipt date',labeled('DATE'),'date',/^\s*DATE\s*:\s*$/i),maxY:.4,inlineLabel:/\bDATE\s*:\s*/i,valuePattern:dateToken},
+      receiptDate:{...beside('Receipt date',labeled('DATE'),'date',/^\s*DATE\s*:\s*$/i),maxY:.4,inlineLabel:receiptDateLabel,valuePattern:dateToken},
       carrier:beside('Carrier',labeled('CARRIER'),'party',/^\s*CARRIER\s*:\s*$/i),
       location:beside('Location',labeled('LOCATION'),'text',/^\s*LOCATION\s*:\s*$/i),
       poNumber:beside('PO number',identifier('PO|P\\.O\\.'),'identifier',/^\s*(?:PO|P\.O\.)\s*(?:NO\.?|NUMBER|#)\s*:\s*$/i),

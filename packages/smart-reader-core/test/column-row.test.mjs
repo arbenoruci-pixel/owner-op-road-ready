@@ -9,7 +9,7 @@ function mergedRows(){
   input.pages[0].observations.unshift(observation('merged-shipping',[
     ['carrier and shipper (or where carrier has been engaged by Example Transport)',.06],
     ['carrier and Example Transport), the property described above is received.',.07],
-    ['Unclear header text B/L NO. 0088123456',.09,.62],
+    ['Unclear header text | B/L NO. 0088123456',.09,.62],
     ['CARRIER: Example Logistics SALES ORDER: ORDER-778',.18],
     ['FROM: Northern Foods DELIVERY: DELIVERY-321',.20],
     ['PO#: PO-1144 * If shipper moves between two ports',.55],
@@ -70,5 +70,34 @@ test('date row segmentation retains malformed timestamps for review',()=>{
     const field=readDocument(input).documents[0].fields.receiptDate;
     assert.equal(field.candidates[0].rawValue,stamp);
     assert.equal(field.value,null,'an invalid timestamp cannot silently become an accepted date');
+  }
+});
+
+
+test('qualified BOL references cannot conflict with or replace the document identity',()=>{
+  const input=mixedPacketInput();input.pages=[input.pages[0]];
+  const rows=input.pages[0].observations[0].lines;
+  rows.push(...['PREVIOUS BOL NO: OLD123','ORIGINAL B/L NO: OLD456','RELATED BILL OF LADING NO: OLD789'].map(text=>({text,confidence:.99,box:{x:.1,y:.2,width:.7,height:.01}})));
+  let result=readDocument(input);
+  assert.equal(result.documents[0].fields.bolNumber.candidates.length,0);
+  assert.deepEqual(result.pageIdentities[0].references.bol,[]);
+  rows.push({text:'BOL NO: CURRENT123',confidence:.99,box:{x:.1,y:.6,width:.3,height:.01}});
+  result=readDocument(input);
+  assert.equal(result.documents[0].fields.bolNumber.value,'CURRENT123','a standalone identity remains readable below the header');
+  assert.deepEqual(result.pageIdentities[0].references.bol,['CURRENT123']);
+  const second=structuredClone(input.pages[0]);second.id='p-other';second.observations[0].lines.at(-1).text='BOL NO: CURRENT456';input.pages.push(second);
+  assert.equal(readDocument(input).documents.length,2,'shared previous references cannot join different current documents');
+});
+
+test('qualified dates cannot conflict with or replace document and receipt dates',()=>{
+  for(const pageIndex of [0,2]){
+    const input=mixedPacketInput();input.pages=[input.pages[pageIndex]];
+    const rows=input.pages[0].observations[0].lines;for(let i=rows.length-1;i>=0;i--)if(/^DATE:/.test(rows[i].text))rows.splice(i,1);
+    rows.push(...['REVISION DATE: 2020-01-01','EXPIRATION DATE: 2027-01-01','DELIVERY DATE: 2026-10-20','PRINTED DATE: 2026-10-18'].map(text=>({text,confidence:.99,box:{x:.1,y:.2,width:.7,height:.01}})));
+    const key=pageIndex===0?'documentDate':'receiptDate';
+    assert.equal(readDocument(input).documents[0].fields[key].candidates.length,0);
+    rows.push({text:'Header column | DATE: 2026-10-19',confidence:.99,box:{x:.1,y:.2,width:.7,height:.01}});
+    const field=readDocument(input).documents[0].fields[key];
+    assert.equal(field.value,'2026-10-19');assert.equal(field.candidates.length,1);
   }
 });
