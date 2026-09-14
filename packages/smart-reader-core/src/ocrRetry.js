@@ -20,13 +20,21 @@ export function needsReadingRetry(passes){
   if(!passes.length)return true;
   const observations=passes.map(passObservation);
   const doc=readDocument({documentId:'coverage',pages:[{id:'page',observations}]}).documents[0];
-  return doc.kind==='unknown'||Object.values(doc.fields).some(f=>f.required&&!f.candidates.some(c=>c.value!==null));
+  return doc.kind==='unknown'||doc.checks.some(check=>check.status==='needs_review')||Object.values(doc.fields).some(f=>f.required&&!f.candidates.some(c=>c.value!==null));
 }
 
 export function hasReadableBolReference(passes){
   const pages=[{id:'coverage',number:1,observations:passes.map(passObservation)}];
   const field=fieldsForProfile(pages,'bol').bolNumber;
-  return field.status==='supported'&&field.candidates.every(candidate=>candidate.evidence.every(e=>e.recognizerConfidence!==null&&e.recognizerConfidence>=.8));
+  return field.status==='supported'&&field.candidates.some(candidate=>candidate.evidence.some(e=>!e.matchIssue&&e.recognizerConfidence!==null&&e.recognizerConfidence>=.8));
+}
+
+// Paper cleanup can alter a digit while OCR still reports high confidence.
+// Financial pages get one original-pixel read; arithmetic never invents a sum.
+export function needsAmountSourceVerification(passes){
+  if(!passes.length)return false;
+  const {documents}=readDocument({documentId:'amount-coverage',pages:[{observations:passes.filter(pass=>pass.scope!=='region').map(passObservation)}]});
+  return documents.some(doc=>Object.values(doc.fields).some(field=>field.kind==='amount'&&field.candidates.some(candidate=>candidate.value!==null)));
 }
 
 // A damaged label can suggest a reread region, never an accepted value.
