@@ -1,0 +1,8 @@
+.owned-reader-recovery{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;background:#e5f3ec;border-radius:10px}
+.owned-reader-inspect{scroll-margin-top:20px}
+.owned-reader-inspect select{display:block;width:100%;min-height:44px;padding:10px;background:white;color:#173d33;border:1px solid #8ca99f;border-radius:8px}
+.owned-reader-inspect button:disabled{opacity:.5}
+.saved-reading-review-v345{margin:12px 0;padding:12px;border:1px solid #b8ccc7;border-radius:12px;background:#f7fcfa;color:#183c35;overflow-wrap:anywhere}
+.saved-reading-review-v345 summary{padding:8px 0;cursor:pointer;font-weight:700}
+.saved-reading-review-v345 dl>div{padding:8px 0;border-top:1px solid #dbe6e0}
+.saved-reading-review-v345 dt{font-weight:700}.saved-reading-review-v345 dd{margin:0}

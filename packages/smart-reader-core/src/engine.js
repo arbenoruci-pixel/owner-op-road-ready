@@ -97,18 +97,23 @@ function extractField(pages, spec) {
     value:values.length===1&&!issues.length?values[0]:null,candidates,issues};
 }
 
+export function fieldsForProfile(pages,kind) {
+  const profile=PROFILES.find(p=>p.id===kind);
+  return profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(pages,spec)])):{};
+}
+
 export function readDocument(input) {
   const {documentId,pages}=normalizeInput(input);
   const identities=pages.map(classifyPage);
   const documents=makeGroups(pages,identities).map(group=>{
     const profile=PROFILES.find(p=>p.id===group.kind);
     const groupPages=pages.filter(p=>group.pageIds.includes(p.id));
-    const fields=profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(groupPages,spec)])):{};
+    const fields=fieldsForProfile(groupPages,group.kind);
     const checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):[];
     return {...group,label:profile?.label||'Uncategorized document',fields,checks,
       requiresReview:true,canAutoFile:false};
   });
-  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.5',documentId,pages,
+  const result={contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.6',documentId,pages,
     pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,
     pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),
     calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};

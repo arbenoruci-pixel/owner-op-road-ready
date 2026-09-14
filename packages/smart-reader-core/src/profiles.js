@@ -9,8 +9,8 @@ const labeledAmount=label=>new RegExp(`^[\\s|]*(?:${label})[ \\t]*:?[ \\t]+([$�
 const dateToken=/^(?:\d{1,4}(?:[-/.][A-Za-z0-9]+){2}|\d{1,2} [A-Za-z]+ \d{4})(?:[ T]\d[^\s|]*)?(?=\s|$)/;
 
 // A suffix inside a qualified label is not the identity/date of this document.
-const documentDateLabel=/(?:^|\|)[ \t]*DATE[ \t]*:[ \t]*/i;
-const receiptDateLabel=/(?:^|\|)[ \t]*(?:RECEIPT[ \t]*(?:NUMBER\b|NO\b\.?|#|:|¢)[ \t:#]*[A-Z0-9][A-Z0-9._/-]*[ \t]+)?DATE[ \t]*:[ \t]*/i;
+const documentDateLabel=/(?:^|\|)[ \t]*DATE(?:[ \t]*:[ \t]*|[ \t]+)/i;
+const receiptDateLabel=/(?:^|\|)[ \t]*(?:RECEIPT[ \t]*(?:NUMBER\b|NO\b\.?|#|:|¢)[ \t:#]*[A-Z0-9][A-Z0-9._/-]*[ \t]+)?DATE(?:[ \t]*:[ \t]*|[ \t]+)/i;
 // OCR may flatten two printed columns into one row. Accept only an explicit
 // preceding PO field, so instructions and historical references stay excluded.
 const receiptBreakdown=/\b(?:UNLOADING|LUMPER)\b|^\s*(?:(?:P\.?[ \t]*O\.?)\s*(?:NUMBER\b|NO\b\.?|#|:)[ \t:#]*[A-Z0-9][A-Z0-9._/-]*[ \t|]+)?LOAD\s+DESCRIPTION\s*:\s*(?:BREAKDOWN|UNLOAD)\b/i;

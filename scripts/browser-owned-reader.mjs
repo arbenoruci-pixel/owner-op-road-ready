@@ -23,6 +23,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
         if(window.__ownedReaderPacket&&String(parameters.tessedit_pageseg_mode)==='3'){window.__ownedReaderPacketPage++;window.__ownedReaderPacketRead=0;}
       },terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
+        if(window.__ownedReaderFail)throw new Error('fixture OCR failure');
         if(window.__ownedReaderLayout||window.__ownedReaderPacket){
           const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
           const observations=window.__ownedReaderPacket?.[window.__ownedReaderPacketPage];
@@ -65,16 +66,32 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.ok(Math.abs(highlightTop-10.5)<.2,'highlight follows the BOL number at its original page position after OCR image resizing');
     await review.locator('.owned-reader-inspect').screenshot({path:`${output}/${name}-source.png`});
     await review.getByLabel('Confirmed value',{exact:true}).fill('BOL-129');
-    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
-    await review.getByText('Confirmed in preview',{exact:true}).waitFor();
+    await review.getByRole('button',{name:'Confirm value',exact:true}).click();
+    await review.getByText('Confirmed',{exact:true}).waitFor();
     assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),folder,'preview corrections do not assign or rename the load');
     assert.equal(await page.evaluate(()=>window.__ownedReaderCalls),calls,'source review does not rerun OCR');
+    // Closing and reopening keeps confirmations; a missing optional date is editable.
+    await page.getByRole('button',{name:'Reader preview · Close',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByText('BOL-129',{exact:true}).waitFor();
+    await review.getByRole('button',{name:'Fix next reading',exact:true}).click();
+    await review.getByRole('heading',{name:'Document date · Page 1',exact:true}).waitFor();
+    await page.evaluate(()=>{window.__ownedReaderFail=true;});
+    await review.getByRole('button',{name:'Reread this area',exact:true}).click();
+    await review.getByText('Rereading failed. You can still enter the value or skip this field.',{exact:true}).waitFor();
+    await page.evaluate(()=>{window.__ownedReaderFail=false;});
+    await review.getByLabel('Confirmed value',{exact:true}).fill('2026-08-18');
+    await review.getByRole('button',{name:'Save & next',exact:true}).click();
+    await review.getByText('0 items to check',{exact:true}).waitFor();
     const download=page.waitForEvent('download');
     await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const file=await download;const saved=JSON.parse(fs.readFileSync(await file.path(),'utf8'));
     assert.equal(saved.documents[0].fields.bolNumber.value,'BOL-129');
     assert.equal(saved.corrections[0].sourceQuote,'BOL-123');
     assert.equal(saved.corrections[0].trainingEligible,false);
+    assert.equal(saved.documents[0].fields.documentDate.value,'2026-08-18');
+    assert.equal(saved.corrections[1].sourceQuote,null);
+    assert.equal(saved.corrections[1].sourcePage.pageNumber,1);
     assert.equal(saved.documents[0].canAutoFile,false);
     assert.equal(saved.pages[0].observations[0].source,'existing-phone-ocr');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),true,'mobile review fits viewport');
@@ -102,7 +119,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
     await review.getByRole('button',{name:'108.25 · Page 1',exact:true}).click();
     await review.getByLabel('Confirmed value',{exact:true}).fill('118.25');
-    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    await review.getByRole('button',{name:'Confirm value',exact:true}).click();
     const warning=review.getByText('Subtotal plus tax does not match the total. Check the amounts.',{exact:true});
     await warning.waitFor();
     const warningDownload=page.waitForEvent('download');
@@ -113,7 +130,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.equal(inconsistent.documents[0].fields.total.correction.value,'118.25');
     await review.getByRole('button',{name:'8.25 · Page 1',exact:true}).click();
     await review.getByLabel('Confirmed value',{exact:true}).fill('18.25');
-    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    await review.getByRole('button',{name:'Confirm value',exact:true}).click();
     await warning.waitFor({state:'hidden'});
     await review.getByText('118.25',{exact:true}).waitFor();
     // Real two-column OCR lines pass through the phone adapter and source UI.
@@ -140,7 +157,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Example Foods Inc · Page 1',exact:true}).click();
     const sourceTop=await review.getByLabel('Source line highlight',{exact:true}).evaluate(el=>parseFloat(el.style.top));
     assert.ok(Math.abs(sourceTop-11.8)<.2,'source highlight points below the centered shipping label');
-    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    await review.getByRole('button',{name:'Confirm value',exact:true}).click();
     const layoutDownload=page.waitForEvent('download');
     await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const layoutFile=await layoutDownload,layoutResult=JSON.parse(fs.readFileSync(await layoutFile.path(),'utf8'));
@@ -191,12 +208,12 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.ok(Math.abs(receiptTop-64)<.2,'receipt value highlights its source on the third page');
     await review.locator('.owned-reader-inspect').screenshot({path:`${output}/${name}-packet-source.png`});
     await review.getByLabel('Confirmed value',{exact:true}).fill('195.00');
-    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    await review.getByRole('button',{name:'Confirm value',exact:true}).click();
     const receiptWarning=review.getByText('Unloading amount plus fee does not match the receipt total. Check the amounts.',{exact:true});
     await receiptWarning.waitFor();
     await review.getByRole('button',{name:'$5.00 · Page 3',exact:true}).click();
     await review.getByLabel('Confirmed value',{exact:true}).fill('15.00');
-    await review.getByRole('button',{name:'Confirm value in preview',exact:true}).click();
+    await review.getByRole('button',{name:'Confirm value',exact:true}).click();
     await receiptWarning.waitFor({state:'hidden'});await receiptCheck.waitFor();
     const packetDownload=page.waitForEvent('download');
     await review.getByRole('button',{name:'Export reading review',exact:true}).click();
@@ -244,6 +261,35 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.ok(detailField.candidates[0].evidence[0].sourceImageId.endsWith('1-identifier-detail'));
     await page.getByRole('button',{name:'Back',exact:true}).click();
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),1);
+    // Unknown pages can be typed and corrected, then persist beside their original.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+    await seed(page,state);
+    await page.evaluate(()=>{window.__ownedReaderLines=['Unclear heading','Unclear source text'];});
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'unknown-source.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByRole('button',{name:'Choose document type',exact:true}).click();
+    await review.getByLabel('Document type in reader',{exact:true}).selectOption('bol');
+    await review.getByRole('button',{name:'Save & next',exact:true}).click();
+    await review.getByRole('heading',{name:'BOL number · Page 1',exact:true}).waitFor();
+    await review.getByLabel('Confirmed value',{exact:true}).fill('MANUAL-345');
+    await review.getByRole('button',{name:'Save & next',exact:true}).click();
+    await review.getByRole('heading',{name:'Shipper · Page 1',exact:true}).waitFor();
+    await review.getByRole('button',{name:'Skip for now',exact:true}).click();
+    await review.getByRole('heading',{name:'Consignee · Page 1',exact:true}).waitFor();
+    await review.getByRole('button',{name:'Close source',exact:true}).click();
+    const saveCheck=page.locator('.scan-driver-check-v105 input');if(await saveCheck.count())await saveCheck.check();
+    await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();
+    await page.locator('.scan-saved-v105').waitFor();
+    await page.getByText('Reviewed document details',{exact:true}).click();
+    await page.getByText('MANUAL-345',{exact:true}).waitFor();
+    await page.reload();
+    const storedReview=await page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction('documents_local','readonly'),q=tx.objectStore('documents_local').getAll();tx.oncomplete=()=>{resolve(q.result.map(row=>row.extracted?.readerReviewV110345).find(Boolean));db.close();};};}));
+    assert.equal(storedReview.documents[0].fields.bolNumber.value,'MANUAL-345');
+    assert.deepEqual(storedReview.documents[0].pages,[1]);
+    assert.equal(storedReview.trainingEligible,false);assert.ok(storedReview.remaining>0);
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){
