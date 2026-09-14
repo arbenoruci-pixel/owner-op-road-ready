@@ -220,10 +220,11 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await seed(page,state);
     const detailPhoto=await page.evaluate(async()=>{
       window.__ownedReaderIdentifier=true;
-      window.__ownedReaderLines=['BILL OF LADING','BAL ? 00991234','Ship From: Example Shipper','Ship To: Example Receiver','BODY MUST SURVIVE'];
+      window.__ownedReaderLines=['BILL OF LADING','B/L NO.','Ship From: Example Shipper','Ship To: Example Receiver','BODY MUST SURVIVE'];
       const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
       const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
-      window.__ownedReaderLines.forEach((line,i)=>ctx.fillText(line,30,64+i*65));
+      // The source contains digits that all three whole-page OCR stubs miss.
+      window.__ownedReaderLines.forEach((line,i)=>ctx.fillText(i===1?line+' 00991234':line,30,64+i*65));
       return [...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())];
     });
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
