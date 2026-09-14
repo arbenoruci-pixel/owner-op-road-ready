@@ -13,7 +13,7 @@ export function guardOcrLayoutReading(result={}) {
     return {...result,fields:{references:[],poNumbers:[],needsFieldReview:true},fieldEvidence:{},fieldConfidence:{},
       needsReview:true,needsFieldReview:true,matchedLoad:null,matchedLoadNo:'',routing:{...result.routing,autoFile:false},
       confidence:Math.min(.49,Number(result.confidence||0)),
-      typeEvidenceV110334:{...result.typeEvidenceV110334,mixedDocuments:true,requiresTypeReview:true,clearShipmentFields:true,reason},
+      typeEvidenceV110334:{...result.typeEvidenceV110334,mixedDocuments:true,requiresTypeReview:true,clearShipmentFields:true,reason:result.typeEvidenceV110334?.mixedDocuments?result.typeEvidenceV110334.reason||reason:reason},
       packetReviewV110338:{separateFields:true},
       evidenceReviewV11036:{...review,evidence:{},suggestedLoad:null,issues:[...new Set([...(review.issues||[]),reason])]}};
   }

@@ -48,4 +48,8 @@ for(const packet of [sameTypePacket(),sameTypePacket('B-17',{weak:true}),sameTyp
   }
 }
 assert.ok(!finalizeSmartScanAnalysisV11039(sameTypePacket('B-17')).packetReviewV110338,'a supported shared ID with agreeing parties remains a continuation');
+const differentReferences=sameTypePacket('B-17');
+differentReferences.ocrEvidenceV110323[1].text=differentReferences.ocrEvidenceV110323[1].text.replace('B-17','B-18');
+differentReferences.text=differentReferences.ocrEvidenceV110323.map(pass=>`[[PAGE:${pass.page}]]\n${pass.text}`).join('\n');
+assert.match(qualifyScanResultV11036(finalizeSmartScanAnalysisV11039(differentReferences),{}).typeEvidenceV110334.reason,/different BOL numbers/,'keep the concrete split reason alongside per-document field review');
 console.log('PASS — mixed scan retains three pages and per-document receipt amounts without packet-wide payment guesses');
