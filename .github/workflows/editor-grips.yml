@@ -1,0 +1,52 @@
+name: Compact editor boundary grips
+on:
+  pull_request:
+    paths: ['scripts/v110355/**', 'scripts/*v110355.mjs', 'scripts/build-v110.mjs', 'vercel.json', '.github/workflows/editor-grips.yml']
+  push:
+    branches: [main]
+    paths: ['scripts/v110355/**', 'scripts/*v110355.mjs', 'scripts/build-v110.mjs', 'vercel.json', '.github/workflows/editor-grips.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Exact hosted build command and final runtime contracts
+        run: |
+          node -e "const fs=require('fs'), cp=require('child_process'); cp.execSync(JSON.parse(fs.readFileSync('vercel.json')).buildCommand, {stdio:'inherit'});" > /tmp/editor-grips-build.log 2>&1 || { tail -100 /tmp/editor-grips-build.log; exit 1; }
+          node scripts/test-editor-grips-v110355.mjs
+          node scripts/test-paper-log-v110315.mjs
+          node scripts/test-logbook-load-cleanup-v110352.mjs
+          node scripts/test-cycle-week-export-v110353.mjs
+          node scripts/test-dot-signature-labels-v110351.mjs --materialized
+          node scripts/verify-isolation-locks-v110.mjs
+      - name: Chromium and mobile WebKit on the exact final bundle
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/editor-grips-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/browser-editor-grips-v110355.mjs
+          node scripts/browser-modern-editor-v11027.mjs
+          node scripts/browser-insert-interaction-v110316.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: editor-grips-evidence
+          retention-days: 3
+          path: |
+            browser-test-results/
+            /tmp/editor-grips-build.log
+            /tmp/editor-grips-server.log
