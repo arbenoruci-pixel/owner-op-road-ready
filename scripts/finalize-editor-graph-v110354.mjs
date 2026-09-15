@@ -6,16 +6,19 @@ const BUILD='v110354-editor-graph-cleanup';
 const panelPath='source/src/modules/editor/components/CompactGraphPanelV111.jsx';
 let source=fs.readFileSync(panelPath,'utf8');
 
-// The phone editor already has direct Start/End fields immediately below the graph.
-// Keep the graph as a clean preview and remove the duplicate floating START/END
-// grabber rail that covers the duty trace on iOS. Edit and Insert share this panel.
-const before="    {editable && <div className=\"graph-handle-rail-v111\" ref={rail}>{['start', 'end'].map(edge => <button key={edge} type=\"button\" className=\"graph-handle-v110 graph-handle-large-v110 modern-handle-v11027\" role=\"slider\" aria-label={`${edge} time handle`} aria-valuemin={edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} style={{ left: clampedHandleLeftV111(edge,centers[edge]) }} onPointerDown={e => drag(e, edge)} onKeyDown={e => {if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;e.preventDefault(); const direction = e.key === 'ArrowLeft' ? -1 : 1;onEditTime(edge, draggedMinuteV111(selected, edge, selected[edge + 'Min'], direction * (e.shiftKey ? 5 : 1) * 0.894 / 1440, 1));}}><span>{edge.toUpperCase()}</span><b>{timeLabel(selected[edge + 'Min'])}</b><i aria-hidden=\"true\">•••</i></button>)}</div>}";
-const after="    {/* EDITOR_GRAPH_CLEAN_V110354: Start/End are edited with the direct time controls below; no duplicate floating rail over the graph. */}";
-if(!source.includes(after)){
-  assert.equal(source.split(before).length-1,1,'Compact editor floating handle rail anchor changed');
-  source=source.replace(before,after);
+// Edit and Insert already expose direct Start Time / End Time controls below the
+// graph. The compact graph rail duplicates those controls and becomes the two
+// large floating time bubbles seen in the iPhone recording.
+const marker='EDITOR_GRAPH_CLEAN_V110354';
+if(!source.includes(marker)){
+  const rail=/\{editable\s*&&\s*<div\s+className=["']graph-handle-rail-v111["'][\s\S]*?<\/div>\}/;
+  const matches=source.match(new RegExp(rail.source,'g')) || [];
+  assert.equal(matches.length,1,'Expected exactly one materialized compact graph handle rail');
+  source=source.replace(rail,`{/* ${marker}: direct time fields remain below; floating duplicate rail removed. */}`);
 }
-assert.ok(!source.includes('graph-handle-rail-v111\" ref={rail}'),'Floating graph handle rail must be absent');
+assert.ok(!/className=["']graph-handle-rail-v111["']/.test(source),'Floating graph handle rail must be absent');
+assert.ok(source.includes('compact-graph-panel-v111'),'Shared compact graph panel must remain installed');
+assert.ok(source.includes('<LogGraph'),'Graph preview must remain installed');
 fs.writeFileSync(panelPath,source);
 
 const now=new Date().toISOString();
@@ -35,7 +38,6 @@ for(const [path,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP']
 }
 for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx']) fs.writeFileSync(path,fs.readFileSync(path,'utf8').replace(/App v\d+\.\d+\.\d+/g,'App v'+VERSION).replace(/APP V\d+\.\d+\.\d+/g,'APP V'+VERSION));
 
-// The shared panel is the important regression contract: both editors route through it.
 const edit=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8');
 const insert=fs.readFileSync('source/src/modules/editor/InsertEditEventSheet.jsx','utf8');
 assert.ok(edit.includes('<EditorGraphPanel'),'Edit must still render the shared graph panel');
