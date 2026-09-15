@@ -52,34 +52,51 @@ const buttonAfter=`<button type="button" className="backup-secondary" onClick={e
           <p>This weekly file starts at the latest completed 34-hour OFF/SB reset and covers exactly 7×24 hours. If no completed reset is found, it clearly falls back to the latest 7 recorded log days.</p>`;
 patch(screen,buttonBefore,buttonAfter,'Weekly export button anchor');
 
-const now=new Date().toISOString();
-for(const path of ['release-version.json','public/app-version.json']){
-  const value=JSON.parse(read(path));
-  Object.assign(value,{version:VERSION,build:BUILD,force:false,label:'v110.3.53 One-week export from 34h reset',releasedAt:now,updatedAt:now,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,notes:['Add a readable one-week diagnostic export.','Start the export window at the latest completed 34-hour OFF/SB restart and cover exactly seven 24-hour periods.','Include loadInfo and route-bucket diagnostics so stuck load data can be analyzed without exporting the full history.']});
-  fs.writeFileSync(path,JSON.stringify(value,null,2)+'\n');
+// Vercel calls this once before build-v110. Inject a second, final pass immediately
+// before Next build so legacy materializers cannot erase this feature.
+const buildPath='scripts/build-v110.mjs';
+const buildLine="steps.push('finalize-cycle-week-export-v110353.mjs','test-cycle-week-export-v110353.mjs','verify-isolation-locks-v110.mjs');";
+let buildSource=read(buildPath);
+if(!buildSource.includes(buildLine)){
+  const buildAnchor='const program=original.replace(anchor,';
+  assert.equal(buildSource.split(buildAnchor).length-1,1,'Weekly build hook anchor');
+  buildSource=buildSource.replace(buildAnchor,buildLine+'\n'+buildAnchor);
+  fs.writeFileSync(buildPath,buildSource);
 }
-for(const path of ['package.json','package-lock.json']){
-  const value=JSON.parse(read(path));value.version=VERSION;if(value.packages?.[''])value.packages[''].version=VERSION;
-  fs.writeFileSync(path,JSON.stringify(value,null,2)+'\n');
-}
-for(const [path,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
-  let source=read(path);
-  for(const [key,value] of [['VERSION',VERSION],['BUILD',BUILD]]){
-    const pattern=new RegExp(`const ${name}_${key}\\s*=\\s*['\"][^'\"]+['\"];?`);
-    assert.ok(pattern.test(source),`Release marker ${path} ${key}`);
-    source=source.replace(pattern,`const ${name}_${key} = '${value}';`);
-  }
-  fs.writeFileSync(path,source);
-}
-for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx']){
-  fs.writeFileSync(path,read(path).replace(/App v\d+\.\d+\.\d+/g,'App v'+VERSION).replace(/APP V\d+\.\d+\.\d+/g,'APP V'+VERSION));
-}
+
+// Only stamp the release on the second pass, after v110.3.52 has materialized.
 const test='scripts/test-duty-graph-continuity.mjs';
 const before="assert.equal(meta.version,'110.3.52');assert.equal(meta.build,'v110352-day-load-cleanup');";
 const after=`assert.equal(meta.version,'${VERSION}');assert.equal(meta.build,'${BUILD}');`;
 let testSource=read(test);
-if(!testSource.includes(after)){
-  assert.equal(testSource.split(before).length-1,1,'Weekly release test anchor');
-  fs.writeFileSync(test,testSource.replace(before,after));
+if(testSource.includes(before) || testSource.includes(after)){
+  const now=new Date().toISOString();
+  for(const path of ['release-version.json','public/app-version.json']){
+    const value=JSON.parse(read(path));
+    Object.assign(value,{version:VERSION,build:BUILD,force:false,label:'v110.3.53 One-week export from 34h reset',releasedAt:now,updatedAt:now,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,notes:['Keep the v110.3.52 deleted-day load cleanup.','Add a readable one-week diagnostic export.','Start the window at the latest completed 34-hour OFF/SB restart and cover exactly seven 24-hour periods.','Include loadInfo and route-bucket diagnostics so stuck load data can be analyzed without exporting full history.']});
+    fs.writeFileSync(path,JSON.stringify(value,null,2)+'\n');
+  }
+  for(const path of ['package.json','package-lock.json']){
+    const value=JSON.parse(read(path));value.version=VERSION;if(value.packages?.[''])value.packages[''].version=VERSION;
+    fs.writeFileSync(path,JSON.stringify(value,null,2)+'\n');
+  }
+  for(const [path,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
+    let source=read(path);
+    for(const [key,value] of [['VERSION',VERSION],['BUILD',BUILD]]){
+      const pattern=new RegExp(`const ${name}_${key}\\s*=\\s*['\"][^'\"]+['\"];?`);
+      assert.ok(pattern.test(source),`Release marker ${path} ${key}`);
+      source=source.replace(pattern,`const ${name}_${key} = '${value}';`);
+    }
+    fs.writeFileSync(path,source);
+  }
+  for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx']){
+    fs.writeFileSync(path,read(path).replace(/App v\d+\.\d+\.\d+/g,'App v'+VERSION).replace(/APP V\d+\.\d+\.\d+/g,'APP V'+VERSION));
+  }
+  if(!testSource.includes(after)){
+    assert.equal(testSource.split(before).length-1,1,'Weekly release test anchor');
+    fs.writeFileSync(test,testSource.replace(before,after));
+  }
+  console.log('PASS — v110.3.53 one-week export from latest completed 34h reset installed');
+}else{
+  console.log('PREP — v110.3.53 weekly export hooked into final build pass');
 }
-console.log('PASS — v110.3.53 one-week export from latest completed 34h reset installed');
