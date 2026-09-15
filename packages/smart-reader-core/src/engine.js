@@ -6,9 +6,6 @@ import {profileEvidence} from './classification.js';
 
 const partyKey=value=>String(value||'').toUpperCase().replace(/[^\p{L}\p{N}]+/gu,'');
 const semanticKey=(kind,value)=>kind==='party'?partyKey(value):String(value||'');
-const strongEvidence=c=>c.evidence.some(e=>!e.matchIssue&&(e.recognizerConfidence===null||e.recognizerConfidence>=.8));
-const evidenceScore=c=>c.evidence.reduce((score,e)=>score+(e.matchIssue?0:.35)+(e.recognizerConfidence??.5),0);
-const streetParty=value=>/^\s*(?:P\.?\s*O\.?\s+BOX\s+\d|\d+[A-Z]?(?:[-/]\d+)?\s+(?:\S+\s+){0,8}(?:ROAD|STREET|AVENUE|BOULEVARD|DRIVE|LANE|COURT|CIRCLE|TERRACE|PLACE|PARKWAY|HIGHWAY|WAY|TRAIL|LOOP|PIKE|PLAZA|SQUARE|RD|ST|AVE|BLVD|DR|LN|CT|CIR|TER|PL|PKWY|HWY|TRL|PLZ|SQ)\b)/i.test(value||'');
 
 function candidatesFor(pages, spec) {
   const candidates=[];
@@ -65,23 +62,16 @@ function makeGroups(pages, identities) {
 
 function extractField(pages, spec) {
   const candidates=candidatesFor(pages,spec),valid=candidates.filter(c=>c.value!==null);
-  const groups=new Map();
-  for(const candidate of valid){const key=semanticKey(spec.kind,candidate.value);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(candidate);}
-  const strongGroups=[...groups.entries()].filter(([,items])=>items.some(strongEvidence));
-  const issues=[...new Set(candidates.map(c=>c.issue==='layout_needs_review'&&strongGroups.some(([,items])=>items.includes(c))?null:c.issue).filter(Boolean))];
-  let chosen=null;
-  if(strongGroups.length===1){
-    const [key,items]=strongGroups[0];
-    chosen=[...items].sort((a,b)=>evidenceScore(b)-evidenceScore(a)||String(b.value).length-String(a.value).length)[0];
-    const competing=valid.filter(c=>semanticKey(spec.kind,c.value)!==key);
-    const meaningful=competing.filter(c=>strongEvidence(c)||!(spec.kind==='party'&&streetParty(c.value)));
-    if(meaningful.length)issues.push('conflicting_reads');
-  } else if(strongGroups.length>1)issues.push('conflicting_reads');
-  if(!chosen&&valid.length===1&&strongEvidence(valid[0]))chosen=valid[0];
-  if(candidates.some(c=>!strongEvidence(c)&&[...c.evidence,...(c.labelEvidence||[])].some(e=>e.recognizerConfidence!==null&&e.recognizerConfidence<.8)&&(!chosen||semanticKey(spec.kind,c.value)===semanticKey(spec.kind,chosen.value))))issues.push('weak_recognition');
+  const supportedValues=new Set(valid.filter(c=>c.evidence.some(e=>!e.matchIssue&&(e.recognizerConfidence===null||e.recognizerConfidence>=.8))).map(c=>semanticKey(spec.kind,c.value)));
+  const values=[...new Set(valid.map(c=>semanticKey(spec.kind,c.value)))];
+  const issues=[...new Set(candidates.map(c=>c.issue==='layout_needs_review'&&supportedValues.has(semanticKey(spec.kind,c.value))?null:c.issue).filter(Boolean))];
+  if(values.length>1)issues.push('conflicting_reads');
+  if(candidates.some(c=>!supportedValues.has(semanticKey(spec.kind,c.value))&&[...c.evidence,...(c.labelEvidence||[])].some(e=>e.recognizerConfidence!==null&&e.recognizerConfidence<.8)))issues.push('weak_recognition');
   if(!candidates.length&&spec.required)issues.push('required_field_missing');
   const uniqueIssues=[...new Set(issues)];
-  return {label:spec.label,kind:spec.kind,required:spec.required,status:!candidates.length?'missing':chosen&&!uniqueIssues.length?'supported':'needs_review',value:chosen&&!uniqueIssues.length?chosen.value:null,candidates,issues:uniqueIssues};
+  const supportedCandidates=valid.filter(c=>supportedValues.has(semanticKey(spec.kind,c.value)));
+  const chosen=values.length===1&&supportedCandidates.length?supportedCandidates[0]:null;
+  return {label:spec.label,kind:spec.kind,required:spec.required,status:!candidates.length?'missing':uniqueIssues.length?'needs_review':chosen?'supported':'needs_review',value:chosen&&!uniqueIssues.length?chosen.value:null,candidates,issues:uniqueIssues};
 }
 
 export function fieldsForProfile(pages,kind) {const profile=PROFILES.find(p=>p.id===kind);return profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(pages,spec)])):{};}
