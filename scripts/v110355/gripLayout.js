@@ -23,3 +23,10 @@ export function editorGripLayout(start, end, rawWidth) {
     end: { x: ex, left: endLeft, tip: clamp(ex - endLeft, 8, 36), labelLeft: endLabel },
   };
 }
+
+// CSS clamps use the current containing block even before a resize observer fires.
+export function editorGripLeft(edge, left, label = false) {
+  const low = edge === 'start' ? (label ? 0 : 2) : (label ? 66 : 50);
+  const reserve = edge === 'start' ? (label ? 130 : 94) : (label ? 64 : 46);
+  return `clamp(${low}px, ${left}px, calc(100% - ${reserve}px))`;
+}

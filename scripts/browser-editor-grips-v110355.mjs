@@ -109,7 +109,7 @@ for (const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.locator('.cancel-main').click();assert.deepEqual((await stored(page)).eventsByDay,persisted.eventsByDay);
     await page.getByRole('button',{name:'Insert',exact:true}).click();
     await page.getByLabel('Start time',{exact:true}).fill('15:10');await page.getByLabel('End time',{exact:true}).fill('15:25');
-    await page.locator('.editor-duty-grid button').filter({hasText:/^ON$/}).click();
+    await page.locator('.editor-duty-grid button[data-status="ON"]').click();
     await page.locator('.quick-activities-v11023').getByRole('button',{name:'Fuel',exact:true}).click();
     await page.locator('.save-main').click();
     await waitState(page,s=>s.eventsByDay[day].some(e=>e.status==='ON'&&e.startMin===910&&e.endMin===925));

@@ -4,7 +4,7 @@ import { GRAPH as G, graphX } from '../../graph/graphGeometryV110.js';
 import { insertPointerMinuteV110316 } from '../insertInteractionsV110316.js';
 import { timeLabel } from '../../../shared/utils/time.js';
 import { draggedMinuteV111 } from './graphHandlesV111.js';
-import { editorGripLayout } from './editorGripLayoutV110355.js';
+import { editorGripLayout, editorGripLeft } from './editorGripLayoutV110355.js';
 
 // EDITOR_BOUNDARY_GRIPS_V110355: actual minute lines + compact, separate 44px
 // touch targets below the trace. All mutations remain in the existing draft API.
@@ -22,16 +22,22 @@ export default function CompactGraphPanelV111({
   const layout = editorGripLayout(selected?.startMin, selected?.endMin, width);
   useLayoutEffect(() => {
     const node = frame.current;
-    const measure = () => {
+    let pendingFrame;
+    const readSize = () => {
       const next = node?.getBoundingClientRect().width;
       if (next > 0) setWidth(current => Math.abs(current - next) > 0.25 ? next : current);
+    };
+    const measure = () => {
+      readSize();
+      cancelAnimationFrame(pendingFrame);
+      pendingFrame = requestAnimationFrame(readSize);
     };
     measure();
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
     if (node) observer?.observe(node);
     window.addEventListener('resize', measure);
     window.visualViewport?.addEventListener('resize', measure);
-    return () => { observer?.disconnect(); window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure); };
+    return () => { cancelAnimationFrame(pendingFrame); observer?.disconnect(); window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure); };
   }, [wide]);
   useEffect(() => {
     cleanup.current?.();
@@ -112,12 +118,12 @@ export default function CompactGraphPanelV111({
         <svg className="rr-boundary-lines-v110355" viewBox={`0 0 ${G.width} 305`} aria-hidden="true">
           {['start', 'end'].map(edge => <line key={edge} data-editor-boundary={edge} x1={graphX(selected[edge + 'Min'])} x2={graphX(selected[edge + 'Min'])} y1={G.top} y2={305} />)}
         </svg>
-        {['start', 'end'].map(edge => <span key={edge} className="rr-boundary-label-v110355" style={{ left: layout[edge].labelLeft }} aria-hidden="true">{timeLabel(selected[edge + 'Min'])}</span>)}
+        {['start', 'end'].map(edge => <span key={edge} className="rr-boundary-label-v110355" style={{ left: editorGripLeft(edge, layout[edge].labelLeft, true) }} aria-hidden="true">{timeLabel(selected[edge + 'Min'])}</span>)}
         <div className="rr-grip-strip-v110355">
           <svg className="rr-grip-leaders-v110355" viewBox={`0 0 ${layout.width} 44`} preserveAspectRatio="none" aria-hidden="true">
             {['start', 'end'].map(edge => <path key={edge} d={`M ${layout[edge].x} 0 L ${layout[edge].left + layout[edge].tip} 8`} />)}
           </svg>
-          {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110 modern-handle-v11027 rr-time-grip-v110355" role="slider" aria-label={`${edge} time handle`} aria-orientation="horizontal" aria-valuemin={freeInsertBoundaries ? (edge === 'start' ? 0 : 1) : edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={freeInsertBoundaries ? (edge === 'start' ? 1439 : 1440) : edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} data-dragging={dragging === edge} style={{ left: layout[edge].left, '--rr-tip': `${layout[edge].tip}px` }} onPointerDown={e => drag(e, edge)} onKeyDown={e => keyMove(e, edge)} onClick={e => { e.preventDefault(); e.stopPropagation(); }}><i className="rr-grip-tab-v110355" aria-hidden="true" /><span className="rr-grip-name-v110355" aria-hidden="true">{edge.toUpperCase()}</span></button>)}
+          {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110 modern-handle-v11027 rr-time-grip-v110355" role="slider" aria-label={`${edge} time handle`} aria-orientation="horizontal" aria-valuemin={freeInsertBoundaries ? (edge === 'start' ? 0 : 1) : edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={freeInsertBoundaries ? (edge === 'start' ? 1439 : 1440) : edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} data-dragging={dragging === edge} style={{ left: editorGripLeft(edge, layout[edge].left), '--rr-tip': `${layout[edge].tip}px` }} onPointerDown={e => drag(e, edge)} onKeyDown={e => keyMove(e, edge)} onClick={e => { e.preventDefault(); e.stopPropagation(); }}><i className="rr-grip-tab-v110355" aria-hidden="true" /><span className="rr-grip-name-v110355" aria-hidden="true">{edge.toUpperCase()}</span></button>)}
         </div>
       </>}
     </div>
