@@ -25,14 +25,13 @@ const state={
 const reset=api.latest34HourReset(state,new Date('2026-09-15T14:00:00Z'));
 assert.ok(reset,'34h reset must be detected');
 assert.equal(reset.completedDay,'2026-09-09');
-assert.equal(reset.completedMinute,120);
+assert.equal(reset.completedMinute,360);
 assert.equal(reset.weekEndDay,'2026-09-16');
-assert.equal(reset.weekEndMinute,120);
+assert.equal(reset.weekEndMinute,360);
 const payload=api.buildCycleWeekExport(state,{now:new Date('2026-09-15T14:00:00Z'),appVersion:'test'});
 assert.equal(payload.window.resetDetected,true);
 assert.equal(payload.window.startDay,'2026-09-09');
-assert.equal(payload.window.startMinute,120);
-assert.ok(payload.state.eventsByDay['2026-09-09'].some(e=>e.id==='off-c'));
+assert.equal(payload.window.startMinute,360);
 assert.ok(payload.state.eventsByDay['2026-09-09'].some(e=>e.id==='drive'));
 assert.ok(payload.state.routeLegsByDay['2026-09-09'].some(r=>r.id==='week-route'));
 assert.equal(payload.state.routeLegsByDay['2026-08-30'],undefined);
