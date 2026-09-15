@@ -1,0 +1,29 @@
+name: DOT signature presentation
+on:
+  pull_request:
+    paths:
+      - 'scripts/finalize-dot-signature-labels-v110351.mjs'
+      - 'scripts/test-dot-signature-labels-v110351.mjs'
+      - 'scripts/build-v110.mjs'
+      - 'source/src/modules/dot/**'
+      - '.github/workflows/dot-signature-presentation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/finalize-dot-signature-labels-v110351.mjs'
+      - 'scripts/test-dot-signature-labels-v110351.mjs'
+      - 'scripts/build-v110.mjs'
+      - 'source/src/modules/dot/**'
+      - '.github/workflows/dot-signature-presentation.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check scripts/finalize-dot-signature-labels-v110351.mjs
+      - run: node scripts/test-dot-signature-labels-v110351.mjs
