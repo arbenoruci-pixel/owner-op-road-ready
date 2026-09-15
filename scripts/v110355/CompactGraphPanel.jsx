@@ -44,7 +44,7 @@ export default function CompactGraphPanelV111({
     cleanup.current?.();
     setDragging(null);
     return () => cleanup.current?.();
-  }, [selected?.id, editable, wide, width]);
+  }, [selected?.id, editable, wide]);
   useEffect(() => {
     const escape = e => { if (e.key === 'Escape') { cleanup.current?.(); setDragging(null); setWide(false); } };
     window.addEventListener('keydown', escape);
@@ -119,12 +119,12 @@ export default function CompactGraphPanelV111({
         <svg className="rr-boundary-lines-v110355" viewBox={`0 0 ${G.width} 305`} aria-hidden="true">
           {['start', 'end'].map(edge => <line key={edge} data-editor-boundary={edge} x1={graphX(selected[edge + 'Min'])} x2={graphX(selected[edge + 'Min'])} y1={G.top} y2={305} />)}
         </svg>
-        {['start', 'end'].map(edge => <span key={edge} className="rr-boundary-label-v110355" style={{ left: editorGripLeft(edge, layout[edge].labelLeft, true) }} aria-hidden="true">{timeLabel(selected[edge + 'Min'])}</span>)}
+        {['start', 'end'].map(edge => <span key={edge} className="rr-boundary-label-v110355" style={{ left: editorGripLeft(edge, selected.startMin, selected.endMin, true) }} aria-hidden="true">{timeLabel(selected[edge + 'Min'])}</span>)}
         <div className="rr-grip-strip-v110355">
           <svg className="rr-grip-leaders-v110355" viewBox={`0 0 ${layout.width} 44`} preserveAspectRatio="none" aria-hidden="true">
             {['start', 'end'].map(edge => <path key={edge} d={`M ${layout[edge].x} 0 L ${layout[edge].left + layout[edge].tip} 8`} />)}
           </svg>
-          {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110 modern-handle-v11027 rr-time-grip-v110355" role="slider" aria-label={`${edge} time handle`} aria-orientation="horizontal" aria-valuemin={freeInsertBoundaries ? (edge === 'start' ? 0 : 1) : edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={freeInsertBoundaries ? (edge === 'start' ? Math.max(0, limit - 1) : limit) : edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} data-dragging={dragging === edge} style={{ left: editorGripLeft(edge, layout[edge].left), '--rr-tip': `${layout[edge].tip}px` }} onPointerDown={e => drag(e, edge)} onKeyDown={e => keyMove(e, edge)} onClick={e => { e.preventDefault(); e.stopPropagation(); }}><i className="rr-grip-tab-v110355" aria-hidden="true" /><span className="rr-grip-name-v110355" aria-hidden="true">{edge.toUpperCase()}</span></button>)}
+          {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110 modern-handle-v11027 rr-time-grip-v110355" role="slider" aria-label={`${edge} time handle`} aria-orientation="horizontal" aria-valuemin={freeInsertBoundaries ? (edge === 'start' ? 0 : 1) : edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={freeInsertBoundaries ? (edge === 'start' ? Math.max(0, limit - 1) : limit) : edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} data-dragging={dragging === edge} style={{ left: editorGripLeft(edge, selected.startMin, selected.endMin), '--rr-tip': `${layout[edge].tip}px` }} onPointerDown={e => drag(e, edge)} onKeyDown={e => keyMove(e, edge)} onClick={e => { e.preventDefault(); e.stopPropagation(); }}><i className="rr-grip-tab-v110355" aria-hidden="true" /><span className="rr-grip-name-v110355" aria-hidden="true">{edge.toUpperCase()}</span></button>)}
         </div>
       </>}
     </div>

@@ -2,7 +2,7 @@
 import { GRAPH as G, graphX } from '../../graph/graphGeometryV110.js';
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 export function editorGripLayout(start, end, rawWidth) {
-  const width = Math.max(160, Number(rawWidth) || 320);
+  const width = Math.max(160, Number(rawWidth) || 0 || 320);
   const x = minute => graphX(clamp(Number(minute) || 0, 0, 1440)) / G.width * width;
   const sx = x(start), ex = x(end), hit = 44, gap = 4, labelWidth = 64;
   let startLeft = clamp(sx - hit, 2, width - hit - 2);
@@ -24,9 +24,13 @@ export function editorGripLayout(start, end, rawWidth) {
   };
 }
 
-// CSS clamps use the current containing block even before a resize observer fires.
-export function editorGripLeft(edge, left, label = false) {
-  const low = edge === 'start' ? (label ? 0 : 2) : (label ? 66 : 50);
-  const reserve = edge === 'start' ? (label ? 130 : 94) : (label ? 64 : 46);
-  return `clamp(${low}px, ${left}px, calc(100% - ${reserve}px))`;
+// Resolve horizontal positions in CSS against the *current* frame width. This
+// avoids a delayed ResizeObserver moving the target between pointer-down and drag.
+export function editorGripLeft(edge, start, end, label = false) {
+  const size = label ? 64 : 44, gap = label ? 2 : 4, pad = label ? 0 : 2;
+  const percent = minute => graphX(clamp(Number(minute) || 0, 0, 1440)) / G.width * 100;
+  const sx = percent(start), ex = percent(end), mid = (sx + ex) / 2;
+  const startLeft = `clamp(${pad}px, min(calc(${sx}% - ${size}px), calc(${mid}% - ${size + gap / 2}px)), calc(100% - ${2 * size + gap + pad}px))`;
+  if (edge === 'start') return startLeft;
+  return `clamp(${size + gap + pad}px, max(${ex}%, calc(${startLeft} + ${size + gap}px)), calc(100% - ${size + pad}px))`;
 }
