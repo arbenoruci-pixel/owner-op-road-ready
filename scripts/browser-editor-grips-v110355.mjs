@@ -47,8 +47,10 @@ const handle = (page,edge) => page.getByRole('slider',{name:edge+' time handle',
 const boundary = async(page,edge) => Number(await handle(page,edge).getAttribute('aria-valuenow'));
 async function drag(page,edge,delta) {
   const b = await handle(page,edge).boundingBox(), x=b.x+b.width/2,y=b.y+b.height/2;
+  await page.evaluate(({x,y})=>{window.__gripTrace=[];window.__gripHit={x,y,target:document.elementFromPoint(x,y)?.outerHTML?.slice(0,500)};if(!window.__gripTraceInstalled){window.__gripTraceInstalled=true;for(const type of ['pointerdown','pointermove','pointerup','pointercancel','gotpointercapture','lostpointercapture'])window.addEventListener(type,e=>{window.__gripTrace.push({type,id:e.pointerId,x:e.clientX,y:e.clientY,target:e.target?.dataset?.edge,values:[...document.querySelectorAll('.rr-time-grip-v110355')].map(el=>el.getAttribute('aria-valuenow'))});if(window.__gripTrace.length>60)window.__gripTrace.shift();},true);}}, {x,y});
   await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+delta,y,{steps:8});await page.mouse.up();
 }
+
 async function fieldsMatch(page) {
   for (const edge of ['start','end']) {
     const v = await boundary(page,edge), h=Math.floor(v/60)%24,m=v%60;
@@ -93,6 +95,13 @@ for (const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     const persisted=await stored(page);
     await page.getByRole('button',{name:'Insert',exact:true}).click();
     await page.getByLabel('Start time',{exact:true}).fill('10:00');await page.getByLabel('End time',{exact:true}).fill('10:01');
+    // One pointer gesture can cross an edge and then reverse without accumulating duration.
+    for (const [edge,delta] of [['start',40],['end',-40]]) {
+      const b=await handle(page,edge).boundingBox(),x=b.x+22,y=b.y+22;
+      await page.mouse.move(x,y);await page.mouse.down();
+      await page.mouse.move(x+delta,y,{steps:5});await page.mouse.move(x,y,{steps:5});await page.mouse.up();
+      assert.deepEqual([await boundary(page,'start'),await boundary(page,'end')],[600,601]);
+    }
     await inspect(page);await drag(page,'end',12);assert.ok(await boundary(page,'end')>601);
     await drag(page,'start',60);assert.ok(await boundary(page,'start')>600);await fieldsMatch(page);
     // iOS canceled touch restores the whole Insert interval, including a moved companion edge.
@@ -116,10 +125,24 @@ for (const [name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.reload();await page.locator('.logbook-ui-v110').waitFor();
     assert.ok((await stored(page)).eventsByDay[day].some(e=>e.status==='ON'&&e.startMin===910&&e.endMin===925));
     assert.equal(await page.locator('.rr-time-grip-v110355').count(),0,'closed editor leaves no orphan handles');
+    // Today retains the existing paper-log full-day policy; ARIA uses the same limit as direct fields.
+    await page.evaluate(async () => {
+      await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{
+        const db=r.result,tx=db.transaction('app_snapshots','readwrite'),st=tx.objectStore('app_snapshots'),q=st.get('owner-op-road-ready-state-v1');
+        q.onsuccess=()=>{const rec=q.result;rec.state={...rec.state,view:'day',activeDay:'2026-09-15',sheet:null,selectedEventId:null};st.put(rec);};
+        tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);
+      };});
+    });
+    await page.reload();await page.locator('.logbook-ui-v110').waitFor();
+    await page.getByRole('button',{name:'Insert',exact:true}).click();
+    await handle(page,'end').waitFor();
+    assert.equal(Number(await handle(page,'start').getAttribute('aria-valuemax')),1439);
+    assert.equal(Number(await handle(page,'end').getAttribute('aria-valuemax')),1440);
+    await page.locator('.cancel-main').click();
     assert.deepEqual(errors,[]);reports.push({browser:name,passed:true});console.log('PASS — '+name+': compact flags, pointer/keyboard drag, synchronized fields, short/midnight/resize/landscape, Insert cancellation, draft-only changes, Save and durable reopen');
   } catch(error) {
     await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});
-    reports.push({browser:name,passed:false,error:String(error),stack:error.stack,errors});console.error(error);
+    reports.push({browser:name,passed:false,error:String(error),stack:error.stack,errors,trace:await page.evaluate(()=>({hit:window.__gripHit,events:window.__gripTrace})).catch(()=>null)});console.error(error);
   } finally { await browser.close(); }
 }
 fs.writeFileSync(`${output}/results.json`,JSON.stringify(reports,null,2));assert.ok(reports.every(r=>r.passed),JSON.stringify(reports));

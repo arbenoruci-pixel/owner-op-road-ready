@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import vm from 'node:vm';
+import { insertBoundaryV110314 } from '../source/src/modules/editor/insertTimeV110314.js';
 import { editorGripLayout } from '../source/src/modules/editor/components/editorGripLayoutV110355.js';
 import { draggedMinuteV111 } from '../source/src/modules/editor/components/graphHandlesV111.js';
 import { insertPointerMinuteV110316 } from '../source/src/modules/editor/insertInteractionsV110316.js';
@@ -47,3 +49,29 @@ const meta = JSON.parse(fs.readFileSync('public/app-version.json','utf8'));
 assert.equal(meta.version,'110.3.55'); assert.equal(meta.build,'v110355-compact-time-grips'); assert.equal(meta.force,false);
 assert.ok(fs.readFileSync(root.replace('editor/','backup/') + 'BackupLogsScreen.jsx','utf8').includes('exportCycleWeek'));
 console.log(`PASS — ${checks} compact layout cases, exact boundaries, Edit/Insert drag math, immutable data, stable modules, weekly export and release markers`);
+
+// Execute the actual materialized Insert handler across rerenders of one gesture.
+const insertSource = fs.readFileSync(root + 'InsertEditEventSheet.jsx', 'utf8');
+const method = insertSource.slice(insertSource.indexOf('  function onEditTime('), insertSource.indexOf('\n  function quick(', insertSource.indexOf('  function onEditTime(')));
+assert.ok(method.includes('INSERT_GESTURE_ORIGIN_V110355'));
+const gesture = Object.freeze({id:'insert_draft',startMin:600,endMin:601,note:'Fuel'});
+let current = {...gesture};
+function move(edge, minute, original = gesture, limit = 1440) {
+  const run = vm.runInNewContext(method + '\nonEditTime', {
+    mode:'insert',insertDraftEvent:current,selectedExisting:null,insertLimitV110314:limit,
+    insertBoundaryV110314,eventToForm:value=>value,setForm:()=>{},setInsertDraftEvent:value=>{current=value;},
+  });
+  run(edge, minute, original);
+  return [current.startMin,current.endMin];
+}
+assert.deepEqual(move('start',620),[620,621]);
+assert.deepEqual(move('start',600),[600,601],'Start reverse restores original companion');
+assert.deepEqual(move('end',580),[579,580]);
+assert.deepEqual(move('end',601),[600,601],'End reverse restores original companion');
+assert.deepEqual(move('start',700,gesture,689),[688,689]);
+assert.deepEqual(move('end',800,gesture,689),[600,689]);
+assert.equal(current.note,'Fuel');
+assert.ok(insertSource.includes("maxMinute={mode === 'insert' ? insertLimitV110314 : 1440}"));
+assert.ok(source.includes("aria-valuemax={freeInsertBoundaries ? (edge === 'start' ? Math.max(0, limit - 1) : limit)"));
+assert.ok(source.includes('svgWidth), snapshot)'));
+console.log('PASS — actual Insert handler: crossing/reversing both edges stays anchored; elapsed limit and current details retained');

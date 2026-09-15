@@ -10,7 +10,7 @@ import { editorGripLayout, editorGripLeft } from './editorGripLayoutV110355.js';
 // touch targets below the trace. All mutations remain in the existing draft API.
 export default function CompactGraphPanelV111({
   events = [], selectedId, editId, onEditTime, onSelect, onEmptyTap, header,
-  freeInsertBoundaries = false, onRestoreRange,
+  freeInsertBoundaries = false, onRestoreRange, maxMinute = 1440,
 }) {
   const frame = useRef(null), cleanup = useRef(null);
   const callbacks = useRef({ onEditTime, onRestoreRange });
@@ -18,7 +18,8 @@ export default function CompactGraphPanelV111({
   const [wide, setWide] = useState(false), [width, setWidth] = useState(320);
   const [dragging, setDragging] = useState(null);
   const selected = events.find(e => e.id === (editId || selectedId));
-  const editable = !!selected && typeof onEditTime === 'function';
+  const limit = Math.max(0, Math.min(1440, Number.isFinite(maxMinute) ? maxMinute : 1440));
+  const editable = !!selected && typeof onEditTime === 'function' && (!freeInsertBoundaries || limit >= 1);
   const layout = editorGripLayout(selected?.startMin, selected?.endMin, width);
   useLayoutEffect(() => {
     const node = frame.current;
@@ -52,7 +53,7 @@ export default function CompactGraphPanelV111({
 
   function moveMinute(snapshot, edge, initial, delta, svgWidth) {
     return freeInsertBoundaries
-      ? insertPointerMinuteV110316(edge, initial, delta, svgWidth)
+      ? Math.min(edge === 'start' ? Math.max(0, limit - 1) : limit, insertPointerMinuteV110316(edge, initial, delta, svgWidth))
       : draggedMinuteV111(snapshot, edge, initial, delta, svgWidth);
   }
   function drag(e, edge) {
@@ -71,7 +72,7 @@ export default function CompactGraphPanelV111({
       const delta = p.clientX - x;
       if (!moved && Math.abs(delta) < 2) return; // A tap never changes the time.
       moved = true; if (p.cancelable) p.preventDefault();
-      callbacks.current.onEditTime?.(edge, moveMinute(snapshot, edge, initial, delta, svgWidth));
+      callbacks.current.onEditTime?.(edge, moveMinute(snapshot, edge, initial, delta, svgWidth), snapshot);
     };
     const stop = () => {
       if (stopped) return;
@@ -108,7 +109,7 @@ export default function CompactGraphPanelV111({
     if (!editable || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
     e.preventDefault(); e.stopPropagation();
     const delta = (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 5 : 1);
-    onEditTime(edge, moveMinute(selected, edge, selected[edge + 'Min'], delta * 0.894 / 1440, 1));
+    onEditTime(edge, moveMinute(selected, edge, selected[edge + 'Min'], delta * 0.894 / 1440, 1), selected);
   }
   return <div className={`editor-graph-panel editor-graph-wrap-v85 compact-graph-panel-v111 rr-graph-panel-v110355 ${wide ? 'graph-focus-v111' : ''}`}>
     <div className="compact-graph-toolbar-v111 compact-graph-toolbar-minimal-v11024"><button type="button" aria-label={wide ? 'Done graph' : 'Full screen'} aria-expanded={wide} onClick={() => setWide(value => !value)}>{wide ? 'Done' : '↗ Expand'}</button></div>
@@ -123,7 +124,7 @@ export default function CompactGraphPanelV111({
           <svg className="rr-grip-leaders-v110355" viewBox={`0 0 ${layout.width} 44`} preserveAspectRatio="none" aria-hidden="true">
             {['start', 'end'].map(edge => <path key={edge} d={`M ${layout[edge].x} 0 L ${layout[edge].left + layout[edge].tip} 8`} />)}
           </svg>
-          {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110 modern-handle-v11027 rr-time-grip-v110355" role="slider" aria-label={`${edge} time handle`} aria-orientation="horizontal" aria-valuemin={freeInsertBoundaries ? (edge === 'start' ? 0 : 1) : edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={freeInsertBoundaries ? (edge === 'start' ? 1439 : 1440) : edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} data-dragging={dragging === edge} style={{ left: editorGripLeft(edge, layout[edge].left), '--rr-tip': `${layout[edge].tip}px` }} onPointerDown={e => drag(e, edge)} onKeyDown={e => keyMove(e, edge)} onClick={e => { e.preventDefault(); e.stopPropagation(); }}><i className="rr-grip-tab-v110355" aria-hidden="true" /><span className="rr-grip-name-v110355" aria-hidden="true">{edge.toUpperCase()}</span></button>)}
+          {['start', 'end'].map(edge => <button key={edge} type="button" className="graph-handle-v110 graph-handle-large-v110 modern-handle-v11027 rr-time-grip-v110355" role="slider" aria-label={`${edge} time handle`} aria-orientation="horizontal" aria-valuemin={freeInsertBoundaries ? (edge === 'start' ? 0 : 1) : edge === 'start' ? 0 : selected.startMin + 1} aria-valuemax={freeInsertBoundaries ? (edge === 'start' ? Math.max(0, limit - 1) : limit) : edge === 'start' ? selected.endMin - 1 : 1440} aria-valuenow={selected[edge + 'Min']} aria-valuetext={timeLabel(selected[edge + 'Min'])} data-edge={edge} data-dragging={dragging === edge} style={{ left: editorGripLeft(edge, layout[edge].left), '--rr-tip': `${layout[edge].tip}px` }} onPointerDown={e => drag(e, edge)} onKeyDown={e => keyMove(e, edge)} onClick={e => { e.preventDefault(); e.stopPropagation(); }}><i className="rr-grip-tab-v110355" aria-hidden="true" /><span className="rr-grip-name-v110355" aria-hidden="true">{edge.toUpperCase()}</span></button>)}
         </div>
       </>}
     </div>

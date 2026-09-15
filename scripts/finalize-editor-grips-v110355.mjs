@@ -19,7 +19,26 @@ if (!source.includes(css)) {
   source = source.replace(anchor, anchor + '\n' + css);
   fs.writeFileSync(layout, source);
 }
-// Presentation and release markers only; no driver state or stable-module locks.
+// An Insert gesture is anchored to its pointer-down interval. Reversing after
+// crossing the companion edge must not grow that interval cumulatively.
+const insertPath = 'source/src/modules/editor/InsertEditEventSheet.jsx';
+let insert = read(insertPath);
+function patchInsert(from, to) {
+  if (insert.includes(to)) return;
+  assert.equal(insert.split(from).length - 1, 1, 'Insert grip draft anchor');
+  insert = insert.replace(from, to);
+}
+patchInsert('  function onEditTime(edge, minute) {', '  function onEditTime(edge, minute, gestureRange) {');
+patchInsert(
+  '      const range = insertBoundaryV110314(current, edge, minute, insertLimitV110314, true);',
+  `      // INSERT_GESTURE_ORIGIN_V110355: retain current details, use original gesture times.
+      const origin = gestureRange?.id === current.id && Number.isFinite(gestureRange.startMin) && Number.isFinite(gestureRange.endMin)
+        ? gestureRange : current;
+      const range = insertBoundaryV110314(origin, edge, minute, insertLimitV110314, true);`
+);
+patchInsert("        freeInsertBoundaries={mode === 'insert'}", "        freeInsertBoundaries={mode === 'insert'}\n        maxMinute={mode === 'insert' ? insertLimitV110314 : 1440}");
+fs.writeFileSync(insertPath, insert);
+// Presentation/draft interaction and release markers only; no persisted state or stable-module locks.
 for (const path of ['release-version.json', 'public/app-version.json']) {
   const value = JSON.parse(read(path));
   Object.assign(value, { version: VERSION, build: BUILD, force: false,
@@ -53,4 +72,4 @@ if (!read(test).includes(replacement)) {
   assert.equal(read(test).split(old).length - 1, 1, 'Final release contract anchor');
   fs.writeFileSync(test, read(test).replace(old, replacement));
 }
-console.log('PASS — 110.3.55 compact draggable boundaries installed; Logbook state logic unchanged');
+console.log('PASS — 110.3.55 compact draggable boundaries installed; Logbook save logic unchanged');
