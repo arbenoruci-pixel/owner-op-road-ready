@@ -1,0 +1,58 @@
+name: Logbook route cleanup
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'source/src/core/routes/**'
+      - '.github/workflows/logbook-route-cleanup.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/finalize-route-cleanup-v110352.mjs'
+      - 'scripts/v110352/**'
+      - '.github/workflows/logbook-route-cleanup.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Exact production materialization and build
+        run: node scripts/build-v110.mjs > /tmp/route-cleanup-build.log 2>&1
+      - name: Focused data and signature regressions
+        run: |
+          node scripts/test-logbook-load-cleanup-v110352.mjs
+          node scripts/test-route-delete-v110350.mjs
+          node scripts/test-day-form-v110.mjs
+          node scripts/test-duty-graph-continuity.mjs
+          node scripts/test-dot-signature-labels-v110351.mjs --materialized
+          node scripts/verify-isolation-locks-v110.mjs
+      - name: Isolated Chromium and mobile WebKit
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/route-cleanup-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/browser-route-delete-v110350.mjs
+          node scripts/browser-day-load-cleanup-v110352.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logbook-route-cleanup-evidence
+          path: |
+            browser-test-results/
+            /tmp/route-cleanup-build.log
+            /tmp/route-cleanup-server.log
+          retention-days: 3
