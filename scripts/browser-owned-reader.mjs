@@ -88,6 +88,31 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByLabel('Source line highlight',{exact:true}).waitFor();
     const highlightTop=await review.getByLabel('Source line highlight',{exact:true}).evaluate(el=>parseFloat(el.style.top));
     assert.ok(Math.abs(highlightTop-10.5)<.2,'highlight follows the BOL number at its original page position after OCR image resizing');
+    const sourceWindow=review.getByRole('region',{name:'Document source image',exact:true});
+    const sourceImage=review.getByRole('img',{name:'Source image for page 1',exact:true});
+    async function visibleHighlight(label='Source line highlight',wholeLine=true){
+      // Read both rectangles in one frame while the review scrolls into view.
+      const visible=await sourceWindow.evaluate((node,{label,wholeLine})=>{
+        const frame=node.getBoundingClientRect(),box=node.querySelector(`[aria-label="${label}"]`)?.getBoundingClientRect();
+        return box&&(wholeLine?box.x>=frame.x-2&&box.y>=frame.y-2&&box.right<=frame.right+2&&box.bottom<=frame.bottom+2:box.right>frame.x&&box.x<frame.right&&box.bottom>frame.y&&box.y<frame.bottom);
+      },{label,wholeLine});
+      assert.ok(visible,'selected evidence remains inside the focused source window');
+    }
+    await visibleHighlight();
+    assert.ok((await sourceImage.boundingBox()).width>(await sourceWindow.boundingBox()).width,'tapping a field automatically magnifies its source');
+    await review.getByLabel('Confirmed value',{exact:true}).fill('BOL-129');
+    await review.getByRole('button',{name:'Full image',exact:true}).click();
+    const whole=await sourceImage.boundingBox(),frame=await sourceWindow.boundingBox();
+    assert.ok(whole.width<=frame.width+1&&whole.height<=frame.height+1,'full image provides context');
+    await review.getByRole('button',{name:'Zoom in',exact:true}).click();
+    assert.ok((await sourceImage.boundingBox()).height>whole.height,'zoom control enlarges the source');
+    await review.getByRole('button',{name:'Zoom out',exact:true}).click();
+    await review.getByRole('button',{name:'Focus on field',exact:true}).click();
+    await sourceWindow.evaluate(node=>node.scrollTo(0,0));
+    await review.getByRole('button',{name:'Focus on field',exact:true}).click();
+    await visibleHighlight();
+    assert.equal(await review.getByLabel('Confirmed value',{exact:true}).inputValue(),'BOL-129','zooming and refocusing preserve the correction draft');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),true,'source zoom stays inside the phone viewport');
     await review.locator('.owned-reader-inspect').screenshot({path:`${output}/${name}-source.png`});
     await review.getByLabel('Confirmed value',{exact:true}).fill('BOL-129');
     await review.getByRole('button',{name:'Confirm value',exact:true}).click();
@@ -100,6 +125,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByText('BOL-129',{exact:true}).waitFor();
     await review.getByRole('button',{name:'Fix next reading',exact:true}).click();
     await review.getByRole('heading',{name:'Ship date · Page 1',exact:true}).waitFor();
+    assert.equal(await review.getByLabel('Source line highlight',{exact:true}).count(),0,'a missing field has no invented source highlight');
+    assert.equal(await review.getByRole('button',{name:'Focus on field',exact:true}).isDisabled(),true);
     await page.evaluate(()=>{window.__ownedReaderFail=true;});
     await review.getByRole('button',{name:'Reread this area',exact:true}).click();
     await review.getByText('Rereading failed. You can still enter the value or skip this field.',{exact:true}).waitFor();
@@ -197,8 +224,14 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     });
     await seed(page,state);
     await page.evaluate(lines=>{window.__ownedReaderBlock=lines;window.__ownedReaderBlockRead=0;window.__ownedReaderCalls=0;},partyBlocksInput().pages[0].observations.map(o=>o.lines));
+    const blockPhoto=await page.evaluate(async lines=>{
+      const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=1000;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,1000,1000);ctx.fillStyle='black';
+      for(const line of lines){ctx.font=`${line.box.height*1000}px Arial`;ctx.fillText(line.text,line.box.x*1000,(line.box.y+line.box.height)*1000,line.box.width*1000);}
+      return [...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())];
+    },partyBlocksInput().pages[0].observations[0].lines);
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
-    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'shipping-blocks.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'shipping-blocks.jpg',mimeType:'image/jpeg',buffer:Buffer.from(blockPhoto)});
     await page.getByRole('button',{name:'Read document',exact:true}).click();
     await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
     await review.getByText('1 items to check',{exact:true}).waitFor();
@@ -211,9 +244,13 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.equal(blockResult.documents[0].fields.consignee.candidates.length,1);
     assert.equal(blockResult.documents[0].fields.consignee.issues.includes('conflicting_reads'),false);
     assert.equal(blockResult.documents[0].canAutoFile,false);
-    await review.getByRole('button',{name:'Fix next reading',exact:true}).click();
+    await review.getByRole('button',{name:'Check Consignee source',exact:true}).click();
     await review.getByRole('heading',{name:'Consignee · Page 1',exact:true}).waitFor();
     await review.getByText('Additional company line:',{exact:false}).waitFor();
+    await review.getByLabel('Additional source line highlight',{exact:true}).waitFor();
+    await visibleHighlight('Source line highlight',false);await visibleHighlight('Additional source line highlight',false);
+    assert.ok((await review.getByLabel('Source line highlight',{exact:true}).boundingBox()).height>=17,'already-cropped sources open at a readable text size');
+    await review.locator('.owned-reader-inspect').screenshot({path:`${output}/${name}-wrapped-source.png`});
     assert.equal(await review.getByLabel('Confirmed value',{exact:true}).inputValue(),'REGIONAL MARKET / TOWN DEPOT #1-2');
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     await review.getByText('0 items to check',{exact:true}).waitFor();
