@@ -50,4 +50,5 @@ for(const [path,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP']
 }
 for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx'])fs.writeFileSync(path,read(path).replace(/App v\d+\.\d+\.\d+/g,'App v'+VERSION).replace(/APP V\d+\.\d+\.\d+/g,'APP V'+VERSION));
 patch('scripts/test-duty-graph-continuity.mjs',"assert.equal(meta.version,'110.3.55');assert.equal(meta.build,'v110355-compact-time-grips');",`assert.equal(meta.version,'${VERSION}');assert.equal(meta.build,'${BUILD}');`);
+patch('scripts/test-editor-grips-v110355.mjs',"assert.equal(meta.version,'110.3.55'); assert.equal(meta.build,'v110355-compact-time-grips');",`assert.equal(meta.version,'${VERSION}'); assert.equal(meta.build,'${BUILD}');`);
 console.log('PASS — 110.3.57 company evidence recovery installed');
