@@ -22,8 +22,10 @@ export const PROFILES = Object.freeze([
   {id:'unloading_receipt',label:'Unloading receipt',partyKeys:['carrier'],joinPages:false,heading:/^\s*(?:(?:LUMPER|UNLOADING)\s+)?RECEIPT\b\s*(?:$|#|NO\b|NUMBER\b)/i,signals:[/^\s*LOAD\s+DETAILS\b/i,receiptBreakdown,/^\s*(?:RELAY\s+PAYMENT\s+DETAILS|CHECKOUT\s+FEE|NET\s+TOTAL)\b/i],identity:'receiptNumber',fields:{receiptNumber:field('Receipt number',/^\s*RECEIPT\s*(?:NUMBER\b|NO\b\.?|#|:)[ \t:#]*([A-Z0-9][A-Z0-9._/-]*)(?=\s*(?:$|\||DATE\b))/id,'identifier',true),receiptDate:{...beside('Receipt date',labeled('DATE'),'date',/^\s*DATE\s*:\s*$/i),maxY:.4,inlineLabel:receiptDateLabel,valuePattern:dateToken},carrier:beside('Carrier',labeled('CARRIER'),'party',/^\s*CARRIER\s*:\s*$/i),location:beside('Location',labeled('LOCATION'),'text',/^\s*LOCATION\s*:\s*$/i),poNumber:beside('PO number',identifier('PO|P\\.O\\.'),'identifier',/^\s*(?:PO|P\.O\.)\s*(?:NO\.?|NUMBER|#)\s*:\s*$/i),trailerNumber:beside('Trailer number',identifier('TRAILER'),'identifier',/^\s*TRAILER\s*(?:NO\.?|NUMBER|#)\s*:\s*$/i),amount:beside('Unloading amount',labeledAmount('AMOUNT'),'amount',/^\s*AMOUNT\s*:?\s*$/i,true),fee:beside('Checkout fee',labeledAmount('CHECKOUT FEE'),'amount',/^\s*CHECKOUT\s+FEE\s*:?\s*$/i),total:beside('Receipt total',labeledAmount('(?:THANK YOU FOR YOUR BUSINESS[!.]?[ \\t]+)?(?:NET TOTAL|TOTAL)'),'amount',/^\s*(?:NET\s+TOTAL|TOTAL)\s*:?\s*$/i,true),currency:field('Currency',labeled('CURRENCY'),'currency')}},
 ]);
 
-export function normalizeValue(kind, raw) {
+export function normalizeValue(kind, raw, sourceLabel=null) {
   const value=raw.trim().replace(/[ \t]+/g,' ');if(!value)return {value:null,issue:'empty'};
+  // Machine-read US dates require the explicit Ship Date source label.
+  if(kind==='ship_date'&&sourceLabel!==null&&!/(?:^|\|)\s*SHIP\s+DATE\s*:?\s*$/i.test(sourceLabel))return normalizeValue('date',value);
   if(kind==='party')return isDocumentParty(value)?{value}:{value:null,issue:'form_instructions'};
   if(kind==='identifier')return /^[A-Za-z0-9][A-Za-z0-9._/-]{1,39}$/.test(value)?{value}:{value:null,issue:'invalid_identifier'};
   if(kind==='currency')return /^(?:USD|EUR|GBP|CAD|AUD|CHF)$/.test(value.toUpperCase())?{value:value.toUpperCase()}:{value:null,issue:'ambiguous_currency'};

@@ -75,7 +75,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
     await review.getByText('BOL-129',{exact:true}).waitFor();
     await review.getByRole('button',{name:'Fix next reading',exact:true}).click();
-    await review.getByRole('heading',{name:'Document date · Page 1',exact:true}).waitFor();
+    await review.getByRole('heading',{name:'Ship date · Page 1',exact:true}).waitFor();
     await page.evaluate(()=>{window.__ownedReaderFail=true;});
     await review.getByRole('button',{name:'Reread this area',exact:true}).click();
     await review.getByText('Rereading failed. You can still enter the value or skip this field.',{exact:true}).waitFor();
@@ -283,7 +283,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     const joinedOpen=page.getByRole('button',{name:'Reader preview · Check source',exact:true});
     await page.locator('.owned-reader-preview').waitFor();if(await joinedOpen.isVisible())await joinedOpen.click();
     await review.getByText('2 pages · 1 document',{exact:true}).waitFor();
-    await review.getByRole('button',{name:'Enter document date from page',exact:true}).click();
+    await review.getByRole('button',{name:'Enter ship date from page',exact:true}).click();
     await review.getByLabel('Source page',{exact:true}).selectOption('page-2');
     await review.getByRole('img',{name:'Source image for page 2',exact:true}).waitFor();
     await review.getByLabel('Confirmed value',{exact:true}).fill('2026-08-18');

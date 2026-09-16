@@ -4,7 +4,8 @@ import {validateInvoice,validateUnloadingReceipt} from './validation.js';
 import {pageFieldMatches} from './identifierChecks.js';
 import {profileEvidence} from './classification.js';
 
-const partyKey=value=>String(value||'').toUpperCase().replace(/[^\p{L}\p{N}]+/gu,'');
+// Fold cosmetic corporate commas, preserving word and identifier boundaries.
+const partyKey=value=>String(value||'').toUpperCase().replace(/,\s*(?=(?:LLC|INC(?:ORPORATED)?|CORP(?:ORATION)?|LTD)\b)/g,' ').replace(/\s+/g,' ').trim();
 const semanticKey=(kind,value)=>kind==='party'?partyKey(value):String(value||'');
 
 function candidatesFor(pages, spec) {
@@ -12,7 +13,7 @@ function candidatesFor(pages, spec) {
   for (const page of pages) for (const match of pageFieldMatches(page,spec)) {
     const {observation,line,start,end}=match;
     const evidence=evidenceFor(page,observation,line,start,end);
-    const normalized=normalizeValue(spec.kind,evidence.quote);
+    const normalized=normalizeValue(spec.kind,evidence.quote,match.labelLine?.text??line.text.slice(0,start));
     if(match.issue&&!normalized.issue)normalized.issue=match.issue;
     const key=JSON.stringify([normalized.value,normalized.issue==='layout_needs_review'?null:normalized.issue||null,evidence.quote.trim()]);
     let candidate=candidates.find(c=>c.key===key);
