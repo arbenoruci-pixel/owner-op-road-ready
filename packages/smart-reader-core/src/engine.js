@@ -3,9 +3,9 @@ import {PROFILES,normalizeValue} from './profiles.js';
 import {validateInvoice,validateUnloadingReceipt} from './validation.js';
 import {pageFieldMatches} from './identifierChecks.js';
 import {profileEvidence} from './classification.js';
+import {partyKey} from './partyEvidence.js';
 
 // Fold cosmetic corporate commas, preserving word and identifier boundaries.
-const partyKey=value=>String(value||'').toUpperCase().replace(/,\s*(?=(?:LLC|INC(?:ORPORATED)?|CORP(?:ORATION)?|LTD)\b)/g,' ').replace(/\s+/g,' ').trim();
 const semanticKey=(kind,value)=>kind==='party'?partyKey(value):String(value||'');
 
 function candidatesFor(pages, spec) {
@@ -13,13 +13,14 @@ function candidatesFor(pages, spec) {
   for (const page of pages) for (const match of pageFieldMatches(page,spec)) {
     const {observation,line,start,end}=match;
     const evidence=evidenceFor(page,observation,line,start,end);
-    const normalized=normalizeValue(spec.kind,evidence.quote,match.labelLine?.text??line.text.slice(0,start));
+    const normalized=normalizeValue(spec.kind,match.joinedValue??evidence.quote,match.labelLine?.text??line.text.slice(0,start));
     if(match.issue&&!normalized.issue)normalized.issue=match.issue;
     const key=JSON.stringify([normalized.value,normalized.issue==='layout_needs_review'?null:normalized.issue||null,evidence.quote.trim()]);
     let candidate=candidates.find(c=>c.key===key);
     if(!candidate){candidate={key,rawValue:evidence.quote,...normalized,evidence:[]};candidates.push(candidate);}
     if(normalized.issue&&!candidate.issue)candidate.issue=normalized.issue;
     candidate.evidence.push({...evidence,...(normalized.issue?{matchIssue:normalized.issue}:{})});
+    if(match.continuation){const tail=match.continuation;candidate.continuationEvidence??=[];candidate.continuationEvidence.push(evidenceFor(page,observation,tail.line,tail.start,tail.end));}
     if(match.labelLine){candidate.labelEvidence??=[];candidate.labelEvidence.push(evidenceFor(page,observation,match.labelLine,0,match.labelLine.text.length));}
   }
   return candidates.map(({key,...candidate})=>candidate);
@@ -80,5 +81,5 @@ export function fieldsForProfile(pages,kind) {const profile=PROFILES.find(p=>p.i
 export function readDocument(input) {
   const {documentId,pages}=normalizeInput(input),identities=pages.map(classifyPage);
   const documents=makeGroups(pages,identities).map(group=>{const profile=PROFILES.find(p=>p.id===group.kind),groupPages=pages.filter(p=>group.pageIds.includes(p.id)),fields=fieldsForProfile(groupPages,group.kind),checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):[];return {...group,label:profile?.label||'Uncategorized document',fields,checks,requiresReview:true,canAutoFile:false};});
-  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.10',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
+  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.11',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
 }

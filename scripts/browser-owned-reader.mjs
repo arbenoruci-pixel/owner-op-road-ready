@@ -24,6 +24,19 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       },terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
         if(window.__ownedReaderFail)throw new Error('fixture OCR failure');
+        if(window.__ownedReaderParty){
+          const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
+          const crop=file.name?.includes('party-detail'),first=window.__ownedReaderCalls===1,split=window.__ownedReaderCalls===3;
+          const line=(text,x,y,w,h,confidence=96)=>({text,x,y,w,h,confidence});
+          const lines=crop?[line('Carrier: TOTAL QUALITY LOGISTICS',.02,.2,.94,.5,99)]:[
+            line('BILL OF LADING',.1,.03,.5,.025),line('BOL#: 123456-001',.1,.08,.4,.02),line('Ship Date: 9/11/2026',.1,.12,.4,.02),
+            line('TO: Example Receiver',.1,.2,.4,.02),line('Carrier: '+(first?'TTA, QUALITY LOGISTICS':'TOTAL QUALITY LOGISTICS'),.51,.7,.4,.015,first?72:96),
+            ...(split?[line('Shipper: EXAMPLE MILLS,',.05,.82,.18,.012),line('LLC #218',.24,.82,.07,.01)]:[line('Shipper: EXAMPLE MILLS, LLC #218',.05,.82,.28,.012)]),
+          ];
+          const header='level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext';
+          const rows=lines.map((line,i)=>`5\t1\t1\t1\t${i+1}\t1\t${Math.round(line.x*width)}\t${Math.round(line.y*height)}\t${Math.max(1,Math.round(line.w*width))}\t${Math.max(1,Math.round(line.h*height))}\t${line.confidence}\t${line.text}`);
+          return {data:{text:lines.map(line=>line.text).join('\n'),confidence:96,tsv:[header,`1\t1\t0\t0\t0\t0\t0\t0\t${width}\t${height}\t-1\t`,...rows].join('\n')}};
+        }
         if(window.__ownedReaderLayout||window.__ownedReaderPacket){
           const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
           const observations=window.__ownedReaderPacket?.[window.__ownedReaderPacketPage];
@@ -133,6 +146,38 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Confirm value',exact:true}).click();
     await warning.waitFor({state:'hidden'});
     await review.getByText('118.25',{exact:true}).waitFor();
+    // Split names recover with corroboration; a clear crop still needs human
+    // confirmation when an earlier pass contains a different carrier.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{
+      localStorage.clear();
+      await new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');request.onsuccess=resolve;request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Previous fixture database is still open'));});
+    });
+    await seed(page,state);
+    await page.evaluate(()=>{window.__ownedReaderParty=true;window.__ownedReaderCalls=0;});
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'party-recovery.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByText('1 items to check',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__ownedReaderCalls),4,'one targeted party crop follows three whole-page passes');
+    await review.getByRole('button',{name:'EXAMPLE MILLS, · Page 1',exact:true}).click();
+    await review.getByText('Adjacent company suffix:',{exact:false}).waitFor();
+    assert.equal(await review.getByLabel('Confirmed value',{exact:true}).inputValue(),'EXAMPLE MILLS, LLC #218');
+    await review.getByRole('button',{name:'Close source',exact:true}).click();
+    const partyDownload=page.waitForEvent('download');
+    await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const partyFile=await partyDownload,partyResult=JSON.parse(fs.readFileSync(await partyFile.path(),'utf8'));
+    assert.equal(partyResult.documents[0].fields.shipper.status,'supported');
+    assert.equal(partyResult.documents[0].fields.carrier.status,'needs_review');
+    assert.equal(partyResult.documents[0].fields.carrier.candidates.length,2);
+    assert.equal(partyResult.documents[0].canAutoFile,false);
+    await review.getByRole('button',{name:'Fix next reading',exact:true}).click();
+    await review.getByRole('heading',{name:'Carrier · Page 1',exact:true}).waitFor();
+    assert.equal(await review.getByLabel('Confirmed value',{exact:true}).inputValue(),'TOTAL QUALITY LOGISTICS','clearest exact-image reread opens first');
+    await review.getByRole('button',{name:'Save & next',exact:true}).click();
+    await review.getByText('0 items to check',{exact:true}).waitFor();
+    await page.screenshot({path:`${output}/${name}-party-recovery.png`,fullPage:true});
     // Real two-column OCR lines pass through the phone adapter and source UI.
     await page.goto(new URL('/_not-found',page.url()).href);
     await page.evaluate(async()=>{

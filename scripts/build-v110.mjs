@@ -59,6 +59,7 @@ steps.push('finalize-route-cleanup-v110352.mjs','test-route-delete-v110350.mjs',
 steps.push('finalize-cycle-week-export-v110353.mjs','test-cycle-week-export-v110353.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-editor-graph-v110354.mjs');
 steps.push('finalize-editor-grips-v110355.mjs','test-editor-grips-v110355.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-party-recovery-v110357.mjs','test-party-recovery-v110357.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
