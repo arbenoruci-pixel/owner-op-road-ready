@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import {readDocument} from '../src/index.js';
 const read = lines => readDocument({documentId:'synthetic-from-to',pages:[{id:'page-1',observations:[{id:'source',sourceImageId:'synthetic-page',lines:lines.map((text,i)=>({text,confidence:.96,box:{x:.1,y:.03+i*.04,width:.6,height:.025}}))}]}]}).documents[0];
 
-test('BOL heading with explicit FROM and TO supports printed parties and Cust PO',()=>{
+test('BOL heading with explicit FROM and TO supports printed parties, Cust PO, and Ship Date',()=>{
   const group=read(['BILL OF LADING','FROM: Example Timber LLC','TO: Example Concrete INC','Cust PO#: 813257','BOL: 9356172084','Ship Date:9/11/2026','DRIVER COPY RETURN W/INVOICE']);
   assert.equal(group.kind,'bol');
   assert.equal(group.fields.shipper.value,'Example Timber LLC');
   assert.equal(group.fields.consignee.value,'Example Concrete INC');
   assert.equal(group.fields.poNumber.value,'813257');
-  assert.equal(group.fields.documentDate.value,null,'ship date is not document date');
+  assert.equal(group.fields.documentDate.value,'2026-09-11');
+  assert.equal(group.fields.documentDate.label,'Ship date');
   assert.equal(group.fields.bolNumber.value,'9356172084');
 });
 

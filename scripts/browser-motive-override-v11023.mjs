@@ -38,7 +38,7 @@ for(const [name,type]of [['chromium',chromium],['webkit',webkit]]){
     await openTarget(page);const quickRoot=page.locator('.quick-activities-v11023');
     assert.equal(await page.locator('details.compact-activities-v111').count(),0);
     assert.equal(await page.locator('.editor-compact-v111 [data-editor-boundary]').count(),2);
-    const h=page.getByRole('slider',{name:'end time handle',exact:true}),r=await h.boundingBox(),svg=await page.locator('.editor-compact-v111 svg').boundingBox();
+    const h=page.getByRole('slider',{name:'end time handle',exact:true}),r=await h.boundingBox(),svg=await page.locator('.editor-compact-v111 svg.log-graph-v110').boundingBox();
     // Both engines dispatch integral CSS pointer coordinates. A 24-hour phone
     // graph maps several minutes to one pixel, so verify that exact pixel delta
     // first, then use the existing one-minute keyboard nudges for 12:30 exactly.

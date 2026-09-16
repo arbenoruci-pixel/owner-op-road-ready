@@ -187,7 +187,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]].filter(([name
     assert.deepEqual(await localRows(page),before,'cancel preserves the previous reading and every record');
     await recent.getByRole('button',{name:'Read again',exact:true}).click();
     await reread.getByRole('button',{name:'Save reading',exact:true}).waitFor();
-    await reread.getByRole('button',{name:'Enter document date from page',exact:true}).click();
+    await reread.getByRole('button',{name:'Enter ship date from page',exact:true}).click();
     await reread.getByLabel('Source page',{exact:true}).selectOption('page-3');
     await reread.getByAltText('Source image for page 3').waitFor();
     await reread.getByLabel('Confirmed value',{exact:true}).fill('2026-08-18');
