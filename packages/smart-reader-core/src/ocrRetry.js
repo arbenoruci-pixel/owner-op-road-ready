@@ -2,7 +2,7 @@ import {readDocument,fieldsForProfile} from './engine.js';
 import {textObservation} from './input.js';
 import {separateWordColumns} from './wordLayout.js';
 
-function passObservation(pass,index){
+export function passObservation(pass,index){
   const id=String(index),size=pass.imageSize;
   if(!size||![size.width,size.height].every(n=>Number.isFinite(n)&&n>0)||!pass.lines?.length){
     const observation=textObservation(pass.text||'',{id});
@@ -20,7 +20,7 @@ export function needsReadingRetry(passes){
   if(!passes.length)return true;
   const observations=passes.map(passObservation);
   const doc=readDocument({documentId:'coverage',pages:[{id:'page',observations}]}).documents[0];
-  return doc.kind==='unknown'||doc.checks.some(check=>check.status==='needs_review')||Object.values(doc.fields).some(f=>f.required&&!f.candidates.some(c=>c.value!==null));
+  return doc.kind==='unknown'||doc.checks.some(check=>check.status==='needs_review')||Object.values(doc.fields).some(f=>f.required&&!f.candidates.some(c=>c.value!==null)||f.kind==='party'&&f.status==='needs_review');
 }
 
 export function hasReadableBolReference(passes){

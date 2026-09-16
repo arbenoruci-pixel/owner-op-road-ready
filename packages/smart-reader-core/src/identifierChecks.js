@@ -1,4 +1,5 @@
 import {fieldMatches} from './layout.js';
+import {recoverPartyContinuations} from './partyEvidence.js';
 
 // A digit string is not interchangeable with another that lost end digits.
 // Unlabelled alternatives can only make a BOL uncertain; never fill its value.
@@ -9,6 +10,7 @@ const overlaps=(a,b)=>Math.min(a.x+a.width,b.x+b.width)>Math.max(a.x,b.x)
 
 export function pageFieldMatches(page,spec){
   const matches=page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match})));
+  if(spec.kind==='party')return recoverPartyContinuations(matches);
   if(!spec.checkIdentifierFragments)return matches;
   const proposals=[];
   for(const match of matches){
