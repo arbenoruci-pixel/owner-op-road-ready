@@ -7,7 +7,7 @@ export function planPartyRegions(passes){
   const full=passes.filter(pass=>pass.scope!=='region');
   if(!full.length)return [];
   const result=readDocument({documentId:'party-coverage',pages:[{id:'page',observations:full.map(passObservation)}]});
-  const choices=[];
+  const choices=new Map();
   for(const group of result.documents)for(const field of Object.values(group.fields)){
     if(field.kind!=='party'||field.status!=='needs_review')continue;
     for(const candidate of field.candidates)for(const evidence of candidate.evidence){
@@ -31,13 +31,20 @@ export function planPartyRegions(passes){
       const pageSegMode=bottom-y>lineHeight*1.65?'6':'7';
       const priority=field.required&&!field.candidates.some(c=>c.evidence.some(e=>!e.matchIssue&&e.recognizerConfidence!==null&&e.recognizerConfidence>=.8))?0:1;
       const confidence=Math.min(...sources.map(e=>e.recognizerConfidence??1));
-      choices.push({sourcePassId:pass.id,fieldLabel:field.label,region,pageSegMode,priority,confidence});
+      const quality=Math.min(...sources.map(e=>e.recognizerConfidence??0));
+      // A weak alternative still gets retry priority. For an identical value,
+      // reread its clearest source, including the label and continuation rows.
+      // Values are compared literally; no punctuation or word boundaries fold.
+      const key=JSON.stringify([field.label,candidate.value]),previous=choices.get(key);
+      const urgency=Math.min(confidence,previous?.confidence??1);
+      if(previous&&previous.quality>=quality){previous.confidence=urgency;continue;}
+      choices.set(key,{sourcePassId:pass.id,fieldLabel:field.label,region,pageSegMode,priority,confidence:urgency,quality});
     }
   }
   const selected=[];
-  for(const choice of choices.sort((a,b)=>a.priority-b.priority||a.confidence-b.confidence)){
+  for(const choice of [...choices.values()].sort((a,b)=>a.priority-b.priority||a.confidence-b.confidence)){
     if(selected.some(item=>item.fieldLabel===choice.fieldLabel))continue;
-    const {confidence,priority,...plan}=choice;selected.push(plan);
+    const {confidence,priority,quality,...plan}=choice;selected.push(plan);
     if(selected.length===2)break;
   }
   return selected;
