@@ -15,7 +15,8 @@ test('focus enlarges the selected source line and keeps it visible near the page
 
 test('wrapped names include both rows only on the exact selected image',()=>{
   const tail={...evidence,box:{x:.65,y:.845,width:.25,height:.02}};
-  const unrelated=[{...tail,sourceImageId:'other'},{...tail,observationId:'other'},{...tail,pageId:'page-2'}];
+  const unrelated=[{...tail,sourceImageId:'other'},{...tail,observationId:'other'},{...tail,pageId:'page-2'},
+    {...tail,box:{...tail.box,y:.2}},{...tail,box:{...tail.box,x:.05}}];
   const before=structuredClone([evidence,tail]);
   const boxes=reviewSourceBoxes(evidence,[tail,tail,...unrelated]);assert.equal(boxes.length,2);
   const view=reviewViewport({image,viewport,boxes});

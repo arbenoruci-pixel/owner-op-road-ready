@@ -9,6 +9,9 @@ export function reviewSourceBoxes(evidence,continuations=[]){
   const boxes=[],seen=new Set();
   for(const item of [evidence,...continuations]){
     if(item.pageId!==evidence.pageId||item.observationId!==evidence.observationId||item.sourceImageId!==evidence.sourceImageId||!validBox(item.box))continue;
+    const a=evidence.box,b=item.box;
+    const horizontalGap=Math.max(0,a.x-b.x-b.width,b.x-a.x-a.width);
+    if(Math.abs(a.y-b.y)>Math.max(a.height,b.height)*3||horizontalGap>.05)continue;
     const {x,y,width,height}=item.box,box={x,y,width:Math.min(width,1-x),height:Math.min(height,1-y)},key=JSON.stringify(box);
     if(!seen.has(key)){seen.add(key);boxes.push(box);}
   }
