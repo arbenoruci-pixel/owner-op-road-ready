@@ -7,6 +7,7 @@ import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
 import {shippingLayoutInput} from '../packages/smart-reader-core/test/shipping-layout-fixture.mjs';
 import {noisyPageInput} from '../packages/smart-reader-core/test/noisy-page-fixture.mjs';
 import {mergedReceiptInput} from '../packages/smart-reader-core/test/merged-receipt-fixture.mjs';
+import {partyBlocksInput} from '../packages/smart-reader-core/test/party-blocks-fixture.mjs';
 
 const output='browser-test-results/owned-reader';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
@@ -20,10 +21,20 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       window.__ownedReaderCalls=0;
       const defaultLines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
       window.Tesseract={createWorker:async()=>({setParameters:async parameters=>{
+        if(parameters.tessedit_pageseg_mode)window.__ownedReaderMode=String(parameters.tessedit_pageseg_mode);
         if(window.__ownedReaderPacket&&String(parameters.tessedit_pageseg_mode)==='3'){window.__ownedReaderPacketPage++;window.__ownedReaderPacketRead=0;}
       },terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
         if(window.__ownedReaderFail)throw new Error('fixture OCR failure');
+        if(window.__ownedReaderBlock){
+          const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
+          const crop=file.name?.includes('party-detail'),block=window.__ownedReaderMode==='6';
+          const lines=crop?(block?['CONSIGNED REGIONAL MARKET','TO: TOWN DEPOT #1-2']:['FROM: NORTHERN FOODS']).map((text,i)=>({text,confidence:.98,box:{x:.03,y:.08+i*.45,width:.92,height:block?.3:.6}}))
+            :window.__ownedReaderBlock[Math.min(window.__ownedReaderBlockRead++,2)];
+          const header='level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext';
+          const rows=lines.map((line,i)=>`5\t1\t1\t1\t${i+1}\t1\t${Math.round(line.box.x*width)}\t${Math.round(line.box.y*height)}\t${Math.max(1,Math.round(line.box.width*width))}\t${Math.max(1,Math.round(line.box.height*height))}\t${line.confidence*100}\t${line.text}`);
+          return {data:{text:lines.map(line=>line.text).join('\n'),confidence:96,tsv:[header,`1\t1\t0\t0\t0\t0\t0\t0\t${width}\t${height}\t-1\t`,...rows].join('\n')}};
+        }
         if(window.__ownedReaderParty){
           const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
           const crop=file.name?.includes('party-detail'),first=window.__ownedReaderCalls===1,split=window.__ownedReaderCalls===3;
@@ -178,6 +189,35 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     await review.getByText('0 items to check',{exact:true}).waitFor();
     await page.screenshot({path:`${output}/${name}-party-recovery.png`,fullPage:true});
+    // Separate labels and wrapped consignee rows get complete source crops.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{
+      localStorage.clear();
+      await new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');request.onsuccess=resolve;request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Previous fixture database is still open'));});
+    });
+    await seed(page,state);
+    await page.evaluate(lines=>{window.__ownedReaderBlock=lines;window.__ownedReaderBlockRead=0;window.__ownedReaderCalls=0;},partyBlocksInput().pages[0].observations.map(o=>o.lines));
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'shipping-blocks.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByText('1 items to check',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__ownedReaderCalls),5);
+    const blockDownload=page.waitForEvent('download');
+    await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const blockFile=await blockDownload,blockResult=JSON.parse(fs.readFileSync(await blockFile.path(),'utf8'));
+    assert.equal(blockResult.documents[0].fields.shipper.status,'supported');
+    assert.equal(blockResult.documents[0].fields.carrier.value,'EXAMPLE TRANSPORT');
+    assert.equal(blockResult.documents[0].fields.consignee.candidates.length,1);
+    assert.equal(blockResult.documents[0].fields.consignee.issues.includes('conflicting_reads'),false);
+    assert.equal(blockResult.documents[0].canAutoFile,false);
+    await review.getByRole('button',{name:'Fix next reading',exact:true}).click();
+    await review.getByRole('heading',{name:'Consignee · Page 1',exact:true}).waitFor();
+    await review.getByText('Additional company line:',{exact:false}).waitFor();
+    assert.equal(await review.getByLabel('Confirmed value',{exact:true}).inputValue(),'REGIONAL MARKET / TOWN DEPOT #1-2');
+    await review.getByRole('button',{name:'Save & next',exact:true}).click();
+    await review.getByText('0 items to check',{exact:true}).waitFor();
+    await page.screenshot({path:`${output}/${name}-shipping-blocks.png`,fullPage:true});
     // Real two-column OCR lines pass through the phone adapter and source UI.
     await page.goto(new URL('/_not-found',page.url()).href);
     await page.evaluate(async()=>{

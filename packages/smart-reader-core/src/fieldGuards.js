@@ -1,7 +1,12 @@
 // Form labels and freight instructions cannot establish a company identity.
+export function isPartyBoilerplate(raw){
+  return /\b(?:interest in|transportation of|receipt of|delivery of)\s+(?:the\s+)?(?:goods|property)\s+(?:identified|described)\b/i.test(String(raw||''));
+}
+
 export function isDocumentParty(raw) {
   const value=String(raw||'').trim();
   return value.length>0&&value.length<=200&&/\p{L}/u.test(value)
+    && !isPartyBoilerplate(value)
     && !/^[\s|.,;:_-]*(?:(?:BOL|B\/L|BILL\s+OF\s+LADING|INVOICE|RECEIPT|TRAILER|(?:CUSTOMER\s+)?(?:P\.?\s*O\.?|PURCHASE\s+ORDER))\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)|(?:DATE|TOTAL\s+(?:NET\s+)?WEIGHT)\s*:)/i.test(value)
     && !/^(?:[\s.,;:_-]*)(?:signature(?:\s*[/;:]|$|\s+(?:date|of|shipper|carrier|required)\b)|sign(?:\s+(?:here|below|parties|pusties)\b|\s*[:/]|$)|n\s*[/;:]|name\s*[:;]|number\b|collect\b|prepaid\b)/i.test(value)
     && !/^(?:acknowledges?\b|shall\b|certif(?:y|ies)\b|without\s+recour\w*\b|recourse\b)/i.test(value)
