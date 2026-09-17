@@ -4,7 +4,7 @@ export function additionalProfiles({p,sig,field,id,amount,date,receiptType,equip
   const saleVin={...field('VIN','VIN|VEHICLE(?: OR HULL)? IDENTIFICATION NUMBER|SERIAL(?: NUMBER| NO\\.?)?','vin'),
     pattern:/^\s*(?:VIN|VEHICLE(?: OR HULL)? IDENTIFICATION NUMBER|SERIAL(?: NUMBER| NO\.?)?)\s*[#:]?\s*([A-HJ-NPR-Z0-9]{17})\s*$/id};
   const saleSerial={...field('Equipment serial number','SERIAL(?: NUMBER| NO\\.?)?','identifier'),
-    pattern:/^\s*SERIAL(?: NUMBER| NO\.?)?\s*[#:]?\s*(?![A-HJ-NPR-Z0-9]{17}\s*$)([A-Z0-9][A-Z0-9._/-]*)\s*$/id};
+    pattern:/^\s*SERIAL(?: NUMBER| NO\.?)?\s*[#:]?\s*(?!NUMBER\b|NO\.?\s*$|[A-HJ-NPR-Z0-9]{17}\s*$)([A-Z0-9][A-Z0-9._/-]*)\s*$/id};
   return [
     p('bill_of_sale','Bill of sale','(?:VEHICLE |TRAILER |EQUIPMENT )?BILL OF SALE',
       [sig('SELLER|BUYER|BIDDER'),sig('VIN|VEHICLE(?: OR HULL)? IDENTIFICATION|SERIAL|YEAR|MAKE|UNIT')],

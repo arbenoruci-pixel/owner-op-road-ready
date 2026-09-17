@@ -21,7 +21,7 @@ Source review opens as a native fullscreen dialog. Next confirms the current val
 | Invoice | Invoice number, Vendor, Invoice date, Subtotal, Tax, Total, Currency |
 | Bill of lading | BOL number, Shipper, Consignee, Carrier, Trailer number, Ship date, PO number, Weight |
 | Unloading receipt | Receipt number, Receipt date, Carrier, Location, PO number, Trailer number, Unloading amount, Checkout fee, Receipt total, Currency |
-| Bill of sale | VIN / serial number, Unit number, Document date, Seller, Buyer, Sale location, Sale price, Year, Make, Model, Bidder number |
+| Bill of sale | VIN, Equipment serial number, Unit number, Document date, Seller, Buyer, Sale location, Sale price, Year, Make, Model, Bidder number |
 | Meal / restaurant receipt | Receipt number, Document date, Merchant, Subtotal, Tax, Total, Currency, Tip |
 | Grocery receipt | Receipt number, Document date, Merchant, Subtotal, Tax, Total, Currency |
 | Hotel / lodging receipt | Receipt number, Document date, Merchant, Subtotal, Tax, Total, Currency, Guest, Room, Arrival date, Departure date |

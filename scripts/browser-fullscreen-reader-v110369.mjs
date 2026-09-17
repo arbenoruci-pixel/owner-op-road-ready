@@ -35,6 +35,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await page.reload();await page.locator('.adaptive-home-v1038').waitFor();
   console.log('PASS '+name+' Home current load, route and Full mission agree');
   state.loadGuidesById={};state.activeLoadGuideId='';state.routeLegsByDay['2026-09-16'][0].toCity='Onalaska';
+  await page.goto(new URL('/_not-found',page.url()).href);
+  await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');request.onsuccess=resolve;request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Fixture database is still open'));});});
   await seed(page,state);assert.equal(await card.locator('h1').innerText(),'8494');
   assert.equal(await card.getByRole('button',{name:'Full mission',exact:true}).count(),0);
   await page.evaluate(()=>{window.open=url=>{window.__reviewNavigation=url;return null;};});
