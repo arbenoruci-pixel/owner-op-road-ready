@@ -1,11 +1,13 @@
-# Owned Smart Reader — experimental core 0.1
+# Owned Smart Reader — source-review core 0.3.14
 
 An independent JavaScript library and CLI for document observations, classification,
 grouping, source-bound fields, region rereading, and human corrections. It has no
 runtime dependencies, network calls, storage, UI, trucking state, or OCR provider.
 
-Current profiles: invoice and bill of lading. Classification and extraction use
-explicit rules in this first version. Unsupported layouts remain for review.
+Profiles cover the app's trucking document catalog, including RateCons, BOLs,
+PODs, invoices, receipts, maintenance, permits, driver and business records.
+See [document coverage and references](DOCUMENT-COVERAGE.md). Classification and
+extraction use source-backed rules. Unsupported layouts remain for review.
 The neural text recognizer is developed separately in `experiments/owned-ocr`.
 
 ## Use without the app

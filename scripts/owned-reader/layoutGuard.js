@@ -6,7 +6,8 @@ import {reviewScanAnalysis} from './ownedReaderAdapter.js';
 // together. Below-label proposals remain available for source review instead.
 export function guardOcrLayoutReading(result={}) {
   const owned=reviewScanAnalysis(result);
-  const separated=owned.documents.length>1&&(owned.documents.some(document=>document.kind!=='unknown')||['bol','lumper_receipt','invoice'].includes(result.type?.id));
+  const primary=owned.documents.filter(document=>document.role!=='supporting');
+  const separated=primary.length>1&&(primary.some(document=>document.kind!=='unknown')||['bol','lumper_receipt','invoice'].includes(result.type?.id));
   if(result.typeEvidenceV110334?.mixedDocuments||separated){
     const review=result.evidenceReviewV11036||{};
     const reason='Separate documents are included. Review the fields under each document; the PDF keeps all pages.';

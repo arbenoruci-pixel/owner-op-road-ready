@@ -8,6 +8,7 @@ import {shippingLayoutInput} from '../packages/smart-reader-core/test/shipping-l
 import {noisyPageInput} from '../packages/smart-reader-core/test/noisy-page-fixture.mjs';
 import {mergedReceiptInput} from '../packages/smart-reader-core/test/merged-receipt-fixture.mjs';
 import {partyBlocksInput} from '../packages/smart-reader-core/test/party-blocks-fixture.mjs';
+import {truckingCases} from '../packages/smart-reader-core/test/trucking-catalog-fixture.mjs';
 
 const output='browser-test-results/owned-reader';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
@@ -466,6 +467,39 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'load_invoice');
     await review.getByRole('heading',{name:'Invoice number · Page 1',exact:true}).waitFor();
+    // Exercise the wider catalog through real intake, review, source opening
+    // and export, with deterministic OCR and ordinary mobile browser storage.
+    const catalogSamples=[['rate_confirmation','PRO # 86420 Rate Confirmation\nTOTAL RATE 2300.00\nPICK 1\n123 EXAMPLE RD Appointment 09/17/26 08:00 to 09/17/26 16:00\nALBANY NY 12207\nSTOP 1\n456 SAMPLE ST Appointment 09/22/26 08:00 to 09/22/26 16:00\nMADISON WI 53703',{loadNumber:'86420',totalRate:'2300.00'}],
+      ...truckingCases.filter(c=>['pod','fuel_receipt','scale_ticket','repair_invoice','packing_list','certificate_of_insurance'].includes(c[0])).map(([kind,title,body,expected])=>[kind,title+'\n'+body,expected])];
+    for(const [kind,text,expected] of catalogSamples){
+      await page.goto(new URL('/_not-found',page.url()).href);
+      await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+      await seed(page,state);
+      const bytes=await page.evaluate(async text=>{
+        const lines=text.split('\n');window.__ownedReaderLines=lines;
+        const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
+        const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
+        lines.forEach((line,i)=>ctx.fillText(line,30,64+i*65));
+        return [...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())];
+      },text);
+      await page.getByRole('button',{name:/Smart Scan/}).first().click();
+      await page.locator('input[type=file][multiple]').first().setInputFiles({name:'catalog-'+kind+'.jpg',mimeType:'image/jpeg',buffer:Buffer.from(bytes)});
+      await page.getByRole('button',{name:'Read document',exact:true}).click();
+      const open=page.getByRole('button',{name:'Reader preview · Check source',exact:true});
+      await page.locator('.owned-reader-preview').waitFor();if(await open.isVisible())await open.click();
+      await review.getByText('1 page · 1 document',{exact:true}).waitFor();
+      const download=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+      const result=JSON.parse(fs.readFileSync(await(await download).path(),'utf8'));
+      assert.equal(result.documents[0].kind,kind);
+      assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),kind);
+      for(const [key,value] of Object.entries(expected))assert.equal(result.documents[0].fields[key].value,value,kind+': '+key);
+      const value=Object.values(expected)[0];
+      await review.getByRole('button',{name:value+' · Page 1',exact:true}).first().click();
+      await review.getByRole('img',{name:'Source image for page 1',exact:true}).waitFor();
+      await review.getByLabel('Source line highlight',{exact:true}).first().waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),true);
+      if(['rate_confirmation','pod','fuel_receipt'].includes(kind))await review.screenshot({path:`${output}/${name}-catalog-${kind}.png`});
+    }
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){

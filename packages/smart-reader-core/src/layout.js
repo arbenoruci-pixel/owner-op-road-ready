@@ -14,6 +14,7 @@ export function fieldMatches(lines,spec){
   const matches=[];
   const signatures=lines.filter(line=>line.box?.y>.4&&/^(?:(?:SHIPPER|CARRIER)\s+SIGNATURE\b|FREIGHT\s+COUNTED\b|TRAILER\s+LOADED\b)/i.test(line.text.trim()));
   for(const line of lines){
+    if(spec.excludePattern?.test(line.text))continue;
     if(line.box&&spec.maxY!=null&&line.box.y>spec.maxY)continue;
     if(spec.kind==='party'&&line.box&&signatures.some(anchor=>line.box.y>=anchor.box.y-.015&&line.box.y<=anchor.box.y+.09))continue;
     const blockLabel=spec.blockLabel?.test(line.text),rightLabel=spec.rightLabel?.test(line.text);

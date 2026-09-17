@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {truckingCases} from '../packages/smart-reader-core/test/trucking-catalog-fixture.mjs';
+import {rateText} from '../packages/smart-reader-core/test/rate-confirmation-fixture.mjs';
+import {inspectPageIdentity,decideDocumentIdentity} from '../source/src/modules/scan/documentIdentityV110334.js';
+import {guardOcrLayoutReading} from '../source/src/modules/scan/documentLayoutGuardV110337.js';
+import {reviewScanAnalysis} from '../source/src/modules/scan/ownedReaderAdapter.js';
+import {truckDocumentTypeMetaV1040} from '../source/src/modules/scan/truckDocumentCatalogV1040.js';
+import {filingTypeForReview} from '../packages/smart-reader-core/src/recovery.js';
+for(const [kind,heading,body] of truckingCases){
+  const text=heading+'\n'+body;
+  assert.equal(inspectPageIdentity(text).typeId,kind,kind+' reaches the app classifier');
+  assert.equal(decideDocumentIdentity({text,type:{id:'other'}}).typeId,kind,kind+' survives app identity resolution');
+  assert.equal(truckDocumentTypeMetaV1040(kind).id,kind,kind+' is available for filing');
+  assert.equal(filingTypeForReview({documents:[{kind,typeCorrection:{confirmed:true}}]}),kind);
+  assert.equal(filingTypeForReview({documents:[{kind}]}),null,'classification alone never authorizes filing');
+}
+const pages=[rateText,'SIGNATURE PAGE\nDocument Ref: SYNTHETIC-REFERENCE Page 2 of 2',
+  'REF. NUMBER DOCUMENT COMPLETED BY ALL PARTIES ON\nSYNTHETIC-REFERENCE 16 SEP 2026 22:20:45\nSIGNER TIMESTAMP SIGNATURE\nSIGNED\nSigned with PandaDoc'];
+const analysis={type:{id:'rate_confirmation'},pageCount:3,text:pages.map((text,i)=>`[[PAGE:${i+1}]]\n${text}`).join('\n'),
+  fields:{loadNo:'86420',total:2300},routing:{autoFile:false}};
+const snapshot=JSON.stringify(analysis),decision=decideDocumentIdentity(analysis);
+assert.equal(decision.typeId,'rate_confirmation');
+assert.ok(!decision.mixedDocuments,'signature attachments are not another shipment');
+const review=reviewScanAnalysis(analysis);
+assert.deepEqual(review.documents.map(d=>d.kind),['rate_confirmation','signature_page','signing_certificate']);
+const guarded=guardOcrLayoutReading(analysis);
+assert.equal(guarded.fields.loadNo,'86420');
+assert.equal(guarded.fields.total,2300);
+assert.equal(JSON.stringify(analysis),snapshot);
+const fuel=truckingCases.find(c=>c[0]==='fuel_receipt');
+const mixed={...analysis,pageCount:2,text:'[[PAGE:1]]\n'+rateText+'\n[[PAGE:2]]\n'+fuel[1]+'\n'+fuel[2]};
+assert.equal(decideDocumentIdentity(mixed).mixedDocuments,true);
+assert.equal(guardOcrLayoutReading(mixed).fields.total,undefined);
+assert.equal(guardOcrLayoutReading(mixed).routing.autoFile,false);
+const unidentified={...analysis,text:analysis.text.replace('SIGNATURE PAGE','UNIDENTIFIED TEXT')};
+assert.equal(decideDocumentIdentity(unidentified).mixedDocuments,true,'unidentified pages still require review');
+console.log('PASS — catalog types reach app identity and filing; signed packets retain load fields and mixed documents stay isolated');
