@@ -381,6 +381,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'00991234 · Page 1',exact:true}).click();
     const detailImage=review.getByRole('img',{name:'Source image for page 1',exact:true});await detailImage.waitFor();
     assert.ok(await detailImage.evaluate(el=>el.naturalWidth<1000&&el.naturalHeight<200),'identifier inspection shows the small source crop');
+    await review.getByRole('button',{name:'Close source',exact:true}).click();
     const detailDownload=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const detailExport=JSON.parse(fs.readFileSync(await(await detailDownload).path(),'utf8'));
     assert.equal(detailExport.pageCount,1);assert.equal(detailExport.pages[0].observations.length,4);
