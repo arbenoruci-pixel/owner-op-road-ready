@@ -4,21 +4,24 @@ import {validateInvoice,validateUnloadingReceipt} from './validation.js';
 import {pageFieldMatches} from './identifierChecks.js';
 import {profileEvidence} from './classification.js';
 import {partyKey} from './partyEvidence.js';
+import {rateDateContext,expandShortYear} from './dateContext.js';
 
 // Fold cosmetic corporate commas, preserving word and identifier boundaries.
 const semanticKey=(kind,value)=>kind==='party'?partyKey(value):String(value||'');
 
-function candidatesFor(pages, spec) {
+function candidatesFor(pages, spec, dateContext=null) {
   const candidates=[];
   for (const page of pages) for (const match of pageFieldMatches(page,spec)) {
     const {observation,line,start,end}=match;
     const evidence=evidenceFor(page,observation,line,start,end);
-    const normalized=normalizeValue(spec.kind,match.joinedValue??evidence.quote,match.labelLine?.text??line.text.slice(0,start));
+    const expanded=spec.kind==='date'?expandShortYear(evidence.quote,dateContext):null;
+    const normalized=normalizeValue(spec.kind,expanded??match.joinedValue??evidence.quote,match.labelLine?.text??line.text.slice(0,start));
     if(match.issue&&!normalized.issue)normalized.issue=match.issue;
     const key=JSON.stringify([normalized.value,normalized.issue==='layout_needs_review'?null:normalized.issue||null,evidence.quote.trim()]);
     let candidate=candidates.find(c=>c.key===key);
     if(!candidate){candidate={key,rawValue:evidence.quote,...normalized,evidence:[]};candidates.push(candidate);}
     if(normalized.issue&&!candidate.issue)candidate.issue=normalized.issue;
+    if(expanded){candidate.labelEvidence??=[];candidate.labelEvidence.push(...dateContext.evidence);}
     candidate.evidence.push({...evidence,...(normalized.issue?{matchIssue:normalized.issue}:{})});
     if(match.continuation){const tail=match.continuation;candidate.continuationEvidence??=[];candidate.continuationEvidence.push(evidenceFor(page,observation,tail.line,tail.start,tail.end));if(match.continuationKind)candidate.continuationKind=match.continuationKind;}
     for(const labelLine of [match.labelLine,...(match.extraLabelLines||[])].filter(Boolean)){candidate.labelEvidence??=[];candidate.labelEvidence.push(evidenceFor(page,observation,labelLine,0,labelLine.text.length));}
@@ -67,8 +70,8 @@ function makeGroups(pages, identities) {
   return groups;
 }
 
-function extractField(pages, spec) {
-  const candidates=candidatesFor(pages,spec),valid=candidates.filter(c=>c.value!==null);
+function extractField(pages, spec, dateContext=null) {
+  const candidates=candidatesFor(pages,spec,dateContext),valid=candidates.filter(c=>c.value!==null);
   const supportedValues=new Set(valid.filter(c=>c.evidence.some(e=>!e.matchIssue&&(e.recognizerConfidence===null||e.recognizerConfidence>=.8))).map(c=>semanticKey(spec.kind,c.value)));
   const values=[...new Set(valid.map(c=>semanticKey(spec.kind,c.value)))];
   const issues=[...new Set(candidates.map(c=>c.issue==='layout_needs_review'&&supportedValues.has(semanticKey(spec.kind,c.value))?null:c.issue).filter(Boolean))];
@@ -81,10 +84,10 @@ function extractField(pages, spec) {
   return {label:spec.label,kind:spec.kind,required:spec.required,status:!candidates.length?'missing':uniqueIssues.length?'needs_review':chosen?'supported':'needs_review',value:chosen&&!uniqueIssues.length?chosen.value:null,candidates,issues:uniqueIssues};
 }
 
-export function fieldsForProfile(pages,kind) {const profile=PROFILES.find(p=>p.id===kind);return profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(pages,spec)])):{};}
+export function fieldsForProfile(pages,kind,dateContext=null) {const profile=PROFILES.find(p=>p.id===kind);return profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(pages,spec,dateContext)])):{};}
 
 export function readDocument(input) {
   const {documentId,pages}=normalizeInput(input),identities=pages.map(classifyPage);
-  const documents=makeGroups(pages,identities).map(group=>{const profile=PROFILES.find(p=>p.id===group.kind),groupPages=pages.filter(p=>group.pageIds.includes(p.id)),fields=fieldsForProfile(groupPages,group.kind),checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):[];return {...group,label:profile?.label||'Uncategorized document',fields,checks,requiresReview:true,canAutoFile:false};});
-  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.15',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
+  const documents=makeGroups(pages,identities).map(group=>{const profile=PROFILES.find(p=>p.id===group.kind),groupPages=pages.filter(p=>group.pageIds.includes(p.id)),fields=fieldsForProfile(groupPages,group.kind,group.kind==='rate_confirmation'?rateDateContext(groupPages,pages,identities):null),checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):[];return {...group,label:profile?.label||'Uncategorized document',fields,checks,requiresReview:true,canAutoFile:false};});
+  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.16',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
 }

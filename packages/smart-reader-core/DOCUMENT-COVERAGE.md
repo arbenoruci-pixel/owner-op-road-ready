@@ -85,3 +85,15 @@ and completion date from the row immediately below the combined completion
 header; individual signer timestamps are not used for that date. All these
 layout-derived proposals require source review. Flattened broker/carrier
 columns without reliable role evidence remain a known extraction limitation.
+
+### 0.3.16 native PDF evidence
+
+Native PDF review retains a separate positioned observation mapped to the exact
+rendered page. Unsupported geometry keeps the original text observation. A
+complete vertical CARRIER label can recover its adjacent company; flattened
+labels and unlabeled billing-company blocks remain explicit review candidates.
+Two-digit RateCon years can use a full year from the completion row of a signing
+certificate with an exact, unique matching envelope reference. The source date
+and both reference anchors are retained. Missing, conflicting, weak or invalid
+certificate evidence never supplies a year; ambiguous month/day order remains
+unresolved. This context does not confirm signature attachments or auto-file.

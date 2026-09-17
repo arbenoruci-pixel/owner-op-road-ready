@@ -55,6 +55,7 @@ jobs:
             sleep 1
           done
           node scripts/browser-owned-reader.mjs
+          node scripts/browser-native-pdf-v110363.mjs
           node scripts/browser-scanner-capture-v110329.mjs
           node scripts/browser-scanner-workflow-v110328.mjs
           node scripts/browser-saved-documents-v110344.mjs
