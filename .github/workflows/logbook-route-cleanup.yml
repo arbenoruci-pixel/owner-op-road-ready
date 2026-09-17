@@ -45,6 +45,7 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          node scripts/browser-active-shipment-v110368.mjs
           node scripts/browser-shipment-carryover-v110367.mjs
           node scripts/browser-route-delete-v110350.mjs
           node scripts/browser-day-load-cleanup-v110352.mjs
