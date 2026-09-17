@@ -35,6 +35,7 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          node scripts/browser-continuous-miles-v110366.mjs
           node scripts/browser-carry-edit-v110365.mjs
           node scripts/browser-midnight-prefix-v110319.mjs
           node scripts/browser-wizard-midnight-v110317.mjs
@@ -47,6 +48,7 @@ jobs:
         with:
           name: status-midnight-carry-evidence
           path: |
+            browser-test-results/continuous-miles-v110366/
             browser-test-results/carry-edit-v110365/
             browser-test-results/midnight-prefix-*/
             browser-test-results/wizard-midnight-*/
