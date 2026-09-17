@@ -474,7 +474,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('heading',{name:'Invoice number · Page 1',exact:true}).waitFor();
     // Exercise the wider catalog through real intake, review, source opening
     // and export, with deterministic OCR and ordinary mobile browser storage.
-    const catalogSamples=[['rate_confirmation','PRO # 86420 Rate Confirmation\nTOTAL RATE 2300.00\nPICK 1\n123 EXAMPLE RD Appointment 09/17/26 08:00 to 09/17/26 16:00\nALBANY NY 12207\nSTOP 1\n456 SAMPLE ST Appointment 09/22/26 08:00 to 09/22/26 16:00\nMADISON WI 53703',{loadNumber:'86420',totalRate:'2300.00'}],
+    const catalogSamples=[['rate_confirmation','PRO # 86420 Rate Confirmation\nTOTAL RATE 2300.00\nPICK 1\n123 EXAMPLE RD Appointment 09/17/26 08:00 to 09/17/26 16:00\nALBANY NY 12207\nSTOP 1\nEXAMPLE RECEIVING LLC\n456 SAMPLE ST Appointment 09/22/26 08:00 to 09/22/26 16:00\nMADISON WI 53703',{loadNumber:'86420',totalRate:'2300.00'}],
       ...truckingCases.filter(c=>['pod','fuel_receipt','scale_ticket','repair_invoice','packing_list','certificate_of_insurance'].includes(c[0])).map(([kind,title,body,expected])=>[kind,title+'\n'+body,expected]),
       ['invoice','INVOICE\nInvoice No: HOTEL-440\nSubtotal $100.00\nTotal $100.00\nCurrency: USD',{invoiceNumber:'HOTEL-440'}]];
     for(const [kind,text,expected] of catalogSamples){
@@ -499,6 +499,13 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       assert.equal(result.documents[0].kind,kind);
       assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),kind==='invoice'?'other':kind);
       for(const [key,value] of Object.entries(expected))assert.equal(result.documents[0].fields[key].value,value,kind+': '+key);
+      if(kind==='rate_confirmation'){
+        const fields=result.documents[0].fields;
+        assert.equal(fields.consignee.candidates[0].value,'EXAMPLE RECEIVING LLC');
+        assert.equal(fields.consignee.status,'needs_review');
+        assert.equal(fields.pickupDate.candidates[0].rawValue,'09/17/26');
+        assert.equal(fields.deliveryDate.candidates[0].rawValue,'09/22/26');
+      }
       const value=Object.values(expected)[0];
       await review.getByRole('button',{name:value+' · Page 1',exact:true}).first().click();
       await review.getByRole('img',{name:'Source image for page 1',exact:true}).waitFor();

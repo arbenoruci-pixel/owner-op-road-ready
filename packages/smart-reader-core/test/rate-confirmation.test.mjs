@@ -112,3 +112,59 @@ test('common carrier RateCon headings and labeled party/date layouts use the sam
     assert.equal(result.documents[0].fields.deliveryDate.value,'2026-09-18');
   }
 });
+
+test('stop company and appointment dates retain exact evidence without inventing a century',()=>{
+  const result=readDocument(rateInput()),fields=result.documents[0].fields;
+  assert.equal(fields.consignee.candidates[0].value,'EXAMPLE RECEIVING LLC');
+  assert.equal(fields.consignee.status,'needs_review');
+  assert.equal(fields.shipper.status,'missing','PICK UP placeholder is not a company');
+  for(const [key,raw] of [['pickupDate','09/16/26'],['deliveryDate','09/22/26']]){
+    assert.equal(fields[key].status,'needs_review');
+    assert.equal(fields[key].value,null);
+    assert.equal(fields[key].candidates[0].rawValue,raw);
+    assert.ok(fields[key].issues.includes('unrecognized_date'));
+  }
+  for(const field of Object.values(fields))for(const c of field.candidates)
+    for(const e of [...c.evidence,...(c.labelEvidence||[])])resolveEvidence(result,e);
+});
+
+test('stop proposals preserve explicit labels and conflicts across roles, windows and observations',()=>{
+  const text=rateText.replaceAll('09/16/26','2026-09-16').replaceAll('09/22/26','2026-09-22');
+  let fields=readDocument(rateInput(text+'\nConsignee: Different Receiver\nDelivery Date: 2026-09-23')).documents[0].fields;
+  assert.ok(fields.consignee.issues.includes('conflicting_reads'));
+  assert.ok(fields.deliveryDate.issues.includes('conflicting_reads'));
+  fields=readDocument(rateInput(text.replace('to 2026-09-22','to 2026-09-23'))).documents[0].fields;
+  assert.deepEqual(fields.deliveryDate.candidates.map(c=>c.value),['2026-09-22','2026-09-23']);
+  assert.ok(fields.deliveryDate.issues.includes('conflicting_reads'));
+  const input=rateInput(text);
+  input.pages[0].observations.push(textObservation(text.replace('EXAMPLE RECEIVING LLC','OTHER RECEIVING LLC'),{id:'retry'}));
+  assert.ok(readDocument(input).documents[0].fields.consignee.issues.includes('conflicting_reads'));
+  fields=readDocument(rateInput(text+'\nSTOP 2\nTHIRD RECEIVER\n789 THIRD AVE Appointment 2026-09-23 09:00\nCHICAGO IL 60601')).documents[0].fields;
+  assert.equal(fields.consignee.status,'missing');
+  assert.equal(fields.deliveryDate.status,'missing');
+});
+
+test('stop instructions, contact labels and incomplete address blocks cannot become company names',()=>{
+  for(const value of ['PLEASE CHECK IN AT FRONT DESK','CONTACT: SAMPLE PERSON','RECEIVING HOURS 8 TO 5','SHIPPER','DELIVERY INSTRUCTIONS']){
+    assert.equal(readDocument(rateInput(rateText.replace('EXAMPLE RECEIVING LLC',value))).documents[0].fields.consignee.status,'missing');
+  }
+  const text=rateText.replace('MADISON WI 53703','SIGNATURE REQUIRED');
+  assert.equal(readDocument(rateInput(text)).documents[0].fields.consignee.status,'missing');
+});
+
+test('certificate completion row yields separate review candidates, never a signer date or load ID',()=>{
+  const certificate='REF. NUMBER DOCUMENT COMPLETED BY ALL PARTIES ON\nTEST-ENVELOPE-123 16 SEP 2026 22:20:45\nUTC\nSIGNER TIMESTAMP SIGNATURE\nSENT\n15 SEP 2026 10:00:00\nSIGNED\nSigned with PandaDoc';
+  const input={documentId:'synthetic-certificate',pages:[{id:'certificate',observations:[textObservation(certificate)]}]};
+  const result=readDocument(input),doc=result.documents[0];
+  assert.equal(doc.kind,'signing_certificate');
+  assert.equal(doc.fields.documentReference.candidates[0].value,'TEST-ENVELOPE-123');
+  assert.equal(doc.fields.date.candidates[0].value,'2026-09-16');
+  assert.equal(doc.fields.date.status,'needs_review');
+  assert.equal(doc.reference,null);
+  for(const field of Object.values(doc.fields))for(const c of field.candidates)
+    for(const e of [...c.evidence,...c.labelEvidence])resolveEvidence(result,e);
+  input.pages[0].observations.push(textObservation(certificate.replace('TEST-ENVELOPE-123','TEST-ENVELOPE-128'),{id:'retry'}));
+  assert.ok(readDocument(input).documents[0].fields.documentReference.issues.includes('conflicting_reads'));
+  input.pages[0].observations=[textObservation(certificate.replace('TEST-ENVELOPE-123 16 SEP 2026 22:20:45',''))];
+  assert.equal(readDocument(input).documents[0].fields.date.status,'missing');
+});

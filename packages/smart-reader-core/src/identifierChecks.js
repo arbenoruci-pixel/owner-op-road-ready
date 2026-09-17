@@ -1,6 +1,7 @@
 import {fieldMatches} from './layout.js';
 import {recoverPartyContinuations} from './partyEvidence.js';
 import {recoverConsigneeBlocks} from './partyBlocks.js';
+import {certificateMatches} from './signingCertificate.js';
 import {rateSectionMatches} from './rateConfirmation.js';
 
 // A digit string is not interchangeable with another that lost end digits.
@@ -11,8 +12,9 @@ const overlaps=(a,b)=>Math.min(a.x+a.width,b.x+b.width)>Math.max(a.x,b.x)
   &&Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y)>=Math.min(a.height,b.height)*.5;
 
 export function pageFieldMatches(page,spec){
-  if(spec.rateSection)return rateSectionMatches(page,spec);
-  const matches=page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match})));
+  const matches=spec.pattern?page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match}))):[];
+  if(spec.rateSection)matches.push(...rateSectionMatches(page,spec));
+  if(spec.certificatePart)matches.push(...certificateMatches(page,spec));
   if(spec.kind==='party')return recoverPartyContinuations(spec.wrappedConsigned?recoverConsigneeBlocks(matches):matches);
   if(!spec.checkIdentifierFragments)return matches;
   const proposals=[];

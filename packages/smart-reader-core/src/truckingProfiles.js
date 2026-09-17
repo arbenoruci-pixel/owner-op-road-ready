@@ -169,7 +169,7 @@ export function truckingProfiles(base){
     p('signature_page','Signature page','SIGNATURE PAGE',[sig('DOCUMENT REF|DOCUMENT REFERENCE|ENVELOPE ID')],
       {documentReference:{label:'Document reference',kind:'identifier',required:false,pattern:/^\s*(?:DOCUMENT REF|DOCUMENT REFERENCE|ENVELOPE ID)\s*:\s*([A-Z0-9][A-Z0-9-]*)(?=\s*(?:$|PAGE\b))/id}},{role:'supporting',filingType:null}),
     p('signing_certificate','Signing certificate',/^\s*(?:REF\. NUMBER\s+DOCUMENT COMPLETED BY ALL PARTIES ON|CERTIFICATE OF COMPLETION|AUDIT TRAIL)\s*$/i,
-      [sig('SIGNER|SIGNATURE'),sig('SIGNED|COMPLETED|SENT')],{documentReference:id('Document reference','DOCUMENT REF|DOCUMENT REFERENCE|ENVELOPE'),date},{role:'supporting',filingType:null}),
+      [sig('SIGNER|SIGNATURE'),sig('SIGNED|COMPLETED|SENT')],{documentReference:{...id('Document reference','DOCUMENT REF|DOCUMENT REFERENCE|ENVELOPE'),certificatePart:'reference'},date:{...date,label:'Completion date',certificatePart:'date'}},{role:'supporting',filingType:null}),
   ];
   profiles.find(p=>p.id==='fuel_receipt').structuralSignals=[sig('DIESEL|ULSD|FUEL TYPE'),sig('GALLONS|GAL'),totalSignal,sig('PAID|PAYMENT|CARD|TRANSACTION')];
   profiles.find(p=>p.id==='other_expense').structuralSignals=[sig('SUBTOTAL'),totalSignal,sig('PAYMENT METHOD|CARD TYPE|PAID|CASH|CHANGE')];
