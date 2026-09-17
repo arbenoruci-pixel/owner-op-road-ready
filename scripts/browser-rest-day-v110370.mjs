@@ -86,7 +86,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   assert.ok(reloaded.logbookRouteRemovalsV110370.deletedIds.includes(target.id));
   assert.deepEqual(errors,[]);
   await page.screenshot({path:'browser-test-results/rest-day-cleanup-'+name+'.png',fullPage:true});
-  console.log('PASS — '+name+': last-event delete clears owned load/routes offline and after reload; other-day evidence preserved');
+  console.log('PASS — '+name+': full-day OFF clears owned load/routes offline and after reload; other-day evidence preserved');
  }catch(error){await page.screenshot({path:'browser-test-results/rest-day-cleanup-'+name+'-failed.png',fullPage:true}).catch(()=>{});fs.writeFileSync('browser-test-results/rest-day-cleanup-'+name+'-failure.json',JSON.stringify({error:String(error),errors,dialogs,text:await page.locator('body').innerText()},null,2));throw error;}
  finally{await context.close();await browser.close();}
 }

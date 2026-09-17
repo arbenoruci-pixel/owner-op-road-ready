@@ -58,6 +58,13 @@ test('full-day sleeper correction excludes carried shipment only on the correcte
  assert.ok(routeLegsForDayCanonical(next,earlier).some(r=>r.id===other.id));
  assert.ok(routeLegsForDayCanonical(next,later).some(r=>r.id===other.id));
 });
+test('explicit full-day rest also clears pending routes on a previously empty day',()=>{
+ const s=make();s.eventsByDay[day]=[];
+ const result=applyLogbookEditorInsert(s,{day,event:{id:'new-rest-day',status:'OFF',startMin:0,endMin:1440,note:'Off Duty'}},at);
+ assert.equal(result.ok,true,result.error);assert.ok(!flat(result.state).some(r=>r.id===route.id));
+ assert.equal(result.state.manualMilesByDay[day],undefined);
+ assert.ok(flat(result.state).some(r=>r.id===other.id));
+});
 test('partial OFF break keeps actual load and mileage; unchanged OFF-day edits do not wipe routes',()=>{
  const s=make();const next=applyLogbookEditorInsert(s,{day,event:{id:'break',status:'OFF',startMin:120,endMin:150,note:'Off Duty'}},at).state;
  assert.equal(next.routeLegsByDay,s.routeLegsByDay);assert.equal(next.manualMilesByDay,s.manualMilesByDay);

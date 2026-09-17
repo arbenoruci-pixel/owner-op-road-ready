@@ -62,11 +62,11 @@ export function cleanupRouteChangesAfterEdit(before,after,day,{targetId,restDayI
   const target=current.find(row=>row.id===targetId);
   const oldTarget=prior.find(row=>row.id===targetId);
   const dutyChanged=!oldTarget||['status','startMin','endMin'].some(key=>oldTarget[key]!==target?.[key]);
-  const fullRest=restDayIntent&&dutyChanged&&changed&&prior.length>0&&target&&Number(target.startMin)===0&&Number(target.endMin)===1440&&current.every(resting)&&edge>=1440;
+  const fullRest=restDayIntent&&dutyChanged&&changed&&target&&Number(target.startMin)===0&&Number(target.endMin)===1440&&current.every(resting)&&edge>=1440;
   if(!replaced.length&&!fullRest)return applyRouteRemovals(after);
   const ids=fullRest?prior.map(row=>row.id):replaced;
   const effective={...after,eventsByDay:{...after.eventsByDay,[day]:fullRest?[]:(after.eventsByDay?.[day]||[]).filter(row=>!ids.includes(row.id))}};
-  let cleaned=cleanupDeletedLogbookData(before,effective,{day,eventIds:ids,clearDay:fullRest});
+  let cleaned=cleanupDeletedLogbookData(before,effective,{day,eventIds:ids,clearDay:fullRest,replaceEmptyDayWithRest:!!fullRest&&!prior.length});
   cleaned={...cleaned,eventsByDay:after.eventsByDay};
   // A carried route keeps its other-day history while this corrected day stays blank.
   const excludeIds=fullRest?rows(before).filter(row=>{

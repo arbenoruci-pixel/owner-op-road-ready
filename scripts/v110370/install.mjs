@@ -13,6 +13,8 @@ if(!read(deletion).includes(deleteWrapper))fs.appendFileSync(deletion,'\n'+delet
 const cleanup='source/src/core/routes/logbookLoadCleanup.js';
 prepend(cleanup,"import {rememberRouteRemoval} from './routeRemovalV110370.js';");
 patch(cleanup,'export function cleanupDeletedLogbookData(before = {}, after = {}, command = {}) {','function cleanupDeletedLogbookDataLegacy(before = {}, after = {}, command = {}) {');
+patch(cleanup,'  if (!removed.size) return after;\n  const cleared = command.clearDay === true',
+  '  const explicitEmptyRest = command.replaceEmptyDayWithRest === true && command.clearDay === true && !prior.length && !current.length;\n  if (!removed.size && !explicitEmptyRest) return after;\n  const cleared = explicitEmptyRest || command.clearDay === true');
 const cleanupWrapper='export function cleanupDeletedLogbookData(before = {}, after = {}, command = {}) { return rememberRouteRemoval(before,cleanupDeletedLogbookDataLegacy(before,after,command)); }';
 if(!read(cleanup).includes(cleanupWrapper))fs.appendFileSync(cleanup,'\n'+cleanupWrapper+'\n');
 const routes='source/src/core/routes/routeNormalization.js';
