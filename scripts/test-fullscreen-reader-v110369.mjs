@@ -12,7 +12,10 @@ for(const [kind,title,body,fields] of additionalCases){
  for(const [key,value] of Object.entries(fields))assert.equal(doc.fields[key].value,value,kind+' '+key);
  assert.equal(decideDocumentIdentity({text,type:{id:kind==='bill_of_sale'?'pod':'other'}}).typeId,kind);
  assert.equal(truckDocumentTypeMetaV1040(kind).id,kind);
- assert.notEqual(read('Please send '+title+'\n'+body).documents[0].kind,kind,kind+' mentions cannot establish this specialized type');
+ assert.notEqual(read('Please send '+title).documents[0].kind,kind,kind+' mentions alone cannot establish this specialized type');
+ const withoutTitle=read('Please send '+title+'\n'+body).documents[0];
+ if(kind==='meal_receipt')assert.equal(withoutTitle.identityStatus,'needs_review','restaurant fields without a title need confirmation');
+ else assert.notEqual(withoutTitle.kind,kind,kind+' requires a document heading');
  assert.equal(doc.canAutoFile,false);
 }
 const saleText=additionalCases[0].slice(1,3).join('\n');

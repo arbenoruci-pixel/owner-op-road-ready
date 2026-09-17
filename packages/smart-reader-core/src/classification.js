@@ -16,7 +16,7 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
     const support=profileEvidence(lines,{...profile,...variant,variants:null,structuralSignals:null},{lineIndices});
     if(support)return {...support,method:variant.method||support.method};
   }
-  const title=lines.find((line,index)=>(line.box?line.box.y<.3:(lineIndices?.get(line)??index)<20)&&(matches(line,profile.heading)||noisyTitle(line,profile)));
+  const title=lines.find((line,index)=>(line.box?line.box.y<(profile.headingMaxY??.3):(lineIndices?.get(line)??index)<20)&&(matches(line,profile.heading)||noisyTitle(line,profile)));
   const signals=profile.signals.map(pattern=>lines.find(line=>matches(line,pattern)));
   if(title&&signals.every(Boolean)){
     const exact=profile.heading.test(title.text)&&signals.every((line,i)=>profile.signals[i].test(line.text));

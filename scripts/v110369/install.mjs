@@ -16,7 +16,7 @@ patch(reread,"} catch (failure) { setStatus('review'); setError(`Reading was not
 patch(reread,'signal={controller.current?.signal} defaultExpanded/>','signal={controller.current?.signal} defaultExpanded onSaveReading={save}/>');
 
 const filing={
- bill_of_sale:['equipment','documents','other',['truck_wallet','business'],['vin']],
+ bill_of_sale:['equipment','documents','other',['truck_wallet','business'],[]],
  meal_receipt:['business','expenses','other',['expenses','tax'],['date','merchant','total']],
  grocery_receipt:['business','expenses','other',['expenses','tax'],['date','merchant','total']],
  lodging_receipt:['business','expenses','other',['expenses','tax'],['date','merchant','total']],
@@ -50,6 +50,9 @@ patch(scan+'documentLayoutGuardV110337.js','  const primary=owned.documents.filt
   }
   const primary=owned.documents.filter`);
 const home='source/src/modules/home/AdaptiveHomeV1038.jsx';
+patch(home,'  if (!guide || !step || step.complete) return;','  if (!step || step.complete) return;');
+patch(home,"  if (step.kind === 'document') {","  if (!guide) return;\n  if (step.kind === 'document') {");
+patch(home,'        <Quick title="Navigate" detail={location || \'Next stop\'} primary onClick={() => runStep(guide, navigateStep, onScan)}/>', '        {location?<Quick title="Navigate" detail={location} primary onClick={() => runStep(guide, navigateStep, onScan)}/>:null}');
 fs.copyFileSync('scripts/v110369/currentHomeLoad.js','source/src/modules/home/currentHomeLoadV110369.js');
 patch(home,"import React, { useMemo } from 'react';", "import React, { useMemo } from 'react';\nimport {currentHomeLoad,cleanRoutePlace} from './currentHomeLoadV110369.js';\nimport {localDayKey} from '../../shared/utils/date.js';\nimport {nowMin} from '../../shared/utils/time.js';");
 patch(home,'function ActiveLoad({ state, summary, activeLoad, snapshot,','function ActiveLoad({ state, summary, activeLoad, currentLoad, snapshot,');

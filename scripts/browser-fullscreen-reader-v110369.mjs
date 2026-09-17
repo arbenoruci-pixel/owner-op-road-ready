@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
+import {checklistFixture} from './v110321/checklistFixture.mjs';
 const output='browser-test-results/fullscreen-reader-v110369';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
  const context=await browser.launchPersistentContext('',{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
@@ -17,8 +18,30 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
     return {data:{text:lines.join('\n'),confidence:90,tsv:[header,...rows].join('\n')}};
    }})};
   });
-  const state=baseState();state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
-  const before=await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1'));
+  const state=baseState(),f=checklistFixture(),current=structuredClone(f.guide),old=structuredClone(f.guide);state.view='logbook';state.activeDay='2026-09-17';
+  current.id='current-guide';current.loadNo='24654';current.orderNo='24654';current.origin='Dates Delivery Dates';current.destination='Dates';
+  current.stops[0].city='Saugerties';current.stops[0].state='NY';current.stops[1].city='Onalaska';current.stops[1].state='WI';
+  old.id='stale-guide';old.loadNo='38246703';old.orderNo='38246703';
+  state.activeLoadGuideId=old.id;state.loadGuidesById={[old.id]:old,[current.id]:current};
+  state.eventsByDay={'2026-09-16':[{id:'real-pickup',status:'ON',startMin:1000,endMin:1030,reasons:['Pickup / Loading'],source:'manual',shippingDocs:'8494',city:'Saugerties',state:'NY'}]};
+  state.routeLegsByDay={'2026-09-16':[{id:'real-leg',loadGroupId:current.id,pickupEventId:'real-pickup',day:'2026-09-16',shippingDocs:'8494',fromCity:'Saugerties',fromState:'NY',toCity:'Incorrect',toState:'WI',status:'open'}]};
+  state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
+  const card=page.locator('.adaptive-mission-v1038');
+  assert.equal(await card.locator('h1').innerText(),'24654');
+  assert.equal(await card.locator('header p').first().innerText(),'Saugerties, NY → Onalaska, WI');
+  await card.screenshot({path:`${output}/${name}-current-load.png`});
+  await card.getByRole('button',{name:'Full mission',exact:true}).click();
+  await page.getByRole('heading',{name:'24654',exact:true}).waitFor();
+  await page.reload();await page.locator('.adaptive-home-v1038').waitFor();
+  console.log('PASS '+name+' Home current load, route and Full mission agree');
+  state.loadGuidesById={};state.activeLoadGuideId='';state.routeLegsByDay['2026-09-16'][0].toCity='Onalaska';
+  await seed(page,state);assert.equal(await card.locator('h1').innerText(),'8494');
+  assert.equal(await card.getByRole('button',{name:'Full mission',exact:true}).count(),0);
+  await page.evaluate(()=>{window.open=url=>{window.__reviewNavigation=url;return null;};});
+  await page.getByRole('button',{name:/^Navigate/}).click();
+  const navigation=await page.evaluate(()=>window.__reviewNavigation);
+  assert.equal(new URL(navigation).searchParams.get('destination'),'Onalaska, WI');
+  console.log('PASS '+name+' recorded load without a guide retains working navigation');
   await page.getByRole('button',{name:/Smart Scan/}).first().click();
   const photo=await page.evaluate(async()=>{
    const canvas=document.createElement('canvas');canvas.width=900;canvas.height=1200;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,900,1200);ctx.fillStyle='#111';ctx.font='28px Arial';
@@ -72,7 +95,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await recent.getByRole('button',{name:'Read again',exact:true}).click();
   const reread=recent.getByRole('region',{name:'Read saved document again'});
   await reread.getByRole('button',{name:'Fix next reading',exact:true}).click();
-  await dialog.getByRole('heading',{name:'VIN / serial number · Page 1',exact:true}).waitFor();
+  await dialog.getByRole('heading',{name:'VIN · Page 1',exact:true}).waitFor();
   await dialog.getByLabel('Confirmed value',{exact:true}).fill('1HGBH41JXMN109188');
   await dialog.getByRole('button',{name:'Save & next',exact:true}).click();
   await dialog.getByRole('button',{name:'Skip for now',exact:true}).click();
@@ -85,5 +108,5 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   assert.equal(saved.documents[0].kind,'bill_of_sale');assert.equal(saved.documents[0].fields.vin.value,'1HGBH41JXMN109188');assert.ok(saved.remaining>0,'skipped date stays unchecked');
   assert.ok(records[0].extracted.previousReaderReviewV110347,'prior review retained');assert.ok(!records[0].load_no,'review cannot create a load assignment');
   assert.deepEqual(errors,[]);console.log('PASS '+name+' fullscreen, highlight, pinch/pan, Next, skip and saved-reading persistence');
- }catch(error){await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});throw error;}finally{await context.close();}
+ }catch(error){console.error('Browser errors:',errors);await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});throw error;}finally{await context.close();}
 }

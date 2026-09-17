@@ -173,6 +173,7 @@ export function truckingProfiles(base){
     p('signing_certificate','Signing certificate',/^\s*(?:REF\. NUMBER\s+DOCUMENT COMPLETED BY ALL PARTIES ON|CERTIFICATE OF COMPLETION|AUDIT TRAIL)\s*$/i,
       [sig('SIGNER|SIGNATURE'),sig('SIGNED|COMPLETED|SENT')],{documentReference:{...id('Document reference','DOCUMENT REF|DOCUMENT REFERENCE|ENVELOPE'),certificatePart:'reference'},date:{...date,label:'Completion date',certificatePart:'date'}},{role:'supporting',filingType:null}),
   ];
+  profiles.find(p=>p.id==='meal_receipt').structuralSignals=[sig('SERVER|TABLE|DINE IN|TAKE OUT|TAKEOUT'),sig('TIP|GRATUITY'),totalSignal];
   profiles.find(p=>p.id==='fuel_receipt').structuralSignals=[sig('DIESEL|ULSD|FUEL TYPE'),sig('GALLONS|GAL'),totalSignal,sig('PAID|PAYMENT|CARD|TRANSACTION')];
   profiles.find(p=>p.id==='other_expense').structuralSignals=[sig('SUBTOTAL'),totalSignal,sig('PAYMENT METHOD|CARD TYPE|PAID|CASH|CHANGE')];
   profiles.find(p=>p.id==='other_expense').fallback=true;

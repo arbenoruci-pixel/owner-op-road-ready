@@ -1,15 +1,17 @@
 // Identification requires a document heading and independent field evidence.
 // These fields describe the source document, never the shipment it is filed in.
 export function additionalProfiles({p,sig,field,id,amount,date,receiptType,equipment,vin,unit,business}) {
-  const saleVin={...field('VIN / serial number','VIN|VEHICLE(?: OR HULL)? IDENTIFICATION NUMBER|SERIAL(?: NUMBER| NO\\.?)?','vin',true),
+  const saleVin={...field('VIN','VIN|VEHICLE(?: OR HULL)? IDENTIFICATION NUMBER|SERIAL(?: NUMBER| NO\\.?)?','vin'),
     pattern:/^\s*(?:VIN|VEHICLE(?: OR HULL)? IDENTIFICATION NUMBER|SERIAL(?: NUMBER| NO\.?)?)\s*[#:]?\s*([A-HJ-NPR-Z0-9]{17})\s*$/id};
+  const saleSerial={...field('Equipment serial number','SERIAL(?: NUMBER| NO\\.?)?','identifier'),
+    pattern:/^\s*SERIAL(?: NUMBER| NO\.?)?\s*[#:]?\s*(?![A-HJ-NPR-Z0-9]{17}\s*$)([A-Z0-9][A-Z0-9._/-]*)\s*$/id};
   return [
     p('bill_of_sale','Bill of sale','(?:VEHICLE |TRAILER |EQUIPMENT )?BILL OF SALE',
       [sig('SELLER|BUYER|BIDDER'),sig('VIN|VEHICLE(?: OR HULL)? IDENTIFICATION|SERIAL|YEAR|MAKE|UNIT')],
-      {vin:saleVin,unitNumber:unit,date,seller:field('Seller','SELLER(?: NAME)?','party'),buyer:field('Buyer','BUYER(?: NAME)?','party'),
+      {vin:saleVin,serialNumber:saleSerial,unitNumber:unit,date,seller:field('Seller','SELLER(?: NAME)?','party'),buyer:field('Buyer','BUYER(?: NAME)?','party'),
         saleLocation:field('Sale location','LOCATION|SALE LOCATION|AUCTION LOCATION'),
         salePrice:amount('Sale price','SALE PRICE|PURCHASE PRICE|CONSIDERATION|PRICE'),year:field('Year','YEAR'),make:field('Make','MAKE'),model:field('Model','MODEL'),
-        bidderNumber:field('Bidder number','BIDDER','identifier')},{identity:'vin',family:'equipment'}),
+        bidderNumber:field('Bidder number','BIDDER','identifier')},{identity:'vin',family:'equipment',headingMaxY:.5}),
     receiptType('meal_receipt','Meal / restaurant receipt','(?:MEAL|RESTAURANT|DINING|FOOD) RECEIPT|GUEST CHECK|RECEIPT',
       [sig('SERVER|TABLE|DINE IN|TAKE OUT|TAKEOUT|FOOD|MEAL')],{tip:amount('Tip','TIP|GRATUITY')}),
     receiptType('grocery_receipt','Grocery receipt','GROCERY RECEIPT|GROCERY SALES RECEIPT',[],{}),
