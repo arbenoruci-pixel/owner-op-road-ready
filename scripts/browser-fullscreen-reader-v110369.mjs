@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {chromium,webkit} from 'playwright';
-import {baseState,seed,setupRoutes,origin} from './v110328/browserFixture.mjs';
+import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
 import {checklistFixture} from './v110321/checklistFixture.mjs';
 const output='browser-test-results/fullscreen-reader-v110369';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
@@ -12,7 +12,14 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   // Serve the built manifest deterministically while fixtures reload. WebKit
   // can otherwise report the cancelled background poll as an access error.
   const manifest=JSON.parse(fs.readFileSync('public/app-version.json','utf8'));
-  await context.route(`${origin}/app-version.json*`,route=>route.fulfill({json:manifest}));
+  await context.addInitScript(manifest=>{
+   const originalFetch=window.fetch.bind(window);
+   window.fetch=(input,options)=>{
+    const url=new URL(input instanceof Request?input.url:String(input),location.href);
+    if(url.origin===location.origin&&url.pathname==='/app-version.json')return Promise.resolve(new Response(JSON.stringify(manifest),{status:200,headers:{'Content-Type':'application/json'}}));
+    return originalFetch(input,options);
+   };
+  },manifest);
   await context.addInitScript(()=>{
    window.__saleLines=['BILL OF SALE','BIDDER: 17922','UNIT # T-889','LOCATION SAUGERTIES, NY','DATE 09/07/2026','SERIAL # 1HGBH41JXMN109186','SELLER: EXAMPLE EQUIPMENT LLC','BUYER: EXAMPLE CARRIER LLC'];
    window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async(file)=>{
