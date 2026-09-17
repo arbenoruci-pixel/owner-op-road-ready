@@ -11,13 +11,19 @@ const exp=Math.floor(Date.now()/1000)+86400;
 const b64=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
 const token=b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:user.id,email:user.email,exp,aud:'authenticated'})+'.synthetic';
 const session={access_token:token,refresh_token:'synthetic-no-real-token',token_type:'bearer',expires_in:86400,expires_at:exp,user};
-const state={view:'day',activeDay:day,sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/Chicago',driver:{truck:'12',trailer:'53'},driverProfile:{name:'Test Driver'},carrierName:'Test Carrier',mainOfficeAddress:'Test Office',currentTrailer:'53',currentStatus:'OFF',currentLocation:{city:'Chicago',state:'IL'},eventsByDay:{[day]:[{id:'fixture-event',status:'OFF',startMin:0,endMin:1440,city:'Chicago',state:'IL',note:'Off Duty'}]},certifyStatus:{[day]:'Needs signature'},signatureByDay:{},inspectionByDay:{},routeLegsByDay:{},formByDay:{},driverSignature:{dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4WQAAAAASUVORK5CYII=',driverName:'Test Driver'},loadGuidesById:{},dotWallet:{documents:{}}};
+const state={view:'day',activeDay:day,sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/Chicago',driver:{truck:'12',trailer:'53'},driverProfile:{name:'Test Driver'},carrierName:'Test Carrier',mainOfficeAddress:'Test Office',currentTrailer:'53',currentStatus:'OFF',currentLocation:{city:'Chicago',state:'IL'},eventsByDay:{[day]:[{id:'fixture-event',status:'ON',startMin:0,endMin:1440,city:'Chicago',state:'IL',note:'Pickup / Loading'}]},certifyStatus:{[day]:'Needs signature'},signatureByDay:{},inspectionByDay:{},routeLegsByDay:{},formByDay:{},driverSignature:{dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4WQAAAAASUVORK5CYII=',driverName:'Test Driver'},loadGuidesById:{},dotWallet:{documents:{}}};
 async function stored(page){return page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,r=db.transaction('app_snapshots').objectStore('app_snapshots').get('owner-op-road-ready-state-v1');r.onerror=()=>{db.close();reject(r.error);};r.onsuccess=()=>{db.close();resolve(r.result?.state);};};}));}
 async function waitState(page,predicate){for(let n=0;n<100;n++){const s=await stored(page);if(s && predicate(s))return s;await page.waitForTimeout(100);}throw Error('Persistent state condition timed out');}
 const target={id:'pending-route',day:'2026-09-13',pickupDay:day,fromCity:'Dates Delivery Dates',toCity:'Dates',shippingDocs:'38246703',status:'open'};
 const other={id:'keep-route',day,pickupDay:day,fromCity:'Downers Grove',fromState:'IL',toCity:'New York',toState:'NY',shippingDocs:'324',status:'open'};
-state.routeLegsByDay={[day]:[target,other]};
-state.loadInfo={loadNo:'324',shippingDocs:'324',routeLegsByDay:{'2026-09-13':[target]}};
+const earlier='2026-09-12';
+other.day=earlier;other.pickupDay=earlier;
+state.eventsByDay[earlier]=[{id:'keep-history',status:'ON',startMin:0,endMin:1440,city:'Downers Grove',state:'IL',note:'Work',shippingDocs:'324'}];
+state.manualMilesByDay={[day]:467.19,[earlier]:42};
+state.dotWallet={documents:{original:{number:'ORIGINAL-KEEP',notes:'Original paperwork stays'}}};
+state.loadGuidesById={archived:{id:'archived',loadNo:'KEEP',status:'closed'}};
+state.routeLegsByDay={[day]:[target],[earlier]:[other]};
+state.loadInfo={loadNo:target.shippingDocs,shippingDocs:target.shippingDocs,bol:target.shippingDocs,po:'OLD-PO',sourceEventId:'fixture-event',sourceEventDay:day,routeLegsByDay:{'2026-09-13':[target]}};
 const rows=s=>Object.values(s.routeLegsByDay || {}).flat();
 fs.mkdirSync('browser-test-results',{recursive:true});
 for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
@@ -50,42 +56,37 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   const pending=()=>page.locator('.route-leg-item').filter({hasText:'Dates Delivery Dates'});
   await pending().first().waitFor();
   const before=await waitState(page,s=>rows(s).some(r=>r.id===target.id));
-  // Cancellation must leave the record in both the UI and durable snapshot.
-  await pending().first().locator('.route-leg-delete').click();
-  assert.ok(rows(await stored(page)).some(r=>r.id===target.id));
-  await pending().first().waitFor();
-  // A route deletion is local-first and works with the network offline.
-  await context.setOffline(true);acceptDelete=true;
-  await pending().first().locator('.route-leg-delete').click();
-  const removed=await waitState(page,s=>!rows(s).some(r=>r.id===target.id));
+  // Explicitly replace the entire historical pickup day with Off Duty.
+  await page.getByRole('navigation',{name:'Log sections'}).getByRole('button',{name:'Log',exact:true}).click();
+  const eventRow=page.locator('[data-log-event-id="fixture-event"]');await eventRow.waitFor();
+  if(await eventRow.locator('.motive-edit-reveal-v11027').count()===0)await eventRow.click();
+  await eventRow.locator('.motive-edit-reveal-v11027').click();
+  const editor=page.locator('.editor-ui-v110');await editor.waitFor();
+  await context.setOffline(true);
+  await editor.locator('.editor-duty-grid button[data-status=OFF]').click();
+  await editor.locator('.save-main').click();
+  const removed=await waitState(page,s=>(s.eventsByDay?.[day]||[]).some(e=>e.id==='fixture-event'&&e.status==='OFF'));
+  assert.ok(!rows(removed).some(r=>r.id===target.id));
   assert.ok(rows(removed).some(r=>r.id===other.id));
-  await pending().waitFor({state:'detached'});
-  assert.deepEqual(removed.eventsByDay,before.eventsByDay);
+  assert.ok(!Object.values(removed.loadInfo?.routeLegsByDay||{}).flat().some(r=>r.id===target.id));
+  assert.ok(!removed.loadInfo?.sourceEventId || removed.loadInfo.sourceEventId!=='fixture-event');
+  assert.ok(!Object.hasOwn(removed.manualMilesByDay||{},day));
+  assert.equal(removed.manualMilesByDay[earlier],before.manualMilesByDay[earlier]);
+  assert.deepEqual(removed.eventsByDay[earlier],before.eventsByDay[earlier]);
   assert.deepEqual(removed.signatureByDay,before.signatureByDay);
   assert.deepEqual(removed.dotWallet,before.dotWallet);
   assert.deepEqual(removed.loadGuidesById,before.loadGuidesById);
-  assert.ok(removed.logbookRouteRemovalsV110370.deletedIds.includes(target.id));
-  await context.setOffline(false);
-  await page.goto(origin+'/_not-found');
-  await page.evaluate(async({removed,target,day})=>{
-   const stale={...removed,routeLegsByDay:{...removed.routeLegsByDay,[day]:[...(removed.routeLegsByDay[day]||[]),{...target,updatedAt:Date.now()+10000}]},loadInfo:{...removed.loadInfo,routeLegsByDay:{[day]:[target]}}};
-   await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{const db=r.result,tx=db.transaction('app_snapshots','readwrite');tx.objectStore('app_snapshots').put({key:'owner-op-road-ready-state-v1',state:stale,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};r.onerror=()=>reject(r.error);});
-  },{removed,target,day});
-  await page.goto(origin);await form().click({timeout:30000});
+  await form().click();assert.equal(await pending().count(),0);
+  await context.setOffline(false);await page.reload();await form().click({timeout:30000});
   const reloaded=await waitState(page,s=>!rows(s).some(r=>r.id===target.id));
   assert.equal(await pending().count(),0);
   assert.ok(rows(reloaded).some(r=>r.id===other.id));
-  assert.deepEqual(reloaded.eventsByDay,before.eventsByDay);
-  // Removing the final synthetic row leaves an explicit empty day after reload.
-  await page.locator('.route-leg-item').filter({hasText:'Downers Grove'}).locator('.route-leg-delete').click();
-  await waitState(page,s=>!rows(s).some(r=>r.id===other.id));
-  await page.reload();await form().click({timeout:30000});
-  assert.equal(await page.locator('.route-leg-item').count(),0);
-  assert.deepEqual((await stored(page)).eventsByDay,before.eventsByDay);
-  assert.equal(dialogs.filter(text=>text.startsWith('Delete this route leg?')).length,3);
+  assert.deepEqual(reloaded.eventsByDay[earlier],before.eventsByDay[earlier]);
+  assert.ok((reloaded.eventsByDay[day]||[]).some(e=>e.id==='fixture-event'&&e.status==='OFF'&&e.startMin===0&&e.endMin===1440));
+  assert.ok(reloaded.logbookRouteRemovalsV110370.deletedIds.includes(target.id));
   assert.deepEqual(errors,[]);
-  await page.screenshot({path:'browser-test-results/route-delete-'+name+'.png',fullPage:true});
-  console.log('PASS — '+name+': cancel, offline Delete, IndexedDB, reload and final-route removal; duty events stay unchanged');
- }catch(error){await page.screenshot({path:'browser-test-results/route-delete-'+name+'-failed.png',fullPage:true}).catch(()=>{});fs.writeFileSync('browser-test-results/route-delete-'+name+'-failure.json',JSON.stringify({error:String(error),errors,dialogs,text:await page.locator('body').innerText()},null,2));throw error;}
+  await page.screenshot({path:'browser-test-results/rest-day-cleanup-'+name+'.png',fullPage:true});
+  console.log('PASS — '+name+': last-event delete clears owned load/routes offline and after reload; other-day evidence preserved');
+ }catch(error){await page.screenshot({path:'browser-test-results/rest-day-cleanup-'+name+'-failed.png',fullPage:true}).catch(()=>{});fs.writeFileSync('browser-test-results/rest-day-cleanup-'+name+'-failure.json',JSON.stringify({error:String(error),errors,dialogs,text:await page.locator('body').innerText()},null,2));throw error;}
  finally{await context.close();await browser.close();}
 }
