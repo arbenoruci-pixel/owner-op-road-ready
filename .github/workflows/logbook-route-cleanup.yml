@@ -10,6 +10,8 @@ on:
     paths:
       - 'scripts/finalize-route-cleanup-v110352.mjs'
       - 'scripts/v110352/**'
+      - 'scripts/v110370/**'
+      - 'scripts/finalize-route-removal-v110370.mjs'
       - '.github/workflows/logbook-route-cleanup.yml'
 permissions:
   contents: read
@@ -30,6 +32,7 @@ jobs:
         run: |
           node scripts/test-logbook-load-cleanup-v110352.mjs
           node scripts/test-route-delete-v110350.mjs
+          node scripts/test-route-removal-v110370.mjs
           node scripts/test-day-form-v110.mjs
           node scripts/test-duty-graph-continuity.mjs
           node scripts/test-dot-signature-labels-v110351.mjs --materialized
@@ -49,6 +52,7 @@ jobs:
           node scripts/browser-shipment-carryover-v110367.mjs
           node scripts/browser-route-delete-v110350.mjs
           node scripts/browser-day-load-cleanup-v110352.mjs
+          node scripts/browser-rest-day-v110370.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
