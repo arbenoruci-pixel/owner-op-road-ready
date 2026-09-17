@@ -26,6 +26,12 @@ structure; the code does not fetch them or send customer documents to them.
 - [Trulos rate-confirmation form](https://www.trulos.com/tools/print/rate/):
   separates shipment dates and references, pickup and consignee, carrier, freight
   details and agreed rate. Load payment must remain distinct from expense totals.
+- [FedEx Freight BOL instructions and forms](https://www.fedexfreight.com/en-us/rate-ship/shipping/forms):
+  distinguish the shipper's BOL number, purchase order, shipper reference, parties,
+  handling units and commodity weight. These references retain separate roles.
+- [Flock Freight's BOL and POD guide](https://www.flockfreight.com/blog/proof-of-delivery-vs-bill-of-lading-whats-the-difference):
+  identifies delivery date and recipient confirmation as delivery evidence.
+  Printed signature boxes alone do not turn a BOL into a completed POD.
 - [CAT Scale weighing guide](https://catscale.com/how-to-weigh/): distinguishes
   steer, drive and trailer axle readings from gross weight. A scale fee is a
   monetary field, separate from weight.

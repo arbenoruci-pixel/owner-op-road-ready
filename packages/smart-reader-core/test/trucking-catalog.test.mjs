@@ -47,6 +47,15 @@ test('generic receipt structure recognizes a purchase without a printed receipt 
   assert.equal(result.documents[0].fields.total.value,'10.70');
 });
 
+test('receipt amounts tolerate compact colon spacing while retaining source offsets',()=>{
+  const result=read('RECEIPT\nDate:2026-09-17\nSubtotal:$10.00\nTax:0.70\nTotal:$10.70');
+  assert.equal(result.documents[0].kind,'other_expense');
+  for(const [key,value] of Object.entries({subtotal:'10.00',tax:'0.70',total:'10.70'})){
+    const field=result.documents[0].fields[key];assert.equal(field.value,value);
+    for(const candidate of field.candidates)for(const evidence of candidate.evidence)resolveEvidence(result,evidence);
+  }
+});
+
 test('fuel structure identifies a fuel receipt without turning its total into a load payment',()=>{
   const result=read('EXAMPLE TRUCK STOP\nDiesel: ULSD\nGallons: 110.250\nTotal $385.76\nCard: XXXX1234');
   assert.equal(result.documents[0].kind,'fuel_receipt');

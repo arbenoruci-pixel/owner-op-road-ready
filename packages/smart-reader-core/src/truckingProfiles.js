@@ -8,7 +8,7 @@ const field=(label,labels,kind='text',required=false)=>({label,kind,required,
 const id=(label,labels,required=false)=>({label,kind:'identifier',required,
   pattern:re(`^\\s*(?:${labels})\\s*(?:NUMBER\\b|NO\\b\\.?|ID\\b|#|:)\\s*[:#]?\\s*([A-Z0-9][A-Z0-9._/-]*)\\s*$`,'id')});
 const amount=(label,labels,required=false)=>({label,kind:'amount',required,
-  pattern:re(`^\\s*(?:${labels})\\s*:?\\s+([$€£]?\\s*\\d[\\d.,]*(?:\\s+(?:USD|EUR|GBP|CAD|AUD|CHF))?)\\s*$`,'id')});
+  pattern:re(`^\\s*(?:${labels})(?:\\s*:\\s*|\\s+)([$€£]?\\s*\\d[\\d.,]*(?:\\s+(?:USD|EUR|GBP|CAD|AUD|CHF))?)\\s*$`,'id')});
 const date=field('Document date','DOCUMENT DATE|INVOICE DATE|RECEIPT DATE|DATE','date');
 const total=amount('Total','GRAND TOTAL|TOTAL AMOUNT|TOTAL DUE|TOTAL|AMOUNT DUE|BALANCE DUE',true);
 const loadNumber=id('Load number','LOAD|ORDER|SHIPMENT|PRO');
