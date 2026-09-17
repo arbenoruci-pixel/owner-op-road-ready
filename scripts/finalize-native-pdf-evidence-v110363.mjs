@@ -4,6 +4,9 @@ const VERSION='110.3.63',BUILD='v110363-native-pdf-evidence';
 const read=path=>fs.readFileSync(path,'utf8');
 function patch(path,before,after){const source=read(path);if(source.includes(after))return;assert.equal(source.split(before).length-1,1,'Release anchor '+path);fs.writeFileSync(path,source.replace(before,after));}
 const pdfPath='source/src/modules/scan/pdfPageReaderV110328.js';
+const intakePath='source/src/modules/scan/SmartScanSheetV105.jsx';
+patch(intakePath,'        signal:controllerV110328.signal,','        signal:controllerV110328.signal,\n        retainPageSourcesV110347:true,');
+patch(intakePath,'applyResult({ ...result, scanMeta:{ ...(scanMeta || {}), originalFileName:rateConFileNameV10964 } });','applyResult({ ...result, scanMeta:{ ...(scanMeta || {}), ...(result.scanMeta || {}), originalFileName:rateConFileNameV10964 } });');
 patch(pdfPath,"import {readPdfImageV110348} from './pdfImageReaderV110348.js';","import {readPdfImageV110348} from './pdfImageReaderV110348.js';\nimport {nativePdfLayout} from '../../../../packages/smart-reader-core/src/pdfLayout.js';");
 patch(pdfPath,"let page,canvas,text='',method='native',confidence=1;","let page,canvas,nativeContent,nativeViewport,text='',method='native',confidence=1;");
 patch(pdfPath,"text=readText(content?.items||[]);","text=readText(content?.items||[]);nativeContent=content;");

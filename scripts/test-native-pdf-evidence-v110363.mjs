@@ -27,5 +27,25 @@ const evidence=clearestEvidence(field.candidates.flatMap(c=>c.evidence));
 assert.equal(evidence.source,'pdf-text-layer');assert.ok(evidence.box,'source review can highlight the total');
 assert.ok(Math.abs(evidence.box.y-84/792)<.001,'highlight aligns with the rendered page');
 assert.equal(result.documents[0].canAutoFile,false);
+// Exercise the real import handler: new scans must request source retention
+// and keep the rendered files returned by the reader through applyResult.
+const intakeSource=fs.readFileSync('source/src/modules/scan/SmartScanSheetV105.jsx','utf8');
+const start=intakeSource.indexOf('  async function chooseFile('),end=intakeSource.indexOf('\n  function acceptReaderReviewV110345',start);
+assert.ok(start>=0&&end>start);
+let imported;
+const noop=()=>{},deps={scanGenerationV11036:{current:0},readAbortV110328:{current:null},
+  normalizeScanPreferenceV11039:value=>value,initialPreferredType:'auto',previewUrl:'',state:{},profile:{},
+  setIntakeDraftV110328:noop,setFile:noop,setPreviewUrl:noop,setStage:noop,setProgress:noop,setProgressText:noop,
+  setMessage:value=>{if(value)throw new Error(value);},readBusinessStore:()=>({}),migrateBusinessStoreV105:value=>value,
+  analyzeTruckDocumentV1040:async(file,options)=>{
+    const reading=await read(pdf,{...options,enablePageOcr:true},items=>items.map(i=>i.str).join('\n'));
+    return {...reading,scanMeta:{pageFiles:reading.pageFiles}};
+  },applyResult:value=>{imported=value;},documentTypeMeta:()=>({id:'other'}),SMART_DOCUMENT_TYPES:[]};
+const chooseFile=new Function(...Object.keys(deps),intakeSource.slice(start,end)+';return chooseFile;')(...Object.values(deps));
+await chooseFile(new File(['synthetic PDF'],'example.pdf',{type:'application/pdf'}),'auto',{source:'test-import',pageFiles:['old preview']});
+assert.equal(imported.ocrEvidenceV110323.length,2,'new imports retain positioned native observations');
+assert.equal(imported.scanMeta.pageFiles[0],imported.ocrEvidenceV110323[1].sourceImageFile,'reader source files survive intake metadata');
+assert.equal(imported.scanMeta.source,'test-import');
+assert.equal(imported.scanMeta.originalFileName,'example.pdf');
 delete globalThis.document;
-console.log('PASS — native PDF render, coordinates, source adapter, amount and highlight');
+console.log('PASS — new PDF import, retained source files, coordinates, source adapter, amount and highlight');

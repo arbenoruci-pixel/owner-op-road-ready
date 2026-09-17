@@ -38,6 +38,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     const review=page.locator('.owned-reader-preview');await review.getByText('2 pages · 2 documents',{exact:true}).waitFor();
     const download=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const result=JSON.parse(fs.readFileSync(await(await download).path(),'utf8'));
+    fs.writeFileSync(`${output}/${name}-native-pdf-review.json`,JSON.stringify(result,null,2));
     assert.equal(result.engineVersion,'0.3.16');
     assert.deepEqual(result.documents.map(d=>d.kind),['rate_confirmation','signing_certificate']);
     const fields=result.documents[0].fields;
