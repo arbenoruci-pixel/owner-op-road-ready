@@ -11,6 +11,18 @@ function patch(path, before, after) {
 }
 fs.copyFileSync('scripts/v110365/carryCorrection.js', 'source/src/modules/logbook/carryCorrection.js');
 
+// Reload cleanup must not turn an explicitly saved manual midnight interval
+// into a link to yesterday. Keep repairing already marked legacy continuations.
+patch('source/src/modules/logbook/logIntegrityV1051.js',
+  '  const event = rows[index];\n  const previous = previousRows.at(-1);',
+  `  const event = rows[index];
+  const independentManual = textV1051(event?.source).toLowerCase() === 'manual'
+    && !event.crossMidnightContinuation
+    && !textV1051(event.crossMidnightFromDay)
+    && !textV1051(event.crossMidnightFromEventId);
+  if (independentManual) return { changed:false, eventsByDay, change:null };
+  const previous = previousRows.at(-1);`);
+
 const day = 'source/src/modules/logbook/DayLogScreen.jsx';
 const reviewedDayHash = '09c473ecabcb8e562f8613f321a6e0cd462eab4a7151ef57c2ea8e5e8f9d17f1';
 patch(day, "import EventList from './EventList.jsx';", "import EventList from './EventList.jsx';\nimport { carryCorrectionDefaults } from './carryCorrection.js';");
@@ -78,6 +90,7 @@ for (const [path, name] of [['source/src/core/update/appUpdate.js', 'FALLBACK_AP
 for (const path of ['source/src/modules/home/HomeScreen.jsx', 'source/src/shared/ui/ToolsSheet.jsx']) fs.writeFileSync(path, read(path).replace(/App v\d+\.\d+\.\d+/g, 'App v' + VERSION).replace(/APP V\d+\.\d+\.\d+/g, 'APP V' + VERSION));
 patch('scripts/test-duty-graph-continuity.mjs', "assert.equal(meta.version,'110.3.64');assert.equal(meta.build,'v110364-native-pdf-cells');", `assert.equal(meta.version,'${VERSION}');assert.equal(meta.build,'${BUILD}');`);
 patch('scripts/test-editor-grips-v110355.mjs', "assert.equal(meta.version,'110.3.64'); assert.equal(meta.build,'v110364-native-pdf-cells');", `assert.equal(meta.version,'${VERSION}'); assert.equal(meta.build,'${BUILD}');`);
+patch('scripts/verify-log-integrity-v1051.mjs', "assert.equal(JSON.parse(read('public/app-version.json')).version, '105.1.0');", `assert.equal(JSON.parse(read('public/app-version.json')).version, '${VERSION}');`);
 
 // Intentional reviewed change to this locked UI boundary. Persistence and
 // signature implementations keep their existing independent locks.

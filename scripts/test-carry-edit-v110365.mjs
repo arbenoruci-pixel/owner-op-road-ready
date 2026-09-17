@@ -8,6 +8,8 @@ import { applyLogbookEditorInsert, previewLogbookInsertOverride, projectLogbookE
 import { displayEventsForDayFromState } from '../source/src/core/timeline/displayTimeline.js';
 import { dutyViewEvents } from '../source/src/modules/logbook/dutyViewV110212.js';
 import { createCertificationRecord, certificationStatusV1032 } from '../source/src/modules/logbook/certificationV110.js';
+import { repairRoadReadyFoundationV105 } from '../source/src/modules/documents/documentFoundationV105.js';
+import { repairLogIntegrityV1051 } from '../source/src/modules/logbook/logIntegrityV1051.js';
 
 register(new URL('./test-jsx-loader.mjs', import.meta.url));
 const { default: DayLogScreen } = await import('../source/src/modules/logbook/DayLogScreen.jsx');
@@ -66,6 +68,23 @@ test('current-day prefix correction leaves the following live status and its clo
   assert.equal(result.state.currentStatus, 'ON');
   assert.equal(result.state.eventsByDay[state.activeDay].find(e => e.id === 'live').endMin, 91);
   assert.equal(projectLogbookEvents(result.state, state.activeDay, at).find(e => e.id === 'live').endMin, 120);
+});
+test('reload retains independent manual midnight rows and unrelated day attestations', () => {
+  const normalize = state => repairLogIntegrityV1051(repairRoadReadyFoundationV105(JSON.parse(JSON.stringify(state))));
+  const state = normalize(fixture('OFF', true)), nextDay = '2026-09-17';
+  state.signatureByDay[nextDay] = {signed:true,marker:'unrelated attestation'};
+  state.certifyStatus[nextDay] = 'Certified';
+  const result = applyLogbookEditorInsert(state, {day,expectedRows:[],event:row('part','SB',240,600)}, at);
+  assert.equal(result.ok, true, result.error);
+  const reopened = normalize(result.state);
+  assert.deepEqual(reopened.eventsByDay, result.state.eventsByDay, 'reopening must not relink the following manual midnight event');
+  assert.deepEqual(reopened.signatureByDay, result.state.signatureByDay);
+  assert.deepEqual(reopened.certifyStatus, result.state.certifyStatus);
+  assert.deepEqual(reopened.logbookEditHistoryByDay, result.state.logbookEditHistoryByDay);
+  const latest = fixture('OFF'); delete latest.eventsByDay[nextDay];
+  latest.eventsByDay[day] = [row('explicit-midnight','OFF',0,617),row('on','ON',617,1440)];
+  const foundation = repairRoadReadyFoundationV105(latest);
+  assert.deepEqual(normalize(foundation).eventsByDay, foundation.eventsByDay, 'a saved manual OFF correction stays independent at midnight');
 });
 test('stale day data prevents saving an obsolete correction draft', () => {
   const state = fixture(), expectedRows = structuredClone(state.eventsByDay[day]);
