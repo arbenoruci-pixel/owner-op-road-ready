@@ -43,9 +43,14 @@ function classifyPage(page) {
     const evidence=support.lines.map(line=>evidenceFor(page,origins.get(line),line,0,line.text.length));
     votes.push({kind:profile.id,method:'combined_observations',evidence:evidence[0],supportingEvidence:evidence.slice(1)});
   }
-  const kinds=[...new Set(votes.map(v=>v.kind))];
+  // A specialized invoice/receipt may refine a generic title in the SAME
+  // observation. Different titles and competing OCR observations stay conflicts.
+  const refined=votes.filter(vote=>!votes.some(other=>other!==vote&&other.evidence.observationId===vote.evidence.observationId
+    &&(PROFILES.find(p=>p.id===other.kind)?.refines?.includes(vote.kind)&&other.evidence.lineId===vote.evidence.lineId
+      ||PROFILES.find(p=>p.id===vote.kind)?.fallback&&vote.method==='field_structure'&&other.kind!==vote.kind)));
+  const kinds=[...new Set(refined.map(v=>v.kind))];
   const references=Object.fromEntries(PROFILES.map(profile=>{const field=extractField([page],profile.fields[profile.identity]);return [profile.id,field.status==='supported'&&field.value!==null?[field.value]:[]];}));
-  return {kind:kinds.length===1?kinds[0]:'unknown',status:kinds.length>1?'conflicting':kinds.length?votes.some(v=>v.method==='heading')?'supported':'needs_review':'unknown',evidence:votes,references};
+  return {kind:kinds.length===1?kinds[0]:'unknown',status:kinds.length>1?'conflicting':kinds.length?refined.some(v=>v.method==='heading')?'supported':'needs_review':'unknown',evidence:refined,references};
 }
 
 function makeGroups(pages, identities) {
@@ -57,7 +62,7 @@ function makeGroups(pages, identities) {
     const conflictingParties=previousIdentity&&partyKeys.some(key=>{const spec=previousIdentity.fields[key];const before=candidatesFor(previousPages,spec).map(c=>semanticKey(spec.kind,c.value)).filter(Boolean),after=candidatesFor([page],spec).map(c=>semanticKey(spec.kind,c.value)).filter(Boolean);return before.length&&after.length&&new Set([...before,...after]).size>1;});
     const canJoin=previous&&previousIdentity?.joinPages!==false&&previous.kind!=='unknown'&&identity.status!=='conflicting'&&!conflictingParties&&previous.reference&&continuationRefs.length===1&&continuationRefs[0]===previous.reference&&(identity.kind===previous.kind||identity.kind==='unknown');
     if(canJoin){previous.pageIds.push(page.id);continue;}
-    groups.push({id:`document-${groups.length+1}`,kind:identity.kind,pageIds:[page.id],reference:refs.length===1?refs[0]:null,boundaryReview:i>0&&(identity.kind==='unknown'||!refs.length||identity.kind===previous.kind&&previous.reference===null),identityStatus:refs.length>1?'conflicting':identity.status});
+    groups.push({id:`document-${groups.length+1}`,kind:identity.kind,role:PROFILES.find(p=>p.id===identity.kind)?.role||'primary',pageIds:[page.id],reference:refs.length===1?refs[0]:null,boundaryReview:i>0&&(identity.kind==='unknown'||!refs.length||identity.kind===previous.kind&&previous.reference===null),identityStatus:refs.length>1?'conflicting':identity.status});
   }
   return groups;
 }
@@ -81,5 +86,5 @@ export function fieldsForProfile(pages,kind) {const profile=PROFILES.find(p=>p.i
 export function readDocument(input) {
   const {documentId,pages}=normalizeInput(input),identities=pages.map(classifyPage);
   const documents=makeGroups(pages,identities).map(group=>{const profile=PROFILES.find(p=>p.id===group.kind),groupPages=pages.filter(p=>group.pageIds.includes(p.id)),fields=fieldsForProfile(groupPages,group.kind),checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):[];return {...group,label:profile?.label||'Uncategorized document',fields,checks,requiresReview:true,canAutoFile:false};});
-  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.13',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
+  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.14',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
 }

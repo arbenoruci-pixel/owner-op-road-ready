@@ -39,7 +39,7 @@ export function confirmDocumentKind(result,request){
   if(group.kind===request.kind)return result;
   if(Object.values(group.fields).some(f=>f.status==='confirmed'))throw new Error('This document already has confirmed fields. Keep its current type.');
   const next=structuredClone(result),updated=next.documents.find(d=>d.id===group.id);
-  Object.assign(updated,{kind:profile.id,label:profile.label,identityStatus:'confirmed',fields:fieldsForProfile(result.pages.filter(p=>group.pageIds.includes(p.id)),profile.id),requiresReview:true,canAutoFile:false});
+  Object.assign(updated,{kind:profile.id,label:profile.label,role:profile.role||'primary',identityStatus:'confirmed',fields:fieldsForProfile(result.pages.filter(p=>group.pageIds.includes(p.id)),profile.id),requiresReview:true,canAutoFile:false});
   updated.checks=checks(updated);
   updated.typeCorrection={kind:profile.id,sourcePage,origin:'human',confirmed:true,trainingEligible:false};
   next.reviewRevision++;
@@ -60,5 +60,6 @@ export function savedReadingReview(result){
 // The host labels its manual invoice choice explicitly as Carrier invoice.
 export function filingTypeForReview(summary){
   if(summary?.documents?.length!==1||!summary.documents[0].typeCorrection)return null;
-  return ({bol:'bol',unloading_receipt:'lumper_receipt',invoice:'load_invoice'})[summary.documents[0].kind]??null;
+  const profile=PROFILES.find(p=>p.id===summary.documents[0].kind);
+  return profile?.role==='supporting'?null:profile?.filingType??profile?.id??null;
 }

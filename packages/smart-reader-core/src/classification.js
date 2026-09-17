@@ -12,6 +12,10 @@ function noisyTitle(line,profile){
 
 // Every vote retains the original lines, including OCR noise and punctuation.
 export function profileEvidence(lines,profile,{lineIndices}={}){
+  for(const variant of profile.variants||[]){
+    const support=profileEvidence(lines,{...profile,...variant,variants:null,structuralSignals:null},{lineIndices});
+    if(support)return {...support,method:variant.method||support.method};
+  }
   const title=lines.find((line,index)=>(line.box?line.box.y<.3:(lineIndices?.get(line)??index)<20)&&(matches(line,profile.heading)||noisyTitle(line,profile)));
   const signals=profile.signals.map(pattern=>lines.find(line=>matches(line,pattern)));
   if(title&&signals.every(Boolean)){
@@ -20,7 +24,7 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
   }
   if(profile.structuralSignals){
     const structure=profile.structuralSignals.map(pattern=>lines.find(line=>matches(line,pattern)));
-    if(structure.every(Boolean))return {method:'shipping_structure',lines:[...new Set(structure)]};
+    if(structure.every(Boolean))return {method:profile.id==='bol'?'shipping_structure':'field_structure',lines:[...new Set(structure)]};
   }
   return null;
 }

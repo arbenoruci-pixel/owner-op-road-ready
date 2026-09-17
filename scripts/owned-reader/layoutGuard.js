@@ -6,7 +6,8 @@ import {reviewScanAnalysis} from './ownedReaderAdapter.js';
 // together. Below-label proposals remain available for source review instead.
 export function guardOcrLayoutReading(result={}) {
   const owned=reviewScanAnalysis(result);
-  const separated=owned.documents.length>1&&(owned.documents.some(document=>document.kind!=='unknown')||['bol','lumper_receipt','invoice'].includes(result.type?.id));
+  const primary=owned.documents.filter(document=>document.role!=='supporting');
+  const separated=primary.length>1&&(primary.some(document=>document.kind!=='unknown')||['bol','lumper_receipt','invoice'].includes(result.type?.id));
   if(result.typeEvidenceV110334?.mixedDocuments||separated){
     const review=result.evidenceReviewV11036||{};
     const reason='Separate documents are included. Review the fields under each document; the PDF keeps all pages.';
@@ -16,6 +17,11 @@ export function guardOcrLayoutReading(result={}) {
       typeEvidenceV110334:{...result.typeEvidenceV110334,mixedDocuments:true,requiresTypeReview:true,clearShipmentFields:true,reason:result.typeEvidenceV110334?.mixedDocuments?result.typeEvidenceV110334.reason||reason:reason},
       packetReviewV110338:{separateFields:true},
       evidenceReviewV11036:{...review,evidence:{},suggestedLoad:null,issues:[...new Set([...(review.issues||[]),reason])]}};
+  }
+  if(result.typeEvidenceV110334?.attachmentReview?.required){
+    const reason=result.typeEvidenceV110334.attachmentReview.reason,review=result.evidenceReviewV11036||{};
+    result={...result,needsReview:true,needsFieldReview:true,matchedLoad:null,matchedLoadNo:'',routing:{...result.routing,autoFile:false},
+      evidenceReviewV11036:{...review,suggestedLoad:null,issues:[...new Set([...(review.issues||[]),reason])]}};
   }
   if(!['bol','pod'].includes(result.type?.id))return result;
   const passes=(result.ocrEvidenceV110323||[]).filter(pass=>pass.lines?.length);

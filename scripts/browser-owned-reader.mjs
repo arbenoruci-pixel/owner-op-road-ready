@@ -8,6 +8,7 @@ import {shippingLayoutInput} from '../packages/smart-reader-core/test/shipping-l
 import {noisyPageInput} from '../packages/smart-reader-core/test/noisy-page-fixture.mjs';
 import {mergedReceiptInput} from '../packages/smart-reader-core/test/merged-receipt-fixture.mjs';
 import {partyBlocksInput} from '../packages/smart-reader-core/test/party-blocks-fixture.mjs';
+import {truckingCases} from '../packages/smart-reader-core/test/trucking-catalog-fixture.mjs';
 
 const output='browser-test-results/owned-reader';fs.mkdirSync(output,{recursive:true});
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSER||process.env.TEST_BROWSER===name)){
@@ -22,9 +23,14 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       const defaultLines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
       window.Tesseract={createWorker:async()=>({setParameters:async parameters=>{
         if(parameters.tessedit_pageseg_mode)window.__ownedReaderMode=String(parameters.tessedit_pageseg_mode);
-        if(window.__ownedReaderPacket&&String(parameters.tessedit_pageseg_mode)==='3'){window.__ownedReaderPacketPage++;window.__ownedReaderPacketRead=0;}
       },terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
+        if(window.__ownedReaderPacket&&window.__ownedReaderMode==='3'&&file.name==='road-ready-clean-ocr.png'){
+          window.__ownedReaderCleanPages||=new WeakSet();
+          if(!window.__ownedReaderCleanPages.has(file)){
+            window.__ownedReaderCleanPages.add(file);window.__ownedReaderPacketPage++;window.__ownedReaderPacketRead=0;
+          }
+        }
         if(window.__ownedReaderFail)throw new Error('fixture OCR failure');
         if(window.__ownedReaderBlock){
           const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
@@ -466,11 +472,72 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'load_invoice');
     await review.getByRole('heading',{name:'Invoice number · Page 1',exact:true}).waitFor();
+    // Exercise the wider catalog through real intake, review, source opening
+    // and export, with deterministic OCR and ordinary mobile browser storage.
+    const catalogSamples=[['rate_confirmation','PRO # 86420 Rate Confirmation\nTOTAL RATE 2300.00\nPICK 1\n123 EXAMPLE RD Appointment 09/17/26 08:00 to 09/17/26 16:00\nALBANY NY 12207\nSTOP 1\n456 SAMPLE ST Appointment 09/22/26 08:00 to 09/22/26 16:00\nMADISON WI 53703',{loadNumber:'86420',totalRate:'2300.00'}],
+      ...truckingCases.filter(c=>['pod','fuel_receipt','scale_ticket','repair_invoice','packing_list','certificate_of_insurance'].includes(c[0])).map(([kind,title,body,expected])=>[kind,title+'\n'+body,expected]),
+      ['invoice','INVOICE\nInvoice No: HOTEL-440\nSubtotal $100.00\nTotal $100.00\nCurrency: USD',{invoiceNumber:'HOTEL-440'}]];
+    for(const [kind,text,expected] of catalogSamples){
+      await page.goto(new URL('/_not-found',page.url()).href);
+      await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+      await seed(page,state);
+      const bytes=await page.evaluate(async text=>{
+        const lines=text.split('\n');window.__ownedReaderLines=lines;
+        const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
+        const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
+        lines.forEach((line,i)=>ctx.fillText(line,30,64+i*65));
+        return [...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())];
+      },text);
+      await page.getByRole('button',{name:/Smart Scan/}).first().click();
+      await page.locator('input[type=file][multiple]').first().setInputFiles({name:'catalog-'+kind+'.jpg',mimeType:'image/jpeg',buffer:Buffer.from(bytes)});
+      await page.getByRole('button',{name:'Read document',exact:true}).click();
+      const open=page.getByRole('button',{name:'Reader preview · Check source',exact:true});
+      await page.locator('.owned-reader-preview').waitFor();if(await open.isVisible())await open.click();
+      await review.getByText('1 page · 1 document',{exact:true}).waitFor();
+      const download=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+      const result=JSON.parse(fs.readFileSync(await(await download).path(),'utf8'));
+      assert.equal(result.documents[0].kind,kind);
+      assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),kind==='invoice'?'other':kind);
+      for(const [key,value] of Object.entries(expected))assert.equal(result.documents[0].fields[key].value,value,kind+': '+key);
+      const value=Object.values(expected)[0];
+      await review.getByRole('button',{name:value+' · Page 1',exact:true}).first().click();
+      await review.getByRole('img',{name:'Source image for page 1',exact:true}).waitFor();
+      await review.getByLabel('Source line highlight',{exact:true}).first().waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),true);
+      if(['rate_confirmation','pod','fuel_receipt'].includes(kind))await review.screenshot({path:`${output}/${name}-catalog-${kind}.png`});
+    }
+    // Unrelated signing envelopes leave the primary reading visible, show
+    // the page warning, and require an explicit load-folder decision.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+    await seed(page,state);
+    const attachmentPhotos=await page.evaluate(async texts=>{
+      window.__ownedReaderPacket=texts.map(text=>[text.split('\n').map((text,i)=>({text,confidence:.96,box:{x:.04,y:.04+i*.065,width:.92,height:.024}}))]);
+      window.__ownedReaderPacketPage=-1;const photos=[];
+      for(const text of texts){
+        const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;const ctx=canvas.getContext('2d');
+        ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
+        text.split('\n').forEach((line,i)=>ctx.fillText(line,30,64+i*65));
+        photos.push([...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())]);
+      }return photos;
+    },[catalogSamples[0][1]+'\nDocument Ref: PACKET-SOURCE-REF Page 1 of 2','SIGNATURE PAGE\nDocument Ref: OTHER-SOURCE-REF Page 2 of 2']);
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles(attachmentPhotos.map((bytes,i)=>({name:`attachment-${i+1}.jpg`,mimeType:'image/jpeg',buffer:Buffer.from(bytes)})));
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByText(/Check that signature attachments on pages 2 belong to this document/).first().waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
+    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'');
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByText('2 pages · 2 documents',{exact:true}).waitFor();
+    await review.getByRole('button',{name:'86420 · Page 1',exact:true}).click();
+    await review.getByRole('img',{name:'Source image for page 1',exact:true}).waitFor();
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){
     await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});
-    fs.writeFileSync(`${output}/${name}-failure.txt`,JSON.stringify({error:String(error),pageErrors:errors,body:await page.locator('body').innerText().catch(()=>''),url:page.url()},null,2));
+    const failure={error:String(error),pageErrors:errors,body:await page.locator('body').innerText().catch(()=>''),url:page.url()};
+    fs.writeFileSync(`${output}/${name}-failure.txt`,JSON.stringify(failure,null,2));
+    console.error('Owned reader fixture failure:',JSON.stringify(failure));
     throw error;
   }finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}
 }
