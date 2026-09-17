@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {routeLegsForDayCanonical as routes} from '../source/src/core/routes/routeNormalization.js';
-import {shipmentContextForEvents as project,shipmentContextLabel as label} from '../source/src/core/routes/shipmentCarryover.js';
+import {shipmentContextForEvents as project,shipmentContextLabel as label,routeHistoryIndex,routeHistoryWindow} from '../source/src/core/routes/shipmentCarryover.js';
+import {realBackupStateFixture} from './fixtures/real-backup-v9574b.mjs';
 import {sequenceFixture,row} from './v110368/fixture.mjs';
 import {guideFixture,pickupDay,middleDay,deliveryDay} from './v110367/fixture.mjs';
 const shown=(s,d)=>project(s,d,s.eventsByDay[d]||[],routes(s,d));
@@ -46,5 +47,12 @@ test('unlinked multi-stop deliveries end only the matching destination',()=>{
  assert.equal(shown(s,middleDay)[0].shipmentContextV110367[0].destination,'New York, NY');
  assert.equal(shown(s,deliveryDay).at(-1).shipmentContextV110367[0].destination,'Boston, MA');
  assert.ok(!shown(s,'2026-09-17').at(-1).shipmentContextV110367);
+});
+test('explicit legacy delivery links remain authoritative without delivery keywords',()=>{
+ const s=realBackupStateFixture(),leg=s.routeLegsByDay['2026-07-05'].find(l=>l.id==='relay_114RMB689');
+ const window=routeHistoryWindow(leg,routeHistoryIndex(s));
+ assert.equal(window.endDay,'2026-07-06');assert.equal(window.endMin,40);assert.equal(window.endReason,'delivery');
+ for(const event of shown(s,'2026-07-06').filter(e=>e.startMin>=40))assert.ok(!(event.shipmentContextV110367||[]).some(c=>c.shippingDocs==='114RMB689'));
+ assert.ok(!routes(s,'2026-07-07').some(l=>l.id===leg.id));
 });
 console.log(passed+' active-shipment regression groups passed');

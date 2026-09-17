@@ -97,7 +97,8 @@ export function routeHistoryWindow(leg, index) {
   const nextPickup = pickup && (index.events || []).find(entry => compareEntries(entry, pickup) > 0
     && text(entry.event.id) !== text(pickup.event.id) && isPickup(entry.event));
   const linkedDelivery = linked(index, leg.deliveryEventId, leg.deliveryDay);
-  const actualDelivery = linkedDelivery && isDelivery(linkedDelivery.event)
+  // Explicit route links remain authoritative when legacy free text was edited.
+  const actualDelivery = linkedDelivery
     && (!pickup || compareEntries(linkedDelivery, pickup) > 0) ? linkedDelivery : null;
   const delivery = actualDelivery || (pickup && inferredDelivery(leg, pickup, nextPickup, index));
   const boundary = [delivery, nextPickup].filter(Boolean).sort(compareEntries)[0];
