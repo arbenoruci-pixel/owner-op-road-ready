@@ -14,6 +14,17 @@ const appointmentDate=/\b(\d{4}-\d{2}-\d{2}|\d{1,2}[/.]\d{1,2}[/.](?:\d{4}|\d{2}
 const partyNoise=/^(?:PICK(?:\s*UP)?|DELIVERY|STOP|SHIPPER|CONSIGNEE|ADDRESS|LOCATION|CONTACT|PHONE|TEL|FAX|APPOINTMENT|CHECK\s*IN|INSTRUCTIONS|PLEASE|NOTE|HOURS|RECEIVING\s+HOURS)\b/i;
 const boilerplate=/\b(?:SIGNATURE|SIGNED|LATE\s+FEE|DETENTION|TONU|LAYOVER|INSURANCE|PAYMENT\s+TERMS|SEND\s+INVOICE|DOCUMENT\s+REF)\b/i;
 
+function cityAfter(lines,index){
+  const address=lines[index],next=lines[index+1];
+  if(city.test(next?.text||''))return next;
+  // Positioned PDF rows keep a right-hand appointment separate from the
+  // street. Skip only that same-row cell when locating the city underneath.
+  const tail=lines[index+2],a=address?.box,b=next?.box,c=tail?.box;
+  return a&&b&&c&&appointment.test(next.text)&&b.x>a.x+a.width
+    &&Math.abs(b.y-a.y)<Math.max(a.height,b.height)&&city.test(tail.text)
+    &&Math.abs(c.x-a.x)<.03&&c.y>a.y&&c.y-a.y<.05?tail:null;
+}
+
 function sections(lines) {
   const markers=[];
   for(let i=0;i<lines.length;i++){
@@ -59,13 +70,13 @@ export function rateSectionMatches(page,spec){
       }
       if(spec.ratePart==='party'&&i===0&&isDocumentParty(line.text)&&!partyNoise.test(line.text.trim())
         &&!street.test(line.text)&&!city.test(line.text)&&!appointment.test(line.text)
-        &&street.test(section.lines[i+1]?.text||'')&&city.test(section.lines[i+2]?.text||'')){
+        &&street.test(section.lines[i+1]?.text||'')&&cityAfter(section.lines,i+1)){
         matches.push({...range(line),observation,labelLine:section.line,issue:'layout_needs_review',
-          extraLabelLines:[section.lines[i+1],section.lines[i+2]]});
+          extraLabelLines:[section.lines[i+1],cityAfter(section.lines,i+1)]});
       }
       if(spec.ratePart==='address'&&street.test(line.text)){
-        const match=range(line,appt?appt.index:line.text.length),next=section.lines[i+1];
-        if(!city.test(next?.text||''))continue;
+        const match=range(line,appt?appt.index:line.text.length),next=cityAfter(section.lines,i);
+        if(!next)continue;
         const tail=range(next);
         matches.push({...match,observation,labelLine:section.line,issue:'layout_needs_review',
           joinedValue:line.text.slice(match.start,match.end)+', '+next.text.slice(tail.start,tail.end),
@@ -88,8 +99,8 @@ export const rateConfirmationProfile={
       pattern:/^\s*(?:PRO|LOAD|ORDER)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:#]?\s*([A-Z0-9][A-Z0-9._/-]*)(?=\s*(?:$|\||(?:CARRIER\s+)?RATE\s*(?:CONFIRMATION|CON)\s*$))/id},
     totalRate:{label:'Total carrier rate',kind:'amount',required:true,
       pattern:/^\s*(?:TOTAL\s+(?:RATE|CARRIER\s+(?:PAY|RATE))|CARRIER\s+PAY|ALL[ -]IN\s+RATE|RATE\s*\(\$\))\s*:?\s+([$€£]?\s*\d[\d.,]*(?:\s+(?:USD|EUR|GBP|CAD|AUD|CHF))?)\s*$/id},
-    broker:{label:'Broker',kind:'party',required:false,pattern:/^\s*BROKER(?: NAME)?\s*:\s*(.+?)\s*$/id},
-    carrier:{label:'Carrier',kind:'party',required:false,pattern:/^\s*CARRIER(?: NAME)?\s*:\s*(.+?)\s*$/id},
+    broker:{label:'Broker',kind:'party',required:false,rateParty:'broker',pattern:/^\s*BROKER(?: NAME)?\s*:\s*(.+?)\s*$/id},
+    carrier:{label:'Carrier',kind:'party',required:false,rateParty:'carrier',pattern:/^\s*CARRIER(?: NAME)?\s*:\s*(.+?)\s*$/id},
     shipper:{label:'Shipper',kind:'party',required:false,rateSection:'pickup',ratePart:'party',pattern:/^\s*(?:SHIPPER|SHIP FROM)\s*:\s*(.+?)\s*$/id},
     consignee:{label:'Consignee',kind:'party',required:false,rateSection:'delivery',ratePart:'party',pattern:/^\s*(?:CONSIGNEE|SHIP TO)\s*:\s*(.+?)\s*$/id},
     pickupDate:{label:'Pickup date',kind:'date',required:false,rateSection:'pickup',ratePart:'date',pattern:/^\s*PICK\s*UP DATE\s*:\s*(.+?)\s*$/id},
