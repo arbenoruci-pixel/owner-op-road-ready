@@ -55,7 +55,9 @@ for(const [name,type] of types) {
    } else {
     assert.equal(gaps,0);assert.equal(await rows.count(),2);
     assert.equal(await rows.first().locator('.event-badge').innerText(),previousStatus);
-    assert.equal(await rows.first().locator('button.blue-edit').count(),0,'derived prefix cannot open raw editor');
+    assert.equal(await rows.first().getByRole('button',{name:'Edit continued status',exact:true}).count(),1,'derived prefix offers an explicit correction draft');
+    assert.equal(await rows.first().getByRole('button',{name:'Edit selected event',exact:true}).count(),0,'derived prefix has no raw event to edit directly');
+    assert.equal(await rows.first().locator('.event-continuity-tag-v11026').count(),0,'no misleading Sign badge');
     assert.match(await rows.first().innerText(),/14h 10m/);
     assert.match(await rows.last().innerText(),/15m/);
     const totals=await graph.evaluate(svg=>[...svg.querySelectorAll(':scope > g')].slice(0,4).map(g=>g.querySelector('text:last-of-type')?.textContent));

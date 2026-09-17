@@ -48,7 +48,7 @@ for(const[name,type]of browserTypes){
     await rows.first().click();
     assert.equal(await rows.first().locator('.event-badge').innerText(),status);assert.equal(await rows.first().locator('button.blue-edit').count(),1,'canonical real row stays editable');assert.equal(await rows.first().locator('.event-continuity-tag-v11026').count(),0);
    }else{
-    assert.equal(await rows.first().locator('.event-badge').innerText(),status);assert.equal(await rows.first().locator('button.blue-edit').count(),0,'derived carry row must not be editable');assert.equal(await rows.first().locator('.event-continuity-tag-v11026').innerText(),activeDay===today?'Now':'Sign');const snapshot=await stored(page);assert.equal((snapshot.eventsByDay?.[activeDay]||[]).length,0,'rendering carry must not write a raw event');
+    assert.equal(await rows.first().locator('.event-badge').innerText(),status);assert.equal(await rows.first().getByRole('button',{name:'Edit continued status',exact:true}).count(),1,'continued time offers an explicit correction draft');assert.equal(await rows.first().locator('.event-continuity-tag-v11026').count(),0,'no misleading Sign/Now action');const snapshot=await stored(page);assert.equal((snapshot.eventsByDay?.[activeDay]||[]).length,0,'rendering carry must not write a raw event');
    }
    const before=await stored(page);
    assert.deepEqual(before.logbookEditHistoryByDay,initial.logbookEditHistoryByDay);
