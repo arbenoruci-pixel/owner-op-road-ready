@@ -1,5 +1,6 @@
 // Read-only shipment context. Never copy a pickup into the duty timeline or
 // consult today's active load when displaying a recorded historical trip.
+import {newestRouteCopies} from './routeProjectionV110352.js';
 const text = value => String(value ?? '').trim();
 const dayKey = value => /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : '';
 const minute = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -23,6 +24,14 @@ export function routeHistoryIndex(state = {}) {
       index.set(id, [...(index.get(id) || []), {day, event}]);
     }
   }
+  index.groups = new Map();
+  const routes = newestRouteCopies(Object.entries(state.routeLegsByDay || {}).flatMap(([day, rows]) =>
+    (Array.isArray(rows) ? rows : []).map(leg => ({...leg, day:leg.day || day}))));
+  for (const leg of routes) {
+    if (!text(leg.loadGroupId) || /^(cancelled|canceled|archived|superseded|dismissed)$/i.test(text(leg.status))) continue;
+    const group = text(leg.loadGroupId);
+    index.groups.set(group, [...(index.groups.get(group) || []), leg]);
+  }
   return index;
 }
 
@@ -32,18 +41,39 @@ function linked(index, id, expectedDay) {
   return exact.length === 1 ? exact[0] : matches.length === 1 ? matches[0] : null;
 }
 
-export function routeHistoryWindow(leg, index) {
+function directPickup(leg, index) {
   const pickup = linked(index, leg.pickupEventId, leg.pickupDay || leg.day);
-  const recordedPickup = pickup?.event.status === 'ON'
+  return pickup?.event.status === 'ON'
     && /\b(pickup|pick up|loading|hook)\b/i.test(activity(pickup.event))
-    && !pickup.event.noLoadDeclared;
+    && !pickup.event.noLoadDeclared ? pickup : null;
+}
+
+function recordedPickupForLeg(leg, index) {
+  const direct = directPickup(leg, index);
+  if (direct || text(leg.pickupEventId) || !text(leg.loadGroupId) || !docs(leg)) return direct;
+  // Guide legs after stop one share shipment identity, but deliberately have no
+  // pickupEventId. Inherit only one unambiguous recorded pickup in that group.
+  const candidates = new Map();
+  for (const other of index.groups.get(text(leg.loadGroupId)) || []) {
+    if (docs(other).toUpperCase() !== docs(leg).toUpperCase() || noLoad(other)) continue;
+    const pickup = directPickup(other, index);
+    if (pickup) candidates.set(pickup.day + ':' + text(pickup.event.id), pickup);
+  }
+  return candidates.size === 1 ? [...candidates.values()][0] : null;
+}
+
+export function routeHistoryWindow(leg, index) {
+  const pickup = recordedPickupForLeg(leg, index);
+  const recordedPickup = !!pickup;
   const delivery = linked(index, leg.deliveryEventId, leg.deliveryDay);
   const startDay = dayKey(recordedPickup ? pickup.day : leg.pickupDay || leg.day);
-  const endDay = dayKey(delivery?.day || leg.deliveryDay);
+  // deliveryDay/deliveryMin also hold appointments on guide-created legs.
+  // Only the linked real delivery event establishes the actual boundary.
+  const endDay = dayKey(delivery?.day);
   return {
     startDay, endDay,
     startMin: minute(recordedPickup ? pickup.event.startMin : leg.pickupMin),
-    endMin: minute(delivery ? delivery.event.startMin : leg.deliveryMin),
+    endMin: minute(delivery?.event.startMin),
     recordedPickup: !!recordedPickup,
     pickup: recordedPickup ? pickup.event : null,
     bounded: !!startDay && !!endDay && endDay >= startDay,
@@ -54,11 +84,10 @@ export function routeHistoryWindow(leg, index) {
 export function recordedRouteDayMembership(leg, day, index) {
   if (!dayKey(day)) return false;
   const window = routeHistoryWindow(leg, index);
-  if (!window.startDay) return null;
+  if (!window.startDay || !window.recordedPickup) return null;
   if (window.bounded) return day >= window.startDay && day <= window.endDay;
-  if (!window.recordedPickup) return null;
   if (day < window.startDay) return false;
-  if (closed(leg) || window.endDay) return day === window.startDay;
+  if (window.endDay) return day === window.startDay;
   return true;
 }
 
@@ -75,22 +104,27 @@ export function shipmentContextForEvents(state, day, events, legs) {
   const shipments = legs.filter(leg => docs(leg) && !noLoad(leg)).map(leg => ({leg, window:routeHistoryWindow(leg, index)}))
     .filter(({window}) => window.recordedPickup);
   return events.map(event => {
-    const contexts = [];
+    const active = [];
     for (const {leg, window} of shipments) {
       if (day < window.startDay || (window.endDay && day > window.endDay)) continue;
-      if (closed(leg) && !window.endDay && day !== window.startDay) continue;
       const at = minute(event.startMin);
       if (at === null) continue;
       if (day === window.startDay && (window.startMin === null || at < window.startMin)) continue;
       if (day === window.endDay && (window.endMin === null || at >= window.endMin)) continue;
       // The pickup already has its exact BOL/destination line.
-      if (text(event.id) === text(leg.pickupEventId)) continue;
-      contexts.push({
+      if (text(event.id) === text(window.pickup?.id)) continue;
+      active.push({leg, window});
+    }
+    // One next destination per confirmed multi-stop shipment. Later stops stay
+    // on board, and become the displayed destination after prior deliveries.
+    const nextStops = active.filter(({leg}) => !text(leg.loadGroupId) || !active.some(({leg:other}) =>
+      text(other.loadGroupId) === text(leg.loadGroupId) && docs(other).toUpperCase() === docs(leg).toUpperCase()
+      && Number(other.stopSequence || 1) < Number(leg.stopSequence || 1)));
+    const contexts = nextStops.map(({leg, window}) => ({
         routeId: text(leg.id), shippingDocs:docs(leg),
         destination:[leg.toCity, leg.toState].map(text).filter(Boolean).join(', '),
         trailer:trailerAtPickup(leg, window.pickup),
-      });
-    }
+    }));
     return contexts.length ? {...event, shipmentContextV110367:contexts} : event;
   });
 }
@@ -106,7 +140,7 @@ export function shipmentContextLabel(contexts = []) {
 export function routeStatusForLogDay(leg, day, state) {
   const window = routeHistoryWindow(leg, routeHistoryIndex(state));
   if (window.recordedPickup && day >= window.startDay
-    && (window.endDay ? day < window.endDay : !closed(leg))) return 'In transit';
+    && (!window.endDay || day < window.endDay)) return 'In transit';
   if (closed(leg)) return 'Done';
   return leg.isCurrentStop ? 'Next stop' : 'Pending';
 }

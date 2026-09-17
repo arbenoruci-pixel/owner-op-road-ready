@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {routeLegsForDayCanonical as routes, routeLegsForDayMiles as miles} from '../source/src/core/routes/routeNormalization.js';
 import {shipmentContextForEvents as project, shipmentContextLabel, routeStatusForLogDay} from '../source/src/core/routes/shipmentCarryover.js';
 import {createCertificationRecord, certificationStatusV1032} from '../source/src/modules/logbook/certificationV110.js';
-import {fixture, pickupDay, middleDay, deliveryDay} from './v110367/fixture.mjs';
+import {fixture, guideFixture, pickupDay, middleDay, deliveryDay} from './v110367/fixture.mjs';
 register(new URL('./test-jsx-loader.mjs', import.meta.url));
 const {default:EventList} = await import('../source/src/modules/logbook/EventList.jsx');
 const shown = (s, day) => project(s, day, s.eventsByDay[day] || [], routes(s, day));
@@ -69,12 +69,44 @@ test('unconfirmed imports, voided pickups and empty moves cannot fabricate event
   const s=fixture();s.routeLegsByDay[pickupDay]=[{id:'import',day:pickupDay,pickupDay,status:'open',shippingDocs:'OLD-REF'}];
   assert.deepEqual(routes(s,middleDay),[], 'legacy unconfirmed route still respects scope');
 });
-test('multi-stop legs remain active independently until their own delivery', () => {
-  const s=fixture(), first=s.routeLegsByDay[pickupDay][0];
-  s.routeLegsByDay[pickupDay].push({...first,id:'second-stop',toCity:'Boston',toState:'MA',deliveryDay:'2026-09-18',deliveryEventId:'',deliveryMin:600});
-  assert.equal(routes(s,middleDay).length,2);
-  assert.deepEqual(routes(s,'2026-09-17').map(x=>x.id),['second-stop']);
-  assert.equal(shown(s,deliveryDay).at(-1).shipmentContextV110367[0].destination,'Boston, MA');
+test('real guide appointments never close a confirmed pickup or bypass unconfirmed scope', () => {
+  const s=guideFixture(), before=structuredClone(s);
+  const legs=Object.values(s.routeLegsByDay).flat();
+  assert.equal(legs[0].deliveryDay,middleDay);assert.equal(legs[0].deliveryEventId,'');
+  assert.equal(legs[1].pickupEventId,'','actual guide producer links only the first pickup');
+  for (const day of [middleDay,deliveryDay,'2026-09-17']) {
+    assert.equal(routes(s,day).length,2);
+    assert.ok(shown(s,day).every(event=>shipmentContextLabel(event.shipmentContextV110367).includes('Going to New York, NY')));
+  }
+  assert.deepEqual(s,before);
+  s.eventsByDay[pickupDay][1].voided=true;s.loadInfo={loadNo:'UNRELATED'};s.activeLoadGuideId='unrelated';
+  assert.deepEqual(routes(s,'2026-09-17'),[], 'unconfirmed scheduled intervals do not override legacy scope');
+  assert.deepEqual(shown(s,middleDay).map(e=>e.shipmentContextV110367).filter(Boolean),[]);
+});
+test('real later guide legs inherit the unique shipment pickup and select the next stop', () => {
+  const s=guideFixture({firstDelivered:true,finalDelivered:true});
+  assert.equal(Object.values(s.routeLegsByDay).flat()[1].pickupEventId,'');
+  assert.equal(shown(s,middleDay)[0].shipmentContextV110367[0].destination,'New York, NY');
+  const afterFirst=shown(s,deliveryDay).at(-1).shipmentContextV110367;
+  assert.equal(afterFirst.length,1);assert.equal(shipmentContextLabel(afterFirst),'BOL 123 · Trailer UNIT-A · Going to Boston, MA');
+  assert.equal(routes(s,'2026-09-17').length,1);
+  assert.ok(shown(s,'2026-09-17')[0].shipmentContextV110367);
+  assert.ok(!shown(s,'2026-09-17').at(-1).shipmentContextV110367);
+  assert.deepEqual(routes(s,'2026-09-18'),[]);
+  assert.equal(routes(s,middleDay).length,2,'completion retains prior trip history');
+});
+test('shipment groups do not inherit conflicting pickups, hidden revisions or other BOLs', () => {
+  for(const mode of ['different-reference','cancelled-anchor','conflicting-pickup']) {
+    const s=guideFixture(), legs=Object.values(s.routeLegsByDay).flat();
+    if(mode==='different-reference')legs[1].shippingDocs=legs[1].loadNo='999';
+    if(mode==='cancelled-anchor')legs[0].status='cancelled';
+    if(mode==='conflicting-pickup'){
+      s.eventsByDay[pickupDay].push({...s.eventsByDay[pickupDay][1],id:'other-pickup',hookedTrailer:'DIFFERENT'});
+      s.routeLegsByDay[pickupDay].push({...legs[0],id:'other-first',pickupEventId:'other-pickup'});
+    }
+    const rows=project(s,middleDay,s.eventsByDay[middleDay],[legs[1]]);
+    assert.ok(rows.every(e=>!e.shipmentContextV110367),mode);
+  }
 });
 test('midnight continuation remains one existing event with read-only shipment annotation', () => {
   const s=fixture(), carry={id:'carry',status:'SB',startMin:0,endMin:50,displayOnly:true,carriedFromPreviousDay:true};

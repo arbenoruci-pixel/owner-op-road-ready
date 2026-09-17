@@ -21,3 +21,32 @@ export function fixture() {
     },
   };
 }
+
+// Exercise the application's real plannedRouteLegs producer, including its
+// scheduled endpoints and deliberately empty pickup link on later stops.
+export function guideFixture({firstDelivered = false, finalDelivered = false} = {}) {
+  const base = fixture(); base.routeLegsByDay = {};
+  if (!firstDelivered) base.eventsByDay[deliveryDay] = [row('waiting','OFF',0,1440)];
+  let state = applySmartDocumentLinkV103(base, {
+    type:{id:'rate_confirmation'}, localDocument:{id:'fixture-ratecon'},
+    fields:{loadNo:'123', broker:'Example Broker', linkDay:pickupDay, linkEventId:'pickup-fixture',
+      pickupDate:pickupDay, deliveryDate:deliveryDay,
+      stops:[
+        {type:'pickup', city:'Chicago', state:'IL', date:pickupDay, time:'20:36'},
+        {type:'delivery', city:'New York', state:'NY', date:middleDay, time:'10:00'},
+        {type:'delivery', city:'Boston', state:'MA', date:deliveryDay, time:'12:00'},
+      ]},
+  });
+  const legs = Object.values(state.routeLegsByDay).flat();
+  if (firstDelivered) Object.assign(legs[0], {deliveryEventId:'delivery-fixture', status:'delivered'});
+  if (finalDelivered) {
+    state.eventsByDay['2026-09-17'] = [
+      row('before-final','D',0,700),
+      row('final-delivery','ON',700,730,{city:'Boston',state:'MA',note:'Delivery / Unloading',shippingDocs:'123'}),
+      row('after-final','OFF',730,1440),
+    ];
+    Object.assign(legs[1], {deliveryEventId:'final-delivery',status:'delivered'});
+  }
+  return state;
+}
+import {applySmartDocumentLinkV103} from '../../source/src/modules/loads/loadGuideV103.js';

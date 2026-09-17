@@ -9,7 +9,7 @@ const schemas=Object.assign({},...[...fs.readFileSync('lib/local-db/dexie.js','u
 const user={id:'00000000-0000-4000-8000-000000000023',email:'override-fixture@example.test',email_confirmed_at:'2026-01-01T00:00:00Z',aud:'authenticated',app_metadata:{provider:'email'}};
 const exp=Math.floor(Date.now()/1000)+86400,b64=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
 const session={access_token:b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:user.id,email:user.email,exp,aud:'authenticated'})+'.synthetic',refresh_token:'synthetic',token_type:'bearer',expires_in:86400,expires_at:exp,user};
-import {fixture, pickupDay, middleDay, deliveryDay} from './v110367/fixture.mjs';
+import {fixture, guideFixture, pickupDay, middleDay, deliveryDay} from './v110367/fixture.mjs';
 const row=(id,status,startMin,endMin,extra={})=>({id,status,startMin,endMin,city:'Willowbrook',state:'IL',source:'manual',note:'',description:'',reasons:[],...extra});
 async function stored(page){return page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,q=db.transaction('app_snapshots').objectStore('app_snapshots').get('owner-op-road-ready-state-v1');q.onsuccess=()=>{db.close();resolve(q.result?.state);};q.onerror=()=>reject(q.error);};}));}
 async function waitState(page,condition){for(let n=0;n<100;n++){const s=await stored(page);if(s&&condition(s))return s;await page.waitForTimeout(100);}throw Error('Override fixture persistence timeout');}
@@ -77,6 +77,39 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
    assert.deepEqual(errors,[]);
    reports.push({browser:name,scenario,passed:true});
    console.log(`PASS — ${name} ${scenario}: all statuses, day Form, delivery boundary, history and reload`);
+  }catch(error){
+   await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`,fullPage:true}).catch(()=>{});
+   fs.writeFileSync(`${output}/${name}-${scenario}-state.json`,JSON.stringify(await stored(page).catch(()=>null),null,2));
+   reports.push({browser:name,scenario,passed:false,error:String(error),stack:error.stack,errors});console.error(error);
+  }finally{await context.close();}
+ }
+
+ for (const betweenStops of [false,true]) {
+  const scenario=betweenStops?'between-guide-stops':'overdue-guide';
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,timezoneId:'Europe/Vienna',serviceWorkers:'block'}),page=await context.newPage(),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  try {
+   const state=guideFixture({firstDelivered:betweenStops,finalDelivered:betweenStops});
+   state.activeDay=betweenStops?deliveryDay:'2026-09-17';
+   await setup(page,context,state,'2026-09-19T14:00:00Z');
+   const id=betweenStops?'after-delivery':'next-day',destination=betweenStops?'Boston, MA':'New York, NY';
+   const text=await eventRow(page,id).locator('.event-route-meta').innerText();
+   assert.ok(text.includes('BOL 123')&&text.includes('Trailer UNIT-A')&&text.includes('Going to '+destination),text);
+   if(betweenStops){
+    assert.match(await eventRow(page,'before-delivery').locator('.event-route-meta').innerText(),/Going to New York, NY/);
+    await page.getByRole('button',{name:'Day ›',exact:true}).click();
+    await section(page,'Log').click();
+    assert.match(await eventRow(page,'before-final').locator('.event-route-meta').innerText(),/Going to Boston, MA/);
+    assert.equal(await eventRow(page,'after-final').locator('.event-route-meta').count(),0);
+   }
+   await page.screenshot({path:`${output}/${name}-${scenario}.png`,fullPage:true});
+   await page.reload();await openLog(page);
+   if(betweenStops)assert.equal(await eventRow(page,'after-final').locator('.event-route-meta').count(),0);
+   else assert.match(await eventRow(page,'next-day').locator('.event-route-meta').innerText(),/Going to New York, NY/);
+   const saved=await stored(page);
+   assert.ok(Object.values(saved.eventsByDay).flat().every(row=>!Object.hasOwn(row,'shipmentContextV110367')));
+   assert.deepEqual(errors,[]);reports.push({browser:name,scenario,passed:true});
+   console.log(`PASS — ${name} ${scenario}: real guide shape, actual deliveries, inherited pickup and reload`);
   }catch(error){
    await page.screenshot({path:`${output}/${name}-${scenario}-FAILED.png`,fullPage:true}).catch(()=>{});
    fs.writeFileSync(`${output}/${name}-${scenario}-state.json`,JSON.stringify(await stored(page).catch(()=>null),null,2));
