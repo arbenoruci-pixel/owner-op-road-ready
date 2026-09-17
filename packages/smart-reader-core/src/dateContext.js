@@ -21,7 +21,7 @@ export function rateDateContext(groupPages,allPages,identities){
   for(let i=0;i<allPages.length;i++){
     if(identities[i].kind!=='signing_certificate'||identities[i].status==='conflicting')continue;
     const page=allPages[i],matches=certificateMatches(page,{certificatePart:'reference'});
-    if(!matches.length||matches.some(m=>m.line.text.slice(m.start,m.end)!==value||!strong(m.line)||!strong(m.labelLine)))continue;
+    if(!matches.length||matches.some(m=>m.line.text.slice(m.start,m.end)!==value||!strong(m.line)||!strong(m.labelLine)||(m.extraLabelLines||[]).some(line=>!strong(line))))continue;
     for(const match of certificateMatches(page,{certificatePart:'date'})){
       const date=match.line.text.slice(match.start,match.end),year=Number(date.slice(-4));
       if(!normalizeValue('date',date).value)continue;
