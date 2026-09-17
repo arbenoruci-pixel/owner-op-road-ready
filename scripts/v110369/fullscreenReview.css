@@ -1,0 +1,36 @@
+/* FULLSCREEN_READING_V110369 */
+dialog.owned-reader-inspect.owned-reader-fullscreen{position:fixed;inset:0;margin:0;width:100vw;height:100dvh;max-width:none;max-height:none;box-sizing:border-box;border:0;border-radius:0;padding:0;background:#101a24;color:#f3f6fa;overflow:hidden;font-size:14px;line-height:1.35}
+dialog.owned-reader-fullscreen[open]{display:flex;flex-direction:column}
+dialog.owned-reader-fullscreen::backdrop{background:#101a24}
+.owned-reader-fullscreen .reader-review-header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 8px;flex:none;background:#172432}
+.owned-reader-fullscreen .reader-review-header h3{margin:3px 0;font-size:17px;color:#fff;line-height:1.3}
+.owned-reader-fullscreen .reader-review-header small{color:#b4c9dd;font-size:12px}
+.owned-reader-fullscreen .reader-review-header button{flex:none}
+.owned-reader-fullscreen .owned-reader-focus{display:flex;flex-direction:column;flex:1;min-height:100px;margin:0;padding:8px 12px 0;overflow:hidden}
+.owned-reader-fullscreen .owned-reader-focus-tools{justify-content:center;margin:0 0 7px;flex:none;flex-wrap:nowrap;gap:6px}
+.owned-reader-fullscreen .owned-reader-focus-tools output{color:#e7f0fa;min-width:42px}
+.owned-reader-fullscreen .owned-reader-focus-window{flex:1;min-height:0;height:auto;border:0;border-radius:10px;background:#293746;touch-action:none;overscroll-behavior:none;overflow:auto}
+.owned-reader-fullscreen .owned-reader-focus-hint{color:#b7c9da;font-size:12px;text-align:center;margin:7px 0;flex:none}
+.owned-reader-fullscreen .owned-reader-focus-image{margin:0 auto;background:white;max-width:none}
+.owned-reader-fullscreen .owned-reader-focus-tools button,.owned-reader-fullscreen button{color:#e9f2fa;background:#25374a;border:1px solid #49617a;border-radius:10px;min-height:44px;margin:0;padding:9px 12px;font-size:14px;font-weight:650;line-height:1.2;text-align:center}
+.owned-reader-fullscreen button:disabled{opacity:.48}
+.owned-reader-fullscreen .owned-reader-focus-tools button[aria-pressed=true]{background:#305481;border-color:#79b1fa}
+.owned-reader-fullscreen .reader-review-controls{padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));background:#f7fafc;color:#172b40;flex:none;max-height:44%;overflow:auto;overscroll-behavior:contain;border-radius:18px 18px 0 0}
+.owned-reader-fullscreen .reader-review-controls label{display:block;font-weight:700;font-size:13px;margin:0}
+.owned-reader-fullscreen .reader-review-controls input,.owned-reader-fullscreen .reader-review-controls select{display:block;box-sizing:border-box;width:100%;min-height:44px;margin:5px 0 8px;padding:10px;background:#fff;color:#172b40;border:1px solid #9cb0c5;border-radius:9px;font:inherit;font-size:16px}
+.owned-reader-fullscreen .reader-review-controls blockquote{font-size:12px;max-height:52px;overflow:auto;margin:0 0 7px;padding:5px 8px;background:#e9eff5;color:#233c52}
+.owned-reader-fullscreen .reader-review-controls mark{background:#ffe297;color:#382900}
+.owned-reader-fullscreen .reader-review-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.owned-reader-fullscreen .reader-review-actions button{background:#e8eef5;color:#233c52;border-color:#bbcbdc}
+.owned-reader-fullscreen .reader-review-actions .owned-reader-confirm-primary{background:#235ae9;color:white;border-color:#235ae9;grid-column:2;grid-row:1}
+.owned-reader-fullscreen .reader-review-actions .reader-review-skip{grid-column:1;grid-row:1}
+.owned-reader-fullscreen .reader-review-tools{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:5px 0}
+.owned-reader-fullscreen .reader-review-tools button{padding:6px 8px;min-height:36px;color:#25466a;border:0;background:transparent;font-size:12px}
+.owned-reader-fullscreen [role=alert]{color:#9c2525;font-size:13px}
+.owned-reader-fullscreen .reader-review-save{width:100%;margin-top:7px;background:#0e7359;color:white;border-color:#0e7359}
+.owned-reader-fullscreen .reader-review-complete{margin:auto;padding:24px;max-width:440px;text-align:center}
+.owned-reader-fullscreen .reader-review-complete h3{font-size:24px;color:white}
+.owned-reader-fullscreen .reader-review-complete p{color:#cad8e5;margin:15px 0}
+.owned-reader-fullscreen .reader-review-complete button{display:block;width:100%;margin:10px 0}
+@media (min-width:800px){.owned-reader-fullscreen .reader-review-controls{padding-left:max(20px,calc((100vw - 760px)/2));padding-right:max(20px,calc((100vw - 760px)/2))}.owned-reader-fullscreen .owned-reader-focus-tools{gap:12px}}
+/* END_FULLSCREEN_READING_V110369 */

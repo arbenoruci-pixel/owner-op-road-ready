@@ -1,0 +1,40 @@
+// Identification requires a document heading and independent field evidence.
+// These fields describe the source document, never the shipment it is filed in.
+export function additionalProfiles({p,sig,field,id,amount,date,receiptType,equipment,vin,unit,business}) {
+  const saleVin={...field('VIN / serial number','VIN|VEHICLE(?: OR HULL)? IDENTIFICATION NUMBER|SERIAL(?: NUMBER| NO\\.?)?','vin',true),
+    pattern:/^\s*(?:VIN|VEHICLE(?: OR HULL)? IDENTIFICATION NUMBER|SERIAL(?: NUMBER| NO\.?)?)\s*[#:]?\s*([A-HJ-NPR-Z0-9]{17})\s*$/id};
+  return [
+    p('bill_of_sale','Bill of sale','(?:VEHICLE |TRAILER |EQUIPMENT )?BILL OF SALE',
+      [sig('SELLER|BUYER|BIDDER'),sig('VIN|VEHICLE(?: OR HULL)? IDENTIFICATION|SERIAL|YEAR|MAKE|UNIT')],
+      {vin:saleVin,unitNumber:unit,date,seller:field('Seller','SELLER(?: NAME)?','party'),buyer:field('Buyer','BUYER(?: NAME)?','party'),
+        saleLocation:field('Sale location','LOCATION|SALE LOCATION|AUCTION LOCATION'),
+        salePrice:amount('Sale price','SALE PRICE|PURCHASE PRICE|CONSIDERATION|PRICE'),year:field('Year','YEAR'),make:field('Make','MAKE'),model:field('Model','MODEL'),
+        bidderNumber:field('Bidder number','BIDDER','identifier')},{identity:'vin',family:'equipment'}),
+    receiptType('meal_receipt','Meal / restaurant receipt','(?:MEAL|RESTAURANT|DINING|FOOD) RECEIPT|GUEST CHECK|RECEIPT',
+      [sig('SERVER|TABLE|DINE IN|TAKE OUT|TAKEOUT|FOOD|MEAL')],{tip:amount('Tip','TIP|GRATUITY')}),
+    receiptType('grocery_receipt','Grocery receipt','GROCERY RECEIPT|GROCERY SALES RECEIPT',[],{}),
+    receiptType('lodging_receipt','Hotel / lodging receipt','(?:HOTEL|MOTEL|LODGING) (?:RECEIPT|INVOICE)|GUEST FOLIO',
+      [sig('GUEST|ROOM|CHECK IN|CHECK-IN|ARRIVAL')],{guest:field('Guest','GUEST(?: NAME)?'),room:field('Room','ROOM'),arrival:field('Arrival date','ARRIVAL|CHECK IN|CHECK-IN','date'),departure:field('Departure date','DEPARTURE|CHECK OUT|CHECK-OUT','date')}),
+    receiptType('shower_receipt','Shower receipt','SHOWER RECEIPT|SHOWER PURCHASE',[],{}),
+    receiptType('laundry_receipt','Laundry receipt','LAUNDRY RECEIPT|LAUNDROMAT RECEIPT',[],{}),
+    receiptType('rental_receipt','Equipment rental receipt','(?:EQUIPMENT |TRUCK |TRAILER )?RENTAL (?:RECEIPT|INVOICE)',[sig('RENTAL|UNIT|EQUIPMENT')],{unitNumber:unit}),
+    p('dvir','Driver vehicle inspection report','DRIVER(?:[’\x27]S)? VEHICLE INSPECTION REPORT|DVIR',
+      [sig('DRIVER|CARRIER'),sig('VEHICLE|UNIT|TRUCK|TRAILER|DEFECTS')],{...equipment,date,driver:field('Driver','DRIVER(?: NAME)?'),defects:field('Defects','DEFECTS|DEFECTS FOUND')}),
+    p('roadside_inspection','Roadside inspection report','DRIVER/VEHICLE EXAMINATION REPORT|ROADSIDE INSPECTION REPORT',
+      [sig('REPORT|INSPECTION|LEVEL'),sig('USDOT|CARRIER|DRIVER|VIOLATIONS')],{...equipment,date,reportNumber:id('Report number','REPORT'),carrier:field('Carrier','CARRIER','party'),violations:field('Violations','VIOLATIONS')}),
+    p('ucr_registration','UCR registration','UNIFIED CARRIER REGISTRATION|UCR REGISTRATION',
+      [sig('USDOT|DOT|CARRIER'),sig('REGISTRATION YEAR|YEAR|REGISTRATION|FEE')],{businessName:business,dotNumber:id('DOT number','USDOT|DOT'),year:field('Registration year','REGISTRATION YEAR|YEAR'),date}),
+    p('purchase_order','Purchase order',/^\s*PURCHASE ORDER\s*$/i,
+      [sig('PO|PURCHASE ORDER'),sig('VENDOR|SUPPLIER|BUYER|SHIP TO')],{poNumber:id('PO number','PO|P.O.|PURCHASE ORDER',true),date,vendor:field('Vendor','VENDOR|SUPPLIER','party'),buyer:field('Buyer','BUYER','party'),total:amount('Order total','ORDER TOTAL|TOTAL')}),
+    p('customs_invoice','Customs commercial invoice','CUSTOMS INVOICE|COMMERCIAL INVOICE',
+      [sig('EXPORTER|COUNTRY OF ORIGIN'),sig('IMPORTER|CONSIGNEE')],{invoiceNumber:id('Invoice number','INVOICE'),date,exporter:field('Exporter','EXPORTER','party'),importer:field('Importer','IMPORTER','party'),country:field('Country of origin','COUNTRY OF ORIGIN')},{refines:['invoice']}),
+    p('customs_entry','Customs entry summary','ENTRY SUMMARY|CBP FORM 7501',
+      [sig('ENTRY|ENTRY NUMBER'),sig('IMPORTER|PORT|CUSTOMS')],{entryNumber:id('Entry number','ENTRY'),date,importer:field('Importer','IMPORTER','party'),port:field('Port','PORT|PORT CODE')}),
+    p('hazmat_shipping_paper','Hazardous materials shipping paper','HAZARDOUS MATERIALS SHIPPING PAPER|HAZMAT SHIPPING PAPER|DANGEROUS GOODS DECLARATION',
+      [sig('UN|NA|UN NUMBER|PROPER SHIPPING NAME'),sig('HAZARD CLASS|PACKING GROUP|EMERGENCY CONTACT')],{date,unNumber:field('UN / NA number','UN NUMBER|NA NUMBER|UN|NA'),shippingName:field('Proper shipping name','PROPER SHIPPING NAME'),hazardClass:field('Hazard class','HAZARD CLASS'),packingGroup:field('Packing group','PACKING GROUP')}),
+    p('certificate_of_origin','Certificate of origin','CERTIFICATE OF ORIGIN|USMCA CERTIFICATION OF ORIGIN',
+      [sig('EXPORTER|PRODUCER'),sig('COUNTRY OF ORIGIN|ORIGIN CRITERION|IMPORTER')],{date,exporter:field('Exporter','EXPORTER','party'),producer:field('Producer','PRODUCER','party'),country:field('Country of origin','COUNTRY OF ORIGIN')}),
+    p('lumper_authorization','Lumper authorization','LUMPER AUTHORIZATION|UNLOADING AUTHORIZATION',
+      [sig('LOAD|BOL|SHIPMENT'),sig('AUTHORIZED|APPROVED|AMOUNT')],{loadNumber:id('Load number','LOAD|SHIPMENT'),date,approvedAmount:amount('Approved amount','APPROVED AMOUNT|AUTHORIZED AMOUNT|AMOUNT')}),
+  ];
+}

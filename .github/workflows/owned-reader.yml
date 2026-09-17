@@ -54,6 +54,7 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          node scripts/browser-fullscreen-reader-v110369.mjs
           node scripts/browser-owned-reader.mjs
           node scripts/browser-native-pdf-v110363.mjs
           TEST_NATIVE_CELLS=1 node scripts/browser-native-pdf-v110363.mjs
@@ -65,6 +66,7 @@ jobs:
         with:
           name: owned-reader-evidence
           path: |
+            browser-test-results/fullscreen-reader-v110369/
             browser-test-results/owned-reader/
             browser-test-results/scanner-capture-v110329/
             browser-test-results/scanner-workflow-v110328/

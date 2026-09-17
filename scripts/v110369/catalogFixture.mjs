@@ -1,0 +1,18 @@
+export const additionalCases=[
+ ['bill_of_sale','BILL OF SALE','BIDDER: 17922\nUNIT # T-889\nLOCATION SAUGERTIES, NY\nDATE 07/30/2026\nSERIAL # 1HGBH41JXMN109186\nSELLER\nBUYER',{vin:'1HGBH41JXMN109186',saleLocation:'SAUGERTIES, NY'}],
+ ['meal_receipt','RESTAURANT RECEIPT','Server: Sam\nDate: 2026-09-17\nTotal 18.00\nTip 3.00',{total:'18.00',tip:'3.00'}],
+ ['grocery_receipt','GROCERY RECEIPT','Date: 2026-09-17\nTotal 12.00',{total:'12.00'}],
+ ['lodging_receipt','GUEST FOLIO','Guest: Example Driver\nRoom: 22\nDate: 2026-09-17\nTotal 85.00',{total:'85.00'}],
+ ['shower_receipt','SHOWER RECEIPT','Date: 2026-09-17\nTotal 15.00',{total:'15.00'}],
+ ['laundry_receipt','LAUNDRY RECEIPT','Date: 2026-09-17\nTotal 8.00',{total:'8.00'}],
+ ['rental_receipt','TRAILER RENTAL INVOICE','Unit # T17\nDate: 2026-09-17\nTotal 88.00',{unitNumber:'T17'}],
+ ['dvir','DRIVER VEHICLE INSPECTION REPORT','Driver: Example Driver\nUnit # 123\nDate: 2026-09-17\nDefects: None',{unitNumber:'123'}],
+ ['roadside_inspection','DRIVER/VEHICLE EXAMINATION REPORT','Report # INS-123\nCarrier: Example Carrier\nDate: 2026-09-17',{reportNumber:'INS-123'}],
+ ['ucr_registration','UNIFIED CARRIER REGISTRATION','USDOT # 1234567\nRegistration year: 2026',{dotNumber:'1234567'}],
+ ['purchase_order','PURCHASE ORDER','PO # PO123\nVendor: Example Vendor\nDate: 2026-09-17',{poNumber:'PO123'}],
+ ['customs_invoice','COMMERCIAL INVOICE','Invoice # C123\nExporter: Example Seller\nImporter: Example Buyer\nSubtotal 100.00\nTotal 100.00',{invoiceNumber:'C123'}],
+ ['customs_entry','ENTRY SUMMARY','Entry # E123\nImporter: Example Buyer\nPort: 1234',{entryNumber:'E123'}],
+ ['hazmat_shipping_paper','HAZARDOUS MATERIALS SHIPPING PAPER','UN Number: 1203\nHazard class: 3\nPacking group: II',{unNumber:'1203'}],
+ ['certificate_of_origin','CERTIFICATE OF ORIGIN','Exporter: Example Seller\nCountry of origin: USA',{country:'USA'}],
+ ['lumper_authorization','LUMPER AUTHORIZATION','Load # 12345\nApproved amount 150.00',{loadNumber:'12345'}],
+];

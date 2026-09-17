@@ -71,6 +71,7 @@ steps.push('finalize-carry-edit-v110365.mjs','test-carry-edit-v110365.mjs','veri
 steps.push('finalize-continuous-miles-v110366.mjs','test-continuous-miles-v110366.mjs','verify-v10967-mileage-segment-editor.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-shipment-carryover-v110367.mjs','test-shipment-carryover-v110367.mjs','test-route-authority-v110352.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-active-shipment-v110368.mjs','test-active-shipment-v110368.mjs','test-shipment-carryover-v110367.mjs','test-route-authority-v110352.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-fullscreen-reader-v110369.mjs','test-fullscreen-reader-v110369.mjs','test-reader-catalog-v110361.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

@@ -1,3 +1,4 @@
+import {additionalProfiles} from './additionalProfiles.js';
 // Shared source-review catalog. A form title plus independent field structure
 // establishes a type; a filename, logo or mention in instructions never does.
 const re=(s,flags='i')=>new RegExp(s,flags);
@@ -57,6 +58,7 @@ const receiptType=(id,label,heading,signals=[],fields={})=>p(id,label,heading,[.
 export function truckingProfiles(base){
   const bol=base.find(p=>p.id==='bol');
   const profiles=[
+    ...additionalProfiles({p,sig,field,id,amount,date,receiptType,equipment,vin,unit,business}),
     p('pod','Proof of delivery','PROOF OF DELIVERY|POD|CUSTOMER DELIVERY COPY',
       [shipmentSignal,sig('RECEIVED BY|DELIVERED TO|DELIVERY DATE|CONSIGNEE|SHIP TO')],
       {...bol.fields,loadNumber,deliveredTo:field('Received by','RECEIVED BY|DELIVERED TO|SIGNED BY'),deliveryDate:field('Delivery date','DELIVERY DATE|DELIVERED ON','date')},{identity:'bolNumber',refines:['bol'],variants:[{

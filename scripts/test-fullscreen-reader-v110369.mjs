@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {readDocument,textObservation} from '../packages/smart-reader-core/src/index.js';
+import {additionalCases} from './v110369/catalogFixture.mjs';
+import {decideDocumentIdentity} from '../source/src/modules/scan/documentIdentityV110334.js';
+import {guardOcrLayoutReading} from '../source/src/modules/scan/documentLayoutGuardV110337.js';
+import {truckDocumentTypeMetaV1040} from '../source/src/modules/scan/truckDocumentCatalogV1040.js';
+import {currentHomeLoad,cleanRoutePlace} from '../source/src/modules/home/currentHomeLoadV110369.js';
+const read=text=>readDocument({documentId:'document-test',pages:[{observations:[textObservation(text)]}]});
+for(const [kind,title,body,fields] of additionalCases){
+ const text=title+'\n'+body,result=read(text),doc=result.documents[0];
+ assert.equal(doc.kind,kind,JSON.stringify(result.pageIdentities));
+ for(const [key,value] of Object.entries(fields))assert.equal(doc.fields[key].value,value,kind+' '+key);
+ assert.equal(decideDocumentIdentity({text,type:{id:kind==='bill_of_sale'?'pod':'other'}}).typeId,kind);
+ assert.equal(truckDocumentTypeMetaV1040(kind).id,kind);
+ assert.notEqual(read('Please send '+title+'\n'+body).documents[0].kind,kind,kind+' mentions cannot establish this specialized type');
+ assert.equal(doc.canAutoFile,false);
+}
+const saleText=additionalCases[0].slice(1,3).join('\n');
+const contaminated={text:saleText,type:{id:'pod'},fields:{loadNo:'9186',bolNo:'9186',origin:'Saugerties, NY',destination:'Saugerties, WI',vin:'1HGBH41JXMN109186'},matchedLoadNo:'old',matchedLoad:{loadNo:'old'},routing:{autoFile:true}};
+const before=JSON.stringify(contaminated),guarded=guardOcrLayoutReading(contaminated);
+for(const key of ['loadNo','bolNo','origin','destination'])assert.ok(!guarded.fields[key]);
+assert.equal(guarded.fields.vin,contaminated.fields.vin);assert.equal(guarded.matchedLoad,null);assert.equal(JSON.stringify(contaminated),before);
+const mixture=readDocument({documentId:'mixed',pages:[{observations:[textObservation(saleText)]},{observations:[textObservation('PROOF OF DELIVERY\nBOL # B123\nShipper: Source\nConsignee: Receiver\nDelivery Date: 2026-09-17')]}]});
+assert.deepEqual(mixture.documents.map(d=>d.kind),['bill_of_sale','pod']);
+assert.equal(cleanRoutePlace('Dates Delivery Dates'),'');assert.equal(cleanRoutePlace('Dates'),'');
+const guide=(id,no)=>({id,loadNo:no,status:'active',source:'rate_confirmation',origin:'Dates Delivery Dates',destination:'Dates',stops:[{type:'pickup',city:'Albany',state:'NY'},{type:'delivery',city:'Madison',state:'WI'}]});
+const old=guide('old','OLD123'),current=guide('new','NEW456');
+const state={activeLoadGuideId:'old',loadGuidesById:{old,new:current},eventsByDay:{'2026-09-16':[{id:'p',status:'ON',startMin:600,note:'Pickup',source:'manual'}]},routeLegsByDay:{'2026-09-16':[{id:'leg',loadGroupId:'new',pickupEventId:'p',day:'2026-09-16',loadNo:'NEW456',fromCity:'Wrong',fromState:'NY',toCity:'Wrong',toState:'WI',status:'open'}]}};
+const snapshot=JSON.stringify(state),context={day:'2026-09-17',minute:500};
+const header=currentHomeLoad(state,old,context);
+assert.equal(header.loadNo,'NEW456');assert.equal(header.origin,'Albany, NY');assert.equal(header.destination,'Madison, WI');assert.equal(header.guide.id,'new');assert.equal(JSON.stringify(state),snapshot);
+const unmatched=structuredClone(state);unmatched.routeLegsByDay['2026-09-16'][0].loadGroupId='unmatched';unmatched.routeLegsByDay['2026-09-16'][0].loadNo='BOL789';
+assert.equal(currentHomeLoad(unmatched,old,context).guide,null);assert.equal(currentHomeLoad(unmatched,old,context).loadNo,'BOL789');
+const delivered=structuredClone(state);delivered.eventsByDay['2026-09-17']=[{id:'drop',status:'ON',startMin:400,note:'Delivery',source:'manual'}];delivered.routeLegsByDay['2026-09-16'][0].deliveryEventId='drop';
+assert.equal(currentHomeLoad(delivered,current,context),null);
+const future=structuredClone(state);future.eventsByDay['2026-09-16'][0].startMin=700;
+assert.equal(currentHomeLoad(future,old,{day:'2026-09-16',minute:600}).loadNo,'OLD123','future pickup cannot replace the current selection');
+console.log('PASS — 16 new document profiles; Bill of Sale fields isolated; current Home load and route follow exact pickup ownership');

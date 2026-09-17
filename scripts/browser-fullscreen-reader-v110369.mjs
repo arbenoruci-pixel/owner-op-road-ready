@@ -1,0 +1,89 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {chromium,webkit} from 'playwright';
+import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
+const output='browser-test-results/fullscreen-reader-v110369';fs.mkdirSync(output,{recursive:true});
+for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
+ const context=await browser.launchPersistentContext('',{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
+ const page=await context.newPage();page.setDefaultTimeout(30000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ try{
+  await setupRoutes(context);await page.clock.setFixedTime(new Date('2026-09-17T18:00:00Z'));
+  await context.addInitScript(()=>{
+   window.__saleLines=['BILL OF SALE','BIDDER: 17922','UNIT # T-889','LOCATION SAUGERTIES, NY','DATE 09/07/2026','SERIAL # 1HGBH41JXMN109186','SELLER: EXAMPLE EQUIPMENT LLC','BUYER: EXAMPLE CARRIER LLC'];
+   window.Tesseract={createWorker:async()=>({setParameters:async()=>{},terminate:async()=>{},recognize:async(file)=>{
+    const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
+    const lines=window.__saleLines,header='level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext';
+    const rows=lines.map((line,i)=>`5\t1\t1\t1\t${i+1}\t1\t${Math.round(width*.08)}\t${Math.round(height*(.06+i*.075))}\t${Math.round(width*.7)}\t${Math.round(height*.028)}\t${line.startsWith('SERIAL')?70:96}\t${line}`);
+    return {data:{text:lines.join('\n'),confidence:90,tsv:[header,...rows].join('\n')}};
+   }})};
+  });
+  const state=baseState();state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
+  const before=await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1'));
+  await page.getByRole('button',{name:/Smart Scan/}).first().click();
+  const photo=await page.evaluate(async()=>{
+   const canvas=document.createElement('canvas');canvas.width=900;canvas.height=1200;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,900,1200);ctx.fillStyle='#111';ctx.font='28px Arial';
+   window.__saleLines.forEach((line,i)=>ctx.fillText(line,72,1200*(.088+i*.075)));
+   return [...new Uint8Array(await(await new Promise(r=>canvas.toBlob(r,'image/jpeg',.96))).arrayBuffer())];
+  });
+  await page.locator('input[type=file][multiple]').first().setInputFiles({name:'equipment-original.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photo)});
+  await page.getByRole('button',{name:'Read document',exact:true}).click();
+  await page.locator('.owned-reader-preview').waitFor();
+  assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bill_of_sale');
+  assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'','sale has no invented load');
+  await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+  const review=page.locator('.owned-reader-preview');
+  await review.getByRole('button',{name:'1HGBH41JXMN109186 · Page 1',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'Check source',exact:true});await dialog.waitFor();
+  await dialog.getByLabel('Source line highlight',{exact:true}).waitFor();
+  const bounds=await dialog.boundingBox();assert.ok(bounds.width>=389&&bounds.height>=843&&Math.abs(bounds.x)<1&&Math.abs(bounds.y)<1,'source review fills mobile viewport');
+  assert.equal(await dialog.evaluate(node=>node.matches(':modal')),true,'native modal isolates background controls');
+  const source=dialog.getByRole('region',{name:'Document source image',exact:true}),img=dialog.getByRole('img');
+  const field=dialog.getByLabel('Confirmed value',{exact:true});await field.fill('1HGBH41JXMN109187');
+  await dialog.getByRole('button',{name:'Full image',exact:true}).click();
+  const full=await img.boundingBox();
+  const frame=await source.boundingBox(),cx=frame.x+frame.width/2,cy=frame.y+frame.height/2;
+  if(name==='chromium'){
+   const cdp=await context.newCDPSession(page);
+   const points=(dx)=>[{x:cx-dx,y:cy,radiusX:2,radiusY:2,id:1},{x:cx+dx,y:cy,radiusX:2,radiusY:2,id:2}];
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points(30)});
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:points(65)});
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  }else{
+   for(const [type,id,x] of [['pointerdown',1,cx-30],['pointerdown',2,cx+30],['pointermove',1,cx-65],['pointermove',2,cx+65],['pointerup',1,cx-65],['pointerup',2,cx+65]])await source.dispatchEvent(type,{pointerId:id,pointerType:'touch',clientX:x,clientY:cy,bubbles:true,buttons:type==='pointerup'?0:1});
+  }
+  assert.ok((await img.boundingBox()).height>full.height*1.4,'two-finger pinch magnifies the document');
+  await dialog.getByRole('button',{name:'Focus on field',exact:true}).click();
+  const position=await source.evaluate(n=>({left:n.scrollLeft,top:n.scrollTop}));
+  for(const [type,y] of [['pointerdown',cy],['pointermove',cy+45],['pointerup',cy+45]])await source.dispatchEvent(type,{pointerId:8,pointerType:'touch',clientX:cx,clientY:y,bubbles:true,buttons:type==='pointerup'?0:1});
+  const moved=await source.evaluate(n=>({left:n.scrollLeft,top:n.scrollTop}));assert.notDeepEqual(moved,position,'one-finger drag pans the image');
+  assert.equal(await field.inputValue(),'1HGBH41JXMN109187','gestures preserve draft');
+  await dialog.getByRole('button',{name:'Focus on field',exact:true}).click();
+  await dialog.screenshot({path:`${output}/${name}-fullscreen-source.png`});
+  await dialog.getByRole('button',{name:'Save & next',exact:true}).click();
+  await dialog.getByRole('heading',{name:'Document date · Page 1',exact:true}).waitFor();
+  assert.ok(await dialog.getByLabel('Source line highlight',{exact:true}).count(),'Next focuses the next uncertain source');
+  await dialog.getByLabel('Confirmed value',{exact:true}).fill('2026-09-07');
+  await dialog.getByRole('button',{name:'Save & next',exact:true}).click();
+  await dialog.waitFor({state:'hidden'});
+  const check=page.locator('.scan-driver-check-v105 input');if(await check.count())await check.check();
+  await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();await page.locator('.scan-saved-v105').waitFor();
+  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();
+  const recent=page.getByRole('region',{name:'Recent documents'});await recent.locator('.saved-document-row-v344').first().click();
+  await recent.getByRole('button',{name:'Read again',exact:true}).click();
+  const reread=recent.getByRole('region',{name:'Read saved document again'});
+  await reread.getByRole('button',{name:'Fix next reading',exact:true}).click();
+  await dialog.getByRole('heading',{name:'VIN / serial number · Page 1',exact:true}).waitFor();
+  await dialog.getByLabel('Confirmed value',{exact:true}).fill('1HGBH41JXMN109188');
+  await dialog.getByRole('button',{name:'Save & next',exact:true}).click();
+  await dialog.getByRole('button',{name:'Skip for now',exact:true}).click();
+  await dialog.getByRole('heading',{name:'Save this reading',exact:true}).waitFor();
+  await dialog.getByRole('button',{name:'Save reading',exact:true}).click();
+  await reread.getByText('Reading saved with this document. Find it under Reviewed document details.',{exact:true}).waitFor();
+  await page.reload();
+  const records=await page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{const db=r.result,q=db.transaction('documents_local').objectStore('documents_local').getAll();q.onsuccess=()=>{db.close();resolve(q.result);};q.onerror=()=>reject(q.error);};}));
+  assert.equal(records.length,1);const saved=records[0].extracted.readerReviewV110345;
+  assert.equal(saved.documents[0].kind,'bill_of_sale');assert.equal(saved.documents[0].fields.vin.value,'1HGBH41JXMN109188');assert.ok(saved.remaining>0,'skipped date stays unchecked');
+  assert.ok(records[0].extracted.previousReaderReviewV110347,'prior review retained');assert.ok(!records[0].load_no,'review cannot create a load assignment');
+  assert.deepEqual(errors,[]);console.log('PASS '+name+' fullscreen, highlight, pinch/pan, Next, skip and saved-reading persistence');
+ }catch(error){await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});throw error;}finally{await context.close();}
+}
