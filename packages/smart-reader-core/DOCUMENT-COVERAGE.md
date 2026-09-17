@@ -97,3 +97,13 @@ certificate with an exact, unique matching envelope reference. The source date
 and both reference anchors are retained. Missing, conflicting, weak or invalid
 certificate evidence never supplies a year; ambiguous month/day order remains
 unresolved. This context does not confirm signature attachments or auto-file.
+
+### 0.3.17 native PDF cells
+
+RateCon number, amount, equipment, mileage and weight cells retain their exact
+source ranges when their labels are printed separately on the same row. Edge
+control glyphs from PDF table rules are excluded from value quotes; internal
+control characters, intervening labels, overlapping cells and other observations
+remain boundaries. Separate completion-certificate columns preserve their own
+reference/date evidence and require aligned headers and values. Geometry adds
+review proposals; it does not verify an uncertain value or infer a weight unit.
