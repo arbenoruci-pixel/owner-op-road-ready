@@ -51,7 +51,12 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
    await action.tap();await page.locator('.editor-ui-v110').waitFor();
    assert.equal(await page.locator('.editor-ui-v110 .sheet-head div').innerText(),'Edit Duty Status');
    assert.equal(await page.getByLabel('Start time',{exact:true}).inputValue(),'00:00');
-   assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),scenario==='prefix'?'10:17':scenario==='full-day'?'24:00':'01:30');
+   // Native time fields display midnight as 00:00; the draft retains minute 1440.
+   assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),scenario==='prefix'?'10:17':scenario==='full-day'?'00:00':'01:30');
+   assert.equal(await page.getByRole('slider',{name:'start time handle',exact:true}).getAttribute('aria-valuenow'),'0');
+   assert.equal(await page.getByRole('slider',{name:'end time handle',exact:true}).getAttribute('aria-valuenow'),String(end));
+   assert.equal(await page.getByLabel('End at 24:00',{exact:true}).isChecked(),scenario==='full-day');
+   assert.equal(await page.locator('.save-main').innerText(),`Save OFF · ${end}m`);
    await page.locator('.editor-duty-grid [data-status="SB"]').tap();
    await page.locator('.cancel-main').tap();
    const canceled=await stored(page);
