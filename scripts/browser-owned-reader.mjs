@@ -23,9 +23,14 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       const defaultLines=['BILL OF LADING','BOL No: BOL-123','Ship From: Example Shipper','Ship To: Example Receiver','Weight: 12000 LB'];
       window.Tesseract={createWorker:async()=>({setParameters:async parameters=>{
         if(parameters.tessedit_pageseg_mode)window.__ownedReaderMode=String(parameters.tessedit_pageseg_mode);
-        if(window.__ownedReaderPacket&&String(parameters.tessedit_pageseg_mode)==='3'){window.__ownedReaderPacketPage++;window.__ownedReaderPacketRead=0;}
       },terminate:async()=>{},recognize:async(file)=>{
         window.__ownedReaderCalls++;
+        if(window.__ownedReaderPacket&&window.__ownedReaderMode==='3'&&file.name==='road-ready-clean-ocr.png'){
+          window.__ownedReaderCleanPages||=new WeakSet();
+          if(!window.__ownedReaderCleanPages.has(file)){
+            window.__ownedReaderCleanPages.add(file);window.__ownedReaderPacketPage++;window.__ownedReaderPacketRead=0;
+          }
+        }
         if(window.__ownedReaderFail)throw new Error('fixture OCR failure');
         if(window.__ownedReaderBlock){
           const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
@@ -530,7 +535,9 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){
     await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});
-    fs.writeFileSync(`${output}/${name}-failure.txt`,JSON.stringify({error:String(error),pageErrors:errors,body:await page.locator('body').innerText().catch(()=>''),url:page.url()},null,2));
+    const failure={error:String(error),pageErrors:errors,body:await page.locator('body').innerText().catch(()=>''),url:page.url()};
+    fs.writeFileSync(`${output}/${name}-failure.txt`,JSON.stringify(failure,null,2));
+    console.error('Owned reader fixture failure:',JSON.stringify(failure));
     throw error;
   }finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}
 }
