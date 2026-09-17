@@ -44,7 +44,8 @@ test('manual type applies only to a single document and uses supported filing ty
  const {filingTypeForReview}=await import('../src/recovery.js');
  const group=kind=>({kind,typeCorrection:{confirmed:true}});
  assert.equal(filingTypeForReview({documents:[group('bol')]}),'bol');
- assert.equal(filingTypeForReview({documents:[group('invoice')]}),'load_invoice');
+ assert.equal(filingTypeForReview({documents:[group('invoice')]}),'other');
+ assert.equal(filingTypeForReview({documents:[group('load_invoice')]}),'load_invoice');
  assert.equal(filingTypeForReview({documents:[group('unloading_receipt')]}),'lumper_receipt');
  assert.equal(filingTypeForReview({documents:[group('bol'),group('invoice')]}),null);
  assert.equal(filingTypeForReview({documents:[{kind:'bol'}]}),null);

@@ -470,7 +470,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     // Exercise the wider catalog through real intake, review, source opening
     // and export, with deterministic OCR and ordinary mobile browser storage.
     const catalogSamples=[['rate_confirmation','PRO # 86420 Rate Confirmation\nTOTAL RATE 2300.00\nPICK 1\n123 EXAMPLE RD Appointment 09/17/26 08:00 to 09/17/26 16:00\nALBANY NY 12207\nSTOP 1\n456 SAMPLE ST Appointment 09/22/26 08:00 to 09/22/26 16:00\nMADISON WI 53703',{loadNumber:'86420',totalRate:'2300.00'}],
-      ...truckingCases.filter(c=>['pod','fuel_receipt','scale_ticket','repair_invoice','packing_list','certificate_of_insurance'].includes(c[0])).map(([kind,title,body,expected])=>[kind,title+'\n'+body,expected])];
+      ...truckingCases.filter(c=>['pod','fuel_receipt','scale_ticket','repair_invoice','packing_list','certificate_of_insurance'].includes(c[0])).map(([kind,title,body,expected])=>[kind,title+'\n'+body,expected]),
+      ['invoice','INVOICE\nInvoice No: HOTEL-440\nSubtotal $100.00\nTotal $100.00\nCurrency: USD',{invoiceNumber:'HOTEL-440'}]];
     for(const [kind,text,expected] of catalogSamples){
       await page.goto(new URL('/_not-found',page.url()).href);
       await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
@@ -491,7 +492,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       const download=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
       const result=JSON.parse(fs.readFileSync(await(await download).path(),'utf8'));
       assert.equal(result.documents[0].kind,kind);
-      assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),kind);
+      assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),kind==='invoice'?'other':kind);
       for(const [key,value] of Object.entries(expected))assert.equal(result.documents[0].fields[key].value,value,kind+': '+key);
       const value=Object.values(expected)[0];
       await review.getByRole('button',{name:value+' · Page 1',exact:true}).first().click();
@@ -500,6 +501,31 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),true);
       if(['rate_confirmation','pod','fuel_receipt'].includes(kind))await review.screenshot({path:`${output}/${name}-catalog-${kind}.png`});
     }
+    // Unrelated signing envelopes leave the primary reading visible, show
+    // the page warning, and require an explicit load-folder decision.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+    await seed(page,state);
+    const attachmentPhotos=await page.evaluate(async texts=>{
+      window.__ownedReaderPacket=texts.map(text=>[text.split('\n').map((text,i)=>({text,confidence:.96,box:{x:.04,y:.04+i*.065,width:.92,height:.024}}))]);
+      window.__ownedReaderPacketPage=-1;const photos=[];
+      for(const text of texts){
+        const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;const ctx=canvas.getContext('2d');
+        ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';ctx.font='24px Arial';
+        text.split('\n').forEach((line,i)=>ctx.fillText(line,30,64+i*65));
+        photos.push([...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())]);
+      }return photos;
+    },[catalogSamples[0][1]+'\nDocument Ref: PACKET-SOURCE-REF Page 1 of 2','SIGNATURE PAGE\nDocument Ref: OTHER-SOURCE-REF Page 2 of 2']);
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles(attachmentPhotos.map((bytes,i)=>({name:`attachment-${i+1}.jpg`,mimeType:'image/jpeg',buffer:Buffer.from(bytes)})));
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByText(/Check that signature attachments on pages 2 belong to this document/).first().waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
+    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'');
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByText('2 pages · 2 documents',{exact:true}).waitFor();
+    await review.getByRole('button',{name:'86420 · Page 1',exact:true}).click();
+    await review.getByRole('img',{name:'Source image for page 1',exact:true}).waitFor();
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' owned reader: page evidence, source image, correction, export and original retained');
   }catch(error){

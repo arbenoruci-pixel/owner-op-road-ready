@@ -58,6 +58,10 @@ structure; the code does not fetch them or send customer documents to them.
 - Supporting signature pages retain their own identities. They do not contribute
   shipment fields or erase the primary document's fields. Unidentified pages and
   actual mixed documents still require boundary review.
+- Signing references must agree exactly before an attachment is associated with
+  the primary document. Missing or differing references show a page-specific
+  review warning and leave the load folder unselected. General invoices require
+  a filing-category choice unless freight or carrier structure is established.
 - Explicit confirmation remains necessary. Automatic acceptance and filing are
   disabled; uncertain or conflicting field readings remain visible.
 

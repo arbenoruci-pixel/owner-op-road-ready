@@ -11,11 +11,18 @@ const scan='source/src/modules/scan/';
 fs.copyFileSync('scripts/owned-reader/pageIdentity.js',scan+'ownedPageIdentityV110338.js');
 fs.copyFileSync('scripts/owned-reader/layoutGuard.js',scan+'documentLayoutGuardV110337.js');
 const identity=scan+'documentIdentityV110334.js';
+patch(identity,"import {extraPageIdentity} from './ownedPageIdentityV110338.js';","import {extraPageIdentity,attachmentRelationship} from './ownedPageIdentityV110338.js';");
 patch(identity,"export function inspectPageIdentity(text=''){", "export function inspectPageIdentity(text=''){\n  const sourceIdentity=extraPageIdentity(text);if(sourceIdentity)return sourceIdentity;");
 patch(identity,"return {page:page.page,typeId:ids.length===1?ids[0]:ids.length?'other':'',", "return {page:page.page,supporting:evidence.length>0&&evidence.every(e=>e.role==='supporting'),typeId:ids.length===1?ids[0]:ids.length?'other':'',");
 patch(identity,'const types=[...new Set(pageTypes.map(p=>p.typeId).filter(Boolean))];','const types=[...new Set(pageTypes.filter(p=>!p.supporting).map(p=>p.typeId).filter(Boolean))];');
 patch(identity,'!pageTypes[i].typeId&&page.reads.some(text=>text.trim())','!pageTypes[i].supporting&&!pageTypes[i].typeId&&page.reads.some(text=>text.trim())');
 patch(identity,"pageTypes.find(p=>p.typeId)?.evidence[0]","pageTypes.find(p=>!p.supporting&&p.typeId)?.evidence[0]");
+patch(identity,'const types=[...new Set(pageTypes.filter(p=>!p.supporting).map(p=>p.typeId).filter(Boolean))];','const types=[...new Set(pageTypes.filter(p=>!p.supporting).map(p=>p.typeId).filter(Boolean))];\n  const attachmentReview=attachmentRelationship(pages,pageTypes);');
+patch(identity,'const requiresTypeReview=pageTypes.some(p=>p.requiresTypeReview);return {typeId:types[0],','const requiresTypeReview=attachmentReview.required||pageTypes.some(p=>p.requiresTypeReview);return {attachmentReview,typeId:types[0],');
+patch(identity,'reason:pageTypes.find(p=>!p.supporting&&p.typeId)?.evidence[0]','reason:attachmentReview.required?attachmentReview.reason:pageTypes.find(p=>!p.supporting&&p.typeId)?.evidence[0]');
+patch(identity,"  const current=analysis.type?.id||'other';","  if(types.includes('other'))return {typeId:'other',confidence:.49,requiresTypeReview:true,pageTypes,reason:pageTypes.find(p=>p.typeId==='other')?.evidence[0]};\n  const current=analysis.type?.id||'other';");
+patch(scan+'SmartScanSheetV105.jsx','const loadNo = resumed ? resumed.loadNo :','const loadNo = result.typeEvidenceV110334?.attachmentReview?.required && !preserveLoadChoice ? \'\' : resumed ? resumed.loadNo :');
+patch(scan+'SmartScanSheetV105.jsx','analysis.typeEvidenceV110334.mixedDocuments||!analysis.userSelectedTypeV11036','analysis.typeEvidenceV110334.mixedDocuments||analysis.typeEvidenceV110334.attachmentReview?.required||!analysis.userSelectedTypeV11036');
 patch(scan+'OwnedReaderPreview.jsx','Shipping fields suggest this type. Confirm it against the page.','Document fields suggest this type. Confirm it against the page.');
 patch(scan+'OwnedReaderPreview.jsx',"{k.id==='invoice'?'Carrier invoice':k.label}",'{k.label}');
 
