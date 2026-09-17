@@ -87,7 +87,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await dialog.screenshot({path:`${output}/${name}-fullscreen-source.png`});
   await dialog.getByRole('button',{name:'Save & next',exact:true}).click();
   await dialog.getByRole('heading',{name:'Document date · Page 1',exact:true}).waitFor();
-  assert.ok(await dialog.getByLabel('Source line highlight',{exact:true}).count(),'Next focuses the next uncertain source');
+  await dialog.getByLabel('Source line highlight',{exact:true}).waitFor();
   await dialog.getByLabel('Confirmed value',{exact:true}).fill('2026-09-07');
   await dialog.getByRole('button',{name:'Save & next',exact:true}).click();
   await dialog.waitFor({state:'hidden'});
