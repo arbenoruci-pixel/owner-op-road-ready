@@ -72,3 +72,16 @@ plus negative headings, conflicts, weak OCR, packet isolation and source offsets
 The supplied signed RateCon is checked locally without committing its contents.
 These tests demonstrate supported structures; they do not establish universal
 layout coverage or a calibrated accuracy rate on unseen customer documents.
+
+### 0.3.15 stop and certificate fields
+
+Rate confirmation stop blocks now propose a company only when the first line
+is followed immediately by a street and city/state/ZIP pair. Appointment dates
+retain both endpoints, explicit labels remain available, and conflicting dates
+or company names stay unresolved. Two-digit years retain the raw source for
+review rather than choosing a century. Generic multi-stop layouts are not
+collapsed into one destination. Signing certificates can propose the reference
+and completion date from the row immediately below the combined completion
+header; individual signer timestamps are not used for that date. All these
+layout-derived proposals require source review. Flattened broker/carrier
+columns without reliable role evidence remain a known extraction limitation.

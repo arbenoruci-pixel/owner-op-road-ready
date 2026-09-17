@@ -1,4 +1,4 @@
-# Owned Smart Reader — source-review core 0.3.14
+# Owned Smart Reader — source-review core 0.3.15
 
 An independent JavaScript library and CLI for document observations, classification,
 grouping, source-bound fields, region rereading, and human corrections. It has no
