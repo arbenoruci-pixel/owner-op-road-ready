@@ -67,6 +67,7 @@ steps.push('finalize-reader-catalog-v110361.mjs','test-reader-catalog-v110361.mj
 steps.push('finalize-reader-stops-v110362.mjs','test-reader-catalog-v110361.mjs','test-duty-graph-continuity.mjs','test-editor-grips-v110355.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-native-pdf-evidence-v110363.mjs','test-native-pdf-evidence-v110363.mjs','test-duty-graph-continuity.mjs','test-editor-grips-v110355.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-native-cells-v110364.mjs','test-native-pdf-evidence-v110363.mjs','test-duty-graph-continuity.mjs','test-editor-grips-v110355.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-carry-edit-v110365.mjs','test-carry-edit-v110365.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
