@@ -1,3 +1,4 @@
+import {referenceDiscrepancies} from './referenceDiscrepancies.js';
 import {fieldsForProfile} from './engine.js';
 import {PROFILES,normalizeValue} from './profiles.js';
 import {validateInvoice,validateUnloadingReceipt} from './validation.js';
@@ -46,7 +47,8 @@ export function confirmDocumentKind(result,request){
   return next;
 }
 export function reviewQueue(result){
-  return result.documents.flatMap(group=>group.kind==='unknown'?[{groupId:group.id,key:null}]:Object.entries(group.fields).filter(([key,f])=>f.status==='needs_review'||f.status==='missing'&&(f.required||/date/i.test(key))).map(([key])=>({groupId:group.id,key})));
+  const referenceChecks=referenceDiscrepancies(result).filter(w=>w.status==='needs_review');
+  return result.documents.flatMap(group=>group.kind==='unknown'?[{groupId:group.id,key:null}]:Object.entries(group.fields).filter(([key,f])=>f.status==='needs_review'||referenceChecks.some(w=>w.groupId===group.id&&w.key===key)||f.status==='missing'&&(f.required||/date/i.test(key))).map(([key])=>({groupId:group.id,key})));
 }
 // Compact, page-scoped review saved beside the original. Excludes images and
 // full OCR transcripts; unresolved candidates remain explicitly unconfirmed.
@@ -54,7 +56,7 @@ export function savedReadingReview(result){
   if(!result)return null;
   return {version:1,engineVersion:result.engineVersion,reviewRevision:result.reviewRevision,pageCount:result.pageCount,
     documents:result.documents.map(g=>({id:g.id,kind:g.kind,label:g.label,pages:g.pageIds.map(id=>result.pages.find(p=>p.id===id).number),typeCorrection:g.typeCorrection||null,fields:Object.fromEntries(Object.entries(g.fields).filter(([,f])=>f.status==='confirmed').map(([key,f])=>[key,{label:f.label,value:f.value,correction:f.correction}])),checks:g.checks})),
-    remaining:reviewQueue(result).length,trainingEligible:false};
+    remaining:reviewQueue(result).length,referenceWarnings:referenceDiscrepancies(result).map(({primaryEvidence,supportingEvidence,...warning})=>warning),trainingEligible:false};
 }
 
 // The host labels its manual invoice choice explicitly as Carrier invoice.
