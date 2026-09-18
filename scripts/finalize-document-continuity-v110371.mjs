@@ -1,4 +1,5 @@
 import './v110371/install.mjs';
+import './v110371/install-browser-regressions.mjs';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';

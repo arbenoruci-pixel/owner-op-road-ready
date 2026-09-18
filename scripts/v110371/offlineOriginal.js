@@ -8,7 +8,11 @@ export async function keepOriginalOffline(db, document, blob) {
   const current = await db.documents_local.where('client_document_id').equals(document.client_document_id).first();
   if (!current?.local_id) throw new Error('Reopen this saved document before keeping it offline.');
   if (Number(current.file_size_bytes) > 0 && Number(current.file_size_bytes) !== blob.size) throw integrityFailure('Original file size does not match.');
-  if (/^[a-f0-9]{64}$/i.test(current.sha256 || '')) {
+  const checksum = current.sha256;
+  if (checksum != null && checksum !== '' && (typeof checksum !== 'string' || !/^[a-f0-9]{64}$/i.test(checksum))) {
+    throw integrityFailure('Original file checksum is invalid. Reopen the verified original instead.');
+  }
+  if (typeof checksum === 'string' && checksum.length) {
     if (!globalThis.crypto?.subtle) throw integrityFailure('Could not verify this original on this device.');
     const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
     const hash = [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('');

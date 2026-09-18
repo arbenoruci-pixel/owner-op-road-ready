@@ -6,8 +6,16 @@ const conflict = message => Object.assign(new Error(message), {code:'document_pu
 export const documentOriginalIdentity = row => JSON.stringify([row.local_id, row.client_document_id, row.sha256 || '', row.file_size_bytes ?? null, row.mime_type || '']);
 
 function sameOwner(local, row) {
-  return local.driver_id === row.driver_id ||
-    (local.driver_id === 'local-owner-op' && local.server_id === row.id);
+  if (local.driver_id === row.driver_id) return true;
+  if (local.driver_id !== 'local-owner-op') return false;
+  if (local.server_id === row.id) return true;
+  // The authenticated pull may acknowledge an upload whose final local write
+  // was interrupted. Require its exact client identity and original metadata.
+  return !nonempty(local.server_id) && nonempty(local.client_document_id) &&
+    local.client_document_id === row.client_document_id &&
+    nonempty(local.mime_type) && local.mime_type === row.mime_type &&
+    Number(local.file_size_bytes) > 0 &&
+    Number(local.file_size_bytes) === Number(row.file_size_bytes);
 }
 
 export function mergePulledDocument(local, row) {

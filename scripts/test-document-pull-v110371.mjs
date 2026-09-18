@@ -32,3 +32,18 @@ test('filling a previously unknown fingerprint keeps a valid checkpoint recovera
 test('a metadata pull and checkpoint serialize without losing either update',async()=>{const db=dbWith([local()]),baseline=db.rows()[0];await Promise.all([upsertPulledDocuments(db,[{...remote(),expires_on:'2027-01-01'}]),saveReadingCheckpoint(db,baseline,summary())]);assert.equal(db.rows()[0].expires_on,'2027-01-01');assert.ok(checkpointReading(db.rows()[0]));});
 test('new cloud document is inserted without fabricating a local reading',async()=>{const db=dbWith();await upsertPulledDocuments(db,[remote()]);assert.equal(db.rows().length,1);assert.equal(db.rows()[0].local_id,'client-1');assert.equal(db.rows()[0].extracted,undefined);});
 test('failed metadata write rolls back and preserves the saved review',async()=>{const db=dbWith([local()]),before=db.rows();db.failNext();await assert.rejects(()=>upsertPulledDocuments(db,[remote()]),/Quota/);assert.deepEqual(db.rows(),before);});
+
+test('server committed upload recovers after the local acknowledgement write was interrupted',async()=>{
+ const initial={...local(),driver_id:'local-owner-op',server_id:null};delete initial.storage_path;
+ const db=dbWith([initial]);await saveReadingCheckpoint(db,db.rows()[0],summary());
+ const before=db.rows()[0];await upsertPulledDocuments(db,[remote()]);const after=db.rows()[0];
+ assert.equal(db.rows().length,1);assert.equal(after.server_id,'server-1');assert.equal(after.driver_id,'driver-1');
+ assert.equal(after.local_id,initial.local_id);assert.deepEqual(after.extracted,before.extracted);assert.ok(checkpointReading(after));
+});
+test('unacknowledged local upload cannot adopt a mismatched or incomplete original',()=>{
+ const initial={...local(),driver_id:'local-owner-op',server_id:null};
+ for(const change of [{client_document_id:'other-client'},{mime_type:'image/png'},{file_size_bytes:4},{file_size_bytes:null},{mime_type:null}]) {
+  assert.throws(()=>mergePulledDocument(initial,{...remote(),...change}),/ownership or identity changed/);
+ }
+ assert.throws(()=>mergePulledDocument({...initial,sha256:'a'.repeat(64)},{...remote(),sha256:'b'.repeat(64)}),/original changed/);
+});

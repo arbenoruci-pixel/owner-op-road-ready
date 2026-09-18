@@ -10,7 +10,7 @@ const checked=(value,label='BOL')=>({label,value,correction:{value,rawValue:valu
 const saved=()=>({version:1,engineVersion:'old',reviewRevision:1,pageCount:1,remaining:0,documents:[{id:'old-group',kind:'bol',pages:[1],fields:{bolNumber:checked('B-21')}}]});
 const observed=value=>({label:'BOL',value,status:'needs_review',issues:['layout_needs_review'],candidates:[{value,rawValue:value,evidence:[{sourceImageId:'new-image',quote:value}]}]});
 const result=()=>({documentId:'new-source',pageCount:1,reviewRevision:0,pages:[{id:'page-1',number:1}],documents:[{id:'new-group',kind:'bol',pageIds:['page-1'],fields:{bolNumber:observed('B-2I'),other:observed('unconfirmed')},canAutoFile:false,checks:[]}],corrections:[]});
-const row=()=>({local_id:'local-1',client_document_id:'client-1',driver_id:'test-driver',sha256:'original-hash',mime_type:'application/pdf',file_size_bytes:3,load_no:'LOAD-10',type:'bol',sync_state:'synced',storage_path:'driver/original.pdf',created_at:'2026-01-01',updated_at:'2026-01-01',extracted:{readerReviewV110345:saved(),unrelated:'keep'}});
+const row=()=>({local_id:'local-1',client_document_id:'client-1',driver_id:'test-driver',sha256:'',mime_type:'application/pdf',file_size_bytes:3,load_no:'LOAD-10',type:'bol',sync_state:'synced',storage_path:'driver/original.pdf',created_at:'2026-01-01',updated_at:'2026-01-01',extracted:{readerReviewV110345:saved(),unrelated:'keep'}});
 function memoryDb(initial=row()) {
   const data={documents_local:[copy(initial)],document_blobs:[]},scope=new AsyncLocalStorage();let tail=Promise.resolve(),writes=0,failAt=Infinity;
   const db={data,failAfter:n=>{failAt=writes+n;},transaction(mode,...args){const fn=args.pop();if(scope.getStore())return fn();const run=tail.then(()=>scope.run(true,async()=>{const before=copy(data);try{return await fn();}catch(error){Object.assign(data,before);throw error;}}));tail=run.catch(()=>{});return run;}};
@@ -43,3 +43,11 @@ test('authenticated cloud original is cached once without changing filing or fil
 test('offline original rejects mismatched byte size without writing',async()=>{const db=memoryDb();await assert.rejects(()=>keepOriginalOffline(db,current(db),new Blob(['wrong-size'])),/size/);assert.equal(db.data.document_blobs.length,0);});
 test('offline original verifies known SHA-256 and rejects incorrect bytes',async()=>{const initial=row();initial.sha256=createHash('sha256').update('PDF').digest('hex');const db=memoryDb(initial);await assert.rejects(()=>keepOriginalOffline(db,current(db),new Blob(['BAD'])),/checksum/);assert.equal(db.data.document_blobs.length,0);assert.equal(await keepOriginalOffline(db,current(db),new Blob(['PDF'])),true);});
 test('quota failure rolls back offline bytes and availability metadata together',async()=>{const db=memoryDb();db.failAfter(2);await assert.rejects(()=>keepOriginalOffline(db,current(db),new Blob(['PDF'])),/Quota/);assert.equal(db.data.document_blobs.length,0);assert.equal(current(db).local_blob_state,undefined);});
+
+test('present malformed checksums fail closed before caching',async()=>{
+ for(const checksum of ['short','g'.repeat(64),' '.repeat(64),123]) {
+  const initial=row();initial.sha256=checksum;const db=memoryDb(initial);
+  await assert.rejects(()=>keepOriginalOffline(db,current(db),new Blob(['PDF'])),error=>error.code==='original_integrity_failed'&&/checksum is invalid/.test(error.message));
+  assert.equal(db.data.document_blobs.length,0);assert.equal(current(db).local_blob_state,undefined);
+ }
+});
