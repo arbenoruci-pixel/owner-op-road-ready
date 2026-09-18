@@ -47,6 +47,40 @@ patch(dayLog,
     to: routeLegs.length ? joinCityState(routeLegs[routeLegs.length - 1].toCity, routeLegs[routeLegs.length - 1].toState) : joinCityState(dayLoad.deliveryCity, dayLoad.deliveryState),`);
 
 patch(dayLog,
+`  function editPickup() {`,
+`  function saveLegacySingleRouteField(patch = {}) {
+    const day = state.activeDay;
+    const existing = form.routeLegs[0] || null;
+    const docs = form.shippingDocs === 'None' ? '' : form.shippingDocs;
+    const leg = {
+      ...(existing || {}),
+      id:existing?.id || \`manual_form_\${day}_\${Date.now()}\`,
+      day:existing?.day || day,
+      pickupDay:existing?.pickupDay || day,
+      pickupEventId:existing?.pickupEventId || '',
+      pickupMin:existing?.pickupMin ?? null,
+      fromCity:existing?.fromCity || '',
+      fromState:existing?.fromState || '',
+      toCity:existing?.toCity || '',
+      toState:existing?.toState || '',
+      shippingDocs:existing?.shippingDocs || docs,
+      loadNo:existing?.loadNo || docs,
+      status:existing?.status || 'open',
+      source:existing?.source || 'manual_form',
+      updatedAt:Date.now(),
+      ...patch,
+    };
+    const routeLegsByDay = { ...(state.routeLegsByDay || {}) };
+    const target = [...(routeLegsByDay[day] || [])];
+    const index = existing ? target.findIndex(item => item.id === existing.id) : -1;
+    if (index >= 0) target[index] = leg; else target.push(leg);
+    routeLegsByDay[day] = target;
+    onSaveLoad?.({ logDayEdit:true, routeLegsByDay, syncLinkedRouteDetails:true });
+  }
+
+  function editPickup() {`);
+
+patch(dayLog,
 `    const value = window.prompt('Pickup / From location (City, ST)', joinCityState(load.pickupCity, load.pickupState) === 'None' ? '' : joinCityState(load.pickupCity, load.pickupState));`,
 `    const value = window.prompt('Pickup / From location (City, ST)', form.from === 'None' ? '' : form.from);`);
 
