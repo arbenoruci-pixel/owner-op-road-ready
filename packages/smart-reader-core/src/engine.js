@@ -9,6 +9,18 @@ import {rateDateContext,expandShortYear} from './dateContext.js';
 // Fold cosmetic corporate commas, preserving word and identifier boundaries.
 const semanticKey=(kind,value)=>kind==='party'?partyKey(value):String(value||'');
 
+// Keep each exact provenance item once within a candidate's labels. Different
+// pages, observations, quotes, boxes and confidence values remain distinct.
+function appendUniqueEvidence(target, evidence) {
+  const seen = new Set(target.map(item => JSON.stringify(item)));
+  for (const item of evidence) {
+    const key = JSON.stringify(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    target.push(item);
+  }
+}
+
 function candidatesFor(pages, spec, dateContext=null) {
   const candidates=[];
   for (const page of pages) for (const match of pageFieldMatches(page,spec)) {
@@ -21,10 +33,10 @@ function candidatesFor(pages, spec, dateContext=null) {
     let candidate=candidates.find(c=>c.key===key);
     if(!candidate){candidate={key,rawValue:evidence.quote,...normalized,evidence:[]};candidates.push(candidate);}
     if(normalized.issue&&!candidate.issue)candidate.issue=normalized.issue;
-    if(expanded){candidate.labelEvidence??=[];candidate.labelEvidence.push(...dateContext.evidence);}
-    candidate.evidence.push({...evidence,...(normalized.issue?{matchIssue:normalized.issue}:{})});
+    if(expanded){candidate.labelEvidence??=[];appendUniqueEvidence(candidate.labelEvidence,dateContext.evidence);}
+    candidate.evidence.push({...evidence,...(match.supportMethod?{supportMethod:match.supportMethod}:{}),...(normalized.issue?{matchIssue:normalized.issue}:{})});
     if(match.continuation){const tail=match.continuation;candidate.continuationEvidence??=[];candidate.continuationEvidence.push(evidenceFor(page,observation,tail.line,tail.start,tail.end));if(match.continuationKind)candidate.continuationKind=match.continuationKind;}
-    for(const labelLine of [match.labelLine,...(match.extraLabelLines||[])].filter(Boolean)){candidate.labelEvidence??=[];candidate.labelEvidence.push(evidenceFor(page,observation,labelLine,0,labelLine.text.length));}
+    for(const labelLine of [match.labelLine,...(match.extraLabelLines||[])].filter(Boolean)){candidate.labelEvidence??=[];appendUniqueEvidence(candidate.labelEvidence,[evidenceFor(page,observation,labelLine,0,labelLine.text.length)]);}
   }
   return candidates.map(({key,...candidate})=>candidate);
 }
@@ -81,7 +93,7 @@ function extractField(pages, spec, dateContext=null) {
   const uniqueIssues=[...new Set(issues)];
   const supportedCandidates=valid.filter(c=>supportedValues.has(semanticKey(spec.kind,c.value)));
   const chosen=values.length===1&&supportedCandidates.length?supportedCandidates[0]:null;
-  return {label:spec.label,kind:spec.kind,required:spec.required,status:!candidates.length?'missing':uniqueIssues.length?'needs_review':chosen?'supported':'needs_review',value:chosen&&!uniqueIssues.length?chosen.value:null,candidates,issues:uniqueIssues};
+  return {label:spec.label,kind:spec.kind,required:spec.required,...(spec.displayWhenFound?{displayWhenFound:true}:{}),status:!candidates.length?'missing':uniqueIssues.length?'needs_review':chosen?'supported':'needs_review',value:chosen&&!uniqueIssues.length?chosen.value:null,candidates,issues:uniqueIssues};
 }
 
 export function fieldsForProfile(pages,kind,dateContext=null) {const profile=PROFILES.find(p=>p.id===kind);return profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(pages,spec,dateContext)])):{};}
@@ -89,5 +101,5 @@ export function fieldsForProfile(pages,kind,dateContext=null) {const profile=PRO
 export function readDocument(input) {
   const {documentId,pages}=normalizeInput(input),identities=pages.map(classifyPage);
   const documents=makeGroups(pages,identities).map(group=>{const profile=PROFILES.find(p=>p.id===group.kind),groupPages=pages.filter(p=>group.pageIds.includes(p.id)),fields=fieldsForProfile(groupPages,group.kind,group.kind==='rate_confirmation'?rateDateContext(groupPages,pages,identities):null),checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):[];return {...group,label:profile?.label||'Uncategorized document',fields,checks,requiresReview:true,canAutoFile:false};});
-  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.17',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
+  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.18',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
 }

@@ -1,7 +1,8 @@
 // Rate confirmations keep stop context inside one observation. A generic STOP
 // is only proposed as delivery for a single-pick, single-stop layout; every
-// section-derived value still needs confirmation against its source.
+// unproven section-derived value still needs confirmation against its source.
 import {isDocumentParty} from './fieldGuards.js';
+import {nativeStopEvidence} from './nativeStopEvidence.js';
 
 const pickup=/^\s*(?:PICK(?:\s*UP)?|SHIPPER)(?:\s*[:#]?\s*\d+)?\s*:?\s*$/i;
 const delivery=/^\s*(?:DELIVERY|DELIVER|DROP(?:\s*OFF)?|CONSIGNEE)(?:\s*[:#]?\s*\d+)?\s*:?\s*$/i;
@@ -38,7 +39,8 @@ function sections(lines) {
     markers.push({kind,line,index:i});
   }
   const simple=markers.length===2&&markers[0].kind==='pickup'&&markers[1].kind==='stop';
-  return markers.map((marker,i)=>({...marker,kind:marker.kind==='stop'?(simple?'delivery':'stop'):marker.kind,
+  return markers.map((marker,i)=>({...marker,rawKind:marker.kind,nextMarker:markers[i+1]?.line,
+    allLines:lines.slice(marker.index+1,markers[i+1]?.index??lines.length),kind:marker.kind==='stop'?(simple?'delivery':'stop'):marker.kind,
     lines:lines.slice(marker.index+1,markers[i+1]?.index??lines.length).filter(l=>l.text.trim()).slice(0,7)}));
 }
 
@@ -51,38 +53,45 @@ const range=(line,end=line.text.length)=>{
 
 export function rateSectionMatches(page,spec){
   const matches=[];
-  for(const observation of page.observations)for(const section of sections(observation.lines)){
+  for(const observation of page.observations){
+    const blocks=sections(observation.lines);
+    for(const section of blocks){
     if(section.kind!==spec.rateSection)continue;
+    const proof=nativeStopEvidence(observation,section,blocks);
+    const support=line=>proof&&[proof.address,proof.time,proof.name].includes(line)
+      ?{supportMethod:'native_stop_block',extraLabelLines:proof.labels}
+      :{issue:'layout_needs_review'};
     for(let i=0;i<section.lines.length;i++){
       const line=section.lines[i];
       if(boilerplate.test(line.text))break;
       const appt=appointment.exec(line.text);
       if(spec.ratePart==='appointment'&&appt){
         const [start,end]=appt.indices[1];
-        matches.push({observation,line,start,end,labelLine:section.line,issue:'layout_needs_review'});
+        matches.push({observation,line,start,end,labelLine:section.line,...support(line)});
       }
       if(spec.ratePart==='date'&&appt){
         // Keep both endpoints: a window spanning days must not become one date.
         for(const date of appt[1].matchAll(appointmentDate)){
           const [a,b]=date.indices[1],offset=appt.indices[1][0];
-          matches.push({observation,line,start:offset+a,end:offset+b,labelLine:section.line,issue:'layout_needs_review'});
+          matches.push({observation,line,start:offset+a,end:offset+b,labelLine:section.line,...support(line)});
         }
       }
       if(spec.ratePart==='party'&&i===0&&isDocumentParty(line.text)&&!partyNoise.test(line.text.trim())
         &&!street.test(line.text)&&!city.test(line.text)&&!appointment.test(line.text)
         &&street.test(section.lines[i+1]?.text||'')&&cityAfter(section.lines,i+1)){
-        matches.push({...range(line),observation,labelLine:section.line,issue:'layout_needs_review',
-          extraLabelLines:[section.lines[i+1],cityAfter(section.lines,i+1)]});
+        matches.push({...range(line),observation,labelLine:section.line,...support(line),
+          extraLabelLines:[...(proof?.labels||[]),section.lines[i+1],cityAfter(section.lines,i+1)]});
       }
       if(spec.ratePart==='address'&&street.test(line.text)){
         const match=range(line,appt?appt.index:line.text.length),next=cityAfter(section.lines,i);
         if(!next)continue;
         const tail=range(next);
-        matches.push({...match,observation,labelLine:section.line,issue:'layout_needs_review',
+        matches.push({...match,observation,labelLine:section.line,...support(line),
           joinedValue:line.text.slice(match.start,match.end)+', '+next.text.slice(tail.start,tail.end),
           continuation:tail,continuationKind:'address'});
       }
     }
+  }
   }
   return matches;
 }
@@ -109,6 +118,18 @@ export const rateConfirmationProfile={
       pattern:/^\s*(?:SIZE\s*&\s*TYPE|EQUIPMENT(?:\s+TYPE)?)\s*:\s*(.+?)(?=\s+(?:DESCRIPTION|MILES)\s*:|$)/id},
     miles:{label:'Miles',kind:'text',required:false,nativeCell:'miles',pattern:/\bMILES\s*:\s*(\d[\d,.]*)\s*$/id},
     weight:{label:'Weight',kind:'weight',required:false,nativeCell:'weight',pattern:/\bWEIGHT\s*:\s*(\d[\d,.]*(?:\s+(?:LB|LBS|KG|KGS))?)\s*$/id},
+    unitNumber:{label:'Unit number (as written)',kind:'identifier',required:false,displayWhenFound:true,
+      pattern:/\bUNIT\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]?\s*([A-Z0-9][A-Z0-9._/-]*)(?=\s|$)/id},
+    vin:{label:'VIN',kind:'vin',required:false,displayWhenFound:true,
+      pattern:/\bVIN\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]?\s*([A-Z0-9]{17})(?=\s|$)/id},
+    podRequirement:{label:'POD requirement',kind:'text',required:false,displayWhenFound:true,
+      pattern:/^\s*(POD\s+must\s+be\s+provided\b.*?)\s*$/id},
+    lateFeeTerms:{label:'Late-fee clause',kind:'text',required:false,displayWhenFound:true,
+      pattern:/^\s*((?:[$€£]\s*\d[\d.,]*\s+PER\s+DAY\s+LATE\s+FEE|LATE\s+FEE)\b.*?)\s*$/id},
+    detentionTerms:{label:'Detention clause',kind:'text',required:false,displayWhenFound:true,
+      pattern:/^\s*(DETENTION\b\s*[:\-–—]?\s*[$€£]\s*\d.*?)\s*$/id},
+    billingEmail:{label:'Invoice recipient (from document)',kind:'text',required:false,displayWhenFound:true,
+      pattern:/^\s*SEND\s+INVOICE\s+TO\s+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\s*$/id},
     pickupAddress:{label:'Pickup address',kind:'text',required:true,rateSection:'pickup',ratePart:'address'},
     pickupAppointment:{label:'Pickup appointment',kind:'text',required:true,rateSection:'pickup',ratePart:'appointment'},
     deliveryAddress:{label:'Delivery address',kind:'text',required:true,rateSection:'delivery',ratePart:'address'},
