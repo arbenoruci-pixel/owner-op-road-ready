@@ -18,9 +18,9 @@ export function referenceDiscrepancies(result){
     const match=reference.exec(line.text);
     if(match&&(line.confidence===null||line.confidence>=.8))anchors.push({value:match[1],evidence:evidenceFor(page,observation,line,...match.indices[1])});
   }
-  const values=[...new Set(anchors.map(a=>a.value))];
+  const values=[...new Set(anchors.map(a=>a.value.toUpperCase()))];
   if(values.length!==1)return [];
-  const expected=values[0],warnings=[];
+  const expected=anchors[0].value,expectedVariants=[...new Set(anchors.map(a=>a.value))],warnings=[];
   for(const group of result.documents){
     if(!['signature_page','signing_certificate'].includes(group.kind))continue;
     const field=group.fields?.documentReference;
@@ -30,9 +30,9 @@ export function referenceDiscrepancies(result){
     for(const value of observed){
       if(!visuallySimilar(value,expected))continue;
       warnings.push({id:'similar_document_references',groupId:group.id,key:'documentReference',
-        status:confirmed?'confirmed_difference':'needs_review',value,expected,
+        status:confirmed?'confirmed_difference':'needs_review',value,expected,expectedVariants,
         message:'Similar document references differ (letter O / number 0). Check the source before treating these pages as one signed document.',
-        primaryEvidence:anchors.filter(a=>a.value===expected).map(a=>a.evidence),
+        primaryEvidence:anchors.map(a=>a.evidence),
         supportingEvidence:field.candidates.filter(c=>c.value===value).flatMap(c=>c.evidence)});
     }
   }

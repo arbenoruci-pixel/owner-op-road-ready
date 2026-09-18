@@ -16,12 +16,15 @@ console.log('PASS — Reader shows full addresses, source-backed clauses and exp
 const legacyBrowser='scripts/browser-native-pdf-v110363.mjs';
 fs.writeFileSync(legacyBrowser,fs.readFileSync(legacyBrowser,'utf8').replaceAll("assert.equal(result.engineVersion,'0.3.17')","assert.equal(result.engineVersion,'0.3.18')"));
 
+fs.copyFileSync('scripts/v110373/reviewPageSources.js','source/src/modules/scan/readerPageSourcesV110373.js');
+patch("import {reviewScanAnalysis} from './ownedReaderAdapter.js';", "import {reviewScanAnalysis} from './ownedReaderAdapter.js';\nimport {retainedReviewPageSources} from './readerPageSourcesV110373.js';");
+
 // Bind a retained original before extraction so fallback text evidence points
 // to the same full page. Never give OCR variants another pass's coordinates.
 patch("const documentId=reviewState?.result?.documentId||`review-${crypto.randomUUID()}`,dimensions={},files={};", "const documentId=reviewState?.result?.documentId||`review-${crypto.randomUUID()}`,dimensions={},files={},originalSources={};");
-patch('      const next=reviewState?.result||reviewScanAnalysis(analysis,{documentId,dimensions});', `      for(const [index,file]of (analysis.scanMeta?.pageFiles||[]).entries()){
+patch('      const next=reviewState?.result||reviewScanAnalysis(analysis,{documentId,dimensions});', `      for(const {pageNumber,file}of retainedReviewPageSources(analysis)){
         if(active.current!==generation)return;
-        const pageId=\`page-\${index+1}\`,prefix=\`\${documentId}:\${pageId}:\`;
+        const pageId=\`page-\${pageNumber}\`,prefix=\`\${documentId}:\${pageId}:\`;
         if(!(file instanceof Blob)||Object.keys(files).some(id=>id.startsWith(prefix)))continue;
         const id=prefix+'original';
         try{await loadImage(file);files[id]=file;originalSources[pageId]=id;}catch{/* Keep text review available when its original cannot be opened. */}

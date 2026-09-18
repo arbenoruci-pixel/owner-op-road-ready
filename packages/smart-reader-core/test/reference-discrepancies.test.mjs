@@ -55,3 +55,23 @@ test('case-only reference differences do not fabricate an O/0 warning',()=>{
  assert.deepEqual(referenceDiscrepancies(result),[]);
  assert.equal(result.documents[1].fields.documentReference.value,'SYNTHETIC-ABO12');
 });
+
+
+test('case-only primary observations retain all raw anchors while detecting a supporting O/0 difference',()=>{
+ const input=rateInput(rateText.replace('SYNTHETIC-REFERENCE','SYNTHETIC-ABO12'));
+ input.pages[0].observations.push(textObservation('Document Ref: synthetic-abo12',{id:'lowercase-read'}));
+ input.pages.push({id:'signature',observations:[textObservation('SIGNATURE PAGE\nDocument Ref: synthetic-ab012')]});
+ const result=readDocument(input),before=JSON.stringify(result),warnings=referenceDiscrepancies(result);
+ assert.equal(warnings.length,1);assert.equal(warnings[0].expected,'SYNTHETIC-ABO12');
+ assert.deepEqual(warnings[0].expectedVariants,['SYNTHETIC-ABO12','synthetic-abo12']);
+ assert.deepEqual(warnings[0].primaryEvidence.map(e=>e.quote),['SYNTHETIC-ABO12','synthetic-abo12']);
+ for(const e of warnings[0].primaryEvidence)resolveEvidence(result,e);
+ assert.ok(reviewQueue(result).some(q=>q.groupId==='document-2'&&q.key==='documentReference'));
+ assert.equal(JSON.stringify(result),before);
+});
+test('folding primary anchor case never folds an actual O/0 conflict',()=>{
+ const input=rateInput(rateText.replace('SYNTHETIC-REFERENCE','SYNTHETIC-ABO12'));
+ input.pages[0].observations.push(textObservation('Document Ref: synthetic-ab012',{id:'different-read'}));
+ input.pages.push({id:'signature',observations:[textObservation('SIGNATURE PAGE\nDocument Ref: synthetic-ab012')]});
+ assert.deepEqual(referenceDiscrepancies(readDocument(input)),[]);
+});

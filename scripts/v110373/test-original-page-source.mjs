@@ -1,3 +1,4 @@
+import {retainedReviewPageSources} from '../../source/src/modules/scan/readerPageSourcesV110373.js';
 import assert from 'node:assert/strict';
 import {inputFromScanAnalysis,reviewScanAnalysis} from '../../source/src/modules/scan/ownedReaderAdapter.js';
 import {resolveEvidence} from '../../packages/smart-reader-core/src/index.js';
@@ -26,3 +27,16 @@ const bound=inputFromScanAnalysis(ocr,{documentId,originalSources:{'page-2':orig
 assert.equal(bound.pages[1].observations[0].sourceImageId,documentId+':page-2:variant');
 assert.deepEqual(bound.pages[1].observations[0].lines[0].box,{x:.05,y:.05,width:.5,height:.06});
 console.log('PASS — sparse original source identity, page isolation, absent/cross-document guards, immutable input and exact OCR geometry');
+
+const processed=new Blob(['ocr derivative']),photo=new Blob(['perspective corrected']),second=new Blob(['second page']);
+const photoAnalysis={scanMeta:{pageFiles:[processed,second],captureAssets:[{pageIndex:0,kind:'perspective-corrected',file:photo}]}};
+const choices=retainedReviewPageSources(photoAnalysis);
+assert.equal(choices[0].file,photo,'the retained perspective-corrected page wins over its OCR derivative');
+assert.equal(choices[1].file,second,'a neighbouring page never borrows another original');
+assert.equal(photoAnalysis.scanMeta.pageFiles[0],processed,'choosing sources does not replace scan input files');
+assert.equal(retainedReviewPageSources({scanMeta:{pageFiles:[processed]}})[0].file,processed,'PDF page or derivative fallback is retained when no corrected asset exists');
+assert.equal(retainedReviewPageSources({scanMeta:{pageFiles:[processed],captureAssets:[{pageIndex:0,kind:'perspective-corrected',file:'missing'}]}})[0].file,processed);
+assert.equal(retainedReviewPageSources({scanMeta:{pageFiles:[processed],captureAssets:[{kind:'perspective-corrected',file:photo},{pageIndex:-1,kind:'perspective-corrected',file:photo},{pageIndex:0,kind:'ocr',file:photo}]}})[0].file,processed,'invalid page indices and different asset types cannot substitute');
+assert.deepEqual(retainedReviewPageSources({scanMeta:{captureAssets:[{pageIndex:1,kind:'perspective-corrected',file:second}]}}),[{pageNumber:2,file:second}],'asset-only sparse pages retain their explicit index');
+assert.deepEqual(retainedReviewPageSources(null),[]);
+console.log('PASS — retained photo originals take priority, with per-page fallback and unchanged OCR derivatives');
