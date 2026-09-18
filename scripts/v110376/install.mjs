@@ -142,6 +142,21 @@ patch(app,
       if (payloadRouteLegsByDay && syncLinkedRouteDetails && logDayEdit) {`);
 
 patch(app,
+`        next = {
+          ...next,
+          eventsByDay:applyRouteLegDetailsToLinkedEvents(s.eventsByDay || {}, payloadRouteLegsByDay),
+        };`,
+`        const reconciledEvents = applyRouteLegDetailsToLinkedEvents(s.eventsByDay || {}, payloadRouteLegsByDay);
+        next = {
+          ...next,
+          eventsByDay:{
+            ...(s.eventsByDay || {}),
+            [s.activeDay]:reconciledEvents[s.activeDay] || (s.eventsByDay?.[s.activeDay] || []),
+          },
+        };`);
+
+
+patch(app,
 `      if (docsKey) {
         next = applyShippingDocumentReference(next, {
           day:s.activeDay,
