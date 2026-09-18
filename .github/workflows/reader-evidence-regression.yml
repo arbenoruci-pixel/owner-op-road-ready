@@ -1,0 +1,35 @@
+name: Reader evidence regression
+on:
+  push:
+    branches: [fix/reader-stop-evidence-v110373]
+  pull_request:
+    paths:
+      - 'packages/smart-reader-core/**'
+      - 'scripts/v110373/**'
+      - 'scripts/finalize-reader-evidence-v110373.mjs'
+      - '.github/workflows/reader-evidence-regression.yml'
+permissions:
+  contents: read
+concurrency:
+  group: reader-evidence-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Core reader regression
+        run: node --test packages/smart-reader-core/test/*.test.mjs
+      - name: Capture exact versioned code for reproducing reader regressions
+        if: always()
+        run: git archive --format=tar.gz -o /tmp/reader-versioned-code.tar.gz HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reader-versioned-code
+          path: /tmp/reader-versioned-code.tar.gz
+          retention-days: 1

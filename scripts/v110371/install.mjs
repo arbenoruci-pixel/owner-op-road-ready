@@ -35,7 +35,7 @@ patch(sync,`    for (const row of changes.documents || []) {
 const preview='source/src/modules/scan/OwnedReaderPreview.jsx';
 patch(preview,"import React,{useEffect,useRef,useState} from 'react';", "import React,{useEffect,useRef,useState} from 'react';\nimport {restoreConfirmedReading} from '../../../../packages/smart-reader-core/src/continuity.js';");
 patch(preview,'function ReviewBody({analysis,reviewState,onReviewChange,onReady,signal,onSaveReading})', 'function ReviewBody({analysis,reviewState,onReviewChange,onReady,signal,onSaveReading,previousReadings=[]})');
-patch(preview,'const next=reviewState?.result||reviewScanAnalysis(analysis,{documentId,dimensions});', 'const next=reviewState?.result||previousReadings.reduce((value,previous)=>restoreConfirmedReading(value,previous),reviewScanAnalysis(analysis,{documentId,dimensions}));');
+patch(preview,'const next=reviewState?.result||reviewScanAnalysis(analysis,{documentId,dimensions,originalSources});', 'const next=reviewState?.result||previousReadings.reduce((value,previous)=>restoreConfirmedReading(value,previous),reviewScanAnalysis(analysis,{documentId,dimensions,originalSources}));');
 patch(preview,'    <p>Check uncertain readings against the page.', `    {result.restoredConfirmationCount?<p role="status">{result.restoredConfirmationCount} saved confirmations kept. Review a saved value to change it.</p>:null}
     {result.continuityWarning?<p role="alert">{result.continuityWarning}</p>:null}
     <p>Check uncertain readings against the page.`);

@@ -73,7 +73,10 @@ steps.push('finalize-shipment-carryover-v110367.mjs','test-shipment-carryover-v1
 steps.push('finalize-active-shipment-v110368.mjs','test-active-shipment-v110368.mjs','test-shipment-carryover-v110367.mjs','test-route-authority-v110352.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-fullscreen-reader-v110369.mjs','test-fullscreen-reader-v110369.mjs','test-reader-catalog-v110361.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-route-removal-v110370.mjs','test-route-removal-v110370.mjs','test-route-delete-v110350.mjs','test-logbook-load-cleanup-v110352.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
-steps.push('finalize-document-continuity-v110371.mjs','test-document-continuity-v110371.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-driving-day-v110372.mjs','v110372/test-driving-day.mjs','v110372/test-rendered-driving-day.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-reader-evidence-v110373.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-route-day-scope-v110374.mjs','v110374/test-route-day-scope.mjs','test-active-shipment-v110368.mjs','test-shipment-carryover-v110367.mjs','test-route-authority-v110352.mjs','test-route-removal-v110370.mjs','test-logbook-load-cleanup-v110352.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-document-continuity-v110371.mjs','test-document-continuity-v110371.mjs','test-document-continuity-integration-v110375.mjs','v110373/test-original-page-source.mjs','v110374/test-route-day-scope.mjs','v110372/test-driving-day.mjs','v110372/test-rendered-driving-day.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

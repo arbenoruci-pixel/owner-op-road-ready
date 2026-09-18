@@ -4,10 +4,9 @@ import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
 import {checklistFixture} from './v110321/checklistFixture.mjs';
 const output='browser-test-results/fullscreen-reader-v110369';fs.mkdirSync(output,{recursive:true});
-for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
+async function openFixture(browser,errors){
  const context=await browser.launchPersistentContext('',{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
- const page=await context.newPage();page.setDefaultTimeout(30000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
- try{
+ const page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));
   await setupRoutes(context);await page.clock.setFixedTime(new Date('2026-09-17T18:00:00Z'));
   // Serve the built manifest deterministically while fixtures reload. WebKit
   // can otherwise report the cancelled background poll as an access error.
@@ -29,6 +28,11 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
     return {data:{text:lines.join('\n'),confidence:90,tsv:[header,...rows].join('\n')}};
    }})};
   });
+ return {context,page};
+}
+for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
+ const errors=[];let {context,page}=await openFixture(browser,errors);
+ try{
   const state=baseState(),f=checklistFixture(),current=structuredClone(f.guide),old=structuredClone(f.guide);state.view='logbook';state.activeDay='2026-09-17';
   current.id='current-guide';current.loadNo='24654';current.orderNo='24654';current.origin='Dates Delivery Dates';current.destination='Dates';
   current.stops[0].city='Saugerties';current.stops[0].state='NY';current.stops[1].city='Onalaska';current.stops[1].state='WI';
@@ -37,7 +41,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   state.eventsByDay={'2026-09-16':[{id:'real-pickup',status:'ON',startMin:1000,endMin:1030,reasons:['Pickup / Loading'],source:'manual',shippingDocs:'8494',city:'Saugerties',state:'NY'}]};
   state.routeLegsByDay={'2026-09-16':[{id:'real-leg',loadGroupId:current.id,pickupEventId:'real-pickup',day:'2026-09-16',shippingDocs:'8494',fromCity:'Saugerties',fromState:'NY',toCity:'Incorrect',toState:'WI',status:'open'}]};
   state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
-  const card=page.locator('.adaptive-mission-v1038');
+  let card=page.locator('.adaptive-mission-v1038');
   assert.equal(await card.locator('h1').innerText(),'24654');
   assert.equal(await card.locator('header p').first().innerText(),'Saugerties, NY → Onalaska, WI');
   await card.screenshot({path:`${output}/${name}-current-load.png`});
@@ -46,8 +50,11 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await page.reload();await page.locator('.adaptive-home-v1038').waitFor();
   console.log('PASS '+name+' Home current load, route and Full mission agree');
   state.loadGuidesById={};state.activeLoadGuideId='';state.routeLegsByDay['2026-09-16'][0].toCity='Onalaska';
-  await page.goto(new URL('/_not-found',page.url()).href);
-  await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');request.onsuccess=resolve;request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Fixture database is still open'));});});
+  // Independent scenarios use independent browser stores. Closing the first
+  // context releases every app/worker DB connection, including WebKit's cache.
+  // Reload and saved-reading assertions below still use the same second store.
+  await context.close();({context,page}=await openFixture(browser,errors));
+  card=page.locator('.adaptive-mission-v1038');
   await seed(page,state);assert.equal(await card.locator('h1').innerText(),'8494');
   assert.equal(await card.getByRole('button',{name:'Full mission',exact:true}).count(),0);
   await page.evaluate(()=>{window.open=url=>{window.__reviewNavigation=url;return null;};});
