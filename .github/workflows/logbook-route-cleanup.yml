@@ -12,6 +12,8 @@ on:
       - 'scripts/v110352/**'
       - 'scripts/v110370/**'
       - 'scripts/finalize-route-removal-v110370.mjs'
+      - 'scripts/v110374/**'
+      - 'scripts/finalize-route-day-scope-v110374.mjs'
       - '.github/workflows/logbook-route-cleanup.yml'
 permissions:
   contents: read
@@ -30,6 +32,7 @@ jobs:
         run: node scripts/build-v110.mjs > /tmp/route-cleanup-build.log 2>&1
       - name: Focused data and signature regressions
         run: |
+          node scripts/v110374/test-route-day-scope.mjs
           node scripts/test-logbook-load-cleanup-v110352.mjs
           node scripts/test-route-delete-v110350.mjs
           node scripts/test-route-removal-v110370.mjs
@@ -48,6 +51,7 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          node scripts/v110374/browser-route-day-scope.mjs
           node scripts/browser-active-shipment-v110368.mjs
           node scripts/browser-shipment-carryover-v110367.mjs
           node scripts/browser-route-delete-v110350.mjs
