@@ -38,9 +38,9 @@ const base={
 };
 
 let count=0;
-function test(name,fn){fn();count+=1;console.log('PASS — '+name);}
+async function test(name,fn){await fn();count+=1;console.log('PASS — '+name);}
 
-test('historical Form cannot inherit a global current load',()=>{
+await test('historical Form cannot inherit a global current load',()=>{
   const before=structuredClone(base);
   const form=formSummary(base,base.eventsByDay[day]);
   assert.equal(form.shippingDocs,'None');
@@ -50,7 +50,7 @@ test('historical Form cannot inherit a global current load',()=>{
   assert.deepEqual(base,before);
 });
 
-test('recorded day evidence wins while stale global load stays isolated',()=>{
+await test('recorded day evidence wins while stale global load stays isolated',()=>{
   const state=structuredClone(base);
   state.eventsByDay[day]=[pickup,drive];
   state.routeLegsByDay[day]=[{
@@ -65,23 +65,21 @@ test('recorded day evidence wins while stale global load stays isolated',()=>{
   assert.doesNotMatch(JSON.stringify(form),/Charleston/i);
 });
 
-test('GPS state-only response never promotes a county subdivision to city',()=>{
+await test('GPS state-only response never promotes a county subdivision to city',async()=>{
   // This reproduces the supplied day backup shape: a valid northern-Indiana
   // coordinate must not be paired with an unrelated township/city label.
   const position={coords:{latitude:41.731322192704475,longitude:-85.84835202918877,accuracy:2},timestamp:1};
-  return resolveGpsPosition(position,{fetchImpl:async()=>({
+  const result=await resolveGpsPosition(position,{fetchImpl:async()=>({
     ok:true,
     json:async()=>({city:'',state:'IN',source:'us-census-state-only',localityKind:'county_subdivision',subdivision:'Washington'})
-  })}).then(result=>{
-    assert.equal(result.state,'IN');
-    assert.equal(result.city,'GPS');
-    assert.equal(result.source,'us-census-state-only');
-    assert.notEqual(result.city,'Washington');
-  });
+  })});
+  assert.equal(result.state,'IN');
+  assert.equal(result.city,'GPS');
+  assert.equal(result.source,'us-census-state-only');
+  assert.notEqual(result.city,'Washington');
 });
 
 const originalFetch=globalThis.fetch;
-test('server returns county subdivision as diagnostic only',()=>{});
 globalThis.fetch=async()=>({
   ok:true,
   json:async()=>({result:{geographies:{
@@ -100,7 +98,7 @@ globalThis.fetch=originalFetch;
 console.log('PASS — county subdivision is never returned as city');
 count+=1;
 
-test('generic load metadata save is fenced from RODS writes',()=>{
+await test('generic load metadata save is fenced from RODS writes',()=>{
   const source=fs.readFileSync('source/src/app/App.jsx','utf8');
   const start=source.indexOf('function saveLoadInfo(payload = {})');
   const end=source.indexOf('\n  function saveDayDistance',start);
@@ -113,7 +111,7 @@ test('generic load metadata save is fenced from RODS writes',()=>{
   assert.doesNotMatch(block,/next\.currentLocation\s*=/);
 });
 
-test('paper Form route edits declare exact log-day scope',()=>{
+await test('paper Form route edits declare exact log-day scope',()=>{
   const source=fs.readFileSync('source/src/modules/logbook/DayLogScreen.jsx','utf8');
   assert.match(source,/logDayEdit:true, pickupCity/);
   assert.match(source,/logDayEdit:true, deliveryCity/);
@@ -121,7 +119,7 @@ test('paper Form route edits declare exact log-day scope',()=>{
   assert.match(source,/logDayEdit:true, routeLegsByDay/);
 });
 
-test('GPS provenance survives the Status save',()=>{
+await test('GPS provenance survives the Status save',()=>{
   const source=fs.readFileSync('source/src/modules/status/StatusWorkflowSheet.jsx','utf8');
   assert.match(source,/locationSource: gpsFix \? \(gpsFix\.source \|\| 'gps'\) : 'manual'/);
 });
