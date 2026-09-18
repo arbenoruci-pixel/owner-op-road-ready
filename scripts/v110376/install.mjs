@@ -86,7 +86,7 @@ patch(dayLog,
 
 patch(dayLog,
 `    onSaveLoad?.({ pickupCity: parsed.city, pickupState: parsed.state });`,
-`    onSaveLoad?.({ logDayEdit:true, pickupCity: parsed.city, pickupState: parsed.state });`);
+`    saveLegacySingleRouteField({ fromCity:parsed.city, fromState:parsed.state });`);
 
 patch(dayLog,
 `    const value = window.prompt('Delivery / To location (City, ST)', joinCityState(load.deliveryCity, load.deliveryState) === 'None' ? '' : joinCityState(load.deliveryCity, load.deliveryState));`,
@@ -94,7 +94,7 @@ patch(dayLog,
 
 patch(dayLog,
 `    onSaveLoad?.({ deliveryCity: parsed.city, deliveryState: parsed.state });`,
-`    onSaveLoad?.({ logDayEdit:true, deliveryCity: parsed.city, deliveryState: parsed.state });`);
+`    saveLegacySingleRouteField({ toCity:parsed.city, toState:parsed.state });`);
 
 patch(dayLog,
 `    onSaveLoad?.({ shippingDocs: String(value || '').trim(), loadNo: String(value || '').trim() });`,
