@@ -53,3 +53,11 @@ This change does not implement cloud synchronization of reading corrections. It 
 Preserve the origin/domain and all stored user data. No storage reset, forced refresh, rewritten duty events, new ELD claims or tax calculations. Keep the protected module hashes and existing graph/signing/GPS/coverage behavior. New external integrations require actual provider configuration and permissions.
 
 Before production: exact build, architecture checks, core tests, mobile Chromium/WebKit regression including skip, reopen recovery and saved-original access. Treat physical-iPhone PWA verification as distinct from automated browser tests. Publish only the capabilities verified for the candidate release; this roadmap is not a completion claim.
+
+## Follow-up review correction in the same PR
+
+Cloud metadata pulls now merge matching document records by client/server identity inside a transaction. Local reading results, checkpoint revisions, classification, and existing original availability remain intact. Cross-owner collisions and conflicting known original fingerprints fail explicitly. Previously duplicated local/server rows keep their separate histories; this change does not delete or combine them. Initial successful pulls enrich missing fingerprints without orphaning valid checkpoints.
+
+Original byte-size or SHA-256 verification failures block opening the unverified cloud bytes. Device quota failures keep the cloud original view available with an explicit local-cache warning.
+
+Focused verification adds 11 pull/autosave/owner/conflict tests to the original 21, for 32 local tests. Full CI uses the real repository dependencies. The mobile regression continues to verify Skip on an unresolved date, then retention once that date is explicitly confirmed.

@@ -1,10 +1,12 @@
 import {readSavedReviewRecord, saveRereading} from './savedRereadingV110347.js';
 import {assertConfirmedReadingPreserved} from '../../../../packages/smart-reader-core/src/continuity.js';
 
+import {documentOriginalIdentity} from '../../../../lib/documents/documentPullV110371.js';
+
 const KEY = 'readerContinuityV110371';
 const clone = value => structuredClone(value);
 const version = row => Number.isSafeInteger(row?.extracted?.[KEY]?.revision) ? row.extracted[KEY].revision : 0;
-const originalKey = row => JSON.stringify([row.local_id, row.client_document_id, row.sha256 || '', row.file_size_bytes ?? null, row.mime_type || '']);
+const originalKey = documentOriginalIdentity;
 const savedKey = row => JSON.stringify(row?.extracted?.readerReviewV110345 ?? null);
 
 function validateSummary(summary) {

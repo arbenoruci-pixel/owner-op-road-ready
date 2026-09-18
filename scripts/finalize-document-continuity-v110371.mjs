@@ -1,6 +1,10 @@
 import './v110371/install.mjs';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+const pullTests=spawnSync(process.execPath,['scripts/test-document-pull-v110371.mjs'],{stdio:'inherit'});
+if(pullTests.error)throw pullTests.error;
+assert.equal(pullTests.status,0,'Document metadata pull regression tests must pass');
 const VERSION='110.3.71',BUILD='v110371-document-continuity';
 const read=path=>fs.readFileSync(path,'utf8');
 for(const path of ['release-version.json','public/app-version.json']) {

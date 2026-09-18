@@ -11,6 +11,27 @@ const owner='source/src/modules/owneros/';
 for(const [from,to] of [['readingState.js','readingStateV110371.js'],['offlineOriginal.js','offlineOriginalV110371.js'],['SavedDocumentReread.jsx','SavedDocumentRereadV110347.jsx']]) {
   fs.copyFileSync('scripts/v110371/'+from,owner+to);
 }
+fs.mkdirSync('lib/documents',{recursive:true});
+fs.copyFileSync('scripts/v110371/documentPull.js','lib/documents/documentPullV110371.js');
+const sync='lib/sync/clientSync.js';
+patch(sync,"'use client';","'use client';\nimport {upsertPulledDocuments} from '../documents/documentPullV110371.js';");
+patch(sync,`    for (const row of changes.documents || []) {
+      await db.documents_local.put({
+        local_id: row.client_document_id || row.id,
+        server_id: row.id,
+        client_document_id: row.client_document_id,
+        driver_id: row.driver_id,
+        type: row.type,
+        status: row.status,
+        original_file_name: row.original_file_name,
+        mime_type: row.mime_type,
+        file_size_bytes: row.file_size_bytes,
+        storage_path: row.storage_path,
+        expires_on: row.expires_on,
+        created_at: row.created_at,
+        sync_state: 'synced'
+      });
+    }`, '    await upsertPulledDocuments(db, changes.documents || []);');
 const preview='source/src/modules/scan/OwnedReaderPreview.jsx';
 patch(preview,"import React,{useEffect,useRef,useState} from 'react';", "import React,{useEffect,useRef,useState} from 'react';\nimport {restoreConfirmedReading} from '../../../../packages/smart-reader-core/src/continuity.js';");
 patch(preview,'function ReviewBody({analysis,reviewState,onReviewChange,onReady,signal,onSaveReading})', 'function ReviewBody({analysis,reviewState,onReviewChange,onReady,signal,onSaveReading,previousReadings=[]})');
@@ -37,8 +58,10 @@ patch(files,"          blob = await response.blob(); source = 'cloud';\n        
             source='device'; setOfflineNotice('Cloud original kept on this device for offline access.');
           } catch (failure) {
             if (!active) return;
+            if(failure?.code==='original_integrity_failed')throw failure;
             setOfflineNotice('Opened from cloud; offline copy was not saved. '+(failure.message||'Try again later.'));
           }`);
+patch(files,"      } catch { if (active) setError('Could not open the saved file. Try again.'); }", "      } catch (failure) { if (active) setError(failure?.code==='original_integrity_failed'?failure.message:'Could not open the saved file. Try again.'); }");
 patch(files,'    {current ? <>\n      <p>{current.source', '    {offlineNotice?<p role="status">{offlineNotice}</p>:null}\n    {current ? <>\n      <p>{current.source');
 const css=owner+'savedDocumentFilesV110344.css';
 const styles='\n/* DOCUMENT_CONTINUITY_V110371 */\n.reader-retained-v371{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0}.reader-retained-v371 small{flex-basis:100%}.reader-retained-v371 button{min-height:44px}.reader-local-status-v371{font-size:.86rem;line-height:1.5}\n';
@@ -54,7 +77,7 @@ patch(browser,"  await dialog.getByLabel('Confirmed value',{exact:true}).fill('2
   await dialog.getByRole('heading',{name:'Document date · Page 1',exact:true}).waitFor();
   await dialog.getByLabel('Confirmed value',{exact:true}).fill('2026-09-07');`);
 patch(browser,"  await reread.getByRole('button',{name:'Fix next reading',exact:true}).click();", "  await reread.getByRole('button',{name:'Review saved VIN',exact:true}).click();");
-patch(browser,"  await dialog.getByRole('button',{name:'Skip for now',exact:true}).click();\n  await dialog.getByRole('heading',{name:'Save this reading',exact:true}).waitFor();", "  await dialog.getByRole('heading',{name:'Save this reading',exact:true}).waitFor();");
+patch(browser,"  await dialog.getByRole('button',{name:'Skip for now',exact:true}).click();\n  await dialog.getByRole('heading',{name:'Save this reading',exact:true}).waitFor();", "  // A confirmed date is retained; there is no extra unchecked date to skip.\n  await dialog.getByRole('heading',{name:'Save this reading',exact:true}).waitFor();");
 patch(browser,"  await dialog.getByRole('button',{name:'Save reading',exact:true}).click();", `  await reread.getByText('Confirmed changes saved on this device.',{exact:true}).waitFor();
   await dialog.getByRole('button',{name:'Return to document',exact:true}).click();
   await reread.getByRole('button',{name:'Cancel reading',exact:true}).click();
