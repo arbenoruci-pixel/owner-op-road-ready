@@ -25,9 +25,9 @@ patch("const documentId=reviewState?.result?.documentId||`review-${crypto.random
 patch('      const next=reviewState?.result||reviewScanAnalysis(analysis,{documentId,dimensions});', `      for(const {pageNumber,file}of retainedReviewPageSources(analysis)){
         if(active.current!==generation)return;
         const pageId=\`page-\${pageNumber}\`,prefix=\`\${documentId}:\${pageId}:\`;
-        if(!(file instanceof Blob)||Object.keys(files).some(id=>id.startsWith(prefix)))continue;
+        if(!(file instanceof Blob))continue;
         const id=prefix+'original';
-        try{await loadImage(file);files[id]=file;originalSources[pageId]=id;}catch{/* Keep text review available when its original cannot be opened. */}
+        try{if(!Object.values(files).includes(file))await loadImage(file);files[id]=file;originalSources[pageId]=id;}catch{/* Keep text review available when its original cannot be opened. */}
       }
       if(active.current!==generation)return;
       const next=reviewState?.result||reviewScanAnalysis(analysis,{documentId,dimensions,originalSources});`);
@@ -35,9 +35,13 @@ const adapter='source/src/modules/scan/ownedReaderAdapter.js';
 let adapterSource=fs.readFileSync(adapter,'utf8');
 for(const [before,after] of [
   ["{documentId='scan-review',dimensions={}}={}","{documentId='scan-review',dimensions={},originalSources={}}={}"],
-  ["observations.push(textObservation(text,{source:analysis.nativeText?'pdf-text-layer':'existing-document-text'}));",`observations.push(textObservation(text,{source:analysis.nativeText?'pdf-text-layer':'existing-document-text'}));
-      const originalId=originalSources[id];
-      if(typeof originalId==='string'&&originalId===\`\${documentId}:\${id}:original\`)observations[0].sourceImageId=originalId;`]
+  ["    return {id,number,observations};",`    const originalId=originalSources[id];
+    if(typeof originalId==='string'&&originalId===\`\${documentId}:\${id}:original\`){
+      // A retained page supports full-page manual review of unpositioned text.
+      // Existing exact OCR-image identities and all geometry remain unchanged.
+      for(const observation of observations)if(!observation.sourceImageId&&observation.lines.every(line=>!line.box))observation.sourceImageId=originalId;
+    }
+    return {id,number,observations};`]
 ]){
   if(adapterSource.includes(after))continue;
   assert.equal(adapterSource.split(before).length-1,1,'Original page source adapter anchor');

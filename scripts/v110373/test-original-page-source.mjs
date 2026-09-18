@@ -21,7 +21,7 @@ const unavailable=reviewScanAnalysis(analysis,{documentId});
 assert.equal(unavailable.pages[1].observations[0].sourceImageId,null,'missing original stays unavailable');
 const ocr={...analysis,ocrEvidenceV110323:[{id:'variant',page:2,text,source:'existing-phone-ocr',lines:[{text:'Document Ref: SYNTHETIC-AB012',left:10,top:10,width:100,height:12,confidence:99}]}]};
 const unbound=inputFromScanAnalysis(ocr,{documentId,originalSources:{'page-2':originalId}});
-assert.equal(unbound.pages[1].observations[0].sourceImageId,undefined,'unrelated original never binds a known OCR variant');
+assert.equal(unbound.pages[1].observations[0].sourceImageId,originalId,'unpositioned OCR text can open its same-page retained original for manual review');
 assert.ok(unbound.pages[1].observations[0].lines.every(l=>!l.box));
 const bound=inputFromScanAnalysis(ocr,{documentId,originalSources:{'page-2':originalId},dimensions:{'page-2:variant':{width:200,height:200}}});
 assert.equal(bound.pages[1].observations[0].sourceImageId,documentId+':page-2:variant');
@@ -40,3 +40,17 @@ assert.equal(retainedReviewPageSources({scanMeta:{pageFiles:[processed],captureA
 assert.deepEqual(retainedReviewPageSources({scanMeta:{captureAssets:[{pageIndex:1,kind:'perspective-corrected',file:second}]}}),[{pageNumber:2,file:second}],'asset-only sparse pages retain their explicit index');
 assert.deepEqual(retainedReviewPageSources(null),[]);
 console.log('PASS — retained photo originals take priority, with per-page fallback and unchanged OCR derivatives');
+
+const photographed=reviewScanAnalysis(ocr,{documentId,originalSources:{'page-2':originalId}});
+for(const evidence of photographed.documents.find(d=>d.kind==='signature_page').fields.documentReference.candidates[0].evidence){
+ assert.equal(evidence.sourceImageId,originalId);assert.equal(evidence.box,null);assert.equal(evidence.source,'existing-phone-ocr');
+ resolveEvidence(photographed,evidence);
+}
+const mixed={...ocr,ocrEvidenceV110323:[...ocr.ocrEvidenceV110323,{...ocr.ocrEvidenceV110323[0],id:'unpositioned-retry'}]};
+const mixedInput=inputFromScanAnalysis(mixed,{documentId,originalSources:{'page-2':originalId},dimensions:{'page-2:variant':{width:200,height:200}}});
+assert.equal(mixedInput.pages[1].observations[0].sourceImageId,documentId+':page-2:variant');
+assert.ok(mixedInput.pages[1].observations[0].lines[0].box);
+assert.equal(mixedInput.pages[1].observations[1].sourceImageId,originalId);
+assert.ok(mixedInput.pages[1].observations[1].lines.every(line=>!line.box));
+assert.equal(inputFromScanAnalysis(ocr,{documentId,originalSources:{'page-2':'other:page-2:original'}}).pages[1].observations[0].sourceImageId,undefined);
+console.log('PASS — populated photographed OCR observations open their retained page without inherited coordinates; mixed exact-image sources stay distinct');
