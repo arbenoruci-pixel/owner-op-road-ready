@@ -6,9 +6,13 @@ on:
     paths:
       - 'scripts/v110372/**'
       - 'scripts/finalize-driving-day-v110372.mjs'
+      - 'scripts/build-v110.mjs'
       - '.github/workflows/driving-day-continuity.yml'
 permissions:
   contents: read
+concurrency:
+  group: driving-day-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   driving-continuity:
     runs-on: ubuntu-latest
@@ -20,7 +24,30 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Build exact application
+      - name: Build exact application and regression contracts
         run: node scripts/build-v110.mjs > /tmp/driving-day-build.log 2>&1 || { tail -n 100 /tmp/driving-day-build.log; exit 1; }
-      - name: Inspect materialized driving projection
-        run: node scripts/v110372/inspect-baseline.mjs
+      - name: Show focused regression results
+        run: node scripts/v110372/test-driving-day.mjs && node scripts/v110372/test-rendered-driving-day.mjs && npm run verify:architecture
+      - name: Install isolated browser tests
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Origin day, explicit End and unrelated Driving in mobile browsers
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/driving-day-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/v110372/browser-driving-day.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: driving-day-continuity-evidence
+          path: |
+            browser-test-results/driving-day-v110372/
+            /tmp/driving-day-build.log
+            /tmp/driving-day-server.log
+          retention-days: 7
