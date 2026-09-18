@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {chromium,webkit} from 'playwright';
-import {graphX,graphY} from '../../source/src/modules/graph/graphGeometryV110.js';
+import {traceGeometry} from '../../source/src/modules/graph/graphGeometryV110.js';
 const origin=process.env.TEST_ORIGIN||'http://127.0.0.1:3000';
 const output='browser-test-results/driving-day-v110372';fs.mkdirSync(output,{recursive:true});
 const schemas=Object.assign({},...[...fs.readFileSync('lib/local-db/dexie.js','utf8').matchAll(/\.stores\((\{[\s\S]*?\})\)/g)].map(m=>vm.runInNewContext('('+m[1]+')')));
@@ -46,7 +46,7 @@ async function setup(page,context,state) {
  await page.goto(origin);await openLog(page);
 }
 async function assertEnd(page,end) {
- const expected=`M ${graphX(1325)} ${graphY('D')} H ${graphX(end)}`;
+ const expected=traceGeometry(fixture('linked').eventsByDay[day].map(e=>e.id==='drive'?{...e,endMin:end}:e)).segments.find(s=>s.event.id==='drive').path;
  const paths=await page.locator('.logbook-ui-v110 .log-graph-v110 .duty-trace-v110').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('d')));
  assert.ok(paths.includes(expected),'Driving endpoint '+end+': '+JSON.stringify(paths));
 }
