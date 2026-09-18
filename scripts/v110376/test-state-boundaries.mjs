@@ -105,6 +105,8 @@ await test('generic load metadata save is fenced from RODS writes',()=>{
   assert.ok(start>=0&&end>start);
   const block=source.slice(start,end);
   assert.match(block,/logDayEdit = false/);
+  assert.match(block,/logEditOwnsCurrentLoad/);
+  assert.match(block,/updateGlobalLoadCache/);
   assert.match(block,/docsKey && logDayEdit/);
   assert.match(block,/syncLinkedRouteDetails && logDayEdit/);
   assert.match(block,/changesCertifiedRouteOrDocs = logDayEdit &&/);
@@ -113,8 +115,9 @@ await test('generic load metadata save is fenced from RODS writes',()=>{
 
 await test('paper Form route edits declare exact log-day scope',()=>{
   const source=fs.readFileSync('source/src/modules/logbook/DayLogScreen.jsx','utf8');
-  assert.match(source,/logDayEdit:true, pickupCity/);
-  assert.match(source,/logDayEdit:true, deliveryCity/);
+  assert.match(source,/function saveLegacySingleRouteField/);
+  assert.match(source,/saveLegacySingleRouteField\(\{ fromCity:parsed\.city, fromState:parsed\.state \}\)/);
+  assert.match(source,/saveLegacySingleRouteField\(\{ toCity:parsed\.city, toState:parsed\.state \}\)/);
   assert.match(source,/logDayEdit:true, shippingDocs/);
   assert.match(source,/logDayEdit:true, routeLegsByDay/);
 });
