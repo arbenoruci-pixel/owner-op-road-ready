@@ -10,6 +10,13 @@ function patch(path, before, after) {
   assert.equal(source.split(before).length - 1, 1, `v110.3.76 anchor mismatch: ${path}`);
   write(path, source.replace(before, after));
 }
+function patchAll(path, before, after, expectedCount) {
+  const source = read(path);
+  const found = source.split(before).length - 1;
+  if (found === 0 && source.includes(after)) return;
+  assert.equal(found, expectedCount, `v110.3.76 repeated anchor mismatch: ${path}`);
+  write(path, source.replaceAll(before, after));
+}
 
 const dayLog = 'source/src/modules/logbook/DayLogScreen.jsx';
 patch(dayLog,
@@ -59,9 +66,9 @@ patch(dayLog,
 `    onSaveLoad?.({ shippingDocs: String(value || '').trim(), loadNo: String(value || '').trim() });`,
 `    onSaveLoad?.({ logDayEdit:true, shippingDocs: String(value || '').trim(), loadNo: String(value || '').trim() });`);
 
-patch(dayLog,
+patchAll(dayLog,
 `    onSaveLoad?.({ routeLegsByDay, syncLinkedRouteDetails:true });`,
-`    onSaveLoad?.({ logDayEdit:true, routeLegsByDay, syncLinkedRouteDetails:true });`);
+`    onSaveLoad?.({ logDayEdit:true, routeLegsByDay, syncLinkedRouteDetails:true });`, 2);
 
 patch(dayLog,
 `    onSaveLoad?.({ routeLegsByDay });`,
