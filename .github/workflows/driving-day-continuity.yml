@@ -1,0 +1,26 @@
+name: Driving day continuity
+on:
+  push:
+    branches: [fix/driving-day-continuity-v110372]
+  pull_request:
+    paths:
+      - 'scripts/v110372/**'
+      - 'scripts/finalize-driving-day-v110372.mjs'
+      - '.github/workflows/driving-day-continuity.yml'
+permissions:
+  contents: read
+jobs:
+  driving-continuity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build exact application
+        run: node scripts/build-v110.mjs > /tmp/driving-day-build.log 2>&1 || { tail -n 100 /tmp/driving-day-build.log; exit 1; }
+      - name: Inspect materialized driving projection
+        run: node scripts/v110372/inspect-baseline.mjs
