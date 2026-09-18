@@ -35,3 +35,23 @@ test('unrelated identifiers and conflicting primary anchors have no similarity-b
  input.pages[0].observations.push(textObservation('Document Ref: SYNTHETIC-AB012',{id:'conflicting-reference'}));
  assert.deepEqual(referenceDiscrepancies(readDocument(input)),[]);
 });
+
+
+test('lowercase and mixed-case O/0 references queue a warning without changing source strings',()=>{
+ for(const [expected,value]of [['synthetic-abo12','synthetic-ab012'],['Synthetic-AbO12','synthetic-ab012'],['synthetic-ab012','SYNTHETIC-ABo12']]){
+  const input=rateInput(rateText.replace('SYNTHETIC-REFERENCE',expected));
+  input.pages.push({id:'signature',observations:[textObservation('SIGNATURE PAGE\nDocument Ref: '+value)]});
+  const result=readDocument(input),before=JSON.stringify(result),warnings=referenceDiscrepancies(result);
+  assert.equal(warnings.length,1);assert.equal(warnings[0].value,value);assert.equal(warnings[0].expected,expected);
+  assert.ok(reviewQueue(result).some(q=>q.groupId==='document-2'&&q.key==='documentReference'));
+  for(const e of [...warnings[0].primaryEvidence,...warnings[0].supportingEvidence])resolveEvidence(result,e);
+  assert.equal(JSON.stringify(result),before);
+ }
+});
+test('case-only reference differences do not fabricate an O/0 warning',()=>{
+ const input=rateInput(rateText.replace('SYNTHETIC-REFERENCE','synthetic-abo12'));
+ input.pages.push({id:'signature',observations:[textObservation('SIGNATURE PAGE\nDocument Ref: SYNTHETIC-ABO12')]});
+ const result=readDocument(input);
+ assert.deepEqual(referenceDiscrepancies(result),[]);
+ assert.equal(result.documents[1].fields.documentReference.value,'SYNTHETIC-ABO12');
+});

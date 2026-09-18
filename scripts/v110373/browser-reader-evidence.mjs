@@ -53,7 +53,14 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
   await dialog.getByText('Address continuation:',{exact:false}).waitFor();
   assert.equal(await dialog.getByLabel('Confirmed value',{exact:true}).inputValue(),'123 EXAMPLE RD, ALBANY NY 12207');
   await dialog.screenshot({path:`${output}/${name}-address-source.png`});await dialog.getByRole('button',{name:'Close source',exact:true}).click();
-  await review.getByRole('button',{name:'Check document reference',exact:true}).click();await dialog.getByLabel('Source line highlight',{exact:true}).waitFor();
+  await review.getByRole('button',{name:'Check document reference',exact:true}).click();
+  const signatureImage=dialog.getByRole('img',{name:'Source image for page 2',exact:true});await signatureImage.waitFor();await signatureImage.evaluate(image=>image.decode());
+  assert.ok(await signatureImage.evaluate(image=>image.complete&&image.naturalWidth>0),'sparse signature page retains its source image');
+  const signatureEvidence=result.documents[1].fields.documentReference.candidates[0].evidence[0];
+  assert.ok(signatureEvidence.sourceImageId,'fallback evidence has its source identity before extraction');
+  if(signatureEvidence.box)await dialog.getByLabel('Source line highlight',{exact:true}).waitFor();
+  else assert.equal(await dialog.getByLabel('Source line highlight',{exact:true}).count(),0,'unpositioned text never receives a fabricated highlight');
+  await dialog.screenshot({path:`${output}/${name}-signature-source.png`});
   assert.equal(await dialog.getByLabel('Confirmed value',{exact:true}).inputValue(),'SYNTHETIC-AB012');
   await dialog.getByLabel('Confirmed value',{exact:true}).fill('SYNTHETIC-ABO12');await dialog.getByRole('button',{name:'Confirm value',exact:true}).click();
   assert.equal(await review.locator('.reader-reference-warning-v373').count(),0);

@@ -1,6 +1,11 @@
 import {evidenceFor} from './input.js';
 const reference=/^\s*DOCUMENT REF(?:ERENCE)?\s*:\s*([A-Z0-9][A-Z0-9-]{7,})(?=\s|$)/id;
-const visuallySimilar=(a,b)=>a!==b&&a.length===b.length&&a.replace(/[O0]/g,'0')===b.replace(/[O0]/g,'0');
+const visuallySimilar=(a,b)=>{
+  // Fold case only for the comparison. Keep the source strings and evidence
+  // unchanged, and never label a case-only difference as an O/0 discrepancy.
+  const left=a.toUpperCase(),right=b.toUpperCase();
+  return left!==right&&left.length===right.length&&left.replace(/[O0]/g,'0')===right.replace(/[O0]/g,'0');
+};
 
 // This is a warning, never an envelope merge or an OCR character replacement.
 // Compare only a single primary RateCon's explicit reference with supporting

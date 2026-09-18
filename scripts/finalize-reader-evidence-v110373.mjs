@@ -1,6 +1,10 @@
 import './v110373/install.mjs';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+const sources=spawnSync(process.execPath,['scripts/v110373/test-original-page-source.mjs'],{stdio:'inherit'});
+if(sources.error)throw sources.error;
+assert.equal(sources.status,0,'Retained original source evidence must resolve before publication');
 const VERSION='110.3.73',BUILD='v110373-reader-stop-evidence';
 const read=path=>fs.readFileSync(path,'utf8');
 function patch(path,before,after){const source=read(path);if(source.includes(after))return;assert.equal(source.split(before).length-1,1,'Release anchor '+path);fs.writeFileSync(path,source.replace(before,after));}

@@ -21,3 +21,22 @@ test('absent extra operational details are explicitly empty and hidden by the op
  const f=readDocument(rateInput()).documents[0].fields;
  for(const k of ['vin','podRequirement','detentionTerms','billingEmail']){assert.equal(f[k].status,'missing');assert.equal(f[k].value,null);assert.equal(f[k].displayWhenFound,true);}
 });
+
+
+test('standard detention label punctuation preserves each exact source clause',()=>{
+ for(const label of ['Detention:', 'DETENTION -', 'Detention –', 'Detention —', 'Detention']){
+  const clause=label+' $25/hr Applicable after 3 free hours.';
+  const result=readDocument(rateInput(rateText+'\n'+clause)),field=result.documents[0].fields.detentionTerms;
+  assert.equal(field.status,'supported',label);assert.equal(field.value,clause);
+  assert.equal(field.candidates[0].rawValue,clause);
+  for(const e of field.candidates[0].evidence)assert.equal(resolveEvidence(result,e).line.text.slice(e.start,e.end),clause);
+ }
+ const unrelated=readDocument(rateInput(rateText+'\nDetentionless $25/hr')).documents[0].fields.detentionTerms;
+ assert.equal(unrelated.status,'missing');
+});
+test('punctuated detention amounts that disagree remain unresolved',()=>{
+ const input=rateInput(rateText+'\nDetention: $25/hr after 3 hours.');
+ input.pages[0].observations.push(textObservation('DETENTION - $50/hr after 3 hours.',{id:'other-detention'}));
+ const field=readDocument(input).documents[0].fields.detentionTerms;
+ assert.equal(field.value,null);assert.ok(field.issues.includes('conflicting_reads'));
+});

@@ -127,7 +127,7 @@ export const rateConfirmationProfile={
     lateFeeTerms:{label:'Late-fee clause',kind:'text',required:false,displayWhenFound:true,
       pattern:/^\s*((?:[$€£]\s*\d[\d.,]*\s+PER\s+DAY\s+LATE\s+FEE|LATE\s+FEE)\b.*?)\s*$/id},
     detentionTerms:{label:'Detention clause',kind:'text',required:false,displayWhenFound:true,
-      pattern:/^\s*(DETENTION\s+[$€£]\s*\d.*?)\s*$/id},
+      pattern:/^\s*(DETENTION\b\s*[:\-–—]?\s*[$€£]\s*\d.*?)\s*$/id},
     billingEmail:{label:'Invoice recipient (from document)',kind:'text',required:false,displayWhenFound:true,
       pattern:/^\s*SEND\s+INVOICE\s+TO\s+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\s*$/id},
     pickupAddress:{label:'Pickup address',kind:'text',required:true,rateSection:'pickup',ratePart:'address'},
