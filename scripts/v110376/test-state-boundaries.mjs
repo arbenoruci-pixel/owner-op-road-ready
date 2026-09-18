@@ -109,6 +109,8 @@ await test('generic load metadata save is fenced from RODS writes',()=>{
   assert.match(block,/updateGlobalLoadCache/);
   assert.match(block,/docsKey && logDayEdit/);
   assert.match(block,/syncLinkedRouteDetails && logDayEdit/);
+  assert.match(block,/const reconciledEvents = applyRouteLegDetailsToLinkedEvents/);
+  assert.match(block,/\[s\.activeDay\]:reconciledEvents\[s\.activeDay\]/);
   assert.match(block,/changesCertifiedRouteOrDocs = logDayEdit &&/);
   assert.doesNotMatch(block,/next\.currentLocation\s*=/);
 });
