@@ -83,6 +83,24 @@ patch(app,
         logDayEdit = false,`);
 
 patch(app,
+`      let next = {
+        ...s,
+        loadInfo: { ...(s.loadInfo || {}), ...loadInfoPayload },
+        ...(payloadRouteLegsByDay ? { routeLegsByDay: payloadRouteLegsByDay } : {}),
+      };`,
+`      const selectedDayEventIds = new Set((s.eventsByDay?.[s.activeDay] || []).map(event => event?.id).filter(Boolean));
+      const logEditOwnsCurrentLoad = logDayEdit && (
+        s.loadInfo?.sourceEventDay === s.activeDay
+        || (!!s.loadInfo?.sourceEventId && selectedDayEventIds.has(s.loadInfo.sourceEventId))
+      );
+      const updateGlobalLoadCache = !logDayEdit || logEditOwnsCurrentLoad;
+      let next = {
+        ...s,
+        loadInfo: updateGlobalLoadCache ? { ...(s.loadInfo || {}), ...loadInfoPayload } : (s.loadInfo || {}),
+        ...(payloadRouteLegsByDay ? { routeLegsByDay: payloadRouteLegsByDay } : {}),
+      };`);
+
+patch(app,
 `      if (payloadRouteLegsByDay && syncLinkedRouteDetails) {`,
 `      // Only an explicit paper-Form edit may write load/route details back
       // into a recorded log day. Scanner, Reader, Home and business-load saves
@@ -103,6 +121,7 @@ patch(app,
           value:docsValue,
           allowEmpty:true,
         });
+        if (!updateGlobalLoadCache) next = { ...next, loadInfo:s.loadInfo || {} };
       } else if (docsKey) {
         // Preserve current-load metadata without touching any duty event,
         // route history, signature, certification or selected historical day.
@@ -137,6 +156,12 @@ patch(app,
         'pickupCity','pickupState','deliveryCity','deliveryState'
       ].some(key => Object.prototype.hasOwnProperty.call(payload || {}, key)));
       return changesCertifiedRouteOrDocs ? markDayRecert(next, s.activeDay) : next;`);
+
+patch(app,
+`      next = normalizeLoadInfoFromRouteLegs(next);
+      if (payload.driverName !== undefined) {`,
+`      if (updateGlobalLoadCache) next = normalizeLoadInfoFromRouteLegs(next);
+      if (payload.driverName !== undefined) {`);
 
 const status = 'source/src/modules/status/StatusWorkflowSheet.jsx';
 patch(status,
