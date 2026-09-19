@@ -6,6 +6,8 @@ on:
       - 'scripts/v110378/**'
       - 'scripts/v110379/**'
       - 'scripts/v110380/**'
+      - 'scripts/v110381/**'
+      - 'scripts/finalize-compact-on-duty-v110381.mjs'
       - 'scripts/finalize-on-duty-intervals-v110380.mjs'
       - 'scripts/finalize-ongoing-on-duty-v110379.mjs'
       - 'scripts/finalize-unified-duty-v110378.mjs'

@@ -7,6 +7,7 @@ const prefix='scripts/v110378/';
 const packs=['ui-edits','integrity-edits','tests-edits','new-core','new-components','new-activities','new-style'];
 // Exact outputs of the following mobile/interaction stages; arbitrary edits still fail.
 const completedHashes={
+  "scripts/browser-insert-interaction-v110316.mjs": "c803ae52cd0a50214b98e8160267f705b7e223ccc02d5e1558ed544066175d6a",
   "source/src/modules/status/StatusWorkflowSheet.jsx": "4763b5135673a99bfa6666464d5478627b0248d6439eac32659ec466048f6403",
   "source/src/shared/duty/DutyForm.jsx": "f685f85503672acc18a8d7bbca2fa5a4757171c8f8fc96f486b1ce129579266a",
   "source/src/modules/editor/EditEventSheet.jsx": "8e918d372a82485c550118b14a301f784031496509dfb7e236bdf4a20eb9a787",

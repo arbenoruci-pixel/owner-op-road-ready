@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+const hash=value=>createHash('sha256').update(value).digest('hex');
+const patch=JSON.parse(fs.readFileSync('scripts/v110381/event-list.json','utf8'));
+assert.equal(patch.path,'source/src/modules/logbook/EventList.jsx');
+const source=fs.readFileSync(patch.path,'utf8');assert.ok([patch.before,patch.after].includes(hash(source)),'Unexpected EventList baseline');assert.equal(hash(patch.text),patch.after);
+const helper='source/src/modules/logbook/onDutySummaryV110381.js',text=fs.readFileSync('scripts/v110381/summary.js','utf8');
+if(fs.existsSync(helper))assert.equal(hash(fs.readFileSync(helper,'utf8')),hash(text),'Unexpected interval helper edit');
+const testPatch=JSON.parse(fs.readFileSync('scripts/v110381/insert-test-patch.json','utf8'));
+assert.equal(testPatch.path,'scripts/browser-insert-interaction-v110316.mjs');assert.equal(hash(testPatch.text),testPatch.after);assert.ok([testPatch.before,testPatch.after].includes(hash(fs.readFileSync(testPatch.path,'utf8'))),'Unexpected insert test baseline');
+fs.writeFileSync(testPatch.path,testPatch.text);
+fs.writeFileSync(patch.path,patch.text);fs.writeFileSync(helper,text);
+console.log('PASS — continuous ON-duty presentation installed; source events stay individually editable');

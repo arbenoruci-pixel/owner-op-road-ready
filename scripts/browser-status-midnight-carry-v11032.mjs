@@ -42,6 +42,7 @@ for(const [name,type] of types) {
    await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
    const rows=page.locator('.events.clean-events .clean-event-row');
    const graph=page.locator('.logbook-ui-v110 .log-graph-v110');
+   if(previousStatus==='ON')await page.locator('.on-duty-details-v110381 > summary').click();
    await page.waitForFunction(()=>document.querySelector('.events.clean-events')?.innerText.includes('15m'));
    const before=await stored(page);
    assert.equal(before.eventsByDay[today].length,1,'only the real status change is persisted');
@@ -74,7 +75,9 @@ for(const [name,type] of types) {
     assert.equal(totals[['OFF','SB','D','ON'].indexOf(previousStatus)],((850+(previousStatus==='ON'?15:0))/60).toFixed(2));
     await page.locator('.logcheck-summary').click();
     assert.doesNotMatch(await page.locator('.logcheck-compact').innerText(),/Missing coverage|start of day missing/i);
-    await page.reload();await graph.waitFor();await rows.last().waitFor();
+    await page.reload();await graph.waitFor();
+    if(previousStatus==='ON')await page.locator('.on-duty-details-v110381 > summary').click();
+    await rows.last().waitFor();
     assert.equal(await graph.locator('.graph-discontinuity').count(),0);
     assert.equal(await rows.count(),2);
     const after=await stored(page);

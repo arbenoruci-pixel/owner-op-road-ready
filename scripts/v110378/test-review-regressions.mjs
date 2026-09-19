@@ -62,7 +62,7 @@ test('repeating all duty installation stages leaves the final runtime byte-ident
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('unknown downstream edits still fail exact validation before any file is written',()=>{
-  for(const file of ['source/src/shared/duty/dutyForm.css','source/src/modules/editor/EditEventSheet.jsx','source/src/modules/logbook/DayLogScreen.jsx']){
+  for(const file of ['scripts/browser-insert-interaction-v110316.mjs','source/src/shared/duty/dutyForm.css','source/src/modules/editor/EditEventSheet.jsx','source/src/modules/logbook/DayLogScreen.jsx']){
     const dir=fixture();
     try{
       fs.appendFileSync(path.join(dir,file),'\n/* unrecognized edit */\n');
