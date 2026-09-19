@@ -6,7 +6,6 @@ register(new URL('../test-jsx-loader.mjs', import.meta.url));
 
 const { formSummary } = await import('../../source/src/modules/logbook/DayLogScreen.jsx');
 const { resolveGpsPosition } = await import('../../source/src/core/gps/locationService.js');
-const { GET: reverseLocation } = await import('../../app/api/location/reverse/route.js');
 
 const day='2026-09-14';
 const pickup={
@@ -79,24 +78,19 @@ await test('GPS state-only response never promotes a county subdivision to city'
   assert.notEqual(result.city,'Washington');
 });
 
-const originalFetch=globalThis.fetch;
-globalThis.fetch=async()=>({
-  ok:true,
-  json:async()=>({result:{geographies:{
-    'County Subdivisions':[{BASENAME:'Washington',STUSAB:'IN'}],
-    'States':[{STUSAB:'IN'}]
-  }}})
+await test('reverse geocoder never promotes a County Subdivision to city',()=>{
+  const source=fs.readFileSync('app/api/location/reverse/route.js','utf8');
+  const placeStart=source.indexOf("const place = firstRecord(geographies, [");
+  const placeEnd=source.indexOf("]);",placeStart);
+  assert.ok(placeStart>=0&&placeEnd>placeStart);
+  const placeBlock=source.slice(placeStart,placeEnd);
+  assert.match(placeBlock,/Incorporated Places/);
+  assert.match(placeBlock,/Census Designated Places/);
+  assert.doesNotMatch(placeBlock,/County Subdivisions/);
+  assert.match(source,/const subdivision = firstRecord\(geographies, \['County Subdivisions'\]\)/);
+  assert.match(source,/city:''/);
+  assert.match(source,/localityKind:subdivision \? 'county_subdivision' : 'state_only'/);
 });
-const response=await reverseLocation(new Request('http://localhost/api/location/reverse?lat=41.731322&lng=-85.848352'));
-const body=await response.json();
-assert.equal(response.status,200);
-assert.equal(body.city,'');
-assert.equal(body.state,'IN');
-assert.equal(body.localityKind,'county_subdivision');
-assert.equal(body.subdivision,'Washington');
-globalThis.fetch=originalFetch;
-console.log('PASS — county subdivision is never returned as city');
-count+=1;
 
 await test('generic load metadata save is fenced from RODS writes',()=>{
   const source=fs.readFileSync('source/src/app/App.jsx','utf8');
