@@ -54,7 +54,17 @@ for(const [name,type] of types) {
     console.log('REPRODUCED — '+previousStatus+' midnight carry disappears after real Save ON');
    } else {
     assert.equal(gaps,0);assert.equal(await rows.count(),2);
-    assert.equal(await rows.first().locator('.event-badge').innerText(),previousStatus);
+    if(previousStatus==='ON') {
+     const interval=page.locator('.on-duty-interval-v110380');
+     assert.equal(await interval.count(),1,'continued ON and real ON share one interval');
+     assert.equal(await interval.locator('.event-badge').count(),1);
+     assert.equal(await interval.locator('.event-badge').innerText(),'ON');
+     assert.equal(await interval.locator('.on-duty-heading b').innerText(),'ON DUTY');
+     assert.match(await interval.locator('.on-duty-heading').innerText(),/14h 25m/);
+     assert.equal(await interval.locator('.clean-event-row').count(),2,'both activity records remain available');
+    } else {
+     assert.equal(await rows.first().locator('.event-badge').innerText(),previousStatus);
+    }
     assert.equal(await rows.first().getByRole('button',{name:'Edit continued status',exact:true}).count(),1,'derived prefix offers an explicit correction draft');
     assert.equal(await rows.first().getByRole('button',{name:'Edit selected event',exact:true}).count(),0,'derived prefix has no raw event to edit directly');
     assert.equal(await rows.first().locator('.event-continuity-tag-v11026').count(),0,'no misleading Sign badge');
