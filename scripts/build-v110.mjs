@@ -81,6 +81,7 @@ steps.push('finalize-state-boundaries-v110376.mjs','v110376/test-state-boundarie
 steps.push('finalize-auth-startup-v110377.mjs','v110377/test-auth-startup.mjs','test-owner-op-cloud-v110.mjs','v110376/test-state-boundaries.mjs','test-document-continuity-integration-v110375.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-unified-duty-v110378.mjs','v110378/test-duty-forms.mjs','v110377/test-auth-startup.mjs','v110376/test-state-boundaries.mjs','v110374/test-route-day-scope.mjs','test-document-continuity-integration-v110375.mjs','test-active-shipment-v110368.mjs','test-shipment-carryover-v110367.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-ongoing-on-duty-v110379.mjs','v110379/test-ongoing-on-duty.mjs','v110378/test-duty-forms.mjs','v110378/test-review-regressions.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-on-duty-intervals-v110380.mjs','v110380/test-on-duty-intervals.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

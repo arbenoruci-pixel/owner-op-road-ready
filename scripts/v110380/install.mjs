@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+const hash=value=>createHash('sha256').update(value).digest('hex');
+const patch=JSON.parse(fs.readFileSync('scripts/v110380/event-list.json','utf8'));
+assert.equal(patch.path,'source/src/modules/logbook/EventList.jsx');
+const source=fs.readFileSync(patch.path,'utf8');assert.ok([patch.before,patch.after].includes(hash(source)),'Unexpected EventList baseline');assert.equal(hash(patch.text),patch.after);
+const helper='source/src/modules/logbook/onDutyIntervalsV110380.js',text=fs.readFileSync('scripts/v110380/onDutyIntervals.js','utf8');
+if(fs.existsSync(helper))assert.equal(hash(fs.readFileSync(helper,'utf8')),hash(text),'Unexpected interval helper edit');
+fs.writeFileSync(patch.path,patch.text);fs.writeFileSync(helper,text);
+console.log('PASS — continuous ON-duty presentation installed; source events stay individually editable');
