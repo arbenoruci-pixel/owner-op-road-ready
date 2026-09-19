@@ -1,4 +1,5 @@
 import './v110378/install.mjs';
+import './v110378/finish-mobile.mjs';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
