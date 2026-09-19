@@ -1,0 +1,54 @@
+name: Unified duty and shipment identity
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/src/shared/duty/**'
+      - 'source/src/core/routes/shipmentIdentityV110378.js'
+      - 'scripts/v110378/**'
+      - 'scripts/finalize-unified-duty-v110378.mjs'
+      - 'scripts/build-v110.mjs'
+      - '.github/workflows/unified-duty-shipment.yml'
+permissions:
+  contents: read
+concurrency:
+  group: unified-duty-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Build exact final runtime
+        run: node scripts/build-v110.mjs > /tmp/unified-duty-build.log 2>&1 || { tail -n 150 /tmp/unified-duty-build.log; exit 1; }
+      - name: Identity and data preservation
+        run: node --test scripts/v110378/test-shipment-duty.mjs && npm run verify:architecture
+      - name: Browser engines
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Confirmed trailer move and shared edit/live fields
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/unified-duty-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/v110378/browser-shipment-duty.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unified-duty-shipment-evidence
+          path: |
+            browser-test-results/unified-duty-v110378/
+            /tmp/unified-duty-build.log
+            /tmp/unified-duty-server.log
+          retention-days: 7
