@@ -104,9 +104,13 @@ patchAll(dayLog,
 `    onSaveLoad?.({ routeLegsByDay, syncLinkedRouteDetails:true });`,
 `    onSaveLoad?.({ logDayEdit:true, routeLegsByDay, syncLinkedRouteDetails:true });`, 2);
 
-patch(dayLog,
-`    onSaveLoad?.({ routeLegsByDay });`,
-`    onSaveLoad?.({ logDayEdit:true, routeLegsByDay });`);
+{
+  const source=read(dayLog);
+  const old=`    onSaveLoad?.({ routeLegsByDay });`;
+  const next=`    onSaveLoad?.({ logDayEdit:true, routeLegsByDay });`;
+  if (source.includes(old)) write(dayLog,source.replace(old,next));
+  else assert.ok(source.includes('onSaveLoad?.({ deleteRouteLeg:request });') || source.includes(next),'v110.3.76 route delete/save anchor mismatch');
+}
 
 const app = 'source/src/app/App.jsx';
 patch(app,
@@ -117,12 +121,16 @@ patch(app,
         logDayEdit = false,`);
 
 patch(app,
-`      let next = {
+`      const linkedRouteLegsByDay = payloadRouteLegsByDay ? linkManualStopsToActiveLoad(s.routeLegsByDay || {}, payloadRouteLegsByDay, s.activeDay) : null;
+      let next = {
         ...s,
         loadInfo: { ...(s.loadInfo || {}), ...loadInfoPayload },
-        ...(payloadRouteLegsByDay ? { routeLegsByDay: payloadRouteLegsByDay } : {}),
+        ...(linkedRouteLegsByDay ? { routeLegsByDay:linkedRouteLegsByDay } : {}),
       };`,
-`      const selectedDayEventIds = new Set((s.eventsByDay?.[s.activeDay] || []).map(event => event?.id).filter(Boolean));
+`      const linkedRouteLegsByDay = payloadRouteLegsByDay
+        ? (logDayEdit ? payloadRouteLegsByDay : linkManualStopsToActiveLoad(s.routeLegsByDay || {}, payloadRouteLegsByDay, s.activeDay))
+        : null;
+      const selectedDayEventIds = new Set((s.eventsByDay?.[s.activeDay] || []).map(event => event?.id).filter(Boolean));
       const logEditOwnsCurrentLoad = logDayEdit && (
         s.loadInfo?.sourceEventDay === s.activeDay
         || (!!s.loadInfo?.sourceEventId && selectedDayEventIds.has(s.loadInfo.sourceEventId))
@@ -131,22 +139,22 @@ patch(app,
       let next = {
         ...s,
         loadInfo: updateGlobalLoadCache ? { ...(s.loadInfo || {}), ...loadInfoPayload } : (s.loadInfo || {}),
-        ...(payloadRouteLegsByDay ? { routeLegsByDay: payloadRouteLegsByDay } : {}),
+        ...(linkedRouteLegsByDay ? { routeLegsByDay:linkedRouteLegsByDay } : {}),
       };`);
 
 patch(app,
-`      if (payloadRouteLegsByDay && syncLinkedRouteDetails) {`,
+`      if (linkedRouteLegsByDay && syncLinkedRouteDetails) {`,
 `      // Only an explicit paper-Form edit may write load/route details back
       // into a recorded log day. Scanner, Reader, Home and business-load saves
       // remain metadata-only with respect to RODS history.
-      if (payloadRouteLegsByDay && syncLinkedRouteDetails && logDayEdit) {`);
+      if (linkedRouteLegsByDay && syncLinkedRouteDetails && logDayEdit) {`);
 
 patch(app,
 `        next = {
           ...next,
-          eventsByDay:applyRouteLegDetailsToLinkedEvents(s.eventsByDay || {}, payloadRouteLegsByDay),
+          eventsByDay:applyRouteLegDetailsToLinkedEvents(s.eventsByDay || {}, linkedRouteLegsByDay),
         };`,
-`        const reconciledEvents = applyRouteLegDetailsToLinkedEvents(s.eventsByDay || {}, payloadRouteLegsByDay);
+`        const reconciledEvents = applyRouteLegDetailsToLinkedEvents(s.eventsByDay || {}, linkedRouteLegsByDay);
         next = {
           ...next,
           eventsByDay:{
@@ -198,13 +206,15 @@ patch(app,
       const changesCertifiedRouteOrDocs = !!docsKey || !!payloadRouteLegsByDay || [
         'pickupCity','pickupState','deliveryCity','deliveryState'
       ].some(key => Object.prototype.hasOwnProperty.call(payload || {}, key));
-      return changesCertifiedRouteOrDocs ? markDayRecert(next, s.activeDay) : next;`,
+      next = applyDayFormEdit(s, next, payload, s.activeDay);
+      return changesCertifiedRouteOrDocs ? markDayRecert(next, s.activeDay) : reconcileCertificationStatusesV1032(next);`,
 `      // A load's pickup address is route metadata. Physical/current location
       // is owned only by the Status/GPS workflow and is never changed here.
       const changesCertifiedRouteOrDocs = logDayEdit && (!!docsKey || !!payloadRouteLegsByDay || [
         'pickupCity','pickupState','deliveryCity','deliveryState'
       ].some(key => Object.prototype.hasOwnProperty.call(payload || {}, key)));
-      return changesCertifiedRouteOrDocs ? markDayRecert(next, s.activeDay) : next;`);
+      next = applyDayFormEdit(s, next, payload, s.activeDay);
+      return changesCertifiedRouteOrDocs ? markDayRecert(next, s.activeDay) : reconcileCertificationStatusesV1032(next);`);
 
 patch(app,
 `      next = normalizeLoadInfoFromRouteLegs(next);
