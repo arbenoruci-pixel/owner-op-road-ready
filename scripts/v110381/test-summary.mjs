@@ -13,3 +13,9 @@ const other=onDutySummary([...rows,{loadNo:'OTHER',destination:'Chicago, IL',not
 assert.equal(other.routes.length,2);assert.match(other.routes[1],/^Load OTHER · Going to Chicago, IL$/);assert.match(other.note,/Fuel/);assert.equal(other.locations.length,2);
 assert.deepEqual(onDutySummary([]),{note:'',locations:[],routes:[]});
 console.log('PASS — compact ON summary keeps activities, locations and separate source references without changing records');
+
+const context=Object.freeze([Object.freeze({routeId:'carried-route',shippingDocs:'CARRIED-DOC',trailer:'CARRIED-TRAILER',destination:'Milwaukee, WI'})]);
+const carried=Object.freeze([Object.freeze({note:'Pre-trip inspection',shipmentContextV110367:context}),Object.freeze({note:'Fuel',shipmentContextV110367:context})]);
+const original=JSON.stringify(carried);assert.deepEqual(onDutySummary(carried).routes,['BOL CARRIED-DOC · Trailer CARRIED-TRAILER · Going to Milwaukee, WI']);assert.equal(JSON.stringify(carried),original);
+assert.equal(onDutySummary([...rows,...carried]).routes.length,2,'direct and carried shipments retain their own references');
+console.log('PASS — compact view retains deduplicated carried shipment context and distinct direct references');

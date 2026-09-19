@@ -1,3 +1,4 @@
+import {shipmentContextLabel} from '../../core/routes/shipmentCarryover.js';
 import {combineLogText} from '../../shared/utils/logText.js';
 const text=value=>String(value??'').trim();
 const unique=values=>[...new Set(values.filter(Boolean))];
@@ -9,11 +10,12 @@ export function onDutySummary(events) {
  const dropHook=parts.some(part=>/^drop\s*(?:&|and)\s*hook$/i.test(part));
  const note=combineLogText(...parts.filter(part=>!(dropHook&&/^(?:drop off|drop load\s*\/\s*trailer|hook\s*\/\s*pickup trailer|hook trailer|pickup trailer)$/i.test(part))));
  const locations=unique(events.map(e=>[e.city,e.state].map(text).filter(Boolean).join(', ')));
- const routes=unique(events.map(e=>{
+ const routes=unique(events.flatMap(e=>{
   const load=text(e.loadNo),docs=text(e.shippingDocs),bol=text(e.bol),po=text(e.po);
   const trailer=text(e.hookedTrailer||e.trailer);
   const destination=text(e.destination||[e.destinationCity,e.destinationState].filter(Boolean).join(', '));
-  return [load&&`Load ${load}`,bol&&`BOL ${bol}`,docs&&docs!==load&&`Shipping docs ${docs}`,po&&`PO ${po}`,trailer&&`Trailer ${trailer}`,destination&&`Going to ${destination}`].filter(Boolean).join(' · ');
+  const direct=[load&&`Load ${load}`,bol&&`BOL ${bol}`,docs&&docs!==load&&`Shipping docs ${docs}`,po&&`PO ${po}`,trailer&&`Trailer ${trailer}`,destination&&`Going to ${destination}`].filter(Boolean).join(' · ');
+  return [direct,shipmentContextLabel(Array.isArray(e.shipmentContextV110367)?e.shipmentContextV110367:[])];
  }));
  return {note,locations,routes};
 }
