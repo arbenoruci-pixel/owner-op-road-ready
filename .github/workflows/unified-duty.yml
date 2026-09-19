@@ -1,0 +1,52 @@
+name: Unified Duty Form and trip identity
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/v110378/**'
+      - 'scripts/finalize-unified-duty-v110378.mjs'
+      - 'scripts/build-v110.mjs'
+      - '.github/workflows/unified-duty.yml'
+permissions:
+  contents: read
+concurrency:
+  group: unified-duty-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  unified-duty:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Exact production build
+        run: node scripts/build-v110.mjs > /tmp/unified-duty-build.log 2>&1 || { tail -n 160 /tmp/unified-duty-build.log; exit 1; }
+      - name: Pickup identity and explicit edit audits
+        run: node scripts/v110378/test-duty-forms.mjs && node scripts/v110378/test-pickup-aliases.mjs && node scripts/v110378/test-review-regressions.mjs && npm run verify:architecture
+      - name: Install isolated browser tools
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Current and recorded form with corrupt-source fixture
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/unified-duty-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/v110378/browser-duty-forms.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unified-duty-v110378-evidence
+          path: |
+            browser-test-results/unified-duty-v110378/
+            /tmp/unified-duty-build.log
+            /tmp/unified-duty-server.log
+          retention-days: 7
