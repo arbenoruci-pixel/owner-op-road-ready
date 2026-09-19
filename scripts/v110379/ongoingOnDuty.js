@@ -50,6 +50,7 @@ export function prepareOnDutyHandoffUpdate(state, day, incoming, {at = new Date(
   if (!previous || !incoming.id || incoming.startMin < previous.startMin || incoming.startMin !== homeTerminalMinute(at, zone)) return null;
   if (!Number.isInteger(incoming.endMin) || incoming.endMin <= incoming.startMin || incoming.endMin > 1440 || previous.endMin > incoming.endMin) return null;
   // Starting a new recorded pickup is a separate fact, even at the same stop.
+  if (incoming.loadDetailsExplicit || activity(incoming).some(r => ['Pickup / Loading','Delivery / Unloading','Hook / Pickup Trailer','Hook Empty / Reposition'].includes(r))) return null;
   if (referenceFields.some(k => text(incoming[k])) || ['hookedTrailer','hookedContainer','hookedChassis'].some(k => equipment(incoming[k]))) return null;
   if (!text(previous.city) || !text(previous.state) || key(previous.city) !== key(incoming.city) || key(previous.state) !== key(incoming.state)) return null;
   const old = activity(previous), selected = activity(incoming);

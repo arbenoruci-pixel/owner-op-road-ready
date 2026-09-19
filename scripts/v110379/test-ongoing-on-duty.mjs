@@ -13,6 +13,8 @@ let checks=0;
 function rejected(changeState={},changeOld={},changeNew={},options={}){const s={...structuredClone(state),...changeState};s.eventsByDay[day]=s.eventsByDay[day].map(e=>e.id==='drop'?{...e,...changeOld}:e);assert.equal(prepare(s,day,{...incoming,...changeNew},{at,...options}),null);checks++;}
 for(const field of ['shippingDocs','loadNo','bol','po','destination','destinationState','pickedUpLoadNo','deliveredLoadNo']){rejected({}, {[field]:'RECORDED'});rejected({}, {},{[field]:'NEW PICKUP'});}
 for(const field of ['hookedTrailer','hookedContainer','hookedChassis']){rejected({}, {[field]:'RECORDED'});rejected({}, {},{[field]:'NEW PICKUP'});}
+rejected({}, {},{loadDetailsExplicit:true});
+for(const value of ['Pickup / Loading','Delivery / Unloading','Hook / Pickup Trailer','Hook Empty / Reposition'])rejected({}, {},{note:'Drop Off',reasons:['Drop Off',value]});
 rejected({}, {loadDetailsExplicit:true});rejected({}, {integrityRepairedAt:1});rejected({}, {description:'Load ORIGINAL · To Milwaukee, WI'});rejected({}, {source:'manual'});rejected({}, {paperLogEndV110315:true});rejected({}, {endMin:1440});rejected({currentStatus:'D'});rejected({}, {},{city:'Milwaukee'});rejected({}, {},{droppedTrailer:'DIFFERENT'});rejected({}, {},{status:'OFF'});rejected({}, {},{note:'Fuel',reasons:['Fuel']});rejected({}, {},{}, {backdateMinutes:15});rejected({}, {},{}, {at:new Date('2026-09-19T14:57:00Z')});
 rejected({routeLegsByDay:{prior:[{pickupEventId:'drop'}]}});rejected({routeLegsByDay:{[day]:[{deliveryEventId:'drop'}]}});rejected({loadInfo:{sourceEventId:'drop'}});
 const legacy=structuredClone(state);legacy.eventsByDay[day][1].reasons=[];assert.ok(prepare(legacy,day,incoming,{at}));

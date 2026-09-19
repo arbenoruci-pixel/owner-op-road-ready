@@ -28,13 +28,18 @@ function handoffFixture(recorded=false){const state=fixture();state.currentStatu
 const reports=[];
 for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
  const browser=await type.launch({headless:true});
- try{for(const recorded of [false,true]){
+ try{for(const scenario of ['handoff','recorded','blank-pickup']){
+  const recorded=scenario==='recorded', blankPickup=scenario==='blank-pickup';
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,timezoneId:'America/Chicago',serviceWorkers:'block'}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   try{
    await setup(page,context,handoffFixture(recorded));const before=await stored(page),previous=before.eventsByDay[day].find(e=>e.id==='drop');
    const root=page.locator('.dd-root[data-duty-mode=current]');
    await page.getByRole('button',{name:'Status',exact:true}).click();await root.waitFor();
-   if(!recorded){
+   if(blankPickup){
+    await root.getByRole('button',{name:'Pickup / Loading',exact:true}).click();
+    assert.equal(await root.getByRole('button',{name:'Drop Off',exact:true}).getAttribute('aria-pressed'),'true');
+    assert.equal(await root.getByText(/Updates current ON Duty/).count(),0);
+   }else if(!recorded){
     assert.equal(await root.getByRole('button',{name:'Drop Off',exact:true}).getAttribute('aria-pressed'),'true');
     await root.getByRole('button',{name:'Drop & Hook',exact:true}).click();
     assert.equal(await root.getByRole('button',{name:'Drop Off',exact:true}).getAttribute('aria-pressed'),'false');
@@ -46,14 +51,15 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
     await root.getByRole('button',{name:'Fuel',exact:true}).click();assert.equal(await root.getByText(/Updates current ON Duty/).count(),0);
    }
    await root.getByRole('button',{name:/^Save/ }).click();
-   const saved=await waitState(page,s=>recorded?s.eventsByDay[day].length===3:s.logbookEditHistoryByDay?.[day]?.some(e=>e.source==='ongoing_on_duty_handoff'));
+   const saved=await waitState(page,s=>(recorded||blankPickup)?s.eventsByDay[day].length===3:s.logbookEditHistoryByDay?.[day]?.some(e=>e.source==='ongoing_on_duty_handoff'));
    const current=saved.eventsByDay[day].find(e=>e.id==='drop');assert.equal(current.startMin,646);
    assert.deepEqual(saved.eventsByDay[prior],before.eventsByDay[prior]);assert.deepEqual(saved.manualMilesByDay,before.manualMilesByDay);assert.deepEqual(saved.signatureByDay,before.signatureByDay);
-   if(!recorded){assert.equal(saved.eventsByDay[day].length,2);assert.deepEqual([...current.reasons].sort(),['Drop & Hook','Pre-trip inspection']);assert.ok(!current.note.includes('Drop Off'));assert.equal(current.endMin,658);assert.equal(current.droppedTrailer,'511865');assert.equal(current.lat,43.8);assert.equal(current.lng,-91.2);const entry=saved.logbookEditHistoryByDay[day].find(e=>e.source==='ongoing_on_duty_handoff');assert.deepEqual(entry.beforeEvents,before.eventsByDay[day]);assert.deepEqual(entry.afterEvents,saved.eventsByDay[day]);assert.equal(saved.inspectionByDay[day].sourceEventId,'drop');}
+   if(blankPickup){const added=saved.eventsByDay[day].find(e=>e.id!=='drop'&&e.status==='ON');assert.ok(added);assert.equal(added.startMin,657);assert.equal(added.loadDetailsExplicit,true);assert.ok(added.reasons.includes('Pickup / Loading'));assert.equal(added.loadNo,'');assert.equal(added.destination,'');assert.equal(current.note,previous.note);assert.deepEqual(current.reasons,previous.reasons);assert.equal(saved.logbookEditHistoryByDay?.[day]?.some(e=>e.source==='ongoing_on_duty_handoff')||false,false);}
+   else if(!recorded){assert.equal(saved.eventsByDay[day].length,2);assert.deepEqual([...current.reasons].sort(),['Drop & Hook','Pre-trip inspection']);assert.ok(!current.note.includes('Drop Off'));assert.equal(current.endMin,658);assert.equal(current.droppedTrailer,'511865');assert.equal(current.lat,43.8);assert.equal(current.lng,-91.2);const entry=saved.logbookEditHistoryByDay[day].find(e=>e.source==='ongoing_on_duty_handoff');assert.deepEqual(entry.beforeEvents,before.eventsByDay[day]);assert.deepEqual(entry.afterEvents,saved.eventsByDay[day]);assert.equal(saved.inspectionByDay[day].sourceEventId,'drop');}
    else for(const key of ['loadNo','bol','shippingDocs','destination','lat','lng','reasons','note'])assert.deepEqual(current[key],previous[key],key);
-   await page.reload();await page.locator('[data-log-event-id=drop]').waitFor();const reopened=await stored(page);assert.deepEqual(reopened.eventsByDay[day],saved.eventsByDay[day]);assert.equal(await page.locator('[data-log-event-id=drop]').count(),1);
-   await page.screenshot({path:`${output}/${name}-${recorded?'protected-pickup':'single-handoff'}.png`});assert.deepEqual(errors,[]);reports.push({browser:name,recorded,passed:true});
-  }catch(error){await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify({error:String(error),stack:error.stack,state:await stored(page).catch(()=>null),errors},null,2));reports.push({browser:name,recorded,passed:false,error:String(error)});console.error(error);}finally{await context.close();}
+   await page.reload();await page.locator('[data-log-event-id=drop]').waitFor();const reopened=await stored(page);if(blankPickup){assert.equal(reopened.eventsByDay[day].length,3);for(const row of saved.eventsByDay[day]){const reopenedRow=reopened.eventsByDay[day].find(e=>e.id===row.id);for(const field of ['startMin','endMin','reasons','loadNo','destination','loadDetailsExplicit'])assert.deepEqual(reopenedRow[field],row[field],field);}}else assert.deepEqual(reopened.eventsByDay[day],saved.eventsByDay[day]);assert.equal(await page.locator('[data-log-event-id=drop]').count(),1);
+   await page.screenshot({path:`${output}/${name}-${scenario}.png`});assert.deepEqual(errors,[]);reports.push({browser:name,scenario,passed:true});
+  }catch(error){await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify({error:String(error),stack:error.stack,state:await stored(page).catch(()=>null),errors},null,2));reports.push({browser:name,scenario,passed:false,error:String(error)});console.error(error);}finally{await context.close();}
  }}finally{await browser.close();}
 }
 fs.writeFileSync(output+'/results.json',JSON.stringify(reports,null,2));assert.ok(reports.every(r=>r.passed),JSON.stringify(reports));console.log('PASS — Chromium/WebKit Save, Cancel, reload, PTI, GPS and protected pickup remain correct');
