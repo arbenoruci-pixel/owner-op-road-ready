@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {onDutyIntervals} from '../../source/src/modules/logbook/onDutyIntervalsV110380.js';
+const row=(id,status,startMin,endMin,extra={})=>Object.freeze({id,status,startMin,endMin,...extra});
+const first=row('pti','ON',646,704,{reasons:['Pre-trip inspection','Drop & Hook'],city:'Onalaska',state:'WI'}),pickup=row('pickup','ON',704,705,{loadNo:'LOAD-A',bol:'BOL-B',destination:'Milwaukee, WI',hookedTrailer:'TRAILER-A'});
+const rows=Object.freeze([row('rest','SB',0,646),first,pickup,row('drive','D',705,929)]);
+const snapshot=JSON.stringify(rows),groups=onDutyIntervals(rows);assert.equal(groups.length,3);assert.deepEqual(groups[1],[first,pickup]);assert.equal(groups[1].at(-1).endMin-groups[1][0].startMin,59);assert.equal(groups[1][1].startMin,704);assert.equal(groups[1][1].bol,'BOL-B');assert.equal(groups[1][1].loadNo,'LOAD-A');assert.equal(JSON.stringify(rows),snapshot);
+for(const next of [row('gap','ON',706,710),row('overlap','ON',703,710),row('other','D',704,710),row('bad','ON',704,704),row('bad','ON',704,1441),row('pti','ON',704,710)])assert.equal(onDutyIntervals([first,next]).length,2);
+assert.equal(onDutyIntervals([first,pickup,row('fuel','ON',705,710,{city:'Another city'})]).length,1);
+assert.equal(onDutyIntervals([row('a','D',0,10),row('b','D',10,20)]).length,2);
+assert.deepEqual(onDutyIntervals([]),[]);assert.equal(onDutyIntervals([pickup,first]).length,2);
+console.log('PASS — adjacent ON-duty activities form one interval; exact pickup facts, original objects, gaps, overlaps and edit IDs remain intact');

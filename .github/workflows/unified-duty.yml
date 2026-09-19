@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/v110378/**'
       - 'scripts/v110379/**'
+      - 'scripts/v110380/**'
+      - 'scripts/finalize-on-duty-intervals-v110380.mjs'
       - 'scripts/finalize-ongoing-on-duty-v110379.mjs'
       - 'scripts/finalize-unified-duty-v110378.mjs'
       - 'scripts/build-v110.mjs'
@@ -44,6 +46,7 @@ jobs:
           done
           node scripts/v110378/browser-duty-forms.mjs
           node scripts/v110379/browser-ongoing-on-duty.mjs
+          node scripts/v110380/browser-on-duty-intervals.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -51,6 +54,7 @@ jobs:
           path: |
             browser-test-results/unified-duty-v110378/
             browser-test-results/ongoing-on-duty-v110379/
+            browser-test-results/on-duty-intervals-v110380/
             /tmp/unified-duty-build.log
             /tmp/unified-duty-server.log
           retention-days: 7
