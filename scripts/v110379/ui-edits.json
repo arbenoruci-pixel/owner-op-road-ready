@@ -1,0 +1,129 @@
+{
+  "source/src/app/App.jsx": {
+    "before": "9fa786c626b5e796ad0c06ac51020bc2c28797bf770ba72284ba79311c032572",
+    "after": "369fc4901c364b16db81ba9c276b3a73b5f3e3439f31ef4a0771c1d1196ef2f7",
+    "edits": [
+      {
+        "from": 1,
+        "to": 1,
+        "text": "import {prepareOnDutyHandoffUpdate, recordOnDutyHandoffUpdate} from '../core/timeline/ongoingOnDutyV110379.js';\n"
+      },
+      {
+        "from": 189,
+        "to": 190,
+        "text": "    // A saved handoff edit already contains the driver-confirmed activity and details.\n    next.note = next.onDutyHandoffUpdatedAt && !statusChanged ? next.note : selectedReasons.join(' \u00b7 ');\n"
+      },
+      {
+        "from": 3353,
+        "to": 3354,
+        "text": "  function closeLastAndAddStatus({ status, reason, reasons=[], city, state: st, description='', droppedTrailer='', hookedTrailer='', dropHook=null, lat=null, lng=null, gpsAccuracy=null, locationSource='manual', shippingDocs='', loadNo='', destination='', destinationState='', backdateMinutes=0 }) {\n"
+      },
+      {
+        "from": 3410,
+        "to": 3411,
+        "text": "      let eventId = `live_${Date.now()}`;\n"
+      },
+      {
+        "from": 3433,
+        "to": 3434,
+        "text": "      let ev = {\n"
+      },
+      {
+        "from": 3443,
+        "to": 3443,
+        "text": "        reasons:status === 'ON' ? reasons : [],\n"
+      },
+      {
+        "from": 3458,
+        "to": 3458,
+        "text": "        ...(isIntermodalDrop ? {droppedContainer:dropHook?.droppedContainer || '', droppedChassis:dropHook?.droppedChassis || '', hookedContainer:dropHook?.hookedContainer || '', hookedChassis:dropHook?.hookedChassis || ''} : {}),\n"
+      },
+      {
+        "from": 3459,
+        "to": 3459,
+        "text": "      const handoffUpdate = prepareOnDutyHandoffUpdate(base, day, ev, {at:now, backdateMinutes:backdate});\n      if (handoffUpdate) { ev = handoffUpdate.event; eventId = ev.id; }\n"
+      },
+      {
+        "from": 3469,
+        "to": 3470,
+        "text": "      const continuous = handoffUpdate ? handoffUpdate.events : applyLiveStatusTransition(existing, ev);\n"
+      },
+      {
+        "from": 3531,
+        "to": 3532,
+        "text": "      return recordOnDutyHandoffUpdate(base, markDayRecert(next, day), day, handoffUpdate, now);\n"
+      }
+    ]
+  },
+  "source/src/modules/status/StatusWorkflowSheet.jsx": {
+    "before": "766ab2cb5c6e9baa12c95340fab91fbd7618fbde0e00a7630ff8f3be7857d177",
+    "after": "4763b5135673a99bfa6666464d5478627b0248d6439eac32659ec466048f6403",
+    "edits": [
+      {
+        "from": 0,
+        "to": 0,
+        "text": "import {currentOnDutyHandoff, toggleHandoffActivity, handoffPreview} from '../../core/timeline/ongoingOnDutyV110379.js';\n"
+      },
+      {
+        "from": 4,
+        "to": 5,
+        "text": "import {dutyActivities, parseRecordedActivities} from '../../shared/duty/dutyActivities.js';\n"
+      },
+      {
+        "from": 110,
+        "to": 110,
+        "text": "  const ongoingHandoff = !guidePrefill.reason && !preferredReason ? currentOnDutyHandoff(state) : null;\n  const ongoingReasons = ongoingHandoff ? parseRecordedActivities(ongoingHandoff.note, ongoingHandoff.reasons).selected : [];\n"
+      },
+      {
+        "from": 117,
+        "to": 118,
+        "text": "  const [selectedReasons, setSelectedReasons] = useState(initialReason ? [initialReason] : ongoingReasons);\n"
+      },
+      {
+        "from": 119,
+        "to": 120,
+        "text": "  const [notes, setNotes] = useState(guidePrefill.notes || ongoingHandoff?.description || '');\n"
+      },
+      {
+        "from": 144,
+        "to": 146,
+        "text": "  const [dropContainer, setDropContainer] = useState(ongoingHandoff?.droppedContainer || state.equipment?.container || '');\n  const [dropChassis, setDropChassis] = useState(ongoingHandoff?.droppedChassis || state.equipment?.chassis || '');\n"
+      },
+      {
+        "from": 151,
+        "to": 152,
+        "text": "  const [dropTrailer, setDropTrailer] = useState(String(preferredDocument?.trailerNo || ongoingHandoff?.droppedTrailer || state.equipment?.trailer || state.currentTrailer || '').replace(/^Trailer\\s+/i, '').trim());\n"
+      },
+      {
+        "from": 277,
+        "to": 278,
+        "text": "    setSelectedReasons(next === 'ON' ? (status === 'ON' ? selectedReasons : ongoingReasons) : [reasonList(next)[0]]);\n"
+      },
+      {
+        "from": 310,
+        "to": 312,
+        "text": "      const next = toggleHandoffActivity(current, reasonValue);\n"
+      },
+      {
+        "from": 484,
+        "to": 484,
+        "text": "  const updatingHandoff = handoffPreview(state, payload());\n  const handoffStart = updatingHandoff ? `${String(Math.floor(updatingHandoff.event.startMin / 60)).padStart(2,'0')}:${String(updatingHandoff.event.startMin % 60).padStart(2,'0')}` : '';\n  const availableActivities = [...new Set([...reasonList(status, intermodalMode), ...(status === 'ON' ? ongoingReasons : []), ...(status === 'ON' && ongoingReasons.some(r => ['Drop Off','Drop & Hook'].includes(r)) ? ['Drop Off','Drop & Hook'] : [])])];\n"
+      },
+      {
+        "from": 485,
+        "to": 486,
+        "text": "    title=\"Change Status\" context={updatingHandoff ? `Updates current ON Duty from ${handoffStart} \u00b7 ${locationText}` : `New status \u00b7 Now \u00b7 ${locationText || 'location needed'}`} onClose={onClose}\n"
+      },
+      {
+        "from": 487,
+        "to": 488,
+        "text": "          activities={availableActivities} selected={selectedReasons}\n"
+      },
+      {
+        "from": 491,
+        "to": 493,
+        "text": "            <label>{updatingHandoff ? 'Original ON Duty start' : 'Start time'}</label>\n            <span>{updatingHandoff ? handoffStart : startAgoMinutes ? `${startAgoMinutes} min ago` : 'Now'}</span>\n"
+      }
+    ]
+  }
+}

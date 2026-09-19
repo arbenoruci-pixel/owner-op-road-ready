@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/v110378/**'
+      - 'scripts/v110379/**'
+      - 'scripts/finalize-ongoing-on-duty-v110379.mjs'
       - 'scripts/finalize-unified-duty-v110378.mjs'
       - 'scripts/build-v110.mjs'
       - '.github/workflows/unified-duty.yml'
@@ -41,12 +43,14 @@ jobs:
             sleep 1
           done
           node scripts/v110378/browser-duty-forms.mjs
+          node scripts/v110379/browser-ongoing-on-duty.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unified-duty-v110378-evidence
           path: |
             browser-test-results/unified-duty-v110378/
+            browser-test-results/ongoing-on-duty-v110379/
             /tmp/unified-duty-build.log
             /tmp/unified-duty-server.log
           retention-days: 7
