@@ -1,0 +1,55 @@
+name: Secure session startup
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/src/modules/auth/**'
+      - 'scripts/v110377/**'
+      - 'scripts/finalize-auth-startup-v110377.mjs'
+      - 'scripts/build-v110.mjs'
+      - '.github/workflows/auth-startup.yml'
+  push:
+    branches: [fix/auth-startup-v110377]
+permissions:
+  contents: read
+concurrency:
+  group: auth-startup-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  auth-startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Exact production build
+        run: node scripts/build-v110.mjs > /tmp/auth-startup-build.log 2>&1 || { tail -n 140 /tmp/auth-startup-build.log; exit 1; }
+      - name: Focused startup policy tests
+        run: node scripts/v110377/test-auth-startup.mjs
+      - name: Install browser test tools
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Stalled auth network in Chromium and WebKit
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/auth-startup-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/v110377/browser-auth-startup.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: auth-startup-v110377-evidence
+          path: |
+            browser-test-results/auth-startup-v110377/
+            /tmp/auth-startup-build.log
+            /tmp/auth-startup-server.log
+          retention-days: 7
