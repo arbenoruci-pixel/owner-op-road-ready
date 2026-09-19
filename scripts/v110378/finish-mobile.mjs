@@ -5,7 +5,8 @@ const hash=value=>createHash('sha256').update(value).digest('hex');
 const planned=[];
 function fix(file,before,after,transform){
  const source=fs.readFileSync(file,'utf8');
- if(hash(source)===after)return;
+ // A later interaction pass changes only the reviewed CSS footer/contrast rules.
+ if(hash(source)===after || (file==='source/src/shared/duty/dutyForm.css' && hash(source)==='e1400b74e43f75cc1b799747c3ef1ba2dd9164ed7b34e676147083a38e32b23c'))return;
  assert.equal(hash(source),before,'Unexpected pre-mobile runtime: '+file);
  const output=transform(source);
  assert.equal(hash(output),after,'Unexpected mobile result: '+file);
@@ -19,7 +20,7 @@ fix('source/src/shared/duty/DutyForm.jsx','0fbdbd4d6950b67c81b5d95af7bcf66f6db4c
  source=replace(source,'onClose,onDelete,time,selection','onClose,onDelete,graph,time,selection');
  return replace(source,'    </header>\n    <div className="dd-body','    </header>\n    {graph?<div className="dd-graph-block" data-duty-section="timeline">{graph}</div>:null}\n    <div className="dd-body');
 });
-fix('source/src/modules/editor/EditEventSheet.jsx','8ee66cdc3b0280f7e5e601e58ce06d23572ed59d9d2c898d327a6c86699d3e07','892b1ac71073cecf2755ba871a4af02940922e9931130b504acc4b8066fbe0a0',source=>{
+fix('source/src/modules/editor/EditEventSheet.jsx','c3796a1922f9ae564f6e277e6301d5f700fb29acbf76c3037b6fccd52c5ce3ff','8e918d372a82485c550118b14a301f784031496509dfb7e236bdf4a20eb9a787',source=>{
  source=replace(source,'    time={<>      <EditorGraphPanel','    graph={<EditorGraphPanel');
  return replace(source,'      />        <div className="selected-duration-live">','      />}\n    time={<><div className="selected-duration-live">');
 });

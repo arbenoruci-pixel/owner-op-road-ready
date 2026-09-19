@@ -26,7 +26,7 @@ jobs:
       - name: Exact production build
         run: node scripts/build-v110.mjs > /tmp/unified-duty-build.log 2>&1 || { tail -n 160 /tmp/unified-duty-build.log; exit 1; }
       - name: Pickup identity and explicit edit audits
-        run: node scripts/v110378/test-duty-forms.mjs && node scripts/v110378/test-pickup-aliases.mjs && npm run verify:architecture
+        run: node scripts/v110378/test-duty-forms.mjs && node scripts/v110378/test-pickup-aliases.mjs && node scripts/v110378/test-review-regressions.mjs && npm run verify:architecture
       - name: Install isolated browser tools
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1

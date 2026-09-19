@@ -5,6 +5,14 @@ import {createHash} from 'node:crypto';
 const hash=text=>createHash('sha256').update(text).digest('hex');
 const prefix='scripts/v110378/';
 const packs=['ui-edits','integrity-edits','tests-edits','new-core','new-components','new-activities','new-style'];
+// Exact outputs of the following mobile/interaction stages; arbitrary edits still fail.
+const completedHashes={
+  "source/src/shared/duty/DutyForm.jsx": "f685f85503672acc18a8d7bbca2fa5a4757171c8f8fc96f486b1ce129579266a",
+  "source/src/modules/editor/EditEventSheet.jsx": "8e918d372a82485c550118b14a301f784031496509dfb7e236bdf4a20eb9a787",
+  "scripts/browser-midnight-prefix-v110319.mjs": "983449ff39dec1f6152b2008163b4280bc87153a3b7522a062b6b07b23d65433",
+  "scripts/browser-motive-override-v11023.mjs": "41c5666ba455109d41021a6133e0fcd8f4fb95ed70325c5a00b5ff19dff94fe0",
+  "source/src/shared/duty/dutyForm.css": "e1400b74e43f75cc1b799747c3ef1ba2dd9164ed7b34e676147083a38e32b23c"
+};
 const prepared=[],seen=new Set();
 const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));
 for(const name of packs){
@@ -13,7 +21,7 @@ for(const name of packs){
   assert.ok(/^(source\/src\/|app\/|scripts\/browser-)/.test(file)&&!file.split('/').includes('..')&&!path.isAbsolute(file),'Unsafe patch target');
   assert.ok(!seen.has(file),'Duplicate patch target '+file);seen.add(file);
   const source=fs.existsSync(file)?fs.readFileSync(file,'utf8'):null;
-  if(source!==null&&hash(source)===change.after)continue;
+  if(source!==null&&(hash(source)===change.after||hash(source)===completedHashes[file]))continue;
   assert.equal(source===null?null:hash(source),change.before,'Exact 110.3.77 baseline changed: '+file);
   if(locks.files[file])assert.equal(hash(source),locks.files[file],'Protected prepatch hash differs: '+file);
   let next=change.text;
