@@ -20,6 +20,7 @@ function editableHandoff(state, day) {
   if (!Number.isInteger(previous.startMin) || !Number.isInteger(previous.endMin) || previous.endMin <= previous.startMin) return null;
   if (rows.slice(0,-1).some(e => e.endMin > previous.startMin)) return null;
   const selected = activity(previous);
+  if (selected.some(r => ['Pickup / Loading','Delivery / Unloading','Hook / Pickup Trailer','Hook Empty / Reposition'].includes(r))) return null;
   const legacy = selected.some(r => legacyActions.includes(r));
   const trailer = selected.includes('Drop Load / Trailer') && !selected.includes('Hook / Pickup Trailer');
   if ((!legacy && !trailer) || (legacy && selected.some(r => trailerActions.includes(r)))) return null;
