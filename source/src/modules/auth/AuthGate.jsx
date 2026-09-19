@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cloudClient } from '../../../../lib/owner-op-cloud/client.js';
+import { ACCESS_CHECK_TIMEOUT_MS, OFFLINE_GRACE_MS, SESSION_CHECK_TIMEOUT_MS, approvalIsFresh, cachedApprovedUser, settleWithin } from './authStartupV110377.js';
 import './auth.css';
-
-const OFFLINE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function approvalKey(user) {
   return `owner-op-approved-device-v1:${user?.id || 'none'}`;
@@ -14,7 +13,7 @@ function readApproval(user) {
   if (!user || typeof window === 'undefined') return null;
   try {
     const row = JSON.parse(localStorage.getItem(approvalKey(user)) || 'null');
-    if (!row || row.userId !== user.id || String(row.email || '').toLowerCase() !== String(user.email || '').toLowerCase()) return null;
+    if (!approvalIsFresh(row, user)) return null;
     return row;
   } catch {
     return null;
@@ -128,49 +127,64 @@ export default function AuthGate({ children }) {
   const [message, setMessage] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
   const [offlineAccess, setOfflineAccess] = useState(false);
+  const stageRef = useRef(stage);
+  const verificationRef = useRef(0);
+
+  useEffect(() => { stageRef.current = stage; }, [stage]);
 
   const verifyAccess = useCallback(async nextSession => {
+    const requestId = ++verificationRef.current;
     const user = nextSession?.user;
     setSession(nextSession || null);
     setError('');
-    setOfflineAccess(false);
     if (!user) {
+      setOfflineAccess(false);
       setStage('signed_out');
       return;
     }
     if (!user.email_confirmed_at) {
+      setOfflineAccess(false);
       setStage('confirm_email');
       return;
     }
 
+    const cached = readApproval(user);
     if (navigator.onLine === false) {
-      const cached = readApproval(user);
-      if (cached && Date.now() - Number(cached.verifiedAt || 0) <= OFFLINE_GRACE_MS) {
+      if (cached) {
         setOfflineAccess(true);
         setStage('approved');
-        return;
+      } else {
+        setStage('needs_online_check');
       }
-      setStage('needs_online_check');
       return;
     }
 
     try {
-      const { data, error: accessError } = await supabase.rpc('owner_op_access_v1');
+      const { data, error: accessError } = await settleWithin(
+        supabase.rpc('owner_op_access_v1'),
+        ACCESS_CHECK_TIMEOUT_MS,
+        'Account access check'
+      );
+      if (requestId !== verificationRef.current) return;
       if (accessError) throw accessError;
       if (data?.approved === true) {
         writeApproval(user);
+        setOfflineAccess(false);
         setStage('approved');
       } else {
         clearApproval(user);
+        setOfflineAccess(false);
         setStage('pending_approval');
       }
     } catch (accessError) {
-      const cached = readApproval(user);
-      if (cached && Date.now() - Number(cached.verifiedAt || 0) <= OFFLINE_GRACE_MS) {
+      if (requestId !== verificationRef.current) return;
+      if (cached) {
         setOfflineAccess(true);
         setStage('approved');
       } else {
-        setError(accessError?.message || 'Could not verify account access.');
+        setError(accessError?.name === 'TimeoutError'
+          ? 'Secure access check is taking too long. Tap Check access again.'
+          : (accessError?.message || 'Could not verify account access.'));
         setStage('needs_online_check');
       }
     }
@@ -179,20 +193,44 @@ export default function AuthGate({ children }) {
   useEffect(() => {
     let active = true;
     const recoveryInUrl = typeof window !== 'undefined' && window.location.hash.includes('type=recovery');
-    supabase.auth.getSession().then(({ data, error: sessionError }) => {
-      if (!active) return;
-      if (sessionError) {
-        setError(sessionError.message);
-        setStage('signed_out');
-        return;
+    const startupApproval = !recoveryInUrl && typeof window !== 'undefined'
+      ? cachedApprovedUser(window.localStorage)
+      : null;
+
+    // A recently approved device should never sit behind a network-dependent
+    // splash screen. Open local records immediately, then revalidate in the
+    // background. Sign-out clears both the Supabase session and approval row.
+    if (startupApproval) {
+      setSession({ user:startupApproval.user });
+      setOfflineAccess(true);
+      setStage('approved');
+    }
+
+    (async () => {
+      try {
+        const { data, error: sessionError } = await settleWithin(
+          supabase.auth.getSession(),
+          SESSION_CHECK_TIMEOUT_MS,
+          'Secure session check'
+        );
+        if (!active) return;
+        if (sessionError) throw sessionError;
+        if (recoveryInUrl && data.session) {
+          setSession(data.session);
+          setStage('reset_password');
+          setError('');
+          return;
+        }
+        await verifyAccess(data.session);
+      } catch (sessionError) {
+        if (!active || startupApproval) return;
+        setError(sessionError?.name === 'TimeoutError'
+          ? 'Secure session check is taking too long. Tap Check access again.'
+          : (sessionError?.message || 'Could not restore the secure session.'));
+        setStage('needs_online_check');
       }
-      if (recoveryInUrl && data.session) {
-        setSession(data.session);
-        setStage('reset_password');
-        return;
-      }
-      verifyAccess(data.session);
-    });
+    })();
+
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setTimeout(() => {
         if (!active) return;
@@ -205,17 +243,30 @@ export default function AuthGate({ children }) {
         verifyAccess(nextSession);
       }, 0);
     });
+
     const online = async () => {
-      const current = await supabase.auth.getSession();
-      if (active && stage !== 'reset_password') verifyAccess(current.data.session);
+      if (stageRef.current === 'reset_password') return;
+      try {
+        const current = await settleWithin(
+          supabase.auth.getSession(),
+          SESSION_CHECK_TIMEOUT_MS,
+          'Secure session check'
+        );
+        if (active) verifyAccess(current.data.session);
+      } catch {
+        // Keep an already-approved local session open. The manual retry button
+        // remains available if no cached approval exists.
+      }
     };
+
     window.addEventListener('online', online);
     return () => {
       active = false;
+      verificationRef.current += 1;
       data.subscription.unsubscribe();
       window.removeEventListener('online', online);
     };
-  }, [supabase, verifyAccess, stage]);
+  }, [supabase, verifyAccess]);
 
   async function submit(event) {
     event.preventDefault();
@@ -317,7 +368,18 @@ export default function AuthGate({ children }) {
           <h1>{title}</h1>
           <p>{detail}</p>
           {error ? <div className="owner-auth-error" role="alert">{error}</div> : null}
-          <button className="owner-auth-primary" type="button" disabled={busy || (typeof navigator !== 'undefined' && navigator.onLine === false)} onClick={async () => { setBusy(true); try { await verifyAccess((await supabase.auth.getSession()).data.session); } finally { setBusy(false); } }}>Check access again</button>
+          <button className="owner-auth-primary" type="button" disabled={busy || (typeof navigator !== 'undefined' && navigator.onLine === false)} onClick={async () => {
+            setBusy(true);
+            setError('');
+            try {
+              const current = await settleWithin(supabase.auth.getSession(), SESSION_CHECK_TIMEOUT_MS, 'Secure session check');
+              await verifyAccess(current.data.session);
+            } catch (retryError) {
+              setError(retryError?.name === 'TimeoutError' ? 'Secure session check is still taking too long. Try again in a moment.' : (retryError?.message || 'Could not check secure access.'));
+            } finally {
+              setBusy(false);
+            }
+          }}>Check access again</button>
           <button type="button" className="owner-auth-secondary" onClick={signOut}>Use another email</button>
         </section>
       </main>
@@ -328,8 +390,8 @@ export default function AuthGate({ children }) {
     <>
       {children}
       <button type="button" className="owner-auth-account-button" aria-label="Account security" onClick={() => setAccountOpen(v => !v)}>🔒</button>
-      {accountOpen ? <div className="owner-auth-account-menu"><b>{session?.user?.email}</b><span>{offlineAccess ? 'Approved · offline session' : 'Approved · secure session'}</span><button type="button" onClick={signOut}>Sign out</button></div> : null}
-      {offlineAccess ? <div className="owner-auth-offline-badge">Secure offline session</div> : null}
+      {accountOpen ? <div className="owner-auth-account-menu"><b>{session?.user?.email}</b><span>{offlineAccess ? 'Approved · cached secure session' : 'Approved · secure session'}</span><button type="button" onClick={signOut}>Sign out</button></div> : null}
+      {offlineAccess ? <div className="owner-auth-offline-badge">Secure cached session</div> : null}
     </>
   );
 }
