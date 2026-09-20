@@ -90,6 +90,7 @@ steps.push('finalize-measurement-detail-v110385.mjs','test-duty-graph-continuity
 steps.push('finalize-measurement-consensus-v110386.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-weight-review-flow-v110387.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-ratecon-structure-v110388.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-dot-manual-report-v110389.mjs','verify-dot-roadside-report-v110389.mjs','test-dot-signature-labels-v110351.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
