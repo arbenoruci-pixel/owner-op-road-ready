@@ -148,6 +148,10 @@ const missingHtml = report.dayReportHtml(partial,day);
 assert.ok(missingHtml.includes('Incomplete log:') && missingHtml.includes('Review these times in Logbook.'));
 assert.deepEqual(logbookReportGaps(view(partial,day)),[{startMin:0,endMin:60},{startMin:120,endMin:1440}]);
 assert.equal(view(base,today).length,0, 'an entirely unknown day stays unknown');
+const futureChange = {...base,eventsByDay:{[day]:[row('previous','SB',1300,1440)],
+  [today]:[row('future-change','ON',900,930)]}};
+assert.equal(view(futureChange,today)[0].status,'SB');
+assert.equal(view(futureChange,today)[0].endMin,720,'known status reaches Now before a future first change');
 for (const status of ['OFF','SB','ON','D']) {
   const event = row('ended',status,300,420,{source:'live_status',paperLogEndV110315:true});
   const value = {...base,eventsByDay:{[day]:[event]}};

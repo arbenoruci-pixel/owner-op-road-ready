@@ -72,10 +72,10 @@ export function readLogbookReportDay(state = {}, day = '', at = new Date(), time
     events = confirmedDrivingDayView(events, { state:projectionState, day, clock });
     events = historicalStatusTailV110317(events, true);
   }
-  events = events.map(event => ({ ...event, endMin:Math.min(event.endMin, end) }))
-    .filter(event => event.endMin > event.startMin);
   const carry = previous ? knownMidnightCarry(events, previous.event) : null;
-  return carry ? [carry, ...events] : events;
+  return (carry ? [carry, ...events] : events)
+    .map(event => ({ ...event, endMin:Math.min(event.endMin, end) }))
+    .filter(event => event.endMin > event.startMin);
 }
 
 export function logbookReportGaps(events = [], end = 1440) {
