@@ -45,6 +45,19 @@ function candidatesFor(pages, spec, dateContext=null) {
   return candidates.map(({key,...candidate})=>candidate);
 }
 
+// A generic receipt and an unloading receipt can be two reads of the same
+// page. Require a supported, identical receipt number in both observations;
+// missing, weak or conflicting identifiers must keep the identity unresolved.
+function sameUnloadingReceipt(page, generic, specialized) {
+  if(generic.kind!=='other_expense'||specialized.kind!=='unloading_receipt')return false;
+  const spec=PROFILES.find(profile=>profile.id==='unloading_receipt').fields.receiptNumber;
+  const fields=[generic,specialized].map(vote=>{
+    const observation=page.observations.find(item=>item.id===vote.evidence.observationId);
+    return extractField([{...page,observations:[observation]}],spec);
+  });
+  return fields.every(field=>field.status==='supported'&&field.value!==null)&&fields[0].value===fields[1].value;
+}
+
 function classifyPage(page) {
   const votes=[];
   for(const observation of page.observations){
@@ -62,13 +75,15 @@ function classifyPage(page) {
     const evidence=support.lines.map(line=>evidenceFor(page,origins.get(line),line,0,line.text.length));
     votes.push({kind:profile.id,method:'combined_observations',evidence:evidence[0],supportingEvidence:evidence.slice(1)});
   }
-  // A specialized invoice/receipt may refine a generic title in the SAME
-  // observation. Different titles and competing OCR observations stay conflicts.
+  // Same-heading refinements remain local to an observation. A generic
+  // receipt may also refine across reads when its receipt number agrees.
   const rateHeading=PROFILES.find(p=>p.id==='rate_confirmation').heading;
   const ratePage=pooled.some(line=>rateHeading.test(line.text));
-  const refined=votes.filter(vote=>!(ratePage&&vote.kind==='signing_certificate'&&vote.method==='sertifi_signature')&&!votes.some(other=>other!==vote&&other.evidence.observationId===vote.evidence.observationId
-    &&(PROFILES.find(p=>p.id===other.kind)?.refines?.includes(vote.kind)&&other.evidence.lineId===vote.evidence.lineId
-      ||PROFILES.find(p=>p.id===vote.kind)?.fallback&&vote.method==='field_structure'&&other.kind!==vote.kind)));
+  const refined=votes.filter(vote=>!(ratePage&&vote.kind==='signing_certificate'&&vote.method==='sertifi_signature')&&!votes.some(other=>other!==vote
+    &&(other.evidence.observationId===vote.evidence.observationId
+      &&(PROFILES.find(p=>p.id===other.kind)?.refines?.includes(vote.kind)&&other.evidence.lineId===vote.evidence.lineId
+        ||PROFILES.find(p=>p.id===vote.kind)?.fallback&&vote.method==='field_structure'&&other.kind!==vote.kind)
+      ||sameUnloadingReceipt(page,vote,other))));
   const kinds=[...new Set(refined.map(v=>v.kind))];
   const references=Object.fromEntries(PROFILES.map(profile=>{let field=extractField([page],profile.fields[profile.identity]);if(profile.id==='bol')field=corroborateBolReference([page],field);return [profile.id,field.status==='supported'&&field.value!==null?[field.value]:[]];}));
   return {kind:kinds.length===1?kinds[0]:'unknown',status:kinds.length>1?'conflicting':kinds.length?refined.some(v=>v.method==='heading')?'supported':'needs_review':'unknown',evidence:refined,references};
