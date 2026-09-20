@@ -1,5 +1,7 @@
 import {readDocument,textObservation} from '../../../../packages/smart-reader-core/src/index.js';
 import {PROFILES} from '../../../../packages/smart-reader-core/src/profiles.js';
+import {documentReferences} from '../../../../packages/smart-reader-core/src/documentReference.js';
+import {reviewScanAnalysis} from './ownedReaderAdapter.js';
 
 export function extraPageIdentity(text){
   const result=readDocument({documentId:'page-identity',pages:[{id:'page',observations:[textObservation(text)]}]});
@@ -14,11 +16,27 @@ export function extraPageIdentity(text){
   return {typeId:profile.filingType||profile.id,confidence:page.status==='needs_review'?.49:.85,status:page.status,requiresTypeReview:page.status==='needs_review',reason:profile.label+' heading and document field structure'};
 }
 
+// The core joins a terms-only RateCon page only with matching PRO, envelope
+// and compatible parties. Carry that established relationship into filing.
+export function alignRateContinuationPages(analysis,pageTypes){
+  if(!pageTypes.some(page=>!page.typeId&&!page.conflicting))return;
+  const review=reviewScanAnalysis(analysis);
+  for(const document of review.documents){
+    if(document.kind!=='rate_confirmation'||document.pageIds.length<2)continue;
+    for(const id of document.pageIds.slice(1)){
+      const number=review.pages.find(page=>page.id===id)?.number;
+      const page=pageTypes.find(page=>page.page===number);
+      if(page&&!page.typeId&&!page.conflicting)Object.assign(page,{typeId:'rate_confirmation',confidence:.85,
+        evidence:['Rate confirmation continuation with matching PRO and signing reference']});
+    }
+  }
+}
+
 // Exact signing references can link attachments. Missing references, OCR
 // disagreements and references from another envelope require page review.
 export function attachmentRelationship(pages,pageTypes){
   const references=page=>[...new Set(page.reads.flatMap(text=>{
-    const lines=String(text).split(/\r?\n/),refs=[];
+    const lines=String(text).split(/\r?\n/),refs=documentReferences([{observations:[textObservation(text)]}]).map(ref=>ref.value.toUpperCase());
     for(let i=0;i<lines.length;i++){
       const labeled=/^\s*(?:DOCUMENT REF(?:ERENCE)?|ENVELOPE ID)\s*:\s*([A-Z0-9][A-Z0-9-]{7,})\b/i.exec(lines[i]);
       if(labeled)refs.push(labeled[1].toUpperCase());
