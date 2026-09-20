@@ -36,7 +36,8 @@ function previousOpenStatus(state, day) {
     // A corrupt or explicitly ended day is a barrier: do not skip it to find
     // an older convenient status, and never infer Driving into another day.
     if (rows.some((row, index) => !valid(row) || (index && rows[index - 1].endMin > row.startMin))
-      || last.status === 'D' || manuallyEnded(state, date, last)) return null;
+      || last.status === 'D' || manuallyEnded(state, date, last)
+      || (last.endMin < 1440 && last.source !== 'live_status')) return null;
     return { event:last, day:date };
   }
   return null;

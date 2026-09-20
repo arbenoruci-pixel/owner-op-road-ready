@@ -170,6 +170,8 @@ const oldEndState = {...base,eventsByDay:{[day]:[legacyEnd]}, logbookEditHistory
 }]}};
 assert.equal(view(oldEndState,day)[0].endMin,200,'older explicit End audit remains authoritative');
 assert.equal(view(oldEndState,today).length,0);
+const boundedManual = {...base,eventsByDay:{[day]:[row('inserted','SB',100,200,{source:'manual'})]}};
+assert.equal(view(boundedManual,today).length,0,'a bounded manual interval ending before midnight cannot prove overnight status');
 
 // Only a recorded, exact midnight link completes a historical Driving origin.
 const driving = {...base,eventsByDay:{[day]:[row('origin','D',1300,1301)], [today]:[
