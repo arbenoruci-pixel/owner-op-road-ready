@@ -7,6 +7,7 @@ import {baseState,seed,setupRoutes} from './v110328/browserFixture.mjs';
 import {shippingLayoutInput} from '../packages/smart-reader-core/test/shipping-layout-fixture.mjs';
 import {noisyPageInput} from '../packages/smart-reader-core/test/noisy-page-fixture.mjs';
 import {mergedReceiptInput} from '../packages/smart-reader-core/test/merged-receipt-fixture.mjs';
+import {receiptColumnsInput} from '../packages/smart-reader-core/test/receipt-columns-fixture.mjs';
 import {partyBlocksInput} from '../packages/smart-reader-core/test/party-blocks-fixture.mjs';
 import {truckingCases} from '../packages/smart-reader-core/test/trucking-catalog-fixture.mjs';
 
@@ -359,6 +360,40 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.screenshot({path:`${output}/${name}-packet-review.png`,fullPage:true});
     await page.getByRole('button',{name:'Back',exact:true}).click();
     assert.equal(await page.locator('.scan-page-list-v328 li').count(),3,'all three original pages survive packet review');
+    // A generic OCR pass cannot erase a matching lumper identity. Clear,
+    // corroborated fee columns must keep their source highlights and export.
+    await page.goto(new URL('/_not-found',page.url()).href);
+    await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
+    await seed(page,state);
+    const columnPhoto=await page.evaluate(async observations=>{
+      window.__ownedReaderPacket=[observations];window.__ownedReaderPacketPage=-1;
+      const canvas=document.createElement('canvas');canvas.width=700;canvas.height=1000;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,700,1000);ctx.fillStyle='black';
+      for(const line of observations[0]){ctx.font=`${Math.max(1,line.box.height*1000)}px Arial`;ctx.fillText(line.text,line.box.x*700,(line.box.y+line.box.height)*1000,line.box.width*700);}
+      return [...new Uint8Array(await(await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.95))).arrayBuffer())];
+    },receiptColumnsInput().pages[0].observations.map(o=>o.lines));
+    await page.getByRole('button',{name:/Smart Scan/}).first().click();
+    await page.locator('input[type=file][multiple]').first().setInputFiles({name:'receipt-columns.jpg',mimeType:'image/jpeg',buffer:Buffer.from(columnPhoto)});
+    await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    await review.getByRole('heading',{name:'Unloading receipt · 1',exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'lumper_receipt','filing type agrees with source review');
+    await review.getByText('Unloading amount plus fee matches the receipt total.',{exact:true}).waitFor();
+    await review.getByRole('button',{name:'$10.00 · Page 1',exact:true}).click();
+    await review.getByRole('heading',{name:'Checkout fee · Page 1',exact:true}).waitFor();
+    await review.getByLabel('Source line highlight',{exact:true}).waitFor();
+    const feeTop=await review.getByLabel('Source line highlight',{exact:true}).evaluate(el=>parseFloat(el.style.top));
+    assert.ok(Math.abs(feeTop-59.5)<.3,'checkout fee highlights its own row');
+    await review.getByRole('button',{name:'Close source',exact:true}).click();
+    const columnDownload=page.waitForEvent('download');
+    await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const columnFile=await columnDownload,columnResult=JSON.parse(fs.readFileSync(await columnFile.path(),'utf8')),columnDoc=columnResult.documents[0];
+    assert.equal(columnDoc.kind,'unloading_receipt');
+    assert.equal(columnDoc.fields.fee.value,'10.00');assert.equal(columnDoc.fields.fee.status,'supported');
+    assert.equal(columnDoc.fields.total.value,'398.00');assert.equal(columnDoc.fields.poNumber.value,'PO-51');
+    assert.equal(columnDoc.fields.trailerNumber.value,'T-700');assert.equal(columnDoc.canAutoFile,false);
+    await review.screenshot({path:`${output}/${name}-receipt-columns.png`});
+    console.log('PASS '+name+' lumper classification, checkout fee columns, exact source highlight and exported evidence');
     // A fourth, bounded identifier read must retain the complete source page.
     await page.goto(new URL('/_not-found',page.url()).href);
     await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});

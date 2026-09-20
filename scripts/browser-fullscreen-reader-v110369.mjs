@@ -47,7 +47,10 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await card.screenshot({path:`${output}/${name}-current-load.png`});
   await card.getByRole('button',{name:'Full mission',exact:true}).click();
   await page.getByRole('heading',{name:'24654',exact:true}).waitFor();
-  await page.reload();await page.locator('.adaptive-home-v1038').waitFor();
+  await page.reload();await page.locator('.adaptive-home-v1038, .logbook-home-screen-v988').first().waitFor();
+  if(!await page.locator('.adaptive-home-v1038').isVisible())await page.getByRole('button',{name:/Home/i}).first().click();
+  await page.locator('.adaptive-home-v1038').waitFor();
+  assert.equal(await card.locator('h1').innerText(),'24654','saved current load survives reloading and returning Home');
   console.log('PASS '+name+' Home current load, route and Full mission agree');
   state.loadGuidesById={};state.activeLoadGuideId='';state.routeLegsByDay['2026-09-16'][0].toCity='Onalaska';
   // Independent scenarios use independent browser stores. Closing the first

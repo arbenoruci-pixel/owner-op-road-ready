@@ -18,6 +18,16 @@ const overlaps=(a,b)=>Math.min(a.x+a.width,b.x+b.width)>Math.max(a.x,b.x)
 export function pageFieldMatches(page,spec){
   const matches=spec.pattern?page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match}))):[];
   if(spec.noisyLabel)for(const match of matches)if(spec.noisyLabel.test(match.labelLine?.text||match.line.text))match.issue||='damaged_label';
+  if(spec.receiptRow){
+    // A single geometric proposal stays reviewable. Two clear same-row reads
+    // of the exact value on this page can support it, keeping both sources.
+    const rows=matches.filter(match=>match.supportMethod==='aligned_receipt_row'&&match.issue==='layout_needs_review');
+    const value=match=>match.line.text.slice(match.start,match.end).trim().replace(/[ \t]+/g,' ');
+    for(const match of rows){
+      const observations=new Set(rows.filter(other=>value(other)===value(match)).map(other=>other.observation.id));
+      if(observations.size>=2)delete match.issue;
+    }
+  }
   if(spec.rateSection)matches.push(...rateSectionMatches(page,spec));
   if(spec.rateParty)matches.push(...ratePartyMatches(page,spec));
   if(spec.nativeCell)matches.push(...nativeCellMatches(page,spec));
