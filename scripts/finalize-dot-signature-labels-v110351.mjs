@@ -8,6 +8,7 @@ const BUILD = 'v110352-day-load-cleanup';
 // Presentation only: retain signedAt, signature images, fingerprints and history.
 export function patchDotSignaturePresentation(input) {
   let source = input;
+  const manualDailyReport = source.includes('class="daily-log-page manual-rods"');
   function replaceLabelFunction(name, body) {
     const pattern = new RegExp('^function ' + name + '\\(state, day\\) \\{[\\s\\S]*?^\\}', 'gm');
     const matches = [...source.matchAll(pattern)];
@@ -17,9 +18,16 @@ export function patchDotSignaturePresentation(input) {
     assert.ok(matches[0][0].includes('sig.signed') && matches[0][0].includes('sig.signedAt'), 'Unexpected DOT signature implementation: ' + name);
     source = source.replace(pattern, () => replacement);
   }
-  replaceLabelFunction('signatureLabel', "  return signatureForDay(state, day).signed ? 'Signed' : 'Not signed';");
+  replaceLabelFunction('signatureLabel', manualDailyReport
+    ? "  const sig = signatureForDay(state, day);\n  return sig.signed && !sig.needsRecertification ? 'Signed' : 'Not signed';"
+    : "  return signatureForDay(state, day).signed ? 'Signed' : 'Not signed';");
   replaceLabelFunction('officerSignatureLabel', '  return signatureLabel(state, day);');
   source = source.replaceAll('Certification:', 'Signature:');
+  if (manualDailyReport) {
+    assert.ok(source.includes('<small>${htmlEscape(officerSignatureLabel(state, day))}</small>'), 'Manual daily signature label anchor');
+    assert.ok(source.includes('<DailyPaper state={state} day={selectedDay} />'), 'Shared officer daily report anchor');
+    return source;
+  }
   const before = '<em>{officerSignatureLabel(state, selectedDay)}</em>';
   const after = '<em style={signatureForDay(state, selectedDay).signed ? undefined : { color: \'var(--muted, #6b7280)\' }}>{officerSignatureLabel(state, selectedDay)}</em>';
   if (!source.includes(after)) {

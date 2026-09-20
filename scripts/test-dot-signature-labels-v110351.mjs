@@ -5,6 +5,7 @@ import { patchDotSignaturePresentation } from './finalize-dot-signature-labels-v
 
 const original = fs.readFileSync('source/src/modules/dot/DotMode.jsx', 'utf8');
 const patched = patchDotSignaturePresentation(original);
+const manualDailyReport = patched.includes('class="daily-log-page manual-rods"');
 assert.equal(patchDotSignaturePresentation(patched), patched, 'Presentation finalizer must be idempotent');
 if (process.argv.includes('--materialized')) assert.equal(original, patched, 'Production must run the presentation finalizer');
 
@@ -32,6 +33,7 @@ for (const signedAt of ['2026-09-15T05:44:00.000Z', undefined, null, '', 'invali
   check({ signed: true, signedAt, signatureDataUrl: 'data:image/png;base64,retained', fingerprint: 'retained', certifiedAt: 'retained' }, 'Signed');
 }
 check({ signed: false, signedAt: '2026-09-15T05:44:00.000Z', signatureDataUrl: 'retained', needsRecertification: true }, 'Not signed');
+if (manualDailyReport) check({ signed: true, needsRecertification: true, signatureDataUrl: 'retained' }, 'Not signed');
 check({ signedAt: '2026-09-15T05:44:00.000Z' }, 'Not signed');
 check({}, 'Not signed');
 check(undefined, 'Not signed');
@@ -40,9 +42,15 @@ assert.equal(helpers.officerSignatureLabel({ signatureByDay: { [day]: unreadTime
 assert.equal(helpers.signatureLabel({ signatureByDay: { [day]: { signed: true } } }, '2026-09-14'), 'Not signed');
 
 // Selected-day badge must avoid a green success signal for an unsigned log.
-assert.ok(patched.includes("<em style={signatureForDay(state, selectedDay).signed ? undefined : { color: 'var(--muted, #6b7280)' }}>"));
-assert.ok(patched.includes('<span>Signature: {officerSignatureLabel(state, selectedDay)}</span>'));
-assert.ok(patched.includes('<b>Signature:</b> {officerSignatureLabel(state, day)}'));
+if (manualDailyReport) {
+  assert.ok(patched.includes('<small>${htmlEscape(officerSignatureLabel(state, day))}</small>'));
+  assert.ok(patched.includes('<DailyPaper state={state} day={selectedDay} />'));
+  assert.ok(functionSource(patched, 'DailyPaper').includes('dayReportHtml(state, day)'));
+} else {
+  assert.ok(patched.includes("<em style={signatureForDay(state, selectedDay).signed ? undefined : { color: 'var(--muted, #6b7280)' }}>"));
+  assert.ok(patched.includes('<span>Signature: {officerSignatureLabel(state, selectedDay)}</span>'));
+  assert.ok(patched.includes('<b>Signature:</b> {officerSignatureLabel(state, day)}'));
+}
 assert.ok(!patched.includes('Certification:'));
 assert.ok(!functionSource(patched, 'signatureLabel').includes('signedAt'));
 assert.ok(!functionSource(patched, 'officerSignatureLabel').includes('signedAt'));
