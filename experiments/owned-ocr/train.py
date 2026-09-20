@@ -10,7 +10,7 @@ from data import collate, load_samples, read_manifest, synthetic_sample
 from model import ALPHABET, LineReader, decode, edit_distance
 
 
-def evaluate(model, samples, batch_size=16):
+def evaluate(model, samples, batch_size=16, padding_aware=True):
     model.eval()
     edits = chars = exact = 0
     examples = []
@@ -18,7 +18,7 @@ def evaluate(model, samples, batch_size=16):
         for start in range(0, len(samples), batch_size):
             batch = samples[start:start+batch_size]
             images, _, lengths, _ = collate(batch, model.alphabet)
-            predictions = decode(model(images), model.alphabet, lengths)
+            predictions = decode(model(images, lengths if padding_aware else None), model.alphabet, lengths)
             for (_, truth), prediction in zip(batch, predictions):
                 edits += edit_distance(truth, prediction)
                 chars += len(truth)
@@ -40,8 +40,9 @@ def main():
     parser.add_argument('--seed', type=int, default=334)
     parser.add_argument('--threads', type=int, default=2)
     parser.add_argument('--digits-only', action='store_true')
+    parser.add_argument('--evaluate-every', type=int, default=500)
     args = parser.parse_args()
-    if args.steps < 1 or args.batch_size < 1:
+    if args.steps < 1 or args.batch_size < 1 or args.evaluate_every < 1:
         parser.error('Positive steps and batch size required')
     torch.set_num_threads(args.threads)
     torch.manual_seed(args.seed)
@@ -69,35 +70,51 @@ def main():
         train = None
     model = LineReader(alphabet)
     optimizer = torch.optim.AdamW(model.parameters(), lr=.001)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.steps, eta_min=.0001)
     criterion = torch.nn.CTCLoss(blank=0, zero_infinity=False)
     started = time.monotonic()
     losses = []
+    validation_history = []
+    best_error = float('inf')
+    best_step = 0
+    args.output.mkdir(parents=True, exist_ok=True)
     for step in range(args.steps):
         model.train()
         batch = [rng.choice(train) if train is not None else synthetic_sample(rng, train_fonts, alphabet, args.digits_only) for _ in range(args.batch_size)]
         images, labels, input_lengths, target_lengths = collate(batch, alphabet)
         optimizer.zero_grad(set_to_none=True)
-        loss = criterion(model(images), labels, input_lengths, target_lengths)
+        loss = criterion(model(images, input_lengths), labels, input_lengths, target_lengths)
         if not torch.isfinite(loss):
             raise RuntimeError('Non-finite CTC loss; check transcription/line dimensions')
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
         optimizer.step()
+        scheduler.step()
         losses.append(float(loss.detach()))
         if (step+1) % 100 == 0 or step == 0:
             print(json.dumps({'step': step+1, 'loss': round(losses[-1], 4), 'seconds': round(time.monotonic()-started)}), flush=True)
-    args.output.mkdir(parents=True, exist_ok=True)
-    report = {'model': 'owned-line-reader-v1', 'initialization': 'random', 'pretrainedWeights': False,
+        if (step+1) % args.evaluate_every == 0 or step+1 == args.steps:
+            metrics = evaluate(model, validation)
+            entry = {'step': step+1, **{k:v for k,v in metrics.items() if k != 'examples'}}
+            validation_history.append(entry)
+            print(json.dumps({'validation': entry}), flush=True)
+            if metrics['characterErrorRate'] < best_error:
+                best_error, best_step = metrics['characterErrorRate'], step+1
+                torch.save({'state_dict':model.state_dict(), 'alphabet':alphabet, 'version':2}, args.output/'best.pt')
+    model.load_state_dict(torch.load(args.output/'best.pt', weights_only=True)['state_dict'])
+    report = {'model': 'owned-line-reader-v2', 'initialization': 'random', 'pretrainedWeights': False,
               'alphabet': alphabet, 'seed': args.seed, 'steps': args.steps, 'batchSize': args.batch_size,
               'parameters': sum(p.numel() for p in model.parameters()), 'torchVersion': str(torch.__version__),
               'dataset': 'manifest' if args.manifest else 'synthetic', 'manifestSha256': manifest_hash,
               'evaluationSplit': 'validation', 'productionReady': False, 'realDocumentEvaluation': False,
               'trainingLossFirst': losses[0], 'trainingLossLast': losses[-1],
               'elapsedSeconds': round(time.monotonic()-started), 'metrics': evaluate(model, validation)}
+    report.update(selectedStep=best_step, selection='lowest validation character error', validationHistory=validation_history,
+                  generation='owned generic synthetic v2; no customer text', paddingAware=True)
     if not args.manifest:
         report['trainingFonts'] = [{'name':p.name,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in train_fonts]
         report['validationFonts'] = [{'name':p.name,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in validation_fonts]
-    torch.save({'state_dict': model.state_dict(), 'alphabet': alphabet, 'report': report}, args.output/'model.pt')
+    torch.save({'state_dict': model.state_dict(), 'alphabet': alphabet, 'version':2, 'report': report}, args.output/'model.pt')
     report['checkpointSha256'] = hashlib.sha256((args.output/'model.pt').read_bytes()).hexdigest()
     (args.output/'report.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report), flush=True)

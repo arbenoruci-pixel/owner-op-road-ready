@@ -21,4 +21,4 @@ if not rows:
     raise ValueError('A held-out test split is required')
 print(json.dumps({'checkpointSha256':hashlib.sha256(args.checkpoint.read_bytes()).hexdigest(),
     'manifestSha256':hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
-    'split':'test','productionReady':False,'metrics':evaluate(model,load_samples(rows))},indent=2))
+    'split':'test','productionReady':False,'metrics':evaluate(model,load_samples(rows),padding_aware=checkpoint.get('version',1)>=2)},indent=2))
