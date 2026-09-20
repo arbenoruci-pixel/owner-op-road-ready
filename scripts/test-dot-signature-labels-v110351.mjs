@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { patchDotSignaturePresentation } from './finalize-dot-signature-labels-v110351.mjs';
+import { certificationStatusV1032 } from '../source/src/modules/logbook/certificationV110.js';
 
 const original = fs.readFileSync('source/src/modules/dot/DotMode.jsx', 'utf8');
 const patched = patchDotSignaturePresentation(original);
@@ -15,10 +16,10 @@ function functionSource(source, name) {
   return matches[0][0];
 }
 const names = ['signatureForDay', 'signatureLabel', 'officerSignatureLabel'];
-const helpers = vm.runInNewContext(names.map(name => functionSource(patched, name)).join('\n') + '\n({ signatureLabel, officerSignatureLabel })');
+const helpers = vm.runInNewContext(names.map(name => functionSource(patched, name)).join('\n') + '\n({ signatureLabel, officerSignatureLabel })', { certificationStatusV1032 });
 const day = '2026-09-13';
 function check(signature, expected) {
-  const state = signature === undefined ? {} : { signatureByDay: { [day]: signature } };
+  const state = signature === undefined ? {} : { signatureByDay: { [day]: signature }, certifyStatus:{ [day]:'Certified' } };
   const before = JSON.stringify(state);
   Object.freeze(state);
   if (state.signatureByDay) {
@@ -38,7 +39,7 @@ check({ signedAt: '2026-09-15T05:44:00.000Z' }, 'Not signed');
 check({}, 'Not signed');
 check(undefined, 'Not signed');
 const unreadTimestamp = { signed: true, get signedAt() { throw new Error('Presentation must not read signedAt'); } };
-assert.equal(helpers.officerSignatureLabel({ signatureByDay: { [day]: unreadTimestamp } }, day), 'Signed');
+assert.equal(helpers.officerSignatureLabel({ signatureByDay: { [day]: unreadTimestamp }, certifyStatus:{ [day]:'Certified' } }, day), 'Signed');
 assert.equal(helpers.signatureLabel({ signatureByDay: { [day]: { signed: true } } }, '2026-09-14'), 'Not signed');
 
 // Selected-day badge must avoid a green success signal for an unsigned log.

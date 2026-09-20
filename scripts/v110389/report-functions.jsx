@@ -1,6 +1,11 @@
 // Source functions installed after the legacy build finalizers.
 // Keep the officer view and exported HTML on the same minimal manual RODS form.
 
+function reportTimeZoneForDay(state, day) {
+  const frozen = signatureForDay(state, day).certificationContext?.homeTimezone;
+  return getHomeTerminalTimeZone({ homeTerminalTimeZone:frozen || getHomeTerminalTimeZone(state) });
+}
+
 function reportEventsForDay(state, day) {
   // Export recorded intervals. Review-only coverage must never become a
   // recorded OFF/Driving event merely because a roadside report was opened.
@@ -13,7 +18,7 @@ function reportEventsForDay(state, day) {
     && Number(event.startMin) >= 0 && Number(event.endMin) <= 1440
     && Number(event.endMin) > Number(event.startMin)
   );
-  const zone = getHomeTerminalTimeZone(state);
+  const zone = reportTimeZoneForDay(state, day);
   if (day !== localDayKey(new Date(), zone)) return rows.map(event => ({ ...event }));
   const minute = nowMin(zone);
   return rows.map((event, index) => {
@@ -35,7 +40,7 @@ function drivingMilesForDay(state, day, events = []) {
     const total = driving.reduce((sum, event) => sum + Number(event.manualMiles), 0);
     return total > 0 ? total : null;
   }
-  const zone = getHomeTerminalTimeZone(state);
+  const zone = reportTimeZoneForDay(state, day);
   const end = day === localDayKey(new Date(), zone) ? nowMin(zone) : 1440;
   const covered = events.length && Number(events[0].startMin) === 0
     && Number(events.at(-1).endMin) === end
@@ -166,7 +171,7 @@ function dayReportHtml(state, day) {
   const events = reportEventsForDay(state, day);
   const drivingMiles = drivingMilesForDay(state, day, events);
   const equipment = reportEquipmentForDay(dayState, events);
-  const timeZone = getHomeTerminalTimeZone(dayState);
+  const timeZone = reportTimeZoneForDay(dayState, day);
   const timeZoneLabel = timeZoneShortLabel(timeZone, new Date(`${day}T12:00:00Z`));
   const sig = signatureForDay(state, day);
   const eventRows = events.length ? events.map((event, index) => `
@@ -179,7 +184,7 @@ function dayReportHtml(state, day) {
       <td data-label="CMV">${htmlEscape(event.truck || event.vehicleNumber || unitName(dayState))}</td>
       <td data-label="Remarks">${htmlEscape(sanitizeLogText(event.note || event.description || ''))}</td>
     </tr>`).join('') : '<tr><td colspan="7">No duty status entries recorded for this day.</td></tr>';
-  const certified = Boolean(sig.signed && !sig.needsRecertification);
+  const certified = officerSignatureLabel(state, day) === 'Signed';
   const signatureDataUrl = certified ? (sig.signatureDataUrl || (sig.signatureRef === 'driverSignature' ? state.driverSignature?.dataUrl : '') || '') : '';
   const signatureHtml = signatureDataUrl ? `<img src="${htmlEscape(signatureDataUrl)}" alt="Driver signature" />` : '';
   const active = day === localDayKey(new Date(), timeZone);

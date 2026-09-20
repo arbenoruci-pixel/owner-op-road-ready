@@ -4,7 +4,8 @@ import vm from 'node:vm';
 import { durLabel, nowMin, timeLabel } from '../source/src/shared/utils/time.js';
 import { addDays, localDayKey } from '../source/src/shared/utils/date.js';
 import { label } from '../source/src/shared/utils/status.js';
-import { readLogbookDayState } from '../source/src/modules/logbook/dayFormV110.js';
+import { readLogbookDayState, applyDayFormEdit } from '../source/src/modules/logbook/dayFormV110.js';
+import { certificationStatusV1032, createCertificationRecord } from '../source/src/modules/logbook/certificationV110.js';
 import { getHomeTerminalTimeZone, timeZoneShortLabel } from '../source/src/core/time/homeTerminalTime.js';
 import { sanitizeLogText } from '../source/src/shared/utils/logText.js';
 import { routeLegsForDayCanonical } from '../source/src/core/routes/routeNormalization.js';
@@ -26,7 +27,7 @@ const report = vm.runInNewContext([
   block('function svgGraphMarkup', 'function reportHtml'),
   '({ dayRange, reportEventsForDay, drivingMilesForDay, dutyTotals, dayReportHtml, dailyLogStyleText })',
 ].join('\n'), {
-  durLabel, nowMin, timeLabel, addDays, localDayKey, label, readLogbookDayState,
+  durLabel, nowMin, timeLabel, addDays, localDayKey, label, readLogbookDayState, certificationStatusV1032,
   getHomeTerminalTimeZone, timeZoneShortLabel, sanitizeLogText,
   routeLegsForDayCanonical, eventHasNoLoadDeclaration,
 });
@@ -108,6 +109,27 @@ const recert = report.dayReportHtml({ ...state, signatureByDay:{ [day]:{
 } } }, day);
 assert.ok(recert.includes('Not signed'));
 assert.doesNotMatch(recert, /<img /, 'stale certification never displays a valid signature');
+const certifiedState = { ...state, signatureByDay:{ [day]:createCertificationRecord(state, day, {
+  signatureDataUrl:'data:image/png;base64,AAAA',
+}) } };
+const certifiedHtml = report.dayReportHtml(certifiedState, day);
+assert.ok(certifiedHtml.includes('<small>Signed</small>') && certifiedHtml.includes('<img '), 'unchanged certified content retains its signature');
+const editedForm = applyDayFormEdit(certifiedState, certifiedState, { truck:'229' }, day);
+assert.equal(editedForm.signatureByDay[day].needsRecertification, undefined, 'canonical form edits do not require the legacy flag');
+for (const changed of [editedForm, { ...certifiedState, eventsByDay:{ [day]:events.map(event =>
+  event.id === 'on' ? { ...event, note:'Corrected pre-trip' } : event
+) } }]) {
+  const saved = JSON.stringify(changed);
+  const changedHtml = report.dayReportHtml(changed, day);
+  assert.ok(changedHtml.includes('<small>Not signed</small>'), 'changed certified content requires a fresh signature');
+  assert.doesNotMatch(changedHtml, /<img /, 'fingerprint mismatch hides the old signature image');
+  assert.equal(JSON.stringify(changed), saved, 'certification review does not rewrite the saved attestation');
+}
+const movedTerminal = { ...certifiedState, homeTerminalTimeZone:'America/Los_Angeles' };
+const historicalHtml = report.dayReportHtml(movedTerminal, day);
+assert.ok(historicalHtml.includes('America/New_York') && historicalHtml.includes('Start (EDT)'), 'historical report keeps the certified home-terminal zone');
+assert.ok(historicalHtml.includes('<small>Signed</small>'), 'changing the current terminal does not invalidate historical facts');
+assert.doesNotMatch(historicalHtml, /America\/Los_Angeles/);
 assert.match(source, /<DailyPaper state=\{state\} day=\{selectedDay\}/, 'officer view shares the daily report');
 assert.match(source, /<style>\$\{dailyLogStyleText\(\)\}<\/style>/, 'export includes the same daily styles');
 assert.match(source, /@media screen and \(max-width:760px\)/,

@@ -19,7 +19,7 @@ export function patchDotSignaturePresentation(input) {
     source = source.replace(pattern, () => replacement);
   }
   replaceLabelFunction('signatureLabel', manualDailyReport
-    ? "  const sig = signatureForDay(state, day);\n  return sig.signed && !sig.needsRecertification ? 'Signed' : 'Not signed';"
+    ? "  const certification = certificationStatusV1032(state, day);\n  return certification.signed && certification.status === 'Certified' ? 'Signed' : 'Not signed';"
     : "  return signatureForDay(state, day).signed ? 'Signed' : 'Not signed';");
   replaceLabelFunction('officerSignatureLabel', '  return signatureLabel(state, day);');
   source = source.replaceAll('Certification:', 'Signature:');
