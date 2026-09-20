@@ -39,9 +39,11 @@ export function fieldMatches(lines,spec){
       const eligible=spec.measurementRow?right.filter(candidate=>measurementRow(label,candidate.box)):right;
       const first=eligible[0];
       if(first){const range=valueRange(first);if(range&&range[1]>range[0]&&!(spec.kind==='party'&&isStreetAddress(first.text))){const token=spec.valuePattern?.exec(first.text.slice(range[0],range[1]));
-        const supportedRow=spec.measurementRow&&eligible.length===1&&line.confidence>=.8&&first.confidence>=.8;
+        const receiptRow=spec.receiptRow&&right.length===1&&measurementRow(label,first.box);
+        const supportedRow=(spec.measurementRow&&eligible.length===1||receiptRow)&&line.confidence>=.8&&first.confidence>=.8;
         matches.push({line:first,start:range[0],end:token?range[0]+token[0].length:range[1],labelLine:line,
-          ...(supportedRow?{supportMethod:'aligned_measurement_row'}:{issue:'layout_needs_review'})});}continue;}
+          ...(supportedRow?{supportMethod:receiptRow?'aligned_receipt_row':'aligned_measurement_row',...(receiptRow?{issue:'layout_needs_review'}:{})}
+            :{issue:spec.receiptRow&&right.length>1?'ambiguous_receipt_row':'layout_needs_review'})});}continue;}
     }
     if(!blockLabel||!line.box)continue;
     const label=line.box,center=label.x+label.width/2;if(label.width>.4||Math.abs(center-.5)<.06)continue;

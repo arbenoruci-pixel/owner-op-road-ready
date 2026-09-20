@@ -31,6 +31,11 @@ BASE_PROFILES.find(p=>p.id==='bol').variants=[{heading:/^\s*(?:UNIFORM\s+)?(?:ST
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').variants=[{heading:/^\s*LUMPER\s+(?:RECEIPT|PAYMENT\s+RECEIPT)\s*$/i,signals:[/^\s*(?:TOTAL|NET\s+TOTAL)\s*:?\s*[$€£]?\s*\d/i,/^\s*(?:RECEIPT|CARRIER|LOAD|PO|DATE)\b/i]}];
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').filingType='lumper_receipt';
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').refines=['other_expense'];
+// Explicit receipt labels can use matching, unique same-row reads as support.
+// Other document profiles and below-label proposals retain their review rules.
+for(const spec of Object.values(BASE_PROFILES.find(p=>p.id==='unloading_receipt').fields)){
+  if(spec.rightLabel)spec.receiptRow=true;
+}
 BASE_PROFILES.find(p=>p.id==='invoice').filingType='other';
 Object.assign(BASE_PROFILES.find(p=>p.id==='bol').fields,bolMeasurementFields);
 export const PROFILES=Object.freeze([...BASE_PROFILES,...truckingProfiles(BASE_PROFILES)]);

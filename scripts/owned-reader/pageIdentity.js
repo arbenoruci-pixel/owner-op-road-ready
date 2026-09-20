@@ -16,6 +16,15 @@ export function extraPageIdentity(text){
   return {typeId:profile.filingType||profile.id,confidence:page.status==='needs_review'?.49:.85,status:page.status,requiresTypeReview:page.status==='needs_review',reason:profile.label+' heading and document field structure'};
 }
 
+// The filing selector must use the same receipt consensus as source review.
+// Only a generic/specific receipt pair is eligible; other type conflicts stay.
+export function hasMatchingReceiptIdentity(analysis,pageNumber,observedTypes){
+  if(observedTypes.length!==2||!observedTypes.includes('other_expense')||!observedTypes.includes('lumper_receipt'))return false;
+  const review=reviewScanAnalysis(analysis),page=review.pages.find(item=>item.number===pageNumber);
+  const identity=review.pageIdentities.find(item=>item.pageId===page?.id);
+  return identity?.kind==='unloading_receipt'&&identity.status==='supported';
+}
+
 // The core joins a terms-only RateCon page only with matching PRO, envelope
 // and compatible parties. Carry that established relationship into filing.
 export function alignRateContinuationPages(analysis,pageTypes){
