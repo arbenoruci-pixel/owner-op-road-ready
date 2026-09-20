@@ -13,7 +13,7 @@ const city=/^\s*[A-Z][A-Z .'-]*,?\s+[A-Z]{2}\s+\d{5}(?:-\d{4})?\s*$/i;
 const appointment=/\bAPPOINTMENT\s*:?\s*(.+?)\s*$/id;
 const appointmentDate=/\b(\d{4}-\d{2}-\d{2}|\d{1,2}[/.]\d{1,2}[/.](?:\d{4}|\d{2})|\d{1,2}[- ](?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[- ]\d{4})\b/gid;
 const partyNoise=/^(?:PICK(?:\s*UP)?|DELIVERY|STOP|SHIPPER|CONSIGNEE|ADDRESS|LOCATION|CONTACT|PHONE|TEL|FAX|APPOINTMENT|CHECK\s*IN|INSTRUCTIONS|PLEASE|NOTE|HOURS|RECEIVING\s+HOURS)\b/i;
-const boilerplate=/\b(?:SIGNATURE|SIGNED|LATE\s+FEE|DETENTION|TONU|LAYOVER|INSURANCE|PAYMENT\s+TERMS|SEND\s+INVOICE|DOCUMENT\s+REF)\b/i;
+const boilerplate=/\b(?:SIGNATURE|SIGNED|LATE\s+FEE|DETENTION|TONU|LAYOVER|INSURANCE|PAYMENT\s+TERMS|SEND\s+INVOICE|DOCUMENT\s+REF)\b|^\s*(?:ALL LOADS MUST\b|ATTENTION\s*:)/i;
 
 function cityAfter(lines,index){
   const address=lines[index],next=lines[index+1];
@@ -78,9 +78,12 @@ export function rateSectionMatches(page,spec){
       }
       if(spec.ratePart==='party'&&i===0&&isDocumentParty(line.text)&&!partyNoise.test(line.text.trim())
         &&!street.test(line.text)&&!city.test(line.text)&&!appointment.test(line.text)
-        &&street.test(section.lines[i+1]?.text||'')&&cityAfter(section.lines,i+1)){
+        &&(street.test(section.lines[i+1]?.text||'')&&cityAfter(section.lines,i+1)||proof?.name===line)){
         matches.push({...range(line),observation,labelLine:section.line,...support(line),
           extraLabelLines:[...(proof?.labels||[]),section.lines[i+1],cityAfter(section.lines,i+1)]});
+      }
+      if(spec.ratePart==='address'&&proof&&!proof.address&&line===proof.locality){
+        matches.push({...range(line),observation,labelLine:section.line,extraLabelLines:proof.labels,issue:'incomplete_address'});
       }
       if(spec.ratePart==='address'&&street.test(line.text)){
         const match=range(line,appt?appt.index:line.text.length),next=cityAfter(section.lines,i);
@@ -99,7 +102,7 @@ export function rateSectionMatches(page,spec){
 // Requiring a heading, an explicit total, and both stop roles avoids treating
 // invoice instructions such as "attach rate confirmation" as the document.
 export const rateConfirmationProfile={
-  id:'rate_confirmation',label:'Rate confirmation',joinPages:false,
+  id:'rate_confirmation',label:'Rate confirmation',joinPages:false,partyKeys:['broker','carrier'],
   heading:/^\s*(?:(?:PRO|LOAD|ORDER)\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]?\s*[A-Z0-9][A-Z0-9._/-]*\s+)?(?:CARRIER\s+)?(?:RATE\s*(?:CONFIRMATION|CON)|LOAD\s+CONFIRMATION)(?:\s+(?:FOR\s+)?(?:LOAD|PRO|ORDER|PO)\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]?\s*[A-Z0-9][A-Z0-9._/-]*)?\s*$/i,
   signals:[/^\s*(?:TOTAL\s+(?:RATE|CARRIER\s+(?:PAY|RATE))|CARRIER\s+PAY|ALL[ -]IN\s+RATE|RATE\s*\(\$\))(?=\s|:)/i,/^\s*(?:PICK(?:\s*UP)?|SHIPPER|ORIGIN|LOAD AT)\b/i,/^\s*(?:DELIVERY|DELIVER|DROP|CONSIGNEE|DESTINATION|STOP)\b/i],
   identity:'loadNumber',
@@ -123,13 +126,13 @@ export const rateConfirmationProfile={
     vin:{label:'VIN',kind:'vin',required:false,displayWhenFound:true,
       pattern:/\bVIN\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]?\s*([A-Z0-9]{17})(?=\s|$)/id},
     podRequirement:{label:'POD requirement',kind:'text',required:false,displayWhenFound:true,
-      pattern:/^\s*(POD\s+must\s+be\s+provided\b.*?)\s*$/id},
+      pattern:/^[\s-]*(POD\s+must\s+be\s+provided\b.*?|ALL\s+PAGES\s+OF\s+PODs?\s+MUST\s+BE\s+TURNED\s+IN\b.*?)\s*$/id},
     lateFeeTerms:{label:'Late-fee clause',kind:'text',required:false,displayWhenFound:true,
       pattern:/^\s*((?:[$€£]\s*\d[\d.,]*\s+PER\s+DAY\s+LATE\s+FEE|LATE\s+FEE)\b.*?)\s*$/id},
     detentionTerms:{label:'Detention clause',kind:'text',required:false,displayWhenFound:true,
-      pattern:/^\s*(DETENTION\b\s*[:\-–—]?\s*[$€£]\s*\d.*?)\s*$/id},
+      pattern:/^[\s-]*(DETENTION\b\s*[:\-–—]?\s*[$€£]\s*\d.*?|DETENTION\s+PAID\s+AFTER\s+\d+\s*(?:H|HOURS?)\b.*?[$€£]\s*\d.*?)\s*$/id},
     billingEmail:{label:'Invoice recipient (from document)',kind:'text',required:false,displayWhenFound:true,
-      pattern:/^\s*SEND\s+INVOICE\s+TO\s+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\s*$/id},
+      pattern:/^[\s-]*(?:PLEASE\s+)?SEND\s+(?:INVOICE|ALL\s+BILLING)\s+TO\s+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\s*$/id},
     pickupAddress:{label:'Pickup address',kind:'text',required:true,rateSection:'pickup',ratePart:'address'},
     pickupAppointment:{label:'Pickup appointment',kind:'text',required:true,rateSection:'pickup',ratePart:'appointment'},
     deliveryAddress:{label:'Delivery address',kind:'text',required:true,rateSection:'delivery',ratePart:'address'},
