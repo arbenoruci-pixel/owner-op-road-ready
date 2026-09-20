@@ -35,7 +35,9 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
     await page.locator('input[type=file][multiple]').first().setInputFiles({name:'rate-confirmation.pdf',mimeType:'application/pdf',buffer});
     await page.getByRole('button',{name:'Read document',exact:true}).click();
-    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+    const previewToggle=page.getByRole('button',{name:/^Reader preview · (?:Check source|Close)$/});
+    await previewToggle.waitFor();
+    if(await previewToggle.getAttribute('aria-expanded')!=='true')await previewToggle.click();
     const review=page.locator('.owned-reader-preview');await review.getByText('3 pages · 2 documents',{exact:true}).waitFor();
     const download=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const result=JSON.parse(fs.readFileSync(await(await download).path(),'utf8')),fields=result.documents[0].fields;
