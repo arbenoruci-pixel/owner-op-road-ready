@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from '../v110328/browserFixture.mjs';
 const output='browser-test-results/bol-rows-v110384';fs.mkdirSync(output,{recursive:true});
+async function savedRecords(page){return page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{const db=r.result,q=db.transaction('documents_local').objectStore('documents_local').getAll();q.onsuccess=()=>{db.close();resolve(q.result);};q.onerror=()=>reject(q.error);};r.onerror=()=>reject(r.error);}));}
 const rows=[
  {text:'BILL OF LADING',x:60,y:35,w:450},
  {text:'B/L NO: 0012345000',x:640,y:175,w:390,confidence:76,words:[['B/L',640,52],['NO:',710,45],['0012345000',785,170]]},
@@ -112,6 +113,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     await dialog.getByRole('button',{name:'Close source',exact:true}).click();
     const check=page.locator('.scan-driver-check-v105 input');if(await check.count())await check.check();
     await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();await page.locator('.scan-saved-v105').waitFor();
+    const beforeRecords=await savedRecords(page);assert.equal(beforeRecords.length,1);const beforeWeights=beforeRecords[0];
     await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();
     const recent=page.getByRole('region',{name:'Recent documents'});await recent.locator('.saved-document-row-v344').first().click();
     await recent.getByRole('button',{name:'Read again',exact:true}).click();
@@ -148,11 +150,15 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     await reread.getByRole('button',{name:'Save reading',exact:true}).click();
     await reread.getByText('Reading saved with this document. Find it under Reviewed document details.',{exact:true}).waitFor();
     await page.reload();
-    const records=await page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{const db=r.result,q=db.transaction('documents_local').objectStore('documents_local').getAll();q.onsuccess=()=>{db.close();resolve(q.result);};q.onerror=()=>reject(q.error);};r.onerror=()=>reject(r.error);}));
+    const records=await savedRecords(page);
     assert.equal(records.length,1);const saved=records[0].extracted.readerReviewV110345;
-    assert.equal(saved.remaining,0);assert.equal(records[0].extracted.readerContinuityV110371.draft,null);
+    // The saved summary also counts supported source suggestions that have
+    // never been human-confirmed. Those remain independent of the fix queue.
+    const suggestions=Object.values(confirmedGroup.fields).filter(f=>f.status==='supported'&&f.value!=null).length;
+    assert.equal(saved.remaining,suggestions);assert.equal(records[0].extracted.readerContinuityV110371.draft,null);
     for(const key of ['netWeight','tareWeight','weight'])assert.equal(saved.documents[0].fields[key].value,confirmedGroup.fields[key].value);
-    assert.ok(!records[0].load_no,'unit confirmation cannot assign a load');
+    assert.equal(records[0].load_no,beforeWeights.load_no,'unit confirmation preserves the original load assignment');
+    assert.equal(records[0].sha256,beforeWeights.sha256,'unit confirmation preserves the original file');
     await page.getByRole('button',{name:/^Documents/}).first().click();await recent.locator('.saved-document-row-v344').first().click();
     await recent.getByRole('button',{name:'Read again',exact:true}).click();
     await reread.getByText('3 saved confirmations kept. Review a saved value to change it.',{exact:true}).waitFor();
