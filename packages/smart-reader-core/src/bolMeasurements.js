@@ -1,8 +1,8 @@
 // Keep observed numbers and units separate. Arithmetic cannot invent either.
 const number = '(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{1,3})?';
-const token = new RegExp('^('+number+')(?:[ \\t]*(LB|LBS|KG|KGS))?(?=[ \\t|)]|$)', 'id');
+const token = new RegExp('^('+number+')(?:[ \\t]*(LB|LBS|KG|KGS))?(?=[ \\t|)\\]\\}]|$)', 'id');
 function weightField(label, source) {
-  return {label, kind:'shipping_weight', required:false, displayWhenFound:true,
+  return {label, kind:'shipping_weight', required:false, displayWhenFound:true,measurementRow:true,
     pattern:new RegExp('^[\\s|]*(?:'+source+')[ \\t]*:?[ \\t]+(.+?)\\s*$', 'id'),
     rightLabel:new RegExp('^\\s*(?:'+source+')\\s*:?\\s*$', 'i'), valuePattern:token};
 }
@@ -10,7 +10,7 @@ export const bolMeasurementFields = {
   weight:weightField('Total weight', 'TOTAL WEIGHT|GROSS WEIGHT|WEIGHT'),
   netWeight:weightField('Net weight', 'TOTAL NET WEIGHT|NET WEIGHT'),
   tareWeight:{...weightField('Tare weight', 'TOTAL TARE|OTAL TARE|TARE WEIGHT|TARE'),noisyLabel:/^[\s|]*OTAL\s/i},
-  totalUnits:{label:'Total units', kind:'count', required:false, displayWhenFound:true,
+  totalUnits:{label:'Total units', kind:'count', required:false, displayWhenFound:true,measurementRow:true,
     pattern:/^[\s|]*(?:TOTAL|OTAL)\s+UNITS\s*:?\s+(\d[\d,]*)\s*$/id,
     rightLabel:/^\s*(?:TOTAL|OTAL)\s+UNITS\s*:?\s*$/i,noisyLabel:/^[\s|]*OTAL\s/i},
   temperature:{label:'Temperature setting instruction', kind:'temperature_instruction', required:false, displayWhenFound:true,

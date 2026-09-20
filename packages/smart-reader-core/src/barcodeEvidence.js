@@ -15,3 +15,18 @@ export function bolBarcodeChecks(pages,fields) {
   }
   return checks;
 }
+
+// An exact checksum-validated barcode can corroborate weak OCR of an explicit
+// BOL label on the same page. It never supplies missing digits or defeats a
+// conflicting reading, and it never invents recognizer confidence.
+export function corroborateBolReference(pages,field){
+  if(!field||field.status==='confirmed'||!field.candidates.length
+    ||field.issues.some(issue=>!['weak_recognition','layout_needs_review','label_needs_review'].includes(issue)))return field;
+  const values=new Set(field.candidates.map(c=>c.value));
+  if(values.size!==1||values.has(null))return field;
+  const checks=bolBarcodeChecks(pages,{bolNumber:field}),value=field.candidates[0].value;
+  if(!checks.length||checks.some(c=>c.status!=='passed'||c.value!==value))return field;
+  const labeled=field.candidates.some(c=>c.evidence.some(e=>!e.matchIssue&&checks.some(check=>check.evidence.pageId===e.pageId)));
+  if(!labeled)return field;
+  return {...field,status:'supported',value,issues:[],corroboration:{method:'barcode_code128',evidence:checks.map(c=>c.evidence)}};
+}
