@@ -35,6 +35,7 @@ patch(ui,"      {group.kind==='unknown'?",`      {group.checks.filter(check=>che
 patch(ui,'      {rereadText?<p role="status">',`      {selection.field?.kind==='shipping_weight'?<p>Include the unit shown on the source, such as LB or KG. Leave this item for review if the unit is missing.</p>:null}
       {selection.field?.kind==='temperature_instruction'?<p>This is the printed temperature setting instruction. Check the sign and any condition, such as “Frozen loads”.</p>:null}
       {rereadText?<p role="status">`);
-const browser='scripts/browser-native-pdf-v110363.mjs';
-fs.writeFileSync(browser,fs.readFileSync(browser,'utf8').replaceAll("'0.3.18'","'0.3.19'"));
+for(const browser of ['scripts/browser-native-pdf-v110363.mjs','scripts/v110373/browser-reader-evidence.mjs']){
+  fs.writeFileSync(browser,fs.readFileSync(browser,'utf8').replaceAll("'0.3.18'","'0.3.19'"));
+}
 console.log('PASS — BOL barcode proof, original-pixel identifier retry and measurement review installed');
