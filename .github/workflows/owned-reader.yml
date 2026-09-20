@@ -39,7 +39,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Exact production build and behavioral contracts
-        run: node scripts/build-v110.mjs 2>&1 | tee /tmp/owned-reader-build.log
+        run: |
+          set -o pipefail
+          node scripts/build-v110.mjs 2>&1 | tee /tmp/owned-reader-build.log
       - name: Architecture and isolation
         run: npm run verify:architecture
       - run: |
@@ -57,6 +59,7 @@ jobs:
           reader_test_status=0
           node scripts/browser-fullscreen-reader-v110369.mjs || reader_test_status=1
           node scripts/v110373/browser-reader-evidence.mjs || reader_test_status=1
+          node scripts/v110382/browser-bol.mjs || reader_test_status=1
           node scripts/browser-owned-reader.mjs || reader_test_status=1
           node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
           TEST_NATIVE_CELLS=1 node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
@@ -72,6 +75,7 @@ jobs:
             browser-test-results/fullscreen-reader-v110369/
             browser-test-results/owned-reader/
             browser-test-results/reader-evidence-v110373/
+            browser-test-results/bol-quality-v110382/
             browser-test-results/scanner-capture-v110329/
             browser-test-results/scanner-workflow-v110328/
             browser-test-results/saved-documents-v110344/

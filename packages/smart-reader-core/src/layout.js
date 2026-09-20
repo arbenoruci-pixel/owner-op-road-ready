@@ -31,7 +31,8 @@ export function fieldMatches(lines,spec){
       const label=line.box,side=label.x+label.width/2<.5?0:.5;
       const right=lines.filter(candidate=>{const box=candidate.box;return candidate!==line&&box&&!isRule(candidate,line)&&box.x>=label.x+label.width-.003&&box.x-(label.x+label.width)<=.3&&box.x>=side&&box.x+box.width<=side+.5&&Math.min(box.y+box.height,label.y+label.height)-Math.max(box.y,label.y)>=Math.min(box.height,label.height)*.5;}).sort((a,b)=>a.box.x-b.box.x);
       const first=right[0];
-      if(first){const range=valueRange(first);if(range&&range[1]>range[0]&&!(spec.kind==='party'&&isStreetAddress(first.text)))matches.push({line:first,start:range[0],end:range[1],labelLine:line,issue:'layout_needs_review'});continue;}
+      if(first){const range=valueRange(first);if(range&&range[1]>range[0]&&!(spec.kind==='party'&&isStreetAddress(first.text))){const token=spec.valuePattern?.exec(first.text.slice(range[0],range[1]));
+        matches.push({line:first,start:range[0],end:token?range[0]+token[0].length:range[1],labelLine:line,issue:'layout_needs_review'});}continue;}
     }
     if(!blockLabel||!line.box)continue;
     const label=line.box,center=label.x+label.width/2;if(label.width>.4||Math.abs(center-.5)<.06)continue;

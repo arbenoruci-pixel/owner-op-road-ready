@@ -1,6 +1,7 @@
 import {resolveEvidence} from './input.js';
 import {normalizeValue} from './profiles.js';
 import {validateInvoice,validateUnloadingReceipt} from './validation.js';
+import {validateBol} from './bolChecks.js';
 
 export function buildRereadRequests(result) {
   const requests=[];
@@ -28,7 +29,7 @@ export function confirmField(result, {documentId,groupId,field:key,rawValue,evid
   if(!field.candidates.some(c=>c.evidence.some(e=>JSON.stringify(e)===JSON.stringify(evidence))))throw new Error('Select evidence belonging to this field');
   if(typeof rawValue!=='string')throw new Error('A field value is required');
   const normalized=normalizeValue(field.kind,rawValue);
-  if(normalized.value===null)throw new Error('Corrected value is ambiguous or invalid');
+  if(normalized.value===null||normalized.issue==='weight_unit_required')throw new Error('Corrected value is ambiguous or invalid');
   const next=structuredClone(result);
   const target=next.documents.find(d=>d.id===groupId);
   const correction={documentId,groupId,field:key,sourceQuote:evidence.quote,rawValue,value:normalized.value,
@@ -40,6 +41,7 @@ export function confirmField(result, {documentId,groupId,field:key,rawValue,evid
     issues:[]};
   if(target.kind==='invoice')target.checks=validateInvoice(target.fields);
   if(target.kind==='unloading_receipt')target.checks=validateUnloadingReceipt(target.fields);
+  if(target.kind==='bol')target.checks=validateBol(next.pages.filter(p=>target.pageIds.includes(p.id)),target.fields);
   target.requiresReview=true;target.canAutoFile=false;
   return next;
 }
