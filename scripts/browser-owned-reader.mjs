@@ -384,6 +384,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByLabel('Source line highlight',{exact:true}).waitFor();
     const feeTop=await review.getByLabel('Source line highlight',{exact:true}).evaluate(el=>parseFloat(el.style.top));
     assert.ok(Math.abs(feeTop-59.5)<.3,'checkout fee highlights its own row');
+    await review.getByRole('button',{name:'Close source',exact:true}).click();
     const columnDownload=page.waitForEvent('download');
     await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const columnFile=await columnDownload,columnResult=JSON.parse(fs.readFileSync(await columnFile.path(),'utf8')),columnDoc=columnResult.documents[0];
