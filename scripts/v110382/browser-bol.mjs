@@ -76,7 +76,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(group.fields.weight.status,'needs_review');assert.equal(group.fields.temperature.value,'-10 F');
     assert.equal(group.checks.find(c=>c.id==='bol_weight_arithmetic').status,'passed');assert.equal(group.checks.find(c=>c.id==='bol_barcode_comparison').status,'passed');
     assert.equal(group.canAutoFile,false);assert.deepEqual(errors,[]);
-    if(damaged){assert.equal(result.engineVersion,'0.3.23');assert.equal(group.identityStatus,'needs_review');}
+    if(damaged){assert.equal(result.engineVersion,'0.3.24');assert.equal(group.identityStatus,'needs_review');}
     console.log('PASS '+name+' '+(damaged?'damaged BOL labels, ':'')+'actual barcode, crop proof, BOL correction, unit guard and exported evidence');
   }finally{await context.close();await instance.close();}
 }

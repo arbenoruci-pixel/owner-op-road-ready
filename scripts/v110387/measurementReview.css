@@ -1,0 +1,7 @@
+.reader-weight-confirm-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.reader-weight-confirm-options .reader-weight-confirm{min-height:68px;font-size:15px;line-height:1.3}
+.reader-weight-confirm-options span{display:block;font-size:12px;font-weight:400;margin-top:4px}
+.reader-weight-modal{padding:14px;overflow:auto;flex:1;min-height:0}
+.reader-weight-modal .reader-weight-review{margin-top:0}
+.reader-weight-modal>.reader-review-skip{min-height:44px;width:100%;border:1px solid #9cb0c5;border-radius:8px;background:white;color:#172b40;font:inherit}
+.reader-weight-complete{padding:12px;border-radius:10px;background:#e9f6ed;color:#184c2e}
