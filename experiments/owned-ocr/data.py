@@ -12,7 +12,14 @@ def image_tensor(image):
     image = ImageOps.exif_transpose(image).convert('L')
     if image.height < 1 or image.width < 1:
         raise ValueError('Empty line image')
+    pixels = np.asarray(image)
+    border = np.concatenate((pixels[0],pixels[-1],pixels[:,0],pixels[:,-1]))
+    if np.quantile(border,.8) < 100:
+        # Reverse-print labels (white letters in a dark cell) use the same ink
+        # convention as ordinary text. Never infer letters from the cell label.
+        image = ImageOps.invert(image)
     width = max(8, round(image.width * 32 / image.height))
+    width = (width + 3) // 4 * 4
     if width > 2048:
         raise ValueError('Line is too wide; split the region before reading')
     image = image.resize((width, 32), Image.Resampling.BILINEAR)
@@ -36,25 +43,60 @@ def collate(samples, alphabet):
     return images, torch.tensor(labels), torch.tensor([w // 4 for w in widths]), torch.tensor(lengths)
 
 
+WORDS = ('INVOICE BOL TOTAL SHIPPER DATE WEIGHT CARRIER AMOUNT REFERENCE ORDER '
+         'RATE CONFIRMATION DELIVERY PICKUP APPOINTMENT NUMBER ADDRESS CITY STATE ZIP '
+         'PHONE CONTACT TRAILER EQUIPMENT MILES DESCRIPTION QUANTITY PALLETS CASES '
+         'GROSS NET TARE FREIGHT LINEHAUL SURCHARGE PAYMENT RECEIVED SIGNATURE '
+         'TRANSPORT LOGISTICS SYSTEMS EXPRESS SERVICES WAREHOUSE DISTRIBUTION '
+         'ROAD STREET DRIVE AVENUE DOCK SUITE PARKWAY NORTH SOUTH EAST WEST '
+         'PRINT COPY ORIGINAL NOTES REQUIRED ONLY LOAD SPECIAL INSTRUCTIONS '
+         'ALPHA BRAVO CHARLIE DELTA ECHO FOXTROT').split()
+
+
+def synthetic_text(rng, alphabet):
+    """Generic generated content: never import a customer's document into training."""
+    mode = rng.randrange(7)
+    if mode == 0:
+        text = ''.join(rng.choice('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-') for _ in range(rng.randint(4, 18)))
+    elif mode == 1:
+        text = f'{rng.randint(1,12):02}/{rng.randint(1,28):02}/{rng.randint(20,30):02} {rng.randint(1,12):02}:{rng.randint(0,59):02} ' + rng.choice(['AM', 'PM', 'EST', 'CST'])
+    elif mode == 2:
+        value = f'{rng.randint(1,99999):,}.{rng.randint(0,99):02}'
+        text = rng.choice(['$', '', 'Weight: ', 'TOTAL: ', 'Rate: ']) + value + rng.choice(['', ' LB', ' KG', ' USD'])
+    elif mode == 3:
+        text = rng.choice(WORDS) + ': ' + ''.join(rng.choice('0123456789') for _ in range(rng.randint(3,12)))
+    elif mode in (4, 5):
+        text = ' '.join(rng.choices(WORDS, k=rng.randint(1,4)))
+        if rng.random() < .45:
+            text = text.title()
+        if rng.random() < .2:
+            text = str(rng.randint(1,9999)) + ' ' + text
+    else:
+        text = ''.join(rng.choice(alphabet) for _ in range(rng.randint(3,24))).strip() or '0'
+    return text[:42].strip()
+
+
 def synthetic_sample(rng, fonts, alphabet, digits_only=False):
     if digits_only:
         text = ''.join(rng.choice('0123456789') for _ in range(rng.randint(3, 9)))
     else:
-        labels = ['INVOICE', 'BOL', 'TOTAL', 'SHIPPER', 'DATE', 'WEIGHT', 'Carrier', 'Amount', 'Fature', 'Narta', 'PO']
-        text = (rng.choice(labels) + ': ' if rng.random() < .6 else '') + ''.join(
-            rng.choice('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-') for _ in range(rng.randint(3, 10)))
-        if rng.random() < .3:
-            text = ''.join(rng.choice(alphabet) for _ in range(rng.randint(3, 18))).strip() or '0'
+        text = synthetic_text(rng, alphabet)
     if any(char not in alphabet for char in text):
         raise ValueError('Unsupported synthetic alphabet')
     font_path = rng.choice(fonts)
-    font = ImageFont.truetype(str(font_path), rng.randint(20, 30))
+    font = ImageFont.truetype(str(font_path), rng.randint(18, 38))
     bounds = font.getbbox(text)
-    image = Image.new('L', (bounds[2] - bounds[0] + 12, bounds[3] - bounds[1] + 10), rng.randint(235, 255))
-    ImageDraw.Draw(image).text((6-bounds[0], 5-bounds[1]), text, font=font, fill=rng.randint(0, 45))
-    image = image.rotate(rng.uniform(-1.5, 1.5), expand=True, fillcolor=255)
-    if rng.random() < .3:
-        image = image.filter(ImageFilter.GaussianBlur(rng.uniform(.1, .55)))
+    ink_height = bounds[3] - bounds[1]
+    padding = max(2, round(ink_height * rng.uniform(.14, .32)))
+    image = Image.new('L', (bounds[2] - bounds[0] + padding*2, ink_height + padding*2), rng.randint(225, 255))
+    ImageDraw.Draw(image).text((padding-bounds[0], padding-bounds[1]), text, font=font, fill=rng.randint(0, 65))
+    image = image.rotate(rng.uniform(-.7, .7), expand=False, fillcolor=255)
+    if rng.random() < .35:
+        # Low-resolution print/scan simulation, with transcription unchanged.
+        scale = rng.uniform(.55, .95)
+        image = image.resize((max(8, round(image.width*scale)), max(8, round(image.height*scale))), Image.Resampling.BILINEAR)
+    if rng.random() < .25:
+        image = image.filter(ImageFilter.GaussianBlur(rng.uniform(.1, .5)))
     return image_tensor(image), text
 
 
@@ -79,7 +121,10 @@ def read_manifest(path, split):
         image_path = (path.parent / row['image']).resolve()
         if not image_path.is_relative_to(path.parent):
             raise ValueError('Image must be inside the dataset directory')
-        digest = hashlib.sha256(image_path.read_bytes()).hexdigest()
+        # Hash decoded pixels: re-encoding the same image must not evade the split guard.
+        with Image.open(image_path) as original:
+            decoded = ImageOps.exif_transpose(original).convert('L')
+            digest = hashlib.sha256(str(decoded.size).encode() + decoded.tobytes()).hexdigest()
         if digest in images and images[digest] != row['split']:
             raise ValueError('Image content leaks across splits')
         images[digest] = row['split']

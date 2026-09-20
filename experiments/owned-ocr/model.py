@@ -17,10 +17,24 @@ class LineReader(nn.Module):
         self.sequence = nn.GRU(64 * 8, 64, batch_first=True, bidirectional=True)
         self.output = nn.Linear(128, len(alphabet) + 1)
 
-    def forward(self, images):
-        features = self.features(images)
+    def forward(self, images, lengths=None):
+        # V2 masks padding after every layer, then packs the recurrent sequence.
+        # Otherwise the backward GRU reads another sample's padding as context.
+        features = images
+        widths = lengths.to(images.device) * 4 if lengths is not None else None
+        for layer in self.features:
+            features = layer(features)
+            if widths is not None:
+                if isinstance(layer, nn.MaxPool2d):
+                    widths = widths // 2
+                valid = torch.arange(features.shape[-1], device=images.device)[None, :] < widths[:, None]
+                features = features * valid[:, None, None, :]
         sequence = features.permute(0, 3, 1, 2).flatten(2)
+        if lengths is not None:
+            sequence = nn.utils.rnn.pack_padded_sequence(sequence, lengths.cpu(), batch_first=True, enforce_sorted=False)
         sequence, _ = self.sequence(sequence)
+        if lengths is not None:
+            sequence, _ = nn.utils.rnn.pad_packed_sequence(sequence, batch_first=True)
         return self.output(sequence).log_softmax(-1).transpose(0, 1)
 
 

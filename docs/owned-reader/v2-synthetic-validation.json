@@ -1,0 +1,197 @@
+{
+  "model": "owned-line-reader-v2",
+  "initialization": "random",
+  "pretrainedWeights": false,
+  "alphabet": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,:;#/$%&()+-'\"@!?=\u00eb\u00cb\u00e7\u00c7",
+  "seed": 334,
+  "steps": 6000,
+  "batchSize": 20,
+  "parameters": 271543,
+  "torchVersion": "2.14.0+cpu",
+  "dataset": "synthetic",
+  "manifestSha256": null,
+  "evaluationSplit": "validation",
+  "productionReady": false,
+  "realDocumentEvaluation": false,
+  "trainingLossFirst": 15.639350891113281,
+  "trainingLossLast": 0.06637109816074371,
+  "elapsedSeconds": 2131,
+  "metrics": {
+    "samples": 160,
+    "characterErrorRate": 0.06051080550098232,
+    "lineExactMatch": 0.53125,
+    "examples": [
+      {
+        "expected": "01/19/29 05:13 PM",
+        "predicted": "01/19/29 05:13 PM"
+      },
+      {
+        "expected": "03/18/25 09:56 EST",
+        "predicted": "03/18/25 09:56 EST"
+      },
+      {
+        "expected": "TOTAL: 16,420.78 USD",
+        "predicted": "TOTAL: 16,420.78 USD"
+      },
+      {
+        "expected": "Special Required Amount Delivery",
+        "predicted": "Special Required Amount Delivery"
+      },
+      {
+        "expected": "WP?8w CbxEJC9\",l\u00eb6G;Kqi",
+        "predicted": "WPwv CbEJC\",k\u00eb6G,Kqi"
+      },
+      {
+        "expected": "&-@;Ic\u00ebB7Z%exT1rB(#t(+",
+        "predicted": "&+@;Ic@B?Z%exT1rB(#t(+"
+      },
+      {
+        "expected": "Payment",
+        "predicted": "Pqyment"
+      },
+      {
+        "expected": "MkhEjVecQ,-3&;!",
+        "predicted": "MkhEjVecG,-3&;!"
+      },
+      {
+        "expected": "NV7LAE1TA7G88TK0",
+        "predicted": "NV7LAE1TAG88TK0"
+      },
+      {
+        "expected": "7657 Warehouse Date Pallets",
+        "predicted": "7657 Worehouse Dche Pollets"
+      },
+      {
+        "expected": "TOTAL: 1503",
+        "predicted": "TOTAL: 1503"
+      },
+      {
+        "expected": "08/19/28 10:46 EST",
+        "predicted": "05/19/28 10:46 EST"
+      }
+    ]
+  },
+  "selectedStep": 6000,
+  "selection": "lowest validation character error",
+  "validationHistory": [
+    {
+      "step": 500,
+      "samples": 160,
+      "characterErrorRate": 0.8978388998035364,
+      "lineExactMatch": 0.0
+    },
+    {
+      "step": 1000,
+      "samples": 160,
+      "characterErrorRate": 0.38153241650294695,
+      "lineExactMatch": 0.03125
+    },
+    {
+      "step": 1500,
+      "samples": 160,
+      "characterErrorRate": 0.19174852652259333,
+      "lineExactMatch": 0.2
+    },
+    {
+      "step": 2000,
+      "samples": 160,
+      "characterErrorRate": 0.12023575638506877,
+      "lineExactMatch": 0.30625
+    },
+    {
+      "step": 2500,
+      "samples": 160,
+      "characterErrorRate": 0.10530451866404715,
+      "lineExactMatch": 0.36875
+    },
+    {
+      "step": 3000,
+      "samples": 160,
+      "characterErrorRate": 0.0825147347740668,
+      "lineExactMatch": 0.45625
+    },
+    {
+      "step": 3500,
+      "samples": 160,
+      "characterErrorRate": 0.08762278978388999,
+      "lineExactMatch": 0.425
+    },
+    {
+      "step": 4000,
+      "samples": 160,
+      "characterErrorRate": 0.06797642436149312,
+      "lineExactMatch": 0.5
+    },
+    {
+      "step": 4500,
+      "samples": 160,
+      "characterErrorRate": 0.06326129666011787,
+      "lineExactMatch": 0.53125
+    },
+    {
+      "step": 5000,
+      "samples": 160,
+      "characterErrorRate": 0.06797642436149312,
+      "lineExactMatch": 0.50625
+    },
+    {
+      "step": 5500,
+      "samples": 160,
+      "characterErrorRate": 0.06483300589390963,
+      "lineExactMatch": 0.51875
+    },
+    {
+      "step": 6000,
+      "samples": 160,
+      "characterErrorRate": 0.06051080550098232,
+      "lineExactMatch": 0.53125
+    }
+  ],
+  "generation": "owned generic synthetic v2; no customer text",
+  "paddingAware": true,
+  "trainingFonts": [
+    {
+      "name": "DejaVuSans.ttf",
+      "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
+    },
+    {
+      "name": "DejaVuSans-Bold.ttf",
+      "sha256": "5c1247acef7f2b8522a31742c76d6adcb5569bacc0be7ceaa4dc39dd252ce895"
+    },
+    {
+      "name": "DejaVuSansMono.ttf",
+      "sha256": "c805f9436dbc268644c1d9584f01a601a653e028e08fd74b9b949f6cf8304d88"
+    },
+    {
+      "name": "DejaVuSerif.ttf",
+      "sha256": "8f2c103bfa3fd5de71f1b92b18f21906b5a26871fb7e19a9a4c9af539c3cc7ab"
+    },
+    {
+      "name": "NimbusMonoPS-Regular.otf",
+      "sha256": "4f225ca8e13acb16f733ce741693105e527d5f7a5443901b9ecc190fca4e149b"
+    },
+    {
+      "name": "NimbusMonoPS-Bold.otf",
+      "sha256": "f036d05d2168c7f71cb11d31e81d11133f3d09711e24ebde19d08a24842384d5"
+    },
+    {
+      "name": "NimbusSans-Regular.otf",
+      "sha256": "7c25be4d78155523080ab85b10277150657ff7dabbcad7037bdd536c9b6d0d08"
+    },
+    {
+      "name": "NimbusRoman-Regular.otf",
+      "sha256": "fd41669443616a7ae890c42e53a58f47fa24a940fd1e367acaff665cf5b6e9d8"
+    }
+  ],
+  "validationFonts": [
+    {
+      "name": "URWGothic-Book.otf",
+      "sha256": "04318316cee29950805110c9c8949eea189ef5575132881f4d4d7e03e5299903"
+    },
+    {
+      "name": "P052-Roman.otf",
+      "sha256": "f054a7389d8d0e9f4c5f7b4c21feb7e2b14bec8004a1e92778a78d149524eea9"
+    }
+  ],
+  "checkpointSha256": "fe6c33677f133c6bf66628a52d2f0a7f0f6ba22e3362022ee2a65f83b4e450f1"
+}

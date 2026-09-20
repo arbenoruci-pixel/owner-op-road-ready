@@ -1,0 +1,47 @@
+{
+  "evaluation": "development document, excluded from model training",
+  "reference": "native PDF text and coordinates; not independently hand-transcribed",
+  "phonePhotoEvaluation": false,
+  "independentDocumentBenchmark": false,
+  "productionReady": false,
+  "checkpointSha256": "fe6c33677f133c6bf66628a52d2f0a7f0f6ba22e3362022ee2a65f83b4e450f1",
+  "pages": 3,
+  "fullPage": {
+    "referenceLines": 139,
+    "referenceCharacters": 3693,
+    "characterErrorRate": 0.2323314378554021,
+    "lineExactMatch": 0.5107913669064749,
+    "unmatchedPredictedLines": 138,
+    "unmatchedPredictedCharacters": 213
+  },
+  "elapsedSeconds": 9.36,
+  "nativeReferenceCrops": {
+    "referenceLines": 139,
+    "referenceCharacters": 3693,
+    "characterErrorRate": 0.38207419442187923,
+    "lineExactMatch": 0.33093525179856115,
+    "unmatchedPredictedLines": 0,
+    "unmatchedPredictedCharacters": 0
+  },
+  "wordBoxCoverage": {
+    "covered": 622,
+    "total": 624,
+    "minimumCoveredArea": 0.7
+  },
+  "beforeReversePrintFix": {
+    "referenceLines": 139,
+    "referenceCharacters": 3693,
+    "characterErrorRate": 0.23422691578662333,
+    "lineExactMatch": 0.5035971223021583,
+    "unmatchedPredictedLines": 139,
+    "unmatchedPredictedCharacters": 214
+  },
+  "nativePrimaryFieldStates": {
+    "supported": 15,
+    "needsReview": 2,
+    "missing": 4
+  },
+  "rasterPrimaryCandidateFields": 6,
+  "rasterPacketReconstructed": false,
+  "modelRetrainedAfterDocumentEvaluation": false
+}
