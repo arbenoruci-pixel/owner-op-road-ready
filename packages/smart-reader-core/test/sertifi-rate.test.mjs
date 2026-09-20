@@ -32,6 +32,7 @@ test('native stops with side notes and a city-only receiver retain parties, date
 test('continuations require matching envelope and PRO, and cannot swallow another complete load',()=>{
   for(const mutate of [
     i=>rewrite(i.pages[1],'20250711111222333','20250711111222999'),
+    i=>rewrite(i.pages[1],'20250711111222333','20250711111222333A'),
     i=>rewrite(i.pages[1],'86420','86429'),
     i=>rewrite(i.pages[1],'Doc ID:','Other ID:'),
     i=>i.pages[1].observations.push(textObservation('TOTAL RATE 900.00\nPICK 1\nSTOP 1',{id:'second-load'})),
@@ -49,6 +50,22 @@ test('a certificate footer alone cannot classify an ordinary rate page as a sign
   assert.equal(readDocument(input).documents[0].kind,'rate_confirmation');
   rewrite(input.pages[2],'E-Signed :','Date:');
   assert.equal(readDocument(input).documents.at(-1).kind,'unknown');
+});
+
+test('embedded Sertifi signing stamps do not override a primary or continuation RateCon',()=>{
+  const input=sertifiRateInput();
+  for(const page of input.pages.slice(0,2))page.observations[0].lines.splice(1,0,
+    {id:'signed-stamp',text:'E-Signed : 07/11/2025 03:55 PM CDT'},
+    {id:'signature-stamp',text:'Sertifi Electronic Signature'});
+  const result=readDocument(input);
+  assert.equal(result.documents[0].kind,'rate_confirmation');
+  assert.deepEqual(result.documents[0].pageIds,['page-1','page-2']);
+  assert.equal(result.documents[0].fields.loadNumber.value,'86420');
+  assert.equal(result.documents[0].fields.billingEmail.value,'billing@example.test');
+  assert.equal(result.documents[1].kind,'signing_certificate');
+  for(const page of input.pages.slice(0,2))page.observations.push(textObservation(
+    'E-Signed : 07/11/2025 03:55 PM CDT\nSertifi Electronic Signature\nDocID: 20250711111222333',{id:'signature-crop'}));
+  assert.deepEqual(readDocument(input).documents[0].pageIds,['page-1','page-2']);
 });
 
 test('unrelated, weak, invalid or conflicting certificate years remain unresolved',()=>{

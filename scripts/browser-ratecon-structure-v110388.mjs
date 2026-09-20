@@ -58,6 +58,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
     assert.deepEqual(errors,[]);console.log(`PASS ${name}: three PDF pages, linked dates, receiver, terms and traceable partial address`);
   }catch(error){
     await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});
-    fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify({error:String(error),errors,body:await page.locator('body').innerText()},null,2));throw error;
+    const diagnostic={error:String(error),errors,body:await page.locator('body').innerText()};
+    fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify(diagnostic,null,2));
+    console.error(JSON.stringify(diagnostic));throw error;
   }finally{await context.close();}
 }

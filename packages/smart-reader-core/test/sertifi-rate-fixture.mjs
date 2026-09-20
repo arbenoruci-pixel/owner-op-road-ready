@@ -32,6 +32,6 @@ export function sertifiRateInput(){
     {id:'page-2',observations:[textObservation(['PRO # 86420 Rate Confirmation',
       '- Please send all billing to billing@example.test','The confirmation governs the movement of the',
       'above-referenced freight as of the date specified.',`Doc ID: ${ref}`].join('\n'))]},
-    {id:'page-3',observations:[textObservation(`E-Signed : 07/11/2025 03:55 PM CDT\nSertifi Electronic Signature\nDocID: ${ref}`)]}
+    {id:'page-3',observations:[textObservation(`E-Signed : 07/11/2025 03:55 PM CDT\nSample Signer\nsigner@example.test\nIP: 192.0.2.1\nSertifi Electronic Signature\nDocID: ${ref}\nDoc ID: ${ref}\nSertifi Electronic Signature`)]}
   ]};
 }

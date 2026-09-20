@@ -1,4 +1,5 @@
 // Matching views never replace source text or its evidence offsets.
+import {rateConfirmationProfile} from './rateConfirmation.js';
 const leadingMarks=/^[\s|~'"‘’“”*_\[\]{}<>•=.,:;–—-]+/;
 const view=line=>line.text.replace(leadingMarks,'');
 const matches=(line,pattern)=>pattern.test(line.text)||pattern.test(view(line));
@@ -16,6 +17,9 @@ function noisyTitle(line,profile){
 // Every vote retains the original lines, including OCR noise and punctuation.
 export function profileEvidence(lines,profile,{lineIndices}={}){
   for(const variant of profile.variants||[]){
+    // Sertifi also stamps signed primary/continuation pages. Their explicit
+    // RateCon heading owns the page; the stamp is supporting content only.
+    if(variant.method==='sertifi_signature'&&lines.some(line=>matches(line,rateConfirmationProfile.heading)))continue;
     const support=profileEvidence(lines,{...profile,...variant,variants:null,structuralSignals:null},{lineIndices});
     if(support)return {...support,method:variant.method||support.method};
   }

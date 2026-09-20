@@ -64,7 +64,9 @@ function classifyPage(page) {
   }
   // A specialized invoice/receipt may refine a generic title in the SAME
   // observation. Different titles and competing OCR observations stay conflicts.
-  const refined=votes.filter(vote=>!votes.some(other=>other!==vote&&other.evidence.observationId===vote.evidence.observationId
+  const rateHeading=PROFILES.find(p=>p.id==='rate_confirmation').heading;
+  const ratePage=pooled.some(line=>rateHeading.test(line.text));
+  const refined=votes.filter(vote=>!(ratePage&&vote.kind==='signing_certificate'&&vote.method==='sertifi_signature')&&!votes.some(other=>other!==vote&&other.evidence.observationId===vote.evidence.observationId
     &&(PROFILES.find(p=>p.id===other.kind)?.refines?.includes(vote.kind)&&other.evidence.lineId===vote.evidence.lineId
       ||PROFILES.find(p=>p.id===vote.kind)?.fallback&&vote.method==='field_structure'&&other.kind!==vote.kind)));
   const kinds=[...new Set(refined.map(v=>v.kind))];
