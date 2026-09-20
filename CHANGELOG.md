@@ -1,3 +1,10 @@
+## 110.3.84 — BOL row evidence
+
+- Keep net and total weights on separate rows; retry unreadable amounts in small original-pixel crops.
+- Reconcile corroborated partial timestamps and carrier initial spacing without changing source text.
+- Use lossless enlarged detail images, bounded adjacent barcode recovery, and shared per-page decoding.
+- Retain review for missing units, ambiguous dates, changed identifiers, and genuine conflicts.
+
 # v96.3.0
 
 - Fixed false certification blocking from a one-minute raw status-boundary artifact at midnight.

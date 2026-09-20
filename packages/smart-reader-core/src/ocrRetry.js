@@ -76,8 +76,11 @@ export function planBolIdentifierRegion(words,size){
     const limit=Math.min(size.width,label.left+size.width*.38,...nextLabel);
     const right=Math.min(limit,Math.max(labelEnd,...neighbors.filter(w=>w.left<limit).map(w=>w.left+w.width),...(explicit?[fieldStart+label.height*20]:[])));
     const top=Math.min(label.top,...neighbors.map(w=>w.top)),bottom=Math.max(label.top+label.height,...neighbors.map(w=>w.top+w.height));
-    const pad=Math.max(8,Math.round(label.height*.55)),left=Math.max(0,Math.floor(label.left-pad)),y=Math.max(0,Math.floor(top-pad));
-    const box={left,top:y,width:Math.min(size.width,Math.ceil(right+pad))-left,height:Math.min(size.height,Math.ceil(bottom+pad))-y};
+    // Extra source pixels above a small number can include barcode bars. Use
+    // tight vertical bounds; the detail renderer adds a clean outer margin.
+    const pad=Math.max(8,Math.round(label.height*.55)),verticalPad=Math.max(2,Math.round(label.height*.12));
+    const left=Math.max(0,Math.floor(label.left-pad)),y=Math.max(0,Math.floor(top-verticalPad));
+    const box={left,top:y,width:Math.min(size.width,Math.ceil(right+pad))-left,height:Math.min(size.height,Math.ceil(bottom+verticalPad))-y};
     if(box.width*box.height<=size.width*size.height*.06)return box;
   }
   return null;

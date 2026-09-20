@@ -6,6 +6,7 @@ import {rateSectionMatches} from './rateConfirmation.js';
 import {ratePartyMatches} from './rateParties.js';
 import {nativeCellMatches} from './nativeCells.js';
 import {reconcilePartyNoise} from './partyNoise.js';
+import {recoverPartialBolDates,recoverCarrierInitialSpacing} from './bolRecovery.js';
 
 // A digit string is not interchangeable with another that lost end digits.
 // Unlabelled alternatives can only make a BOL uncertain; never fill its value.
@@ -21,7 +22,8 @@ export function pageFieldMatches(page,spec){
   if(spec.rateParty)matches.push(...ratePartyMatches(page,spec));
   if(spec.nativeCell)matches.push(...nativeCellMatches(page,spec));
   if(spec.certificatePart)matches.push(...certificateMatches(page,spec));
-  if(spec.kind==='party')return reconcilePartyNoise(recoverPartyContinuations(spec.wrappedConsigned?recoverConsigneeBlocks(matches):matches));
+  if(spec.kind==='party')return reconcilePartyNoise(recoverPartyContinuations(spec.wrappedConsigned?recoverConsigneeBlocks(matches):spec.recoverInitialSpacing?recoverCarrierInitialSpacing(matches):matches));
+  if(spec.recoverPartialTime)return recoverPartialBolDates(matches);
   if(!spec.checkIdentifierFragments)return matches;
   const proposals=[];
   for(const match of matches){
