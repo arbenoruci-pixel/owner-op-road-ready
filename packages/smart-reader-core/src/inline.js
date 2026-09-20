@@ -4,6 +4,9 @@ import {isPartyBoilerplate} from './fieldGuards.js';
 const NEXT_FIELD=/(?:^|[\s|])(?:SALES\s+ORDER|DELIVERY|LOAD\s+DESCRIPTION|RESTACKS|BAD\s+PALLETS|DOOR\s+NO\.?|DEPARTMENT|TRUCK\s+NO\.?|TRAILER\s+NO\.?|STARTED\s+AT|COMPLETED\s+AT|ARRIVAL|PRINTED|DATE|PHONE|NET\s+TOTAL|CHECKOUT\s+FEE)\s*[:#]/i;
 const FOOTNOTE=/\s+\*\s+(?:IF|WHEN|THE|SHIPPER|CARRIER)\b/i;
 export function inlineFieldRange(line,spec){
+  // Tiny lower-case header fragments can be broken boilerplate. Full names and
+  // explicitly delimited labels remain eligible.
+  if(spec.kind==='party'&&line.box?.y<.16&&line.box.height<.008&&/^\s*(?:carrier|shipper|consignee)\s+[a-z]{1,3}\s*$/.test(line.text))return null;
   if(spec.kind==='party'&&isPartyBoilerplate(line.text))return null;
   if(spec.kind==='party'&&/^[\s|]*(?:CARRIER(?:\s+NAME)?|SHIPPER|CONSIGNEE)\s*[:#]?\s*[({\[]\s*(?:or|and|if|where|when)\b/i.test(line.text))return null;
   if(spec.kind==='party'&&/^\s*(?:CARRIER|SHIPPER|CONSIGNEE)\s+(?:and|or|shall|acknowledges?|agrees?|without|certifies|(?:has|have)\s+been)\b/i.test(line.text))return null;

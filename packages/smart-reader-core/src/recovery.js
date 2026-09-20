@@ -2,9 +2,10 @@ import {referenceDiscrepancies} from './referenceDiscrepancies.js';
 import {fieldsForProfile} from './engine.js';
 import {PROFILES,normalizeValue} from './profiles.js';
 import {validateInvoice,validateUnloadingReceipt} from './validation.js';
+import {validateBol} from './bolChecks.js';
 
 export const reviewKinds=PROFILES.map(({id,label})=>({id,label}));
-const checks=group=>group.kind==='invoice'?validateInvoice(group.fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(group.fields):[];
+const checks=(group,pages)=>group.kind==='invoice'?validateInvoice(group.fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(group.fields):group.kind==='bol'?validateBol(pages.filter(p=>group.pageIds.includes(p.id)),group.fields):[];
 function target(result,{documentId,groupId,expectedRevision,userConfirmed}){
   if(documentId!==result.documentId||userConfirmed!==true)throw new Error('Confirm the current document first.');
   if(expectedRevision!==result.reviewRevision)throw new Error('The reading changed. Open the field again.');
@@ -25,12 +26,12 @@ export function confirmPageField(result,request){
   const sourcePage=pageSource(result,group,request);
   if(typeof request.rawValue!=='string')throw new Error('Enter the value shown on the page.');
   const normalized=normalizeValue(field.kind,request.rawValue);
-  if(normalized.value===null)throw new Error('Check the value. Use YYYY-MM-DD for dates and include the unit for weight.');
+  if(normalized.value===null||normalized.issue==='weight_unit_required')throw new Error('Check the value. Use YYYY-MM-DD for dates and include the unit for weight.');
   const next=structuredClone(result),updated=next.documents.find(d=>d.id===group.id);
   const correction={documentId:result.documentId,groupId:group.id,field:request.field,rawValue:request.rawValue,value:normalized.value,sourceQuote:null,sourcePage,confirmed:true,origin:'human',trainingEligible:false};
   next.corrections.push(correction);next.reviewRevision++;
   updated.fields[request.field]={...updated.fields[request.field],value:normalized.value,status:'confirmed',issues:[],correction};
-  updated.checks=checks(updated);updated.canAutoFile=false;updated.requiresReview=true;
+  updated.checks=checks(updated,next.pages);updated.canAutoFile=false;updated.requiresReview=true;
   return next;
 }
 export function confirmDocumentKind(result,request){
@@ -41,14 +42,14 @@ export function confirmDocumentKind(result,request){
   if(Object.values(group.fields).some(f=>f.status==='confirmed'))throw new Error('This document already has confirmed fields. Keep its current type.');
   const next=structuredClone(result),updated=next.documents.find(d=>d.id===group.id);
   Object.assign(updated,{kind:profile.id,label:profile.label,role:profile.role||'primary',identityStatus:'confirmed',fields:fieldsForProfile(result.pages.filter(p=>group.pageIds.includes(p.id)),profile.id),requiresReview:true,canAutoFile:false});
-  updated.checks=checks(updated);
+  updated.checks=checks(updated,next.pages);
   updated.typeCorrection={kind:profile.id,sourcePage,origin:'human',confirmed:true,trainingEligible:false};
   next.reviewRevision++;
   return next;
 }
 export function reviewQueue(result){
   const referenceChecks=referenceDiscrepancies(result).filter(w=>w.status==='needs_review');
-  return result.documents.flatMap(group=>group.kind==='unknown'?[{groupId:group.id,key:null}]:Object.entries(group.fields).filter(([key,f])=>f.status==='needs_review'||referenceChecks.some(w=>w.groupId===group.id&&w.key===key)||f.status==='missing'&&(f.required||/date/i.test(key))).map(([key])=>({groupId:group.id,key})));
+  return result.documents.flatMap(group=>group.kind==='unknown'?[{groupId:group.id,key:null}]:Object.entries(group.fields).filter(([key,f])=>f.status==='needs_review'||referenceChecks.some(w=>w.groupId===group.id&&w.key===key)||f.status!=='confirmed'&&group.kind==='bol'&&group.checks.some(check=>check.status==='needs_review'&&check.fields?.includes(key))||f.status==='missing'&&(f.required||/date/i.test(key))).map(([key])=>({groupId:group.id,key})));
 }
 // Compact, page-scoped review saved beside the original. Excludes images and
 // full OCR transcripts; unresolved candidates remain explicitly unconfirmed.

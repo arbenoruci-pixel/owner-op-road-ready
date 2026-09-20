@@ -1,6 +1,7 @@
 import {isDocumentParty} from './fieldGuards.js';
 import {rateConfirmationProfile} from './rateConfirmation.js';
 import {truckingProfiles} from './truckingProfiles.js';
+import {bolMeasurementFields,normalizeBolMeasurement} from './bolMeasurements.js';
 
 const identifier = label => new RegExp(`^\\s*(?:${label})[ \\t]*(?:NUMBER\\b|NO\\b\\.?|ID\\b|#|:)[ \\t:#;]*(.+?)\\s*$`, 'id');
 const labeled = label => new RegExp(`^[\\s|]*(?:${label})[ \\t]*[:#]?[ \\t]+(.+?)\\s*$`, 'id');
@@ -31,10 +32,12 @@ BASE_PROFILES.find(p=>p.id==='unloading_receipt').variants=[{heading:/^\s*LUMPER
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').filingType='lumper_receipt';
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').refines=['other_expense'];
 BASE_PROFILES.find(p=>p.id==='invoice').filingType='other';
+Object.assign(BASE_PROFILES.find(p=>p.id==='bol').fields,bolMeasurementFields);
 export const PROFILES=Object.freeze([...BASE_PROFILES,...truckingProfiles(BASE_PROFILES)]);
 
 export function normalizeValue(kind, raw, sourceLabel=null) {
   const value=raw.trim().replace(/[ \t]+/g,' ');if(!value)return {value:null,issue:'empty'};
+  if(['shipping_weight','temperature_instruction','count'].includes(kind))return normalizeBolMeasurement(kind,value);
   // Machine-read US dates require the explicit Ship Date source label.
   if(kind==='ship_date'&&sourceLabel!==null&&!/(?:^|\|)\s*SHIP\s+DATE\s*:?\s*$/i.test(sourceLabel))return normalizeValue('date',value);
   if(kind==='party')return isDocumentParty(value)?{value}:{value:null,issue:'form_instructions'};

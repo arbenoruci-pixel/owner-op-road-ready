@@ -4,6 +4,7 @@
  * The caller must obtain both readings from the same saved document record.
  */
 import {validateInvoice, validateUnloadingReceipt} from './validation.js';
+import {validateBol} from './bolChecks.js';
 
 const copy = value => structuredClone(value);
 const pagesKey = pages => Array.isArray(pages) && pages.length && pages.every(n => Number.isInteger(n) && n > 0)
@@ -56,6 +57,7 @@ export function restoreConfirmedReading(result, previous) {
       group.requiresReview = true;
       if (group.kind === 'invoice') group.checks = validateInvoice(group.fields);
       if (group.kind === 'unloading_receipt') group.checks = validateUnloadingReceipt(group.fields);
+      if (group.kind === 'bol') group.checks = validateBol(next.pages.filter(p=>group.pageIds.includes(p.id)),group.fields);
     }
   });
   next.restoredConfirmationCount = (next.restoredConfirmationCount || 0) + restored;
