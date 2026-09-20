@@ -23,4 +23,8 @@ const changed=structuredClone(analysis);
 changed.ocrEvidenceV110323[0].text=changed.ocrEvidenceV110323[0].text.replaceAll('RC-51','RC-99');
 for(const line of changed.ocrEvidenceV110323[0].lines)line.text=line.text.replaceAll('RC-51','RC-99');
 assert.equal(decideDocumentIdentity(changed).mixedDocuments,true,'Different receipt numbers keep the filing conflict');
+const thirdRead=structuredClone(analysis);
+thirdRead.ocrEvidenceV110323[2].text=thirdRead.ocrEvidenceV110323[2].text.replaceAll('RC-51','RC-99');
+for(const line of thirdRead.ocrEvidenceV110323[2].lines)line.text=line.text.replaceAll('RC-51','RC-99');
+assert.equal(decideDocumentIdentity(thirdRead).mixedDocuments,true,'A matching pair cannot hide a different third receipt number');
 console.log('PASS — receipt adapter, filing type, fee columns, source preservation and conflicting references');

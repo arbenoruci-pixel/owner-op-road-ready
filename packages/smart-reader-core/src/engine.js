@@ -51,11 +51,14 @@ function candidatesFor(pages, spec, dateContext=null) {
 function sameUnloadingReceipt(page, generic, specialized) {
   if(generic.kind!=='other_expense'||specialized.kind!=='unloading_receipt')return false;
   const spec=PROFILES.find(profile=>profile.id==='unloading_receipt').fields.receiptNumber;
+  // A matching pair cannot overrule a different number in a third read.
+  const pageReference=extractField([page],spec);
+  if(pageReference.status!=='supported'||pageReference.value===null)return false;
   const fields=[generic,specialized].map(vote=>{
     const observation=page.observations.find(item=>item.id===vote.evidence.observationId);
     return extractField([{...page,observations:[observation]}],spec);
   });
-  return fields.every(field=>field.status==='supported'&&field.value!==null)&&fields[0].value===fields[1].value;
+  return fields.every(field=>field.status==='supported'&&field.value===pageReference.value);
 }
 
 function classifyPage(page) {

@@ -47,6 +47,17 @@ test('specific competing receipt types remain conflicting even with a matching r
   assert.equal(result.pageIdentities[0].status,'conflicting');
 });
 
+test('a matching pair cannot overrule a third observation with another receipt number',()=>{
+  for(const confidence of [.96,.3]){
+    const other=unloading();other.id='third-read';
+    other.lines[0].text='RECEIPT # RC-99';other.lines[0].confidence=confidence;
+    const result=read([generic(),unloading(),other]);
+    assert.equal(result.pageIdentities[0].status,'conflicting');
+    assert.equal(result.documents[0].kind,'unknown');
+    assert.equal(result.documents[0].reference,null);
+  }
+});
+
 test('classification refinement preserves conflicting monetary reads for review',()=>{
   const other=unloading();other.lines.find(line=>line.text.startsWith('NET TOTAL')).text='NET TOTAL $498.00';
   const doc=read([generic(),other]).documents[0];
