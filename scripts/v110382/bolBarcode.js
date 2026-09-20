@@ -4,7 +4,10 @@ export async function decodeBolBarcode(image,region) {
   if(!data||!region||!Number.isInteger(width)||!Number.isInteger(height)||data.length!==width*height*4)return null;
   const {left,top,width:w,height:h}=region;
   if(![left,top,w,h].every(Number.isInteger)||left<0||top<0||w<16||h<8||left+w>width||top+h>height||w*h>1500000)return null;
-  const {Code128Reader,DecodeHintType,RGBLuminanceSource,HybridBinarizer,BinaryBitmap}=await import('@zxing/library');
+  const library=await import('@zxing/library');
+  // Node 20 exposes this CommonJS package through default; browser bundlers
+  // and newer Node releases also expose named exports.
+  const {Code128Reader,DecodeHintType,RGBLuminanceSource,HybridBinarizer,BinaryBitmap}=library.Code128Reader?library:library.default;
   const luminance=new Uint8ClampedArray(w*h);
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     const i=((top+y)*width+left+x)*4;

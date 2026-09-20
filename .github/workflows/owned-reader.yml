@@ -39,7 +39,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Exact production build and behavioral contracts
-        run: node scripts/build-v110.mjs 2>&1 | tee /tmp/owned-reader-build.log
+        run: |
+          set -o pipefail
+          node scripts/build-v110.mjs 2>&1 | tee /tmp/owned-reader-build.log
       - name: Architecture and isolation
         run: npm run verify:architecture
       - run: |
