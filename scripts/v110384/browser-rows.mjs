@@ -34,7 +34,12 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
         const tsv=[header,[1,1,0,0,0,0,0,0,w,h,-1,''].join('\t')];
         const detail=file.name==='road-ready-identifier-detail.png',measurement=file.name==='road-ready-measurement-detail.png';
         if(detail||measurement){if(file.type!=='image/png')throw new Error('Detail image must be lossless PNG');window.readerDetails??=[];window.readerDetails.push({name:file.name,w,h});}
-        const observed=detail?[{text:"'BILNO.: 0012345000",x:10,y:200,w:1250,confidence:42}]:measurement?[{text:'TOTAL WEIGHT: 3,936.84]',x:10,y:300,w:1250,h:300}]:rows.map(row=>row.text.startsWith('DATE:')&&file.name!=='road-ready-clean-ocr.png'?{...row,text:'DATE: 08/19/2026 07:41:00'}:row);
+        // The phone returns two crop-relative lines, numeric text first, with
+        // a tall low-confidence number box. An inline stub misses that failure.
+        const observed=detail?[{text:"'BILNO.: 0012345000",x:10,y:200,w:1250,confidence:42}]:measurement?[
+          {text:'3,936.84]',x:.766*1314,y:.126*1700,w:.192*1314,h:.747*1700,confidence:36.15},
+          {text:'TOTAL WEIGHT:',x:.043*1314,y:.274*1700,w:.363*1314,h:.379*1700,confidence:96.53}
+        ]:rows.map(row=>row.text.startsWith('DATE:')&&file.name!=='road-ready-clean-ocr.png'?{...row,text:'DATE: 08/19/2026 07:41:00'}:row);
         const x=v=>Math.round(v*w/1314),y=v=>Math.round(v*h/1700);
         for(const [i,row]of observed.entries())for(const [j,word]of (row.words||[[row.text,row.x,row.w]]).entries())tsv.push([5,1,i+1,1,1,j+1,x(word[1]),y(row.y),x(word[2]),Math.max(1,y(row.h||17)),row.confidence??96,word[0]].join('\t'));
         return {data:{text:observed.map(r=>r.text).join('\n'),confidence:96,tsv:tsv.join('\n')}};
@@ -64,7 +69,10 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     await dialog.getByLabel('Source line highlight',{exact:true}).waitFor();
     await dialog.getByRole('button',{name:'Close source',exact:true}).click();
     await review.getByRole('button',{name:'Check Total weight source',exact:true}).click();
-    await dialog.getByLabel('Confirmed value',{exact:true}).fill('3936.84');await dialog.getByRole('button',{name:'Confirm value',exact:true}).click();
+    assert.equal(await dialog.getByLabel('Confirmed value',{exact:true}).inputValue(),'3936.84');
+    await dialog.getByLabel('Source line highlight',{exact:true}).waitFor();
+    await dialog.screenshot({path:output+'/'+name+'-measurement-detail.png'});
+    await dialog.getByRole('button',{name:'Confirm value',exact:true}).click();
     await dialog.getByRole('alert').filter({hasText:/ambiguous or invalid/}).waitFor();await dialog.getByRole('button',{name:'Close source',exact:true}).click();
     const download=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const exported=await download,result=JSON.parse(fs.readFileSync(await exported.path(),'utf8')),group=result.documents.find(g=>g.kind==='bol');
@@ -72,14 +80,19 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(group.fields.weight.status,'needs_review');assert.equal(group.fields.temperature.value,'-10 F');
     assert.equal(group.checks.find(c=>c.id==='bol_weight_arithmetic').status,'passed');assert.equal(group.checks.find(c=>c.id==='bol_barcode_comparison').status,'passed');
     assert.equal(group.canAutoFile,false);assert.deepEqual(errors,[]);
-    assert.equal(result.engineVersion,'0.3.21');
+    assert.equal(result.engineVersion,'0.3.22');
     assert.equal(group.fields.documentDate.value,'2026-08-19');assert.equal(group.fields.totalUnits.value,'331');
-    assert.ok(group.fields.weight.candidates.some(c=>c.numericValue==='3936.84'));
+    const total=group.fields.weight.candidates.find(c=>c.numericValue==='3936.84');assert.ok(total);
+    assert.equal(total.evidence[0].supportMethod,'isolated_measurement_detail');
+    assert.ok(Math.abs(total.evidence[0].recognizerConfidence-.3615)<.000001);
+    assert.equal(total.evidence[0].quote,'3,936.84');assert.equal(total.labelEvidence[0].quote,'TOTAL WEIGHT:');
+    assert.ok(total.evidence[0].sourceImageId.endsWith(':1-measurement-detail-1'));
+    assert.ok(group.fields.weight.issues.includes('weak_recognition'));assert.ok(group.fields.weight.issues.includes('weight_unit_required'));
     assert.ok(!group.fields.weight.candidates.some(c=>c.numericValue==='1111.50'));
     assert.ok(!group.fields.netWeight.candidates.some(c=>c.numericValue==='1111.50'));
     assert.equal(result.pages[0].observations.filter(o=>o.id.includes('measurement-detail')).length,1);
     const details=await page.evaluate(()=>window.readerDetails||[]);assert.ok(details.some(d=>d.name==='road-ready-measurement-detail.png'&&d.h>40));
     await review.screenshot({path:output+'/'+name+'-rows.png'});
-    console.log('PASS '+name+' weight row isolation, PNG retry, barcode corroboration, date recovery, unit review and export');
+    console.log('PASS '+name+' split measurement detail, exact weak evidence, complete review draft, row isolation, barcode, unit review and export');
   }finally{await context.close();await instance.close();}
 }

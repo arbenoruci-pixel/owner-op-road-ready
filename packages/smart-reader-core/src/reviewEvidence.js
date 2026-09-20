@@ -6,8 +6,13 @@ export function clearestEvidence(evidence,isAvailable=()=>true){
     ||(b.recognizerConfidence??-1)-(a.recognizerConfidence??-1))[0];
 }
 
-export function clearestCandidate(candidates,isAvailable){
+export function clearestCandidate(candidates,isAvailable=()=>true){
   const choices=candidates.filter(candidate=>candidate.issue!=='form_instructions').map(candidate=>({candidate,evidence:clearestEvidence(candidate.evidence,isAvailable)})).filter(choice=>choice.evidence);
-  const best=clearestEvidence(choices.map(choice=>choice.evidence),isAvailable);
+  const available=choices.filter(choice=>isAvailable(choice.evidence));
+  const pool=available.length?available:choices;
+  // Open a complete observed measurement before an invalid fragment. This
+  // only selects the review draft; confidence, conflicts and units stay intact.
+  const numeric=pool.filter(choice=>choice.candidate.numericValue!=null);
+  const best=clearestEvidence((numeric.length?numeric:pool).map(choice=>choice.evidence),isAvailable);
   return choices.find(choice=>choice.evidence===best);
 }

@@ -1,6 +1,7 @@
 // Geometric proposals keep the exact source line. A shipping block is a
 // bounded heuristic, so below-label proposals always require human review.
 import {inlineFieldRange} from './inline.js';
+import {isolatedMeasurementMatch} from './measurementDetails.js';
 const STREET_ADDRESS=/^(?:[|{}\s]*)(?:P\.?\s*O\.?\s+BOX\s+\d+[A-Z]?\b|\d+[A-Z]?(?:[-/]\d+)?\s+(?:\S+\s+){0,8}(?:ROAD|STREET|AVENUE|BOULEVARD|DRIVE|LANE|COURT|CIRCLE|TERRACE|PLACE|PARKWAY|HIGHWAY|WAY|TRAIL|LOOP|PIKE|PLAZA|SQUARE|RD|ST|AVE|BLVD|DR|LN|CT|CIR|TER|PL|PKWY|HWY|TRL|PLZ|SQ)\b)/i;
 const ADDRESS_TAIL=/^[\s.,]*(?:\d+[A-Z]?(?:[-/]\d+)?\b[\s.,]*)?(?:(?:NORTH|SOUTH|EAST|WEST|N|S|E|W|NE|NW|SE|SW)\b[\s.,]*)?(?:(?:(?:SUITE|STE|APARTMENT|APT|UNIT|BUILDING|BLDG|FLOOR|FL|ROOM|RM)\.?\s*#?\s*|#\s*)[A-Z0-9-]+\b[\s.,]*)?(?:(?:[A-Z][A-Z.'-]*[,\s]+){0,5}[A-Z]{2}\s+\d{5}(?:-\d{4})?[\s.,]*)?(?:(?:C\/O|CARE\s+OF)\s+\S.*)?[\s|{}]*$/i;
 const isRule=(line,label)=>!/[\p{L}\p{N}]/u.test(line.text)||(line.box&&label.box&&line.box.height<label.box.height*.4&&line.confidence!==null&&(line.confidence<.5||line.confidence<.8&&(line.text.match(/[\p{L}\p{N}]/gu)||[]).length<=1));
@@ -15,6 +16,7 @@ const isStreetAddress=value=>{
   return !!address&&ADDRESS_TAIL.test(value.slice(address[0].length));
 };
 export function fieldMatches(lines,spec){
+  const detail=isolatedMeasurementMatch(lines,spec);if(detail)return [detail];
   const matches=[];
   const signatures=lines.filter(line=>line.box?.y>.4&&/^(?:(?:SHIPPER|CARRIER)\s+SIGNATURE\b|FREIGHT\s+COUNTED\b|TRAILER\s+LOADED\b)/i.test(line.text.trim()));
   for(const line of lines){
