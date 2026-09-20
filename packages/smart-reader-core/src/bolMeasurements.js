@@ -9,10 +9,10 @@ function weightField(label, source) {
 export const bolMeasurementFields = {
   weight:weightField('Total weight', 'TOTAL WEIGHT|GROSS WEIGHT|WEIGHT'),
   netWeight:weightField('Net weight', 'TOTAL NET WEIGHT|NET WEIGHT'),
-  tareWeight:weightField('Tare weight', 'TOTAL TARE|TARE WEIGHT|TARE'),
+  tareWeight:{...weightField('Tare weight', 'TOTAL TARE|OTAL TARE|TARE WEIGHT|TARE'),noisyLabel:/^[\s|]*OTAL\s/i},
   totalUnits:{label:'Total units', kind:'count', required:false, displayWhenFound:true,
-    pattern:/^[\s|]*TOTAL\s+UNITS\s*:?\s+(\d[\d,]*)\s*$/id,
-    rightLabel:/^\s*TOTAL\s+UNITS\s*:?\s*$/i},
+    pattern:/^[\s|]*(?:TOTAL|OTAL)\s+UNITS\s*:?\s+(\d[\d,]*)\s*$/id,
+    rightLabel:/^\s*(?:TOTAL|OTAL)\s+UNITS\s*:?\s*$/i,noisyLabel:/^[\s|]*OTAL\s/i},
   temperature:{label:'Temperature setting instruction', kind:'temperature_instruction', required:false, displayWhenFound:true,
     pattern:/^[\s|]*(?:(?:FROZEN\s+LOADS|FOOTNOTES)\s*:\s*)?(?:USE\s*TEMP(?:ERATURE)?\s*SETTING\s*(?:OF\s*)?|(?:REEFER\s+)?(?:SET\s*POINT|TEMP(?:ERATURE)?\s*SETTING)\s*:?\s*)([+\-−<]?\s*\d{1,3}(?:\.\d+)?\s*°?\s*[FC])\s*$/id}
 };

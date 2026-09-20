@@ -7,6 +7,7 @@ export function inlineFieldRange(line,spec){
   // Tiny lower-case header fragments can be broken boilerplate. Full names and
   // explicitly delimited labels remain eligible.
   if(spec.kind==='party'&&line.box?.y<.16&&line.box.height<.008&&/^\s*(?:carrier|shipper|consignee)\s+[a-z]{1,3}\s*$/.test(line.text))return null;
+  if(spec.kind==='party'&&line.box?.y<.16&&line.confidence!==null&&line.confidence<.8&&/^\s*carrier\s+ackn\b/i.test(line.text)&&/\b(?:edges|agre\w*|goods|identified)\b/i.test(line.text))return null;
   if(spec.kind==='party'&&isPartyBoilerplate(line.text))return null;
   if(spec.kind==='party'&&/^[\s|]*(?:CARRIER(?:\s+NAME)?|SHIPPER|CONSIGNEE)\s*[:#]?\s*[({\[]\s*(?:or|and|if|where|when)\b/i.test(line.text))return null;
   if(spec.kind==='party'&&/^\s*(?:CARRIER|SHIPPER|CONSIGNEE)\s+(?:and|or|shall|acknowledges?|agrees?|without|certifies|(?:has|have)\s+been)\b/i.test(line.text))return null;

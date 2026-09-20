@@ -16,6 +16,7 @@ const overlaps=(a,b)=>Math.min(a.x+a.width,b.x+b.width)>Math.max(a.x,b.x)
 
 export function pageFieldMatches(page,spec){
   const matches=spec.pattern?page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match}))):[];
+  if(spec.noisyLabel)for(const match of matches)if(spec.noisyLabel.test(match.labelLine?.text||match.line.text))match.issue||='damaged_label';
   if(spec.rateSection)matches.push(...rateSectionMatches(page,spec));
   if(spec.rateParty)matches.push(...ratePartyMatches(page,spec));
   if(spec.nativeCell)matches.push(...nativeCellMatches(page,spec));
