@@ -35,7 +35,9 @@ test('split detail binds the observed total with exact number, label, crop and w
   assert.equal(candidate.labelEvidence[0].quote,'TOTAL WEIGHT:');
   resolveEvidence(result,candidate.labelEvidence[0]);
   assert.equal(field.status,'needs_review');assert.equal(field.value,null);
-  for(const issue of ['invalid_weight','weight_unit_required','weak_recognition'])assert.ok(field.issues.includes(issue),issue);
+  assert.deepEqual(field.issues,['weight_unit_required']);
+  assert.equal(field.numberSupport.method,'matching_measurement_digits');
+  assert.ok(field.candidates.some(c=>c.issue==='invalid_weight'));
   assert.equal(group.checks.find(c=>c.id==='bol_weight_arithmetic').status,'passed');
   assert.equal(group.canAutoFile,false);
   assert.throws(()=>confirmField(result,{documentId:result.documentId,groupId:group.id,field:'weight',rawValue:'2500.75',evidence,userConfirmed:true,expectedRevision:0,expectedRawValues:field.candidates.map(c=>c.rawValue)}),/ambiguous or invalid/);
