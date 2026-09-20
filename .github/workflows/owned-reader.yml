@@ -56,12 +56,14 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          # Check the changed weight/save flow first so a failure produces
+          # diagnostics immediately. The complete suite still gates success.
+          node scripts/v110384/browser-rows.mjs
           reader_test_status=0
           node scripts/browser-fullscreen-reader-v110369.mjs || reader_test_status=1
           node scripts/v110373/browser-reader-evidence.mjs || reader_test_status=1
           node scripts/v110382/browser-bol.mjs || reader_test_status=1
           TEST_DAMAGED_BOL=1 node scripts/v110382/browser-bol.mjs || reader_test_status=1
-          node scripts/v110384/browser-rows.mjs || reader_test_status=1
           node scripts/browser-owned-reader.mjs || reader_test_status=1
           node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
           TEST_NATIVE_CELLS=1 node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1

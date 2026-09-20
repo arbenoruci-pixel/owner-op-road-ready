@@ -24,7 +24,9 @@ const rows=[
  {text:'Frozen Loads: Use temp setting of -10F',x:70,y:1510,w:890}
 ];
 for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
-  const instance=await browser.launch({headless:true}),context=await instance.newContext({viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'}),page=await context.newPage(),errors=[];
+  // Use the same persistent browser profile as the existing saved-reading
+  // fixture when testing original-file storage and reload recovery.
+  const context=await browser.launchPersistentContext('',{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'}),page=await context.newPage(),errors=[];
   page.setDefaultTimeout(45000);page.on('pageerror',e=>errors.push(e.message));
   try{
     await setupRoutes(context);
@@ -167,5 +169,10 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     await reread.screenshot({path:output+'/'+name+'-weights-retained.png'});
     assert.deepEqual(errors,[]);
     console.log('PASS '+name+' grouped Fix next reading, source return, skip, explicit '+chosen+', save checkpoint, reload and retained weight confirmations');
-  }finally{await context.close();await instance.close();}
+  }catch(error){
+    console.error('Weight review browser errors:',errors);
+    console.error('Weight review page:',(await page.locator('body').innerText().catch(()=>'' )).slice(-16000));
+    await page.screenshot({path:output+'/'+name+'-failure.png',fullPage:true}).catch(()=>{});
+    throw error;
+  }finally{await context.close();}
 }
