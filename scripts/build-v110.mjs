@@ -84,6 +84,7 @@ steps.push('finalize-ongoing-on-duty-v110379.mjs','v110379/test-ongoing-on-duty.
 steps.push('finalize-on-duty-intervals-v110380.mjs','v110380/test-on-duty-intervals.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-compact-on-duty-v110381.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-bol-quality-v110382.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-bol-recovery-v110383.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

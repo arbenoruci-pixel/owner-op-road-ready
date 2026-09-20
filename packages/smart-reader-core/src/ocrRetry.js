@@ -51,11 +51,17 @@ export function planBolIdentifierRegion(words,size){
     longLabels.push({...bill,width:lading.left+lading.width-bill.left,longForm:true});
   }
   for(const label of [...valid,...longLabels]){
-    if(label.top>size.height*.35||!label.longForm&&! /^(?:BOL|B\/?L|BAL)(?:[.:;]|NO\b|$)/i.test(label.text))continue;
+    const damaged=/^BA[.:;]?$/i.test(label.text);
+    if(label.top>size.height*.35||!label.longForm&&!damaged&&! /^(?:BOL|B\/?L|BAL)(?:[.:;]|NO\b|$)/i.test(label.text))continue;
     const neighbors=valid.filter(w=>w!==label&&w.left>=label.left&&w.left+w.width<=label.left+size.width*.38&&w.height<=label.height*2&&Math.abs(w.top-label.top)<=label.height*.7);
     // An explicit B/L number label is sufficient to inspect missing pixels.
     // A damaged bare label still needs numeric support to avoid broad guesses.
     const labelEnd=label.left+label.width;
+    // BA alone is not a BOL label. Permit a diagnostic crop only with an
+    // adjacent number label, a substantial identifier and shipping context.
+    if(damaged&&!(neighbors.some(w=>/^(?:NO\.?|NUMBER|#)[:;]?$/i.test(w.text)&&w.left-labelEnd<=label.height*2)&&
+      neighbors.some(w=>/^\d{6,20}$/.test(w.text))&&
+      valid.some(w=>/\b(?:CARRIER|CONSIGNED|CONSIGNEE|SHIPPER)\b/i.test(w.text))))continue;
     const explicit=(label.longForm||/^(?:BOL|B\/L)(?:[.:;]|$)/i.test(label.text))&&
       neighbors.some(w=>/^(?:NO\.?|NUMBER|#)[:;]?$/.test(w.text.toUpperCase())&&w.left-labelEnd<=label.height*2);
     if(label.longForm&&!explicit)continue;
