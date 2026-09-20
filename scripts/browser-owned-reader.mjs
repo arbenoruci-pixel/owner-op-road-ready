@@ -375,6 +375,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
     await page.locator('input[type=file][multiple]').first().setInputFiles({name:'receipt-columns.jpg',mimeType:'image/jpeg',buffer:Buffer.from(columnPhoto)});
     await page.getByRole('button',{name:'Read document',exact:true}).click();
+    await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
     await review.getByRole('heading',{name:'Unloading receipt · 1',exact:true}).waitFor();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'lumper_receipt','filing type agrees with source review');
     await review.getByText('Unloading amount plus fee matches the receipt total.',{exact:true}).waitFor();
