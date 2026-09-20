@@ -3,8 +3,26 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 const VERSION='110.3.88',BUILD='v110388-ratecon-structure';
 const read=path=>fs.readFileSync(path,'utf8');
+const identityPath='source/src/modules/scan/documentIdentityV110334.js';
+let identity=read(identityPath);
+const importBefore="import {extraPageIdentity,attachmentRelationship} from './ownedPageIdentityV110338.js';";
+const importAfter="import {extraPageIdentity,attachmentRelationship,alignRateContinuationPages} from './ownedPageIdentityV110338.js';";
+if(!identity.includes(importAfter)){
+ assert.equal(identity.split(importBefore).length-1,1,'RateCon app identity import');
+ identity=identity.replace(importBefore,importAfter);
+}
+const before="  const types=[...new Set(pageTypes.filter(p=>!p.supporting).map(p=>p.typeId).filter(Boolean))];";
+const after="  alignRateContinuationPages(analysis,pageTypes);\n"+before;
+if(!identity.includes(after)){
+ assert.equal(identity.split(before).length-1,1,'RateCon app continuation boundary');
+ identity=identity.replace(before,after);
+}
+fs.writeFileSync(identityPath,identity);
+fs.copyFileSync('scripts/owned-reader/pageIdentity.js','source/src/modules/scan/ownedPageIdentityV110338.js');
 const result=spawnSync(process.execPath,['--test','packages/smart-reader-core/test/sertifi-rate.test.mjs'],{stdio:'inherit'});
 if(result.error)throw result.error;assert.equal(result.status,0,'Rate confirmation structure regressions must pass');
+const appResult=spawnSync(process.execPath,['scripts/test-ratecon-app-v110388.mjs'],{stdio:'inherit'});
+if(appResult.error)throw appResult.error;assert.equal(appResult.status,0,'Rate confirmation app integration must pass');
 for(const browser of ['scripts/browser-native-pdf-v110363.mjs','scripts/v110373/browser-reader-evidence.mjs','scripts/v110382/browser-bol.mjs','scripts/v110384/browser-rows.mjs'])fs.writeFileSync(browser,read(browser).replaceAll("'0.3.24'","'0.3.25'"));
 for(const path of ['release-version.json','public/app-version.json']){
  const value=JSON.parse(read(path));const stamp=new Date().toISOString();

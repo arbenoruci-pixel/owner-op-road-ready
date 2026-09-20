@@ -39,6 +39,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
     await previewToggle.waitFor();
     if(await previewToggle.getAttribute('aria-expanded')!=='true')await previewToggle.click();
     const review=page.locator('.owned-reader-preview');await review.getByText('3 pages · 2 documents',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Some pages could not be identified. Check whether these documents belong together.',{exact:true}).count(),0);
+    assert.equal(await page.getByText('Separate documents are included. Review the fields under each document; the PDF keeps all pages.',{exact:true}).count(),0);
     const download=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const result=JSON.parse(fs.readFileSync(await(await download).path(),'utf8')),fields=result.documents[0].fields;
     fs.writeFileSync(`${output}/${name}-review.json`,JSON.stringify(result,null,2));
