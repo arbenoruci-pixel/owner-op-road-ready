@@ -1,0 +1,8 @@
+.reader-weight-review{margin:14px 0;padding:14px;border:1px solid #96b8ce;border-radius:12px;background:#f1f7fb;color:#172b40}
+.reader-weight-review h4{margin:0 0 6px;font-size:16px}.reader-weight-review p{margin:6px 0 10px;font-size:13px}
+.reader-weight-review table{width:100%;border-collapse:collapse;margin-bottom:10px}.reader-weight-review th{text-align:left;font-size:13px;font-weight:600}.reader-weight-review td{padding:4px;font-variant-numeric:tabular-nums;text-align:right}
+.reader-weight-review button,.reader-weight-review select{min-height:44px;border-radius:8px;font:inherit}.reader-weight-review td button{padding:8px;border:1px solid #96b8ce;background:#fff;color:#172b40}
+.reader-weight-review label{display:block;font-size:13px;font-weight:700}.reader-weight-review select{display:block;box-sizing:border-box;width:100%;margin:5px 0 10px;padding:8px;background:#fff;color:#172b40;border:1px solid #96b8ce;font-size:16px}
+.reader-weight-review .reader-weight-confirm{width:100%;padding:10px;background:#135e85;color:white;border:0;font-weight:700}.reader-weight-review button:disabled{opacity:.5}
+.reader-weight-units{display:flex;gap:8px;flex-wrap:wrap;border:0;padding:4px 0 10px;margin:0}.reader-weight-units legend{font-size:13px;font-weight:700}.reader-weight-units button{flex:1;min-height:44px;padding:8px;background:white;color:#172b40;border:1px solid #9cb0c5;border-radius:8px;font:inherit}
+.reader-weight-units button[aria-pressed=true]{background:#135e85;color:white;border-color:#135e85}

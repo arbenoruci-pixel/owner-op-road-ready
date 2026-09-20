@@ -7,6 +7,7 @@ import {partyKey} from './partyEvidence.js';
 import {rateDateContext,expandShortYear} from './dateContext.js';
 import {validateBol} from './bolChecks.js';
 import {corroborateBolReference} from './barcodeEvidence.js';
+import {reconcileBolMeasurements} from './measurementConsensus.js';
 
 // Fold cosmetic corporate commas, preserving word and identifier boundaries.
 const semanticKey=(kind,value)=>kind==='party'?partyKey(value):String(value||'');
@@ -98,10 +99,15 @@ function extractField(pages, spec, dateContext=null) {
   return {label:spec.label,kind:spec.kind,required:spec.required,...(spec.displayWhenFound?{displayWhenFound:true}:{}),status:!candidates.length?'missing':uniqueIssues.length?'needs_review':chosen?'supported':'needs_review',value:chosen&&!uniqueIssues.length?chosen.value:null,candidates,issues:uniqueIssues};
 }
 
-export function fieldsForProfile(pages,kind,dateContext=null) {const profile=PROFILES.find(p=>p.id===kind);const fields=profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(pages,spec,dateContext)])):{};if(kind==='bol')fields.bolNumber=corroborateBolReference(pages,fields.bolNumber);return fields;}
+export function fieldsForProfile(pages,kind,dateContext=null) {
+  const profile=PROFILES.find(p=>p.id===kind);
+  const fields=profile?Object.fromEntries(Object.entries(profile.fields).map(([key,spec])=>[key,extractField(pages,spec,dateContext)])):{};
+  if(kind==='bol'){fields.bolNumber=corroborateBolReference(pages,fields.bolNumber);return reconcileBolMeasurements(fields);}
+  return fields;
+}
 
 export function readDocument(input) {
   const {documentId,pages}=normalizeInput(input),identities=pages.map(classifyPage);
   const documents=makeGroups(pages,identities).map(group=>{const profile=PROFILES.find(p=>p.id===group.kind),groupPages=pages.filter(p=>group.pageIds.includes(p.id)),fields=fieldsForProfile(groupPages,group.kind,group.kind==='rate_confirmation'?rateDateContext(groupPages,pages,identities):null),checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):group.kind==='bol'?validateBol(groupPages,fields):[];return {...group,label:profile?.label||'Uncategorized document',fields,checks,requiresReview:true,canAutoFile:false};});
-  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.22',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
+  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.23',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
 }

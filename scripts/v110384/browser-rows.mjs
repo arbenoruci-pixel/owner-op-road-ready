@@ -80,19 +80,38 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(group.fields.weight.status,'needs_review');assert.equal(group.fields.temperature.value,'-10 F');
     assert.equal(group.checks.find(c=>c.id==='bol_weight_arithmetic').status,'passed');assert.equal(group.checks.find(c=>c.id==='bol_barcode_comparison').status,'passed');
     assert.equal(group.canAutoFile,false);assert.deepEqual(errors,[]);
-    assert.equal(result.engineVersion,'0.3.22');
+    assert.equal(result.engineVersion,'0.3.23');
     assert.equal(group.fields.documentDate.value,'2026-08-19');assert.equal(group.fields.totalUnits.value,'331');
     const total=group.fields.weight.candidates.find(c=>c.numericValue==='3936.84');assert.ok(total);
     assert.equal(total.evidence[0].supportMethod,'isolated_measurement_detail');
     assert.ok(Math.abs(total.evidence[0].recognizerConfidence-.3615)<.000001);
     assert.equal(total.evidence[0].quote,'3,936.84');assert.equal(total.labelEvidence[0].quote,'TOTAL WEIGHT:');
     assert.ok(total.evidence[0].sourceImageId.endsWith(':1-measurement-detail-1'));
-    assert.ok(group.fields.weight.issues.includes('weak_recognition'));assert.ok(group.fields.weight.issues.includes('weight_unit_required'));
+    assert.deepEqual(group.fields.weight.issues,['weight_unit_required']);
+    assert.equal(group.fields.weight.numberSupport.method,'matching_measurement_digits');
     assert.ok(!group.fields.weight.candidates.some(c=>c.numericValue==='1111.50'));
     assert.ok(!group.fields.netWeight.candidates.some(c=>c.numericValue==='1111.50'));
     assert.equal(result.pages[0].observations.filter(o=>o.id.includes('measurement-detail')).length,1);
     const details=await page.evaluate(()=>window.readerDetails||[]);assert.ok(details.some(d=>d.name==='road-ready-measurement-detail.png'&&d.h>40));
     await review.screenshot({path:output+'/'+name+'-rows.png'});
-    console.log('PASS '+name+' split measurement detail, exact weak evidence, complete review draft, row isolation, barcode, unit review and export');
+    const weights=review.getByRole('region',{name:'Review shipment weights',exact:true});await weights.waitFor();
+    const unit=weights.getByLabel('Unit for all three weights',{exact:true}),confirm=weights.getByRole('button',{name:'Confirm all three weights',exact:true});
+    assert.equal(await unit.inputValue(),'');assert.equal(await confirm.isDisabled(),true);
+    await weights.getByRole('button',{name:'View Net weight source',exact:true}).click();
+    assert.equal(await dialog.getByLabel('Confirmed value',{exact:true}).inputValue(),'3373.90');
+    await dialog.getByLabel('Source line highlight',{exact:true}).waitFor();
+    await dialog.getByRole('button',{name:'lb (pounds)',exact:true}).click();
+    assert.equal(await dialog.getByLabel('Confirmed value',{exact:true}).inputValue(),'3373.90 LB');
+    await dialog.getByRole('button',{name:'Close source',exact:true}).click();
+    const chosen=name==='chromium'?'LB':'KG';await unit.selectOption(chosen);
+    await weights.screenshot({path:output+'/'+name+'-grouped-weights.png'});await confirm.click();await weights.waitFor({state:'hidden'});
+    const afterDownload=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
+    const confirmed=JSON.parse(fs.readFileSync(await (await afterDownload).path(),'utf8')),confirmedGroup=confirmed.documents.find(g=>g.kind==='bol');
+    for(const key of ['netWeight','tareWeight','weight']){const f=confirmedGroup.fields[key];assert.equal(f.status,'confirmed');assert.ok(f.value.endsWith(' '+chosen));assert.equal(f.correction.unitOrigin,'human_selection');}
+    assert.equal(confirmed.corrections.length,3);assert.deepEqual(confirmed.pages,result.pages);
+    assert.equal(confirmedGroup.checks.find(c=>c.id==='bol_weight_arithmetic').status,'passed');
+    assert.equal(confirmedGroup.checks.find(c=>c.id==='bol_weight_arithmetic').unit,chosen);assert.equal(confirmedGroup.canAutoFile,false);
+    assert.deepEqual(errors,[]);
+    console.log('PASS '+name+' weight digit consensus, exact source proof, single-unit group confirmation, preserved weak confidence and exported corrections');
   }finally{await context.close();await instance.close();}
 }
