@@ -30,6 +30,16 @@ test('BOL form variants share the delivery refinement',()=>{
   }
 });
 
+test('pickup signature ownership survives intervening rows until an explicit delivery section',()=>{
+  for(const heading of ['PICKUP ACKNOWLEDGEMENT','DRIVER SIGNATURE','SHIPPER SIGNATURE: J. DOE']){
+    const pickup=bol+'\n'+heading+'\nDate: 2026-09-21\nTime: 10:00\nLocation: Example Mill\nComments: loaded\nDelivery Date: 2026-09-22';
+    assert.equal(read(pickup+'\nReceived by: J. DOE').pageIdentities[0].kind,'bol');
+    assert.equal(read(pickup+'\nSigned by: J. DOE').pageIdentities[0].kind,'bol');
+    const delivery=pickup+'\nDELIVERY ACCEPTANCE\nDate: 2026-09-22\nTime: 12:00\nLocation: Example Market\nComments: received\nSigned by: J. DOE';
+    assert.equal(read(delivery).pageIdentities[0].kind,'pod');
+  }
+});
+
 test('matching BOL references reconcile completed and incomplete reads in either order',()=>{
   for(const texts of [[bol,bol+'\nReceived by: J. DOE'],[bol+'\nReceived by: J. DOE',bol]]){
     assert.equal(read(...texts).pageIdentities[0].kind,'pod');

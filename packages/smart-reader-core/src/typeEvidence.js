@@ -4,28 +4,29 @@ const clean=line=>line.text.trim();
 const name=value=>/^[\p{L}][\p{L} .’'-]*$/u.test(value)&&/[\p{L}]/u.test(value)
   &&!/\b(?:unsigned|pending|none|unknown|date|signature|print|name|sign|here|required|not|driver|shipper|carrier)\b|^N\s*A$/i.test(value);
 
-function pickupSection(lines,index){
-  for(let i=index-1;i>=Math.max(0,index-4);i--){
+function signatureSection(lines,index){
+  // A section owns all following fields until another explicit signature
+  // section begins. Date/time/location rows never end pickup ownership.
+  for(let i=index-1;i>=0;i--){
     const line=clean(lines[i]);
-    if(/^(?:DELIVERY|RECEIVER|CONSIGNEE)\b/i.test(line))return false;
-    if(/^(?:(?:PICKUP|PICK UP)(?: ACKNOWLEDGEMENT| ACKNOWLEDGMENT| RECEIPT)?|(?:DRIVER|SHIPPER|CARRIER)(?:'S)? (?:SIGNATURE|ACKNOWLEDGEMENT|ACKNOWLEDGMENT))\s*:?$/i.test(line))return true;
+    if(/^(?:DELIVERY (?:ACKNOWLEDGEMENT|ACKNOWLEDGMENT|ACCEPTANCE)|(?:RECEIVER|CONSIGNEE)(?:'S)? (?:SIGNATURE|ACKNOWLEDGEMENT|ACKNOWLEDGMENT|RECEIPT))\s*:?$/i.test(line))return {role:'delivery',line:lines[i]};
+    if(/^(?:(?:PICKUP|PICK UP)(?: ACKNOWLEDGEMENT| ACKNOWLEDGMENT| RECEIPT)?|(?:DRIVER|SHIPPER|CARRIER)(?:'S)? (?:SIGNATURE|ACKNOWLEDGEMENT|ACKNOWLEDGMENT))\s*(?::.*)?$/i.test(line))return {role:'pickup',line:lines[i]};
   }
-  return false;
+  return null;
 }
 
 export function deliveryEvidence(lines){
   for(let i=0;i<lines.length;i++){
     const value=clean(lines[i]);
     const received=/^(?:RECEIVED BY|ACCEPTED BY|(?:RECEIVER|CONSIGNEE)(?:'S)? SIGNATURE)\s*(?::\s*|\s+)(.+)$/i.exec(value);
-    if(received&&name(received[1].trim())&&!pickupSection(lines,i))return [lines[i]];
     const signed=/^SIGNED BY\s*(?::\s*|\s+)(.+)$/i.exec(value);
-    if(!signed||!name(signed[1].trim()))continue;
+    const signature=received||signed;
+    if(!signature||!name(signature[1].trim()))continue;
+    const section=signatureSection(lines,i);
+    if(received&&section?.role!=='pickup')return [...(section?[section.line]:[]),lines[i]];
     // A generic Signed By field belongs to delivery only inside an explicit
     // delivery section. Pickup/driver signatures cannot complete a BOL.
-    for(let j=i-1;j>=Math.max(0,i-4);j--){
-      if(/^(?:DRIVER|SHIPPER|CARRIER|PICKUP|PICK UP)\b/i.test(clean(lines[j])))break;
-      if(/^(?:DELIVERY (?:ACKNOWLEDGEMENT|ACKNOWLEDGMENT|ACCEPTANCE)|RECEIVER ACKNOWLEDGEMENT|CONSIGNEE RECEIPT)\s*:?$/i.test(clean(lines[j])))return [lines[j],lines[i]];
-    }
+    if(section?.role==='delivery')return [section.line,lines[i]];
   }
   return null;
 }
