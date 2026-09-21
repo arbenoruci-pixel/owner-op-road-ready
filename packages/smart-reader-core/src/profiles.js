@@ -27,7 +27,7 @@ const BASE_PROFILES = [
 ];
 
 // Common variants share the original fields, normalization and evidence rules.
-BASE_PROFILES.find(p=>p.id==='bol').variants=[{heading:/^\s*(?:UNIFORM\s+)?(?:STRAIGHT\s+)?BILL\s+OF\s+LADING\b(?:\s*[-:]?\s*(?:SHORT\s+FORM|ORIGINAL|NOT\s+NEGOTIABLE))?\s*$/i,signals:[/^\s*(?:SHIPPER|SHIP\s*FROM)\b/i,/^\s*(?:CONSIGNEE|SHIP\s*TO)\b/i]}];
+BASE_PROFILES.find(p=>p.id==='bol').variants=[{heading:/^\s*(?:(?:UNIFORM|ALTERNATE)\s+)?(?:STRAIGHT\s+)?BILL\s+OF\s+LADING\b(?:\s*[-:]?\s*(?:SHORT\s+FORM|ORIGINAL|NOT\s+NEGOTIABLE))?\s*$/i,signals:[/^\s*(?:SHIPPER|SHIP\s*FROM)\b/i,/^\s*(?:CONSIGNEE|SHIP\s*TO)\b/i]}];
 // A short-form straight BOL names its parties in receipt/consignment rows.
 // Keep the explicit title and three independent form labels as its proof.
 BASE_PROFILES.find(p=>p.id==='bol').variants.push({
@@ -49,6 +49,7 @@ for(const spec of Object.values(BASE_PROFILES.find(p=>p.id==='unloading_receipt'
 BASE_PROFILES.find(p=>p.id==='invoice').filingType='other';
 Object.assign(BASE_PROFILES.find(p=>p.id==='bol').fields,bolMeasurementFields);
 const bolContext=BASE_PROFILES.find(p=>p.id==='bol');
+bolContext.fields.poNumber.noisyPattern=/^[\s]*[\[{}|]+\s*(?:(?:CUSTOMER|CUST)\s+)?P\.?\s*O\.?\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]*\s*([A-Z0-9][A-Z0-9._/-]{1,39})\s*$/id;
 const bolStructure={id:'bol',heading:/$a/,signals:[],structuralSignals:bolContext.structuralSignals};
 bolContext.fields.bolNumber.bolHeaderContext=bolStructure;
 bolContext.fields.trailerNumber.bolEquipmentContext=bolStructure;

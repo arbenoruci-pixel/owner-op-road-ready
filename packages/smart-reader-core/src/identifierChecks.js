@@ -8,6 +8,7 @@ import {nativeCellMatches} from './nativeCells.js';
 import {reconcilePartyNoise} from './partyNoise.js';
 import {recoverPartialBolDates,recoverCarrierInitialSpacing} from './bolRecovery.js';
 import {bolHeaderMatches,bolEquipmentMatches} from './bolHeader.js';
+import {referenceRowMatches} from './referenceRows.js';
 
 // A digit string is not interchangeable with another that lost end digits.
 // Unlabelled alternatives can only make a BOL uncertain; never fill its value.
@@ -21,6 +22,7 @@ const confusablePair=(a,b)=>a.length===b.length&&a.length>=5&&a.length<=20&&/\d/
 
 export function pageFieldMatches(page,spec){
   const matches=spec.pattern?page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match}))):[];
+  if(spec.referenceRow)matches.push(...referenceRowMatches(page,spec));
   if(spec.bolHeaderContext)matches.push(...bolHeaderMatches(page,spec.bolHeaderContext));
   if(spec.bolEquipmentContext)matches.push(...bolEquipmentMatches(page,spec.bolEquipmentContext));
   if(spec.noisyLabel)for(const match of matches)if(spec.noisyLabel.test(match.labelLine?.text||match.line.text))match.issue||='damaged_label';
