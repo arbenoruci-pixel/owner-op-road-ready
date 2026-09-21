@@ -20,6 +20,7 @@ jobs:
           node-version: '20'
       - run: node --test packages/smart-reader-core/test/*.test.mjs
       - run: node --test scripts/test-document-type-priority.mjs
+      - run: node --test scripts/reader-ai/test-ai-reader.mjs
       - run: node --test experiments/owned-ocr/test-*.mjs
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - uses: actions/setup-python@v5
@@ -61,6 +62,7 @@ jobs:
           done
           # Check the changed BOL/source flow first so a failure produces
           # diagnostics immediately. The complete suite still gates success.
+          node scripts/reader-ai/browser.mjs
           node scripts/v110394/browser-bol-form.mjs
           node scripts/v110393/browser-bol-source.mjs
           node scripts/browser-owned-reader.mjs
@@ -90,6 +92,7 @@ jobs:
             browser-test-results/bol-rows-v110384/
             browser-test-results/bol-source-v110393/
             browser-test-results/bol-form-v110394/
+            browser-test-results/ai-reader/
             browser-test-results/ratecon-structure-v110388/
             browser-test-results/scanner-capture-v110329/
             browser-test-results/scanner-workflow-v110328/
