@@ -1,6 +1,6 @@
 // Matching views never replace source text or its evidence offsets.
 import {rateConfirmationProfile} from './rateConfirmation.js';
-import {deliveryEvidence,fuelReceiptEvidence} from './typeEvidence.js';
+import {deliveryEvidence,receiverStampEvidence,fuelReceiptEvidence} from './typeEvidence.js';
 const leadingMarks=/^[\s|~'"‘’“”*_\[\]{}<>•=.,:;–—-]+/;
 const view=line=>line.text.replace(leadingMarks,'');
 const matches=(line,pattern)=>pattern.test(line.text)||pattern.test(view(line));
@@ -40,10 +40,13 @@ function noisyTitle(line,profile){
 export function profileEvidence(lines,profile,{lineIndices}={}){
   if(profile.deliveryBase){
     const shipping=profileEvidence(lines,profile.deliveryBase,{lineIndices});
-    const delivery=deliveryEvidence(lines);
+    const explicit=deliveryEvidence(lines);
+    // Never assemble a stamp from different OCR images in the pooled pass.
+    const stamp=!explicit&&!lineIndices?receiverStampEvidence(lines):null;
+    const delivery=explicit||stamp;
     if(shipping&&delivery){
       const support=[...new Set([...shipping.lines,...delivery])];
-      return {method:shipping.method==='heading'&&support.every(line=>line.confidence==null||line.confidence>=.8)?'heading':'delivery_evidence',lines:support};
+      return {method:!stamp&&shipping.method==='heading'&&support.every(line=>line.confidence==null||line.confidence>=.8)?'heading':'delivery_evidence',lines:support};
     }
   }
   if(profile.id==='fuel_receipt'){

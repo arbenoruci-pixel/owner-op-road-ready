@@ -100,6 +100,7 @@ steps.push('finalize-document-identity-v110395.mjs','verify-document-identity-v1
 steps.push('finalize-document-row-alignment-v110396.mjs','verify-document-row-alignment-v110396.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-document-type-priority-v110397.mjs','verify-document-type-priority-v110397.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-ai-reader-v110398.mjs','reader-ai/test-ai-reader.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-received-stamp-v110399.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
