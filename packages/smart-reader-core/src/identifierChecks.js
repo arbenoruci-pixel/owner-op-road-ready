@@ -15,6 +15,9 @@ const numeric=value=>/^\d{6,20}$/.test(value);
 const header=line=>line.box&&line.box.y<.35&&line.box.height<.04;
 const overlaps=(a,b)=>Math.min(a.x+a.width,b.x+b.width)>Math.max(a.x,b.x)
   &&Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y)>=Math.min(a.height,b.height)*.5;
+const confusablePair=(a,b)=>a.length===b.length&&a.length>=5&&a.length<=20&&/\d/.test(a)&&/\d/.test(b)
+  &&[...a].filter((letter,index)=>letter!==b[index]).length===1
+  &&[...a].every((letter,index)=>letter===b[index]||['8B','0O','1I','1L','5S','2Z','6G'].some(pair=>pair.includes(letter)&&pair.includes(b[index])));
 
 export function pageFieldMatches(page,spec){
   const matches=spec.pattern?page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match}))):[];
@@ -39,6 +42,19 @@ export function pageFieldMatches(page,spec){
   if(spec.recoverPartialTime)return recoverPartialBolDates(matches);
   if(!spec.checkIdentifierFragments)return matches;
   const proposals=[];
+  // A numbered header with one OCR-confusable letter/digit is an alternative
+  // to review, never another accepted reference. Preserve both source quotes.
+  for(const match of matches){
+    const raw=match.line.text.slice(match.start,match.end).trim().toUpperCase();
+    if(!header(match.line)||!/^[A-Z0-9]{5,20}$/.test(raw)||!/[A-Z]/.test(raw))continue;
+    for(const observation of page.observations)for(const line of observation.lines){
+      if(line===match.line||!header(line))continue;
+      const other=/^\s*(?:NUMBER|NO\.?)\s*[:#]\s*([A-Z0-9]{5,20})\s*$/id.exec(line.text);
+      if(!other||!confusablePair(raw,other[1].toUpperCase()))continue;
+      match.issue||='identifier_fragments';
+      if(!proposals.some(proposal=>proposal.observation===observation&&proposal.line===line))proposals.push({observation,line,start:other.indices[1][0],end:other.indices[1][1],issue:'identifier_fragments'});
+    }
+  }
   for(const match of matches){
     const raw=match.line.text.slice(match.start,match.end).trim();
     if(!header(match.line)||!numeric(raw))continue;

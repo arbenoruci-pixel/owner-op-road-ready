@@ -5,6 +5,7 @@
  */
 import {validateInvoice, validateUnloadingReceipt} from './validation.js';
 import {validateBol} from './bolChecks.js';
+import {isDocumentParty} from './fieldGuards.js';
 
 const copy = value => structuredClone(value);
 const pagesKey = pages => Array.isArray(pages) && pages.length && pages.every(n => Number.isInteger(n) && n > 0)
@@ -61,6 +62,9 @@ export function restoreConfirmedReading(result, previous) {
     }
   });
   next.restoredConfirmationCount = (next.restoredConfirmationCount || 0) + restored;
+  if(next.documents.some(group=>Object.values(group.fields).some(field=>field.retainedConfirmation&&field.kind==='party'&&!isDocumentParty(field.value)))){
+    next.continuityWarning='A saved company value looks like a form label. Check it against the original. The previous confirmation remains in the saved reading.';
+  }
   if (matched < confirmedFieldCount(previous)) {
     next.continuityWarning = 'Some previous confirmations could not be matched to these document pages. The saved reading remains available.';
   }

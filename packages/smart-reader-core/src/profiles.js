@@ -28,6 +28,16 @@ const BASE_PROFILES = [
 
 // Common variants share the original fields, normalization and evidence rules.
 BASE_PROFILES.find(p=>p.id==='bol').variants=[{heading:/^\s*(?:UNIFORM\s+)?(?:STRAIGHT\s+)?BILL\s+OF\s+LADING\b(?:\s*[-:]?\s*(?:SHORT\s+FORM|ORIGINAL|NOT\s+NEGOTIABLE))?\s*$/i,signals:[/^\s*(?:SHIPPER|SHIP\s*FROM)\b/i,/^\s*(?:CONSIGNEE|SHIP\s*TO)\b/i]}];
+// A short-form straight BOL names its parties in receipt/consignment rows.
+// Keep the explicit title and three independent form labels as its proof.
+BASE_PROFILES.find(p=>p.id==='bol').variants.push({
+  heading:/^\s*(?:UNIFORM\s+)?STRAIGHT\s+BILL\s+OF\s+LADING\s*[-–—:]\s*SHORT\s+FORM\s*$/i,
+  signals:[/^\s*NAME\s+OF\s+CARRIER\s*:/i,/^\s*CONSIGNED\s*TO\s*:/i,/^\s*TOTAL\s+WEIGHT\s*:/i],
+});
+const bolParties=BASE_PROFILES.find(p=>p.id==='bol').fields;
+bolParties.carrier.pattern=labeled('CARRIER(?: NAME)?|NAME OF CARRIER');
+bolParties.carrier.valueStop=/\s+(?:KEEP\s+FROZEN\b|SHIPPER[’\x27]S\s+NO\s*:)/i;
+bolParties.consignee.pattern=labeled('SHIP[ \\t]*TO|CONSIGNEE|CONSIGNED(?:[ \\t]*TO)?|TO(?=[ \\t]*:)');
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').variants=[{heading:/^\s*LUMPER\s+(?:RECEIPT|PAYMENT\s+RECEIPT)\s*$/i,signals:[/^\s*(?:TOTAL|NET\s+TOTAL)\s*:?\s*[$€£]?\s*\d/i,/^\s*(?:RECEIPT|CARRIER|LOAD|PO|DATE)\b/i]}];
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').filingType='lumper_receipt';
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').refines=['other_expense'];

@@ -10,7 +10,7 @@ export function inlineFieldRange(line,spec){
   if(spec.kind==='party'&&line.box?.y<.16&&line.confidence!==null&&line.confidence<.8&&/^\s*carrier\s+ackn\b/i.test(line.text)&&/\b(?:edges|agre\w*|goods|identified)\b/i.test(line.text))return null;
   if(spec.kind==='party'&&isPartyBoilerplate(line.text))return null;
   if(spec.kind==='party'&&/^[\s|]*(?:CARRIER(?:\s+NAME)?|SHIPPER|CONSIGNEE)\s*[:#]?\s*[({\[]\s*(?:or|and|if|where|when)\b/i.test(line.text))return null;
-  if(spec.kind==='party'&&/^\s*(?:CARRIER|SHIPPER|CONSIGNEE)\s+(?:and|or|shall|acknowledges?|agrees?|without|certifies|(?:has|have)\s+been)\b/i.test(line.text))return null;
+  if(spec.kind==='party'&&/^\s*(?:CARRIER|SHIPPER|CONSIGNEE)\s+(?:and|or|shall|acknowledges?|agrees?|without|certifies|hereby\s+(?:certifies|acknowledges?|agrees?)|(?:has|have)\s+been)\b/i.test(line.text))return null;
   const explicit=spec.inlineLabel?.exec(line.text),match=explicit?null:spec.pattern.exec(line.text);
   if(!explicit&&!match)return null;
   if(explicit&&explicit.index>0){
@@ -23,6 +23,7 @@ export function inlineFieldRange(line,spec){
   const value=line.text.slice(start,end),stop=NEXT_FIELD.exec(value),footnote=FOOTNOTE.exec(value);
   if(stop)end=Math.min(end,start+stop.index);
   if(footnote)end=Math.min(end,start+footnote.index);
+  const formStop=spec.valueStop?.exec(value);if(formStop)end=Math.min(end,start+formStop.index);
   const token=spec.valuePattern?.exec(line.text.slice(start,end));
   if(token)end=start+token[0].length;
   while(start<end&&/[\s|]/.test(line.text[start]))start++;
