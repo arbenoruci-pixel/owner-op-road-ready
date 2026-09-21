@@ -19,13 +19,12 @@ function carrierPass(id,value,confidence){
 const planFor=(passes,label)=>planPartyRegions(passes).find(plan=>plan.fieldLabel===label);
 const read=passes=>readDocument({documentId:'party-sources',pages:[{id:'page-1',observations:passes.map(passObservation)}]});
 
-test('an identical wrapped proposal uses the clearest complete source in either pass order',()=>{
+test('matching complete consignee blocks avoid a redundant reread in either pass order',()=>{
   const passes=[blockPass('weak',86),blockPass('clear',98),blockPass('medium',92)],before=structuredClone(passes);
   for(const order of [passes,[...passes].reverse()]){
     const plan=planFor(order,'Consignee');
-    assert.equal(plan.sourcePassId,'clear');assert.equal(plan.pageSegMode,'6');
-    assert.ok(plan.region.top<=240&&plan.region.top+plan.region.height>=267);
-    assert.ok(plan.region.left<=30&&plan.region.left+plan.region.width>=335);
+    assert.equal(plan,undefined);
+    assert.equal(read(order).documents[0].fields.consignee.status,'supported');
   }
   assert.deepEqual(passes,before,'planning never rewrites OCR text or its coordinates');
 });
@@ -58,7 +57,7 @@ test('a weaker competing name keeps retry priority and uses its own clearest sou
 });
 
 test('the selected source supplies its own coordinates and bounded retry budget',()=>{
-  const weak=blockPass('weak',82),clear=blockPass('clear',98);
+  const weak=blockPass('weak',62),clear=blockPass('clear',98);
   for(const line of clear.lines)line.left+=200;
   const plans=planPartyRegions([weak,clear]);
   assert.equal(plans.length,2);

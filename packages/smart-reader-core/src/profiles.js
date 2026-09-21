@@ -38,6 +38,10 @@ for(const spec of Object.values(BASE_PROFILES.find(p=>p.id==='unloading_receipt'
 }
 BASE_PROFILES.find(p=>p.id==='invoice').filingType='other';
 Object.assign(BASE_PROFILES.find(p=>p.id==='bol').fields,bolMeasurementFields);
+const bolContext=BASE_PROFILES.find(p=>p.id==='bol');
+const bolStructure={id:'bol',heading:/$a/,signals:[],structuralSignals:bolContext.structuralSignals};
+bolContext.fields.bolNumber.bolHeaderContext=bolStructure;
+bolContext.fields.trailerNumber.bolEquipmentContext=bolStructure;
 export const PROFILES=Object.freeze([...BASE_PROFILES,...truckingProfiles(BASE_PROFILES)]);
 
 export function normalizeValue(kind, raw, sourceLabel=null) {

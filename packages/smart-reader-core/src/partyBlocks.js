@@ -1,4 +1,5 @@
 import {partyKey} from './partyEvidence.js';
+import {explicitPartyRow} from './partyRowEvidence.js';
 
 const raw=match=>match.line.text.slice(match.start,match.end).trim();
 const label=match=>match.labelLine||match.line;
@@ -16,8 +17,8 @@ function wrapped(a,b){
 }
 
 // A wrapped CONSIGNED / TO label can name a company and its facility on two
-// rows. Keep both names in one proposal, with both exact source ranges. This
-// is still a geometric proposal and never establishes an accepted alias.
+// rows. Keep both names and their exact ranges. Two complete, unambiguous
+// labelled block readings can support that literal text; one stays reviewable.
 export function recoverConsigneeBlocks(matches){
   const blocks=[];
   for(const first of matches.filter(primary)){
@@ -40,11 +41,16 @@ export function recoverConsigneeBlocks(matches){
     if(blocks.filter(other=>other.tail.line===block.tail.line&&other.first.observation===block.first.observation).length!==1)continue;
     used.add(block.first);used.add(block.tail);
   }
+  const proofs=blocks.filter(({first,tail})=>used.has(first)&&second(tail)&&explicitPartyRow(first)&&explicitPartyRow(tail));
   return matches.flatMap(match=>{
     const block=blocks.find(block=>block.first===match&&used.has(match));
     if(!block)return used.has(match)?[]:[match];
     const {tail}=block;
-    return [{...match,joinedValue:raw(match)+' / '+raw(tail),issue:'layout_needs_review',labelLine:label(match),
+    const peers=proofs.filter(other=>partyKey(raw(other.first))===partyKey(raw(match))&&partyKey(raw(other.tail))===partyKey(raw(tail)));
+    const supported=proofs.includes(block)&&new Set(peers.map(other=>other.first.observation)).size>=2;
+    const unresolved=[match.issue,tail.issue].find(issue=>issue&&issue!=='layout_needs_review');
+    return [{...match,joinedValue:raw(match)+' / '+raw(tail),issue:unresolved||(supported?undefined:'layout_needs_review'),
+      ...(supported?{supportMethod:'corroborated_consigned_block'}:{}),labelLine:label(match),
       continuation:{line:tail.line,start:tail.start,end:tail.end},continuationKind:'party_block',
       extraLabelLines:tail.labelLine?[tail.labelLine]:second(tail)?[tail.line]:[]}];
   });

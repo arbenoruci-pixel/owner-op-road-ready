@@ -15,10 +15,10 @@ test('freight boilerplate cannot become a carrier or consume the crop budget',()
   assert.equal(result.pages[0].observations[0].lines.some(line=>line.text.includes('goods identified herein')),true,'raw paragraph remains available');
 });
 
-test('wrapped consignee keeps company and facility as one reviewable source block',()=>{
+test('two complete consignee blocks support the printed company and facility together',()=>{
   const input=partyBlocksInput(),before=structuredClone(input),result=readDocument(input),field=result.documents[0].fields.consignee;
-  assert.equal(field.status,'needs_review');assert.equal(field.value,null);
-  assert.deepEqual(field.issues,['layout_needs_review']);assert.equal(field.candidates.length,1);
+  assert.equal(field.status,'supported');assert.equal(field.value,'REGIONAL MARKET / TOWN DEPOT #1-2');
+  assert.deepEqual(field.issues,[]);assert.equal(field.candidates.length,1);
   const candidate=field.candidates[0];
   assert.equal(candidate.rawValue,'REGIONAL MARKET');assert.equal(candidate.value,'REGIONAL MARKET / TOWN DEPOT #1-2');
   assert.equal(candidate.evidence.length,3);assert.equal(candidate.continuationEvidence.length,3);
@@ -51,7 +51,9 @@ test('a separate unproven fragment or another column remains a different reading
 });
 
 test('party rereads include separate labels and every company row on their own image',()=>{
-  const passes=partyBlockPasses(),plans=planPartyRegions(passes);
+  const passes=partyBlockPasses();
+  passes[0].lines.find(line=>line.text.startsWith('CONSIGNED ')).confidence=70;
+  const plans=planPartyRegions(passes);
   assert.equal(plans.length,2);assert.deepEqual(plans.map(p=>p.fieldLabel).sort(),['Consignee','Shipper']);
   const shipper=plans.find(p=>p.fieldLabel==='Shipper'),consignee=plans.find(p=>p.fieldLabel==='Consignee');
   assert.equal(shipper.pageSegMode,'7');assert.equal(consignee.pageSegMode,'6');

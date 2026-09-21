@@ -9,6 +9,7 @@ const strip=path=>fs.readFileSync(path,'utf8').replace(/^import .*;\n/gm,'').rep
 const makeDetails=new Function('deps',`const {planPartyRegions,decodeImageFileV3,imageDataToFileV3}=deps;${strip('source/src/modules/scan/partyDetailV110357.js')};return preparePartyDetails;`);
 const makeReader=new Function('deps',`const {needsReadingRetry,hasReadableBolReference,needsAmountSourceVerification,prepareIdentifierDetail,preparePartyDetails,checkCancelled,monotonicProgress,qualifyDocumentFieldsV11038,recognizeDocumentText,decodeImageFileV3,imageDataToFileV3,grayscalePaperV110323,normalizePaperV110323,classifyDocument,arbitrateDocumentTypeV104,documentTypeMeta,parseSmartDocumentTextByTypeV104}=deps;${strip('source/src/modules/scan/imageReaderV110323.js')};return readImageDocumentV110323;`);
 const original={name:'original',type:'image/png'},clean={name:'clean',type:'image/png'},passes=partyBlockPasses();
+passes[0].lines.find(line=>line.text.startsWith('CONSIGNED ')).confidence=70;
 const pixels={width:1000,height:1000,data:new Uint8ClampedArray(4000000)},calls=[];
 let controller=new AbortController(),abortAfterFirst=false;
 const checkCancelled=signal=>{if(signal?.aborted)throw new DOMException('Canceled','AbortError');};
@@ -33,7 +34,7 @@ assert.deepEqual(calls.slice(3).map(call=>call.options.pageSegMode).sort(),['6',
 const dimensions=Object.fromEntries(result.ocrEvidenceV110323.map(pass=>[`page-1:${pass.id}`,pass.imageSize]));
 const review=reviewScanAnalysis(result,{dimensions}),fields=review.documents[0].fields;
 assert.equal(fields.shipper.status,'supported');assert.equal(fields.shipper.value,'NORTHERN FOODS');
-assert.equal(fields.consignee.status,'needs_review');assert.equal(fields.consignee.candidates.length,1);
+assert.equal(fields.consignee.status,'supported');assert.equal(fields.consignee.candidates.length,1);
 assert.equal(fields.consignee.candidates[0].value,'REGIONAL MARKET / TOWN DEPOT #1-2');
 assert.equal(fields.consignee.issues.includes('conflicting_reads'),false);
 assert.equal(fields.carrier.value,'EXAMPLE TRANSPORT');assert.equal(review.documents[0].canAutoFile,false);

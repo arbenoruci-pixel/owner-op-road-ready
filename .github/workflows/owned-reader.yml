@@ -58,8 +58,10 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
-          # Check the changed weight/save flow first so a failure produces
+          # Check the changed BOL/source flow first so a failure produces
           # diagnostics immediately. The complete suite still gates success.
+          node scripts/v110393/browser-bol-source.mjs
+          node scripts/browser-owned-reader.mjs
           node scripts/v110384/browser-rows.mjs
           node scripts/browser-ratecon-structure-v110388.mjs
           reader_test_status=0
@@ -67,7 +69,6 @@ jobs:
           node scripts/v110373/browser-reader-evidence.mjs || reader_test_status=1
           node scripts/v110382/browser-bol.mjs || reader_test_status=1
           TEST_DAMAGED_BOL=1 node scripts/v110382/browser-bol.mjs || reader_test_status=1
-          node scripts/browser-owned-reader.mjs || reader_test_status=1
           node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
           TEST_NATIVE_CELLS=1 node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
           node scripts/browser-scanner-capture-v110329.mjs || reader_test_status=1
@@ -85,6 +86,7 @@ jobs:
             browser-test-results/bol-quality-v110382/
             browser-test-results/bol-recovery-v110383/
             browser-test-results/bol-rows-v110384/
+            browser-test-results/bol-source-v110393/
             browser-test-results/ratecon-structure-v110388/
             browser-test-results/scanner-capture-v110329/
             browser-test-results/scanner-workflow-v110328/
