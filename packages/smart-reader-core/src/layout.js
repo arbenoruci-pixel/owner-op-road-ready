@@ -43,7 +43,7 @@ export function fieldMatches(lines,spec){
         const supportedRow=(spec.measurementRow&&eligible.length===1||receiptRow)&&line.confidence>=.8&&first.confidence>=.8;
         matches.push({line:first,start:range[0],end:token?range[0]+token[0].length:range[1],labelLine:line,
           ...(supportedRow?{supportMethod:receiptRow?'aligned_receipt_row':'aligned_measurement_row',...(receiptRow?{issue:'layout_needs_review'}:{})}
-            :{issue:spec.receiptRow&&right.length>1?'ambiguous_receipt_row':'layout_needs_review'})});}continue;}
+            :{issue:right.length>1&&spec.kind==='party'?'ambiguous_party_row':spec.receiptRow&&right.length>1?'ambiguous_receipt_row':'layout_needs_review'})});}continue;}
     }
     if(!blockLabel||!line.box)continue;
     const label=line.box,center=label.x+label.width/2;if(label.width>.4||Math.abs(center-.5)<.06)continue;

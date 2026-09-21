@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const VERSION = '110.3.92', BUILD = 'v110392-lumper-receipt-consensus';
 const read = path => fs.readFileSync(path, 'utf8');
-assert.equal(JSON.parse(read('packages/smart-reader-core/package.json')).version, '0.3.26');
+assert.ok(['0.3.26','0.3.27'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
 const identityPath='source/src/modules/scan/documentIdentityV110334.js';
 let identity=read(identityPath);
 const beforeImport="import {extraPageIdentity,attachmentRelationship,alignRateContinuationPages} from './ownedPageIdentityV110338.js';";

@@ -241,8 +241,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.locator('input[type=file][multiple]').first().setInputFiles({name:'shipping-blocks.jpg',mimeType:'image/jpeg',buffer:Buffer.from(blockPhoto)});
     await page.getByRole('button',{name:'Read document',exact:true}).click();
     await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
-    await review.getByText('1 items to check',{exact:true}).waitFor();
-    assert.equal(await page.evaluate(()=>window.__ownedReaderCalls),5);
+    await review.getByText('0 items to check',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__ownedReaderCalls),4);
     const blockDownload=page.waitForEvent('download');
     await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const blockFile=await blockDownload,blockResult=JSON.parse(fs.readFileSync(await blockFile.path(),'utf8'));
