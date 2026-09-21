@@ -36,9 +36,11 @@ export function bolHeaderMatches(page,profile){
 // confined to shipping structure and retain the printed label as evidence.
 export function bolEquipmentMatches(page,profile){
   const matches=[];
-  if(!page.observations.some(observation=>profileEvidence(observation.lines,profile)))return matches;
+  const contexts=new Map(page.observations.map(observation=>[observation,profileEvidence(observation.lines,profile)]));
+  const strongContext=observation=>contexts.get(observation)?.method==='shipping_structure'&&contexts.get(observation).lines.every(strong);
+  if(!page.observations.some(strongContext))return matches;
   for(const observation of page.observations){
-    const complete=!!profileEvidence(observation.lines,profile);
+    const complete=strongContext(observation);
     for(const line of observation.lines){
       const value=/^\s*ROUTE\s+CAR\s+(?:NO\.?|NUMBER|#)\s*[:#]?\s*([A-Z0-9][A-Z0-9._/-]{1,39})\s*[–—|]*\s*$/id.exec(line.text);
       if(!value)continue;

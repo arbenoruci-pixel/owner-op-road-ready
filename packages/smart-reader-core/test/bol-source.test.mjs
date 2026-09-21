@@ -77,6 +77,19 @@ test('initial/AND spacing needs an expanded source and repeated clear complete j
   }
 });
 
+test('a clear equipment label needs strong shipping context in that observation',()=>{
+  const input=bolSourceInput();
+  for(const o of input.pages[0].observations){
+    if(o.id==='sparse')for(const l of o.lines){if(!l.text.startsWith('ROUTE CAR NO.'))l.confidence=.6;}
+    else o.lines=o.lines.filter(l=>!l.text.startsWith('ROUTE CAR NO.'));
+  }
+  const field=fields(input).trailerNumber;
+  assert.equal(field.value,null);assert.equal(field.status,'needs_review');
+  assert.equal(field.candidates[0].value,'8042');assert.ok(field.issues.includes('label_needs_review'));
+  for(const o of input.pages[0].observations)for(const l of o.lines)if(!l.text.startsWith('ROUTE CAR NO.'))l.confidence=.6;
+  assert.equal(fields(input).trailerNumber.value,null,'weak context on every observation never supports equipment');
+});
+
 test('a single complete consignee block remains reviewable; different facilities stay conflicting',()=>{
   const single=bolSourceInput();single.pages[0].observations=[pass(single,'sparse')];
   assert.equal(fields(single).consignee.status,'needs_review');

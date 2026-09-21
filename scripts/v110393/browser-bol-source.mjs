@@ -1,6 +1,8 @@
 // Full intake, source review, export and persistence with anonymized OCR data.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from '../v110328/browserFixture.mjs';
 import {bolSourceInput} from '../../packages/smart-reader-core/test/bol-source-fixture.mjs';
@@ -8,8 +10,8 @@ import {bolSourceInput} from '../../packages/smart-reader-core/test/bol-source-f
 const output='browser-test-results/bol-source-v110393';fs.mkdirSync(output,{recursive:true});
 const observations=bolSourceInput().pages[0].observations.slice(0,3).map(o=>o.lines);
 for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
-  const instance=await browser.launch({headless:true});
-  const context=await instance.newContext({viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
+  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'bol-source-'));
+  const context=await browser.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
   const page=await context.newPage(),errors=[];page.setDefaultTimeout(45000);page.on('pageerror',error=>errors.push(error.message));
   try{
     await setupRoutes(context);
@@ -39,6 +41,13 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     const review=page.locator('.owned-reader-preview');
     await review.getByRole('heading',{name:'Bill of lading · 1',exact:true}).waitFor();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
+    const checks=page.getByRole('region',{name:'Document reading checks',exact:true});
+    assert.equal(await checks.getByText('BOL number was not verified from its label. Check the original.',{exact:true}).count(),0);
+    await page.getByRole('button',{name:/^Extracted details/}).click();
+    const displayed=page.locator('.scan-details-v105 > div');
+    await displayed.getByText('0012345678',{exact:true}).waitFor();
+    await displayed.getByText('REGIONAL MARKET / TOWN DEPOT NORTH',{exact:true}).waitFor();
+    await page.getByRole('button',{name:/^Extracted details/}).click();
     await review.getByRole('button',{name:'0012345678 · Page 1',exact:true}).click();
     const dialog=page.getByRole('dialog',{name:'Check source',exact:true});await dialog.waitFor();
     assert.equal(await dialog.getByLabel('Confirmed value',{exact:true}).inputValue(),'0012345678');
@@ -63,13 +72,16 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     const saved=await page.evaluate(()=>new Promise((resolve,reject)=>{
       const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onerror=()=>reject(request.error);
       request.onsuccess=()=>{const db=request.result,tx=db.transaction('documents_local','readonly'),rows=tx.objectStore('documents_local').getAll();
-        tx.oncomplete=()=>{resolve(rows.result.map(row=>row.extracted?.readerReviewV110345).find(Boolean));db.close();};};
+        tx.oncomplete=()=>{resolve(rows.result.map(row=>row.extracted).find(extracted=>extracted?.readerReviewV110345));db.close();};};
     }));
-    assert.equal(saved.documents[0].fields.bolNumber.value,'0012345678');assert.deepEqual(errors,[]);
+    assert.equal(saved.bolNo,'0012345678');assert.equal(saved.trailerNo,'8042');
+    assert.equal(saved.readerSourceFieldsV110393.fields.bolNo.status,'confirmed');
+    assert.equal(saved.readerSourceFieldsV110393.fields.trailerNo.status,'supported');
+    assert.equal(saved.readerReviewV110345.documents[0].fields.bolNumber.value,'0012345678');assert.deepEqual(errors,[]);
     console.log(`PASS ${name} BOL header, eight supported fields, exact source, export and confirmed-number persistence`);
   }catch(error){
     await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});
     fs.writeFileSync(`${output}/${name}-failure.txt`,JSON.stringify({error:String(error),errors,body:await page.locator('body').innerText().catch(()=>''),url:page.url()},null,2));
     throw error;
-  }finally{await context.close();await instance.close();}
+  }finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}
 }

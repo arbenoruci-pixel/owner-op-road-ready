@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {bolSourceInput} from '../packages/smart-reader-core/test/bol-source-fixture.mjs';
 import {reviewScanAnalysis} from '../source/src/modules/scan/ownedReaderAdapter.js';
 import {confirmField,resolveEvidence} from '../packages/smart-reader-core/src/index.js';
 import {savedReadingReview} from '../packages/smart-reader-core/src/recovery.js';
+import {scanWithSourceFields} from '../packages/smart-reader-core/src/scanFields.js';
+import {compactRateConSaveFieldsV10964} from '../source/src/modules/scan/rateConSaveStabilityV10964.js';
 
 const dimensions={},input=bolSourceInput();
 const passes=input.pages[0].observations.map(o=>{
@@ -20,5 +23,13 @@ assert.equal(doc.fields.weight.value,null);assert.ok(doc.fields.weight.issues.in
 const evidence=doc.fields.bolNumber.candidates[0].evidence[0];resolveEvidence(result,evidence);
 const confirmed=confirmField(result,{documentId:result.documentId,groupId:doc.id,field:'bolNumber',rawValue:'0012345678',evidence,userConfirmed:true,expectedRevision:result.reviewRevision,expectedRawValues:doc.fields.bolNumber.candidates.map(c=>c.rawValue)});
 assert.equal(savedReadingReview(confirmed).documents[0].fields.bolNumber.value,'0012345678');
+const shown=scanWithSourceFields(analysis,{analysis,result:confirmed},'bol');
+assert.equal(shown.fields.bolNo,'0012345678');assert.equal(shown.fields.trailerNo,'8042');
+assert.equal(shown.fields.readerSourceFieldsV110393.fields.bolNo.status,'confirmed');
+assert.equal(compactRateConSaveFieldsV10964(shown.fields).bolNo,'0012345678');
+const sheet=fs.readFileSync('source/src/modules/scan/SmartScanSheetV105.jsx','utf8');
+for(const anchor of ['<ScanEvidenceReviewV11036 analysis={sourceAnalysisV110393} />','onReady={acceptReaderReviewV110345}',
+  'extractedRows(sourceAnalysisV110393)','...(sourceAnalysisV110393?.fields || {})',
+  'storageFieldsV10964.readerSourceFieldsV110393=sourceAnalysisV110393.fields.readerSourceFieldsV110393'])assert.ok(sheet.includes(anchor),anchor);
 assert.equal(doc.canAutoFile,false);assert.equal(JSON.stringify(analysis),before);
 console.log('PASS — BOL app adapter, eight supported fields, exact proof, review confirmation and unchanged source');
