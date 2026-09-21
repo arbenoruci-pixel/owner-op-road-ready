@@ -28,6 +28,15 @@ function fragmentKind(raw,complete){
 // Resolve redundant fragments, retaining every candidate, quote and original
 // confidence. Arithmetic supports an observed number; it never supplies digits.
 export function reconcileBolMeasurements(fields){
+  fields={...fields};
+  for(const key of keys){
+    const field=fields[key];if(field?.correction||!field?.candidates?.some(candidate=>candidate.issue==='ocr_weight_unit'))continue;
+    const candidates=field.candidates.filter(candidate=>candidate.numericValue!=null);
+    if(!candidates.length||new Set(candidates.map(candidate=>JSON.stringify([candidate.thousandths,candidate.unit]))).size!==1)continue;
+    const sources=candidates.flatMap(candidate=>candidate.evidence.filter(evidence=>direct(candidate,evidence)));
+    const corroborated=sources.some(source=>new Set(sources.filter(other=>other.pageId===source.pageId).map(other=>other.observationId)).size>=2);
+    if(corroborated)fields[key]={...field,issues:field.issues.filter(issue=>issue!=='ocr_weight_unit')};
+  }
   const next={...fields},readings=Object.fromEntries(keys.map(key=>[key,completeReading(fields[key])])),supports={};
   for(const key of keys){
     const reading=readings[key];if(!reading?.direct.length)continue;

@@ -1,9 +1,10 @@
 // Keep observed numbers and units separate. Arithmetic cannot invent either.
 const number = '(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{1,3})?';
-const token = new RegExp('^('+number+')(?:[ \\t]*(LB|LBS|KG|KGS))?(?=[ \\t|)\\]\\}]|$)', 'id');
+const token = new RegExp('^('+number+')(?:[ \\t]*(LB|LBS|KG|KGS|IBS))?(?=[ \\t|)\\]\\}]|$)', 'id');
 function weightField(label, source) {
   return {label, kind:'shipping_weight', required:false, displayWhenFound:true,measurementRow:true,
-    pattern:new RegExp('^[\\s|]*(?:'+source+')[ \\t]*:?[ \\t]+(.+?)\\s*$', 'id'),
+    excludePattern:/^[\s|]*WEIGHT\s+SUBJECT\s+TO\b/i,
+    pattern:new RegExp('^[\\s|\\[\\]]*(?:'+source+')[ \\t]*:?[ \\t]+(.+?)\\s*$', 'id'),
     rightLabel:new RegExp('^\\s*(?:'+source+')\\s*:?\\s*$', 'i'), valuePattern:token};
 }
 export const bolMeasurementFields = {
@@ -11,8 +12,8 @@ export const bolMeasurementFields = {
   netWeight:weightField('Net weight', 'TOTAL NET WEIGHT|NET WEIGHT'),
   tareWeight:{...weightField('Tare weight', 'TOTAL TARE|OTAL TARE|TARE WEIGHT|TARE'),noisyLabel:/^[\s|]*OTAL\s/i},
   totalUnits:{label:'Total units', kind:'count', required:false, displayWhenFound:true,measurementRow:true,
-    pattern:/^[\s|]*(?:TOTAL|OTAL)\s+UNITS\s*:?\s+(\d[\d,]*)\s*$/id,
-    rightLabel:/^\s*(?:TOTAL|OTAL)\s+UNITS\s*:?\s*$/i,noisyLabel:/^[\s|]*OTAL\s/i},
+    pattern:/^[\s|]*(?:TOTAL|OTAL)\s+(?:(?:QTY|QUANTITY)\s+)?UNITS\s*:?\s+(\d[\d,]*)\s*$/id,
+    rightLabel:/^\s*(?:TOTAL|OTAL)\s+(?:(?:QTY|QUANTITY)\s+)?UNITS\s*:?\s*$/i,noisyLabel:/^[\s|]*OTAL\s/i},
   temperature:{label:'Temperature setting instruction', kind:'temperature_instruction', required:false, displayWhenFound:true,
     pattern:/^[\s|]*(?:(?:FROZEN\s+LOADS|FOOTNOTES)\s*:\s*)?(?:USE\s*TEMP(?:ERATURE)?\s*SETTING\s*(?:OF\s*)?|(?:REEFER\s+)?(?:SET\s*POINT|TEMP(?:ERATURE)?\s*SETTING)\s*:?\s*)([+\-−<]?\s*\d{1,3}(?:\.\d+)?\s*°?\s*[FC])\s*$/id}
 };
@@ -29,12 +30,13 @@ export function normalizeBolMeasurement(kind, raw) {
     if(match[1]==='<')return {value:null,issue:'ambiguous_temperature_sign'};
     return {value:match[1].replace('−','-')+match[2]+' '+match[3].toUpperCase()};
   }
-  const match=new RegExp('^('+number+')(?:\\s*(LB|LBS|KG|KGS))?$','i').exec(value);
+  const match=new RegExp('^('+number+')(?:\\s*(LB|LBS|KG|KGS|IBS))?$','i').exec(value);
   if(!match)return {value:null,issue:'invalid_weight'};
-  const numericValue=match[1].replaceAll(',',''),unit=match[2]?.toUpperCase().replace(/S$/,'')||null;
+  const numericValue=match[1].replaceAll(',',''),ocrUnit=match[2]?.toUpperCase()==='IBS';
+  const unit=ocrUnit?'LB':match[2]?.toUpperCase().replace(/S$/,'')||null;
   const thousandths=Math.round(Number(numericValue)*1000);
   if(!Number.isSafeInteger(thousandths))return {value:null,issue:'invalid_weight'};
-  return {value:numericValue+(unit?' '+unit:''),numericValue,unit,thousandths,...(!unit?{issue:'weight_unit_required'}:{})};
+  return {value:numericValue+(unit?' '+unit:''),numericValue,unit,thousandths,...(ocrUnit?{issue:'ocr_weight_unit'}:!unit?{issue:'weight_unit_required'}:{})};
 }
 export function validateBolWeights(fields) {
   const keys=['netWeight','tareWeight','weight'];

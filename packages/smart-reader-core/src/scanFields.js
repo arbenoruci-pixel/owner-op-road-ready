@@ -1,7 +1,8 @@
 import {resolveEvidence} from './input.js';
+import {isDocumentParty} from './fieldGuards.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
-  poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight'};
+  poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
 const referenceKinds={bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailerNo'};
 const aliases={shipper:'origin',consignee:'destination',documentDate:'date'};
 const bolWarning='BOL number was not verified from its label. Check the original.';
@@ -17,7 +18,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
   if(result?.engine!=='owned-smart-reader'||result.documents.length!==1||doc.kind!==selectedType
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
   const fields={...analysis.fields},fieldEvidence={...analysis.fieldEvidence},fieldConfidence={...analysis.fieldConfidence};
-  const oldReview=analysis.evidenceReviewV11036||{},evidence={...oldReview.evidence},accepted=[],proofs={};
+  const oldReview=analysis.evidenceReviewV11036||{},evidence={...oldReview.evidence},accepted=[],proofs={},savedWarnings=[];
   for(const [key,ownedKey]of Object.entries(mapping)){
     const field=doc.fields[ownedKey];if(!field)continue;
     const alias=aliases[key],replaceAlias=alias&&fields[alias]===fields[key];
@@ -25,6 +26,9 @@ export function scanWithSourceFields(analysis,review,selectedType){
     delete fields[key];delete fieldEvidence[key];delete fieldConfidence[key];delete evidence[key];
     if(key==='weight'){delete fields.weightUnit;delete fieldEvidence.weightUnit;delete evidence.weightUnit;}
     if(!['supported','confirmed'].includes(field.status)||typeof field.value!=='string'||!field.value)continue;
+    if(field.kind==='party'&&!isDocumentParty(field.value)){
+      savedWarnings.push('The saved '+field.label.toLowerCase()+' value looks like a form label. Check the company name on the original.');continue;
+    }
     const pageSource=field.status==='confirmed'&&field.correction?.sourcePage;
     const validPage=pageSource&&doc.pageIds.includes(pageSource.pageId)&&result.pages.some(page=>page.id===pageSource.pageId
       &&page.observations.some(observation=>observation.sourceImageId&&observation.sourceImageId===pageSource.sourceImageId));
@@ -45,6 +49,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
   const issues=(oldReview.issues||[]).filter(issue=>!(issue===bolWarning&&accepted.includes('bolNo')
     ||issue===dateWarning&&accepted.includes('documentDate')||issue===layoutWarning&&analysis.layoutGuardV110337&&!removed.length));
   if(!fields.bolNo&&!issues.includes(bolWarning))issues.push(bolWarning);
+  for(const warning of savedWarnings)if(!issues.includes(warning))issues.push(warning);
   return {...analysis,fields,fieldEvidence,fieldConfidence,needsReview:true,routing:{...analysis.routing,autoFile:false},
     ...(analysis.layoutGuardV110337?{layoutGuardV110337:{...analysis.layoutGuardV110337,removedFields:removed}}:{}),
     evidenceReviewV11036:{...oldReview,evidence,issues}};

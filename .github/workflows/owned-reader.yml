@@ -60,6 +60,7 @@ jobs:
           done
           # Check the changed BOL/source flow first so a failure produces
           # diagnostics immediately. The complete suite still gates success.
+          node scripts/v110394/browser-bol-form.mjs
           node scripts/v110393/browser-bol-source.mjs
           node scripts/browser-owned-reader.mjs
           node scripts/v110384/browser-rows.mjs
@@ -87,6 +88,7 @@ jobs:
             browser-test-results/bol-recovery-v110383/
             browser-test-results/bol-rows-v110384/
             browser-test-results/bol-source-v110393/
+            browser-test-results/bol-form-v110394/
             browser-test-results/ratecon-structure-v110388/
             browser-test-results/scanner-capture-v110329/
             browser-test-results/scanner-workflow-v110328/
