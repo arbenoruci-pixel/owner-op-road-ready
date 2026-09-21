@@ -136,6 +136,8 @@ test('fallback sends only the uncertain page and preserves clear primary type, f
   assert.equal(result.type.id,'bol');assert.deepEqual(result.fields,before.fields);assert.deepEqual(result.typeEvidenceV110334,before.typeEvidenceV110334);assert.deepEqual(h.analysis,before);
   assert.equal(result.aiClassification.pages.length,1);assert.equal(result.aiClassification.pages[0].pageNumber,2);
   assert.equal(result.aiClassification.pages[0].result.kind,'pod');
+  assert.equal(result.aiSourcePages.length,1);assert.equal(result.aiSourcePages[0].pageNumber,2);
+  assert.equal('file' in result.aiClassification.pages[0],false,'saved AI provenance excludes source blobs');
   const posts=h.calls.filter(call=>call.method==='POST');assert.equal(posts.length,1);assert.equal(JSON.parse(posts[0].body).pageNumber,2);
 });
 

@@ -50,6 +50,14 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     await review.getByRole('button',{name:'Check AI suggestion',exact:true}).click();
     const dialog=page.getByRole('dialog',{name:'Check source',exact:true});await dialog.waitFor();
     assert.equal(await dialog.getByLabel('Document type in reader').inputValue(),'pod');
+    const original=dialog.getByRole('img',{name:'Source image for page 1',exact:true});
+    const ink=await original.evaluate(async img=>{
+      await img.decode();const canvas=document.createElement('canvas');canvas.width=120;canvas.height=160;
+      const c=canvas.getContext('2d');c.drawImage(img,0,0,120,160);const pixels=c.getImageData(0,0,120,160).data;
+      let dark=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]<160&&pixels[i+1]<160&&pixels[i+2]<160)dark++;
+      return dark;
+    });
+    assert.ok(ink>20,'source confirmation must display the original document ink');
     await dialog.screenshot({path:`${output}/${name}-source-confirmation.png`});
     await dialog.getByRole('button',{name:'Confirm value',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.scan-confirm-v105 select')?.value==='pod');
@@ -59,6 +67,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(result.aiClassification.pages[0].result.kind,'pod');
     assert.equal(result.aiClassification.pages[0].result.verified,false);
     assert.equal(result.documents[0].typeCorrection.origin,'human');
+    assert.match(result.documents[0].typeCorrection.sourcePage.sourceImageId,/:original$/);
     assert.equal(result.documents[0].canAutoFile,false);
     assert.equal(result.pages.some(p=>p.observations.some(o=>o.source==='ai')),false,'AI is never injected as OCR');
     assert.deepEqual(errors,[]);

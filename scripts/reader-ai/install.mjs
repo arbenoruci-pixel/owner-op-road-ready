@@ -22,6 +22,13 @@ export function installAiReader(){
     }
   }
   patch(preview,'confirmDocumentKind(result,{...request,kind:draft})','confirmReviewedKind(result,{...request,kind:draft})');
+  patch(preview,'for(const {pageNumber,file}of retainedReviewPageSources(analysis)){','for(const {pageNumber,file}of [...retainedReviewPageSources(analysis),...(analysis.aiSourcePages||[])]){');
+  patch(preview,'setSources(files);setResult(next);onReady?.({analysis,result:next,',`for(const page of next.pages){
+        const sourceImageId=originalSources[page.id];
+        const hasAiSuggestion=analysis.aiClassification?.pages?.some(p=>p.pageNumber===page.number&&p.status==='suggested');
+        if(hasAiSuggestion&&sourceImageId&&!page.observations.some(o=>o.sourceImageId===sourceImageId))page.observations.push({id:'original-source',source:'source-image',sourceImageId,lines:[]});
+      }
+      setSources(files);setResult(next);onReady?.({analysis,result:next,`);
   patch(preview,'return <section className="owned-reader-preview">','return <section className="owned-reader-preview">\n    <AiClassificationSummary analysis={analysis}/>');
   patch(preview,'function sourceFor(group){return sourceOptions(group)[0]||null;}',`function sourceFor(group){return sourceOptions(group)[0]||null;}
   function aiSuggestion(group){
@@ -32,8 +39,10 @@ export function installAiReader(){
   function checkAiSuggestion(group){
     const suggestion=aiSuggestion(group);if(!suggestion)return;
     openItem({groupId:group.id,key:null});setDraft(suggestion.kind);
-    // Show a complete source page, not an unrelated OCR heading crop.
-    setSelection(value=>({...value,evidence:sourceFor(group)}));
+    // Match the retained original sent to AI, not an OCR filter derivative.
+    const page=result.pages.find(p=>p.id===group.pageIds[0]),sourceImageId=result.documentId+':'+page.id+':original';
+    const evidence=sources[sourceImageId]?{pageId:page.id,pageNumber:page.number,sourceImageId}:sourceFor(group);
+    setSelection(value=>({...value,evidence}));
   }`);
   patch(preview,"{group.boundaryReview?<p>Check whether these pages belong together.</p>:null}",`{group.boundaryReview?<p>Check whether these pages belong together.</p>:null}
       {aiSuggestion(group)?<aside aria-label="AI type suggestion"><b>AI suggests {AI_LABELS[aiSuggestion(group).kind]}</b><p>Check the original before confirming. AI evidence:</p><ul>{aiSuggestion(group).evidence.map((e,i)=><li key={i}>{e.quote} · {e.location} of page</li>)}</ul><button type="button" onClick={()=>checkAiSuggestion(group)}>Check AI suggestion</button></aside>:null}`);
