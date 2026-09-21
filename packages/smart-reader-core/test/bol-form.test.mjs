@@ -98,3 +98,14 @@ test('old Ngme confirmation remains in history with a warning and cannot supply 
   const real=damagedUnitInput();edit(real,l=>l.text==='Carrier Ngme:',l=>{l.text='Carrier: Ngme Logistics';});
   assert.equal(doc(real).fields.carrier.value,'Ngme Logistics');
 });
+
+test('generic numbers cannot override an observation with its own labeled BOL number',()=>{
+  for(const repeat of [false,true]){
+    const input=damagedUnitInput(),page=input.pages[0],clean=page.observations[0];
+    clean.lines.push(formRow('Number: ABB565',.1,.06,.2));
+    page.observations=[clean];
+    if(repeat)page.observations.push({...structuredClone(clean),id:'repeat',sourceImageId:'repeat-image'});
+    const d=doc(input);assert.equal(d.reference,'AB8565');assert.equal(d.fields.bolNumber.value,'AB8565');
+    assert.equal(d.fields.bolNumber.candidates.length,1);
+  }
+});

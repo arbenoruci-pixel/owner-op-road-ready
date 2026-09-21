@@ -47,12 +47,18 @@ export function pageFieldMatches(page,spec){
   for(const match of matches){
     const raw=match.line.text.slice(match.start,match.end).trim().toUpperCase();
     if(!header(match.line)||!/^[A-Z0-9]{5,20}$/.test(raw)||!/[A-Z]/.test(raw))continue;
-    for(const observation of page.observations)for(const line of observation.lines){
+    for(const observation of page.observations){
+      // A generic header number is an OCR alternative only when that other
+      // observation has no labeled BOL reading of its own. Its other form
+      // numbers cannot invalidate an already identified BOL in the same read.
+      if(observation===match.observation||matches.some(other=>other.observation===observation))continue;
+      for(const line of observation.lines){
       if(line===match.line||!header(line))continue;
       const other=/^\s*(?:NUMBER|NO\.?)\s*[:#]\s*([A-Z0-9]{5,20})\s*$/id.exec(line.text);
       if(!other||!confusablePair(raw,other[1].toUpperCase()))continue;
       match.issue||='identifier_fragments';
       if(!proposals.some(proposal=>proposal.observation===observation&&proposal.line===line))proposals.push({observation,line,start:other.indices[1][0],end:other.indices[1][1],issue:'identifier_fragments'});
+      }
     }
   }
   for(const match of matches){
