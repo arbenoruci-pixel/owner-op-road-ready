@@ -35,7 +35,7 @@ test('POD completion requires filled delivery evidence; printed signature boxes 
   assert.equal(read(bol+'\nReceiver Signature: ______\nDelivery date: ____').documents[0].kind,'bol');
   const result=read(bol+'\nReceived by: J SAMPLE\nDelivery Date: 2026-09-17');
   assert.equal(result.documents[0].kind,'pod');
-  assert.equal(result.documents[0].identityStatus,'needs_review');
+  assert.equal(result.documents[0].identityStatus,'supported');
   assert.equal(result.documents[0].fields.deliveredTo.value,'J SAMPLE');
   assert.equal(result.documents[0].canAutoFile,false);
 });

@@ -33,5 +33,6 @@ for(const label of ['BOL:', 'BOL ID', 'BILL OF LADING:']){
 }
 for(const extra of ['FUEL RECEIPT\nDiesel 20 gallons\nTOTAL $80','Unrecognized extra sheet']){
  const packet=decideDocumentIdentity(analysis(`[[PAGE:1]]\n${bol}\n[[PAGE:2]]\n${extra}`));
- assert.equal(packet.typeId,'other');assert.equal(packet.mixedDocuments,true);assert.equal(packet.requiresTypeReview,true);
+ assert.equal(packet.typeId,'bol');assert.equal(packet.mixedDocuments,true);assert.equal(packet.requiresTypeReview,true);
+ assert.deepEqual(packet.unclassifiedPages,[2]);assert.equal(packet.clearShipmentFields,true);
 }

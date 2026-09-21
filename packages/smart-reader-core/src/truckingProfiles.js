@@ -61,9 +61,7 @@ export function truckingProfiles(base){
     ...additionalProfiles({p,sig,field,id,amount,date,receiptType,equipment,vin,unit,business}),
     p('pod','Proof of delivery','PROOF OF DELIVERY|POD|CUSTOMER DELIVERY COPY',
       [shipmentSignal,sig('RECEIVED BY|DELIVERED TO|DELIVERY DATE|CONSIGNEE|SHIP TO')],
-      {...bol.fields,loadNumber,deliveredTo:field('Received by','RECEIVED BY|DELIVERED TO|SIGNED BY'),deliveryDate:field('Delivery date','DELIVERY DATE|DELIVERED ON','date')},{identity:'bolNumber',refines:['bol'],variants:[{
-        heading:bol.heading,signals:[...bol.signals,/^\s*(?:RECEIVED BY|SIGNED BY)\s*:\s*[A-Z][A-Z .'-]+\s*$/i,/^\s*(?:DELIVERY DATE|DELIVERED ON)\s*:\s*\d[\d/.-]+\s*$/i],method:'delivery_evidence',
-      }]}),
+      {...bol.fields,loadNumber,deliveredTo:field('Received by',"RECEIVED BY|ACCEPTED BY|(?:RECEIVER|CONSIGNEE)(?:'S)? SIGNATURE|DELIVERED TO|SIGNED BY"),deliveryDate:field('Delivery date','DELIVERY DATE|DELIVERED ON','date')},{identity:'bolNumber',refines:['bol'],deliveryBase:bol}),
     p('delivery_receipt','Delivery receipt','DELIVERY RECEIPT',[shipmentSignal,partySignal],
       {...shipping,receivedBy:field('Received by','RECEIVED BY|SIGNED BY'),deliveryDate:field('Delivery date','DELIVERY DATE|DELIVERED ON','date')}),
     p('load_tender','Load tender','LOAD TENDER|SHIPMENT TENDER|TENDER OFFER',[shipmentSignal,partySignal],shipping),

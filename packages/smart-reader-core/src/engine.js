@@ -45,12 +45,14 @@ function candidatesFor(pages, spec, dateContext=null) {
   return candidates.map(({key,...candidate})=>candidate);
 }
 
-// A generic receipt and an unloading receipt can be two reads of the same
-// page. Require a supported, identical receipt number in both observations;
+// Generic/specific receipts and BOL/POD can be two reads of the same page.
+// Require a supported, identical document number in both observations;
 // missing, weak or conflicting identifiers must keep the identity unresolved.
-function sameUnloadingReceipt(page, generic, specialized) {
-  if(generic.kind!=='other_expense'||specialized.kind!=='unloading_receipt')return false;
-  const spec=PROFILES.find(profile=>profile.id==='unloading_receipt').fields.receiptNumber;
+function sameRefinedDocument(page, generic, specialized) {
+  const field=generic.kind==='other_expense'&&['unloading_receipt','fuel_receipt'].includes(specialized.kind)?'receiptNumber'
+    :generic.kind==='bol'&&specialized.kind==='pod'?'bolNumber':null;
+  if(!field)return false;
+  const spec=PROFILES.find(profile=>profile.id===specialized.kind).fields[field];
   // A matching pair cannot overrule a different number in a third read.
   const pageReference=extractField([page],spec);
   if(pageReference.status!=='supported'||pageReference.value===null)return false;
@@ -86,10 +88,10 @@ function classifyPage(page) {
     &&(other.evidence.observationId===vote.evidence.observationId
       &&(PROFILES.find(p=>p.id===other.kind)?.refines?.includes(vote.kind)&&other.evidence.lineId===vote.evidence.lineId
         ||PROFILES.find(p=>p.id===vote.kind)?.fallback&&vote.method==='field_structure'&&other.kind!==vote.kind)
-      ||sameUnloadingReceipt(page,vote,other))));
+      ||sameRefinedDocument(page,vote,other))));
   const kinds=[...new Set(refined.map(v=>v.kind))];
   const references=Object.fromEntries(PROFILES.map(profile=>{let field=extractField([page],profile.fields[profile.identity]);if(profile.id==='bol')field=corroborateBolReference([page],field);return [profile.id,field.status==='supported'&&field.value!==null?[field.value]:[]];}));
-  return {kind:kinds.length===1?kinds[0]:'unknown',status:kinds.length>1?'conflicting':kinds.length?refined.some(v=>v.method==='heading')?'supported':'needs_review':'unknown',evidence:refined,references};
+  return {kind:kinds.length===1?kinds[0]:'unknown',status:kinds.length>1?'conflicting':kinds.length?refined.some(v=>['heading','fuel_transaction'].includes(v.method))?'supported':'needs_review':'unknown',evidence:refined,references};
 }
 
 function makeGroups(pages, identities) {
@@ -143,5 +145,5 @@ export function readDocument(input) {
     const checks=group.kind==='invoice'?validateInvoice(fields):group.kind==='unloading_receipt'?validateUnloadingReceipt(fields):group.kind==='bol'?validateBol(groupPages,fields):[];
     return {...group,label:profile?.label||'Uncategorized document',fields,checks,requiresReview:true,canAutoFile:false};
   });
-  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.30',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
+  return {contractVersion:1,engine:'owned-smart-reader',engineVersion:'0.3.31',documentId,pages,pageIdentities:pages.map((p,i)=>({pageId:p.id,...identities[i]})),documents,pageCount:pages.length,unreadablePageIds:pages.filter(p=>!p.observations.some(o=>o.lines.some(l=>l.text.trim()))).map(p=>p.id),calibration:{status:'not_calibrated',automaticAcceptance:false},reviewRevision:0,corrections:[]};
 }

@@ -6,6 +6,8 @@ import {reviewScanAnalysis} from './ownedReaderAdapter.js';
 export function extraPageIdentity(text){
   const result=readDocument({documentId:'page-identity',pages:[{id:'page',observations:[textObservation(text)]}]});
   const page=result.pageIdentities[0];
+  if(page.kind==='pod')return {typeId:'pod',confidence:page.status==='supported'?.9:.49,status:page.status,requiresTypeReview:page.status!=='supported',reason:'Delivery document or BOL with filled receiver acknowledgement; check the original signature'};
+  if(page.kind==='fuel_receipt')return {typeId:'fuel_receipt',confidence:page.status==='supported'?.96:.49,status:page.status,requiresTypeReview:page.status!=='supported',reason:'Fuel product, dispensing details and receipt payment structure'};
   if(page.kind==='bol')return {typeId:'bol',confidence:page.status==='needs_review'?.49:.8,status:page.status,requiresTypeReview:page.status==='needs_review',reason:'Shipping origin, consigned destination, carrier, weight and BOL terms suggest this type; confirm against the page'};
   if(page.kind==='unloading_receipt')return {typeId:'lumper_receipt',confidence:page.status==='needs_review'?.49:.9,status:page.status,requiresTypeReview:page.status==='needs_review',reason:'Receipt heading, load details and unloading payment fields'};
   if(page.status==='conflicting')return {typeId:'other',confidence:0,status:'conflicting',requiresTypeReview:true,reason:'Conflicting document headings or source readings on this page'};
@@ -16,13 +18,22 @@ export function extraPageIdentity(text){
   return {typeId:profile.filingType||profile.id,confidence:page.status==='needs_review'?.49:.85,status:page.status,requiresTypeReview:page.status==='needs_review',reason:profile.label+' heading and document field structure'};
 }
 
-// The filing selector must use the same receipt consensus as source review.
-// Only a generic/specific receipt pair is eligible; other type conflicts stay.
+// Keep the existing lumper-only API for older materialization steps.
 export function hasMatchingReceiptIdentity(analysis,pageNumber,observedTypes){
-  if(observedTypes.length!==2||!observedTypes.includes('other_expense')||!observedTypes.includes('lumper_receipt'))return false;
+  return refinedPageIdentity(analysis,pageNumber,observedTypes)?.typeId==='lumper_receipt';
+}
+
+// The filing selector and source review share specific receipt / POD evidence.
+// Unrelated types and differing references remain conflicting.
+export function refinedPageIdentity(analysis,pageNumber,observedTypes){
+  const specific=observedTypes.includes('other_expense')?observedTypes.find(type=>['lumper_receipt','fuel_receipt'].includes(type))
+    :observedTypes.includes('bol')&&observedTypes.includes('pod')?'pod':null;
+  if(observedTypes.length!==2||!specific)return null;
   const review=reviewScanAnalysis(analysis),page=review.pages.find(item=>item.number===pageNumber);
   const identity=review.pageIdentities.find(item=>item.pageId===page?.id);
-  return identity?.kind==='unloading_receipt'&&identity.status==='supported';
+  if(identity?.kind!==(specific==='lumper_receipt'?'unloading_receipt':specific)||identity.status!=='supported')return null;
+  return {page:pageNumber,supporting:false,typeId:specific,conflicting:false,requiresTypeReview:false,
+    evidence:['Matching document reference and specific page structure across source readings']};
 }
 
 // The core joins a terms-only RateCon page only with matching PRO, envelope

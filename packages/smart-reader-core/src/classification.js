@@ -1,5 +1,6 @@
 // Matching views never replace source text or its evidence offsets.
 import {rateConfirmationProfile} from './rateConfirmation.js';
+import {deliveryEvidence,fuelReceiptEvidence} from './typeEvidence.js';
 const leadingMarks=/^[\s|~'"‘’“”*_\[\]{}<>•=.,:;–—-]+/;
 const view=line=>line.text.replace(leadingMarks,'');
 const matches=(line,pattern)=>pattern.test(line.text)||pattern.test(view(line));
@@ -37,6 +38,18 @@ function noisyTitle(line,profile){
 
 // Every vote retains the original lines, including OCR noise and punctuation.
 export function profileEvidence(lines,profile,{lineIndices}={}){
+  if(profile.deliveryBase){
+    const shipping=profileEvidence(lines,profile.deliveryBase,{lineIndices});
+    const delivery=deliveryEvidence(lines);
+    if(shipping&&delivery){
+      const support=[...new Set([...shipping.lines,...delivery])];
+      return {method:shipping.method==='heading'&&support.every(line=>line.confidence==null||line.confidence>=.8)?'heading':'delivery_evidence',lines:support};
+    }
+  }
+  if(profile.id==='fuel_receipt'){
+    const support=fuelReceiptEvidence(lines);
+    if(support)return {method:support.every(line=>line.confidence==null||line.confidence>=.8)?'fuel_transaction':'weak_fuel_transaction',lines:support};
+  }
   for(const variant of profile.variants||[]){
     // Sertifi also stamps signed primary/continuation pages. Their explicit
     // RateCon heading owns the page; the stamp is supporting content only.
