@@ -4,7 +4,7 @@ const token=/^[ \t]*([A-Z0-9][A-Z0-9._/-]{1,39})[ \t]*$/id;
 const date=/^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}$/;
 const header=line=>line.box&&line.box.y<.4&&line.box.height<.04;
 const center=line=>line.box.y+line.box.height/2;
-const rowLabel=/^\s*(?:PACKING (?:SLIP|LIST) (?:NUMBER|NO\.?)|ORDER (?:NUMBER|NO\.?)|CUSTOMER (?:NUMBER|P\.?\s*O\.?)|(?:INVOICE|ORDER|SHIP) DATE)\s*[:;#]?\s*$/i;
+const rowLabel=/^\s*(?:(?:PACKING (?:SLIP|LIST)|ORDER)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)|(?:(?:CUSTOMER )?P\.?\s*O\.?|PURCHASE ORDER)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)?|CUSTOMER NUMBER|(?:INVOICE|ORDER|SHIP) DATE)\s*[:;#]?\s*$/i;
 
 export function referenceRowMatches(page,spec){
   if(!spec.referenceRow)return [];

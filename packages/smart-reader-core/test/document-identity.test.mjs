@@ -60,6 +60,24 @@ test('single, conflicting and ambiguous reference rows stay reviewable',()=>{
   for(const d of readDocument(pages).documents)assert.equal(d.fields.packingSlipNumber.value,null);
 });
 
+test('separate packing, order and PO labels accept hash, No., ID and colon markers',()=>{
+  for(const suffix of ['#:','No.:','ID:',':'])for(const tilt of [0,.012])for(const poLabel of ['Customer PO','PO','P.O.','Purchase Order']){
+    const input=packingInput({tilt});
+    for(const o of input.pages[0].observations)for(const line of o.lines){
+      if(line.text==='Packing Slip Number:')line.text='Packing Slip '+suffix;
+      if(line.text==='Order Number:')line.text='Order '+suffix;
+      if(line.text==='Customer PO:')line.text=poLabel+' '+suffix;
+    }
+    const result=readDocument(input),doc=result.documents[0];
+    assert.equal(doc.kind,'packing_list',suffix);assert.equal(doc.identityStatus,'supported');
+    for(const [key,value]of Object.entries({packingSlipNumber:'700012345',orderNumber:'0012345',poNumber:'902468'})){
+      assert.equal(doc.fields[key].value,value,key+' '+suffix);assert.equal(doc.fields[key].status,'supported');
+      assert.ok(doc.fields[key].candidates[0].labelEvidence.every(e=>e.quote.endsWith(suffix)));
+    }
+    assert.equal(doc.fields.loadNumber.value,null);proof(result);
+  }
+});
+
 test('neighboring customer numbers and dates cannot fill a missing PO',()=>{
   for(const tilt of [0,.012]){
     const input=packingInput({tilt});for(const o of input.pages[0].observations)o.lines=o.lines.filter(l=>l.text!=='902468');
