@@ -55,6 +55,7 @@ test('blank, pickup, unrelated-company and misplaced signature marks remain BOL'
     input=>{input.lines.find(l=>l.id==='signature').box.x=.1;},
     input=>{input.lines.find(l=>l.id==='signature').box.y=.75;},
     input=>{input.lines.splice(input.lines.findIndex(l=>l.id==='signature'),0,line('pickup','PICKUP ACKNOWLEDGEMENT',.64,.59));},
+    input=>{input.lines.splice(input.lines.findIndex(l=>l.id==='stamp-company'),0,line('pickup','PICKUP ACKNOWLEDGEMENT',.64,.52));},
     input=>{input.lines.splice(input.lines.findIndex(l=>l.id==='received'),0,line('pickup','PICKUP ACKNOWLEDGEMENT',.64,.48));},
   ]){
     const input=observation();change(input);assert.equal(read(input).pageIdentities[0].kind,'bol',change.toString());

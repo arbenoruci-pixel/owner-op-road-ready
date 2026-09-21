@@ -35,6 +35,7 @@ export function deliveryEvidence(lines){
 // Keep this a reviewable OCR interpretation, with all original source lines.
 export function receiverStampEvidence(lines){
   const words=value=>value.toUpperCase().match(/[A-Z]+/g)?.filter(word=>word.length>2&&!['THE','AND','INC','LLC','LTD','CORP'].includes(word))||[];
+  const pickupSection=text=>/\b(?:PICK\s*UP|DRIVER|CARRIER|SHIPPER|CONSIGNOR)\b.*\b(?:SIGNATURE|ACKNOWLEDGEMENT|ACKNOWLEDGMENT)\b|^PICK\s*UP\b/i.test(text);
   const sameColumn=(a,b)=>!a.box&&!b.box||!!a.box&&!!b.box&&
     Math.min(a.box.x+a.box.width,b.box.x+b.box.width)-Math.max(a.box.x,b.box.x)>=Math.min(a.box.width,b.box.width)*.5;
   const below=(a,b,max)=>!a.box&&!b.box||!!a.box&&!!b.box&&b.box.y>=a.box.y-a.box.height&&b.box.y-a.box.y<=max;
@@ -56,11 +57,12 @@ export function receiverStampEvidence(lines){
     if(signatureSection(lines,i)?.role==='pickup')continue;
     for(let j=i+1;j<Math.min(lines.length,i+5);j++){
       const company=lines[j],tokens=words(clean(company));
+      if(pickupSection(clean(company)))break;
       const recipient=recipients.find(item=>item.words.length>=2&&tokens.length>=2&&item.words[0]===tokens[0]&&item.words[1]===tokens[1]);
       if(!recipient||recipient.line===company||!sameColumn(stamp,company)||!below(stamp,company,.07))continue;
       for(let k=j+1;k<Math.min(lines.length,i+10);k++){
         const line=lines[k],text=clean(line);
-        if(/\b(?:PICK\s*UP|DRIVER|CARRIER|SHIPPER|CONSIGNOR)\b.*\b(?:SIGNATURE|ACKNOWLEDGEMENT|ACKNOWLEDGMENT)\b|^PICK\s*UP\b/i.test(text))break;
+        if(pickupSection(text))break;
         const signed=/^SIGNATURE\s*(?::\s*|\s+)(.+)$/i.exec(text);
         if(signed&&name(signed[1].trim())&&sameColumn(company,line)&&below(stamp,line,.16))
           return [...new Set([recipient.label,recipient.line,stamp,company,line])];
