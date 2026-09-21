@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const VERSION='110.3.94',BUILD='v110394-bol-form-reading';
 const read=path=>fs.readFileSync(path,'utf8');
-assert.ok(['0.3.28','0.3.29'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
+assert.ok(['0.3.28','0.3.29','0.3.30'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
 function patch(path,before,after){const text=read(path);if(text.includes(after))return;assert.equal(text.split(before).length,2,path+' BOL form anchor');fs.writeFileSync(path,text.replace(before,after));}
 patch('source/src/modules/scan/OwnedReaderPreview.jsx',
   "selection.candidate.continuationKind==='address'?'Address continuation:'",

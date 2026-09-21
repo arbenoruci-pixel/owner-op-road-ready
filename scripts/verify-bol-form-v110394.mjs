@@ -15,7 +15,7 @@ for(const input of [shortFormInput(),damagedUnitInput()]){
   });
   const analysis={type:{id:'bol'},pageCount:1,text:passes[0].text,ocrEvidenceV110323:passes,fields:{carrierName:'Ngme:',weight:'WRONG'},routing:{autoFile:false}};
   const before=JSON.stringify(analysis),result=reviewScanAnalysis(analysis,{documentId:input.documentId,dimensions}),doc=result.documents[0];
-  assert.equal(result.engineVersion,'0.3.29');assert.equal(doc.kind,'bol');assert.equal(doc.canAutoFile,false);
+  assert.equal(result.engineVersion,'0.3.30');assert.equal(doc.kind,'bol');assert.equal(doc.canAutoFile,false);
   const shown=scanWithSourceFields(analysis,{analysis,result},'bol'),saved=compactRateConSaveFieldsV10964(shown.fields),rows=documentFieldRowsV11038(shown);
   assert.equal(saved.weight,input.documentId==='short-form-fixture'?'20188 LB':'2377.44 LB');
   assert.equal(rows.find(row=>row.key==='weight').value,saved.weight);

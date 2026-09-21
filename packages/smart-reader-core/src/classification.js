@@ -6,7 +6,28 @@ const matches=(line,pattern)=>pattern.test(line.text)||pattern.test(view(line));
 // Confusable letters affect only the BOL matching view. Raw proof stays exact,
 // and all shipping structure signals are still required on the same page.
 const bolView=line=>view(line).replace(/\b(bill[ \t]+of[ \t]+)[I1]ading\b/gi,'$1lading').replace(/\b((?:this|original)[ \t]+)bil[ \t]+of[ \t]+lading\b/gi,'$1bill of lading');
+function oneEditApart(a,b){
+  if(Math.abs(a.length-b.length)>1)return false;
+  let i=0,j=0,edits=0;
+  while(i<a.length&&j<b.length){
+    if(a[i]===b[j]){i++;j++;continue;}
+    if(++edits>1)return false;
+    if(a.length>=b.length)i++;
+    if(b.length>=a.length)j++;
+  }
+  return edits+a.length-i+b.length-j===1;
+}
+function damagedBolModifier(line,profile){
+  if(profile.id!=='bol')return false;
+  // Recover one insertion, deletion or substitution in a known form modifier.
+  // BILL OF LADING, the rest of the title and independent party signals must
+  // still match. Never discard arbitrary words or repair identifier digits.
+  const parts=/^([A-Z]+)([ \t]+(?:STRAIGHT[ \t]+)?BILL[ \t]+OF[ \t]+LADING\b.*)$/i.exec(view(line));
+  return !!parts&&['ALTERNATE','UNIFORM','STRAIGHT'].some(modifier=>
+    oneEditApart(parts[1].toUpperCase(),modifier)&&profile.heading.test(modifier+parts[2]));
+}
 function noisyTitle(line,profile){
+  if(damagedBolModifier(line,profile))return true;
   if(profile.id!=='bol'||!line.box||line.box.y>=.2||line.box.height<.015||line.confidence===null||line.confidence>=.8)return false;
   const text=view(line),prefix=/^([A-Za-z0-9]{1,2})[ \t]+/.exec(text);
   // Tiny low-confidence fragments beside a large header may be scan noise.
