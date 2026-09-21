@@ -223,7 +223,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     await review.getByText('0 items to check',{exact:true}).waitFor();
     await page.screenshot({path:`${output}/${name}-party-recovery.png`,fullPage:true});
-    // Separate labels and wrapped consignee rows get complete source crops.
+    // Complete repeated consignee blocks need no extra crop and retain both source rows.
     await page.goto(new URL('/_not-found',page.url()).href);
     await page.evaluate(async()=>{
       localStorage.clear();
@@ -248,15 +248,17 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     const blockFile=await blockDownload,blockResult=JSON.parse(fs.readFileSync(await blockFile.path(),'utf8'));
     assert.equal(blockResult.documents[0].fields.shipper.status,'supported');
     assert.equal(blockResult.documents[0].fields.carrier.value,'EXAMPLE TRANSPORT');
+    assert.equal(blockResult.documents[0].fields.consignee.status,'supported');
+    assert.equal(blockResult.documents[0].fields.consignee.value,'REGIONAL MARKET / TOWN DEPOT #1-2');
     assert.equal(blockResult.documents[0].fields.consignee.candidates.length,1);
     assert.equal(blockResult.documents[0].fields.consignee.issues.includes('conflicting_reads'),false);
     assert.equal(blockResult.documents[0].canAutoFile,false);
-    await review.getByRole('button',{name:'Check Consignee source',exact:true}).click();
+    await review.getByRole('button',{name:'REGIONAL MARKET · Page 1',exact:true}).click();
     await review.getByRole('heading',{name:'Consignee · Page 1',exact:true}).waitFor();
     await review.getByText('Additional company line:',{exact:false}).waitFor();
     await review.getByLabel('Additional source line highlight',{exact:true}).waitFor();
     await visibleHighlight('Source line highlight',false);await visibleHighlight('Additional source line highlight',false);
-    assert.ok((await review.getByLabel('Source line highlight',{exact:true}).boundingBox()).height>=17,'already-cropped sources open at a readable text size');
+    assert.ok((await review.getByLabel('Source line highlight',{exact:true}).boundingBox()).height>=17,'corroborated source rows open at a readable text size');
     await review.locator('.owned-reader-inspect').screenshot({path:`${output}/${name}-wrapped-source.png`});
     assert.equal(await review.getByLabel('Confirmed value',{exact:true}).inputValue(),'REGIONAL MARKET / TOWN DEPOT #1-2');
     await review.getByRole('button',{name:'Save & next',exact:true}).click();

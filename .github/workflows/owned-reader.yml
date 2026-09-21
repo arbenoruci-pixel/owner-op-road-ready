@@ -61,6 +61,7 @@ jobs:
           # Check the changed BOL/source flow first so a failure produces
           # diagnostics immediately. The complete suite still gates success.
           node scripts/v110393/browser-bol-source.mjs
+          node scripts/browser-owned-reader.mjs
           node scripts/v110384/browser-rows.mjs
           node scripts/browser-ratecon-structure-v110388.mjs
           reader_test_status=0
@@ -68,7 +69,6 @@ jobs:
           node scripts/v110373/browser-reader-evidence.mjs || reader_test_status=1
           node scripts/v110382/browser-bol.mjs || reader_test_status=1
           TEST_DAMAGED_BOL=1 node scripts/v110382/browser-bol.mjs || reader_test_status=1
-          node scripts/browser-owned-reader.mjs || reader_test_status=1
           node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
           TEST_NATIVE_CELLS=1 node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
           node scripts/browser-scanner-capture-v110329.mjs || reader_test_status=1
