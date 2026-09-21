@@ -5,7 +5,7 @@ const view=line=>line.text.replace(leadingMarks,'');
 const matches=(line,pattern)=>pattern.test(line.text)||pattern.test(view(line));
 // Confusable letters affect only the BOL matching view. Raw proof stays exact,
 // and all shipping structure signals are still required on the same page.
-const bolView=line=>view(line).replace(/\b(bill[ \t]+of[ \t]+)[I1]ading\b/gi,'$1lading');
+const bolView=line=>view(line).replace(/\b(bill[ \t]+of[ \t]+)[I1]ading\b/gi,'$1lading').replace(/\b((?:this|original)[ \t]+)bil[ \t]+of[ \t]+lading\b/gi,'$1bill of lading');
 function noisyTitle(line,profile){
   if(profile.id!=='bol'||!line.box||line.box.y>=.2||line.box.height<.015||line.confidence===null||line.confidence>=.8)return false;
   const text=view(line),prefix=/^([A-Za-z0-9]{1,2})[ \t]+/.exec(text);
@@ -24,7 +24,7 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
     if(support)return {...support,method:variant.method||support.method};
   }
   const title=lines.find((line,index)=>(line.box?line.box.y<(profile.headingMaxY??.3):(lineIndices?.get(line)??index)<20)&&(matches(line,profile.heading)||noisyTitle(line,profile)));
-  const signals=title?profile.signals.map(pattern=>lines.find(line=>matches(line,pattern))):[];
+  const signals=title?profile.signals.map(pattern=>lines.find(line=>(!profile.distinctSignals||line!==title)&&matches(line,pattern))):[];
   if(title&&signals.every(Boolean)){
     const exact=profile.heading.test(title.text)&&signals.every((line,i)=>profile.signals[i].test(line.text));
     return {method:exact?'heading':'noisy_heading',lines:[...new Set([title,...signals])]};
