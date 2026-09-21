@@ -78,7 +78,8 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
         tx.oncomplete=()=>{resolve(rows.result.map(row=>row.extracted).find(extracted=>extracted?.readerReviewV110345));db.close();};};
     }));
     assert.equal(saved.weight,expectedWeight);assert.equal(saved.readerSourceFieldsV110393.fields.weight.status,'supported');
-    assert.equal(saved.readerReviewV110345.documents[0].fields.weight.value,expectedWeight);
+    assert.equal(saved.readerSourceFieldsV110393.fields.weight.value,expectedWeight);
+    assert.equal(saved.readerReviewV110345.documents[0].fields.weight,undefined,'source support does not create a human confirmation');
     if(caseName==='damaged-unit'){assert.equal(saved.totalUnits,'4');assert.equal(saved.carrierName,undefined);assert.equal(saved.bolNo,undefined);}
     assert.deepEqual(errors,[]);
     console.log(`PASS ${name} ${caseName}: classification, displayed weight, exact source, export and saved fields`);
