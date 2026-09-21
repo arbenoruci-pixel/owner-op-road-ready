@@ -1,6 +1,6 @@
 {
   "name": "@owner-op/smart-reader-core",
-  "version": "0.3.28",
+  "version": "0.3.29",
   "private": true,
   "type": "module",
   "exports": "./src/index.js",

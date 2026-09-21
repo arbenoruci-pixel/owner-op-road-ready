@@ -3,17 +3,7 @@ import assert from 'node:assert/strict';
 import {readDocument,textObservation,resolveEvidence} from '../src/index.js';
 
 const fromText=text=>readDocument({documentId:'identity',pages:[{id:'p1',observations:[textObservation(text)]}]});
-const row=(text,x,y,width=.13,height=.012,confidence=.96)=>({text,confidence,box:{x,y,width,height}});
-function packingInput({tilt=0}={}){
-  const lines=[row('Packing Slip',.78,.08,.16,.025),row('Ship To:',.05,.19),
-    row('Packing Slip Number:',.35,.12,.15),row('700012345',.64,.12+tilt,.08),
-    row('Order Number:',.35,.18),row('0012345',.64,.18+tilt,.06),
-    row('Order Date:',.35,.20),row('07/08/2026',.64,.20+tilt,.08),
-    row('Customer Number:',.35,.22),row('CUSTOMER01',.64,.22+tilt,.08),
-    row('Customer PO:',.35,.24),row('902468',.64,.24+tilt,.06),
-    row('Ship Date:',.35,.26),row('07/08/2026',.64,.26+tilt,.08)];
-  return {documentId:'packing',pages:[{id:'p1',observations:['clean','table'].map(id=>({id,sourceImageId:id+'-image',lines:structuredClone(lines)}))}]};
-}
+import {row,packingInput} from './document-identity-fixture.mjs';
 const proof=result=>{
   for(const p of result.pageIdentities)for(const vote of p.evidence)for(const e of [vote.evidence,...vote.supportingEvidence])resolveEvidence(result,e);
   for(const d of result.documents)for(const f of Object.values(d.fields))for(const c of f.candidates)
@@ -51,7 +41,10 @@ test('packing classification and labeled references work independently of produc
     assert.equal(doc.fields.weight.status,'missing');assert.equal(doc.fields.quantity.status,'missing');
     assert.equal(doc.canAutoFile,false);proof(result);assert.equal(JSON.stringify(input),before);
   }
-  assert.equal(fromText('Please attach PACKING SLIP\nShip To: Example Foods\nPacking Slip Number: 700012345').documents[0].kind,'unknown');
+  const instructions='Please attach PACKING SLIP\nShip To: Example Foods\nPacking Slip Number: 700012345';
+  assert.equal(fromText(instructions).documents[0].kind,'unknown');
+  const repeated={documentId:'instructions',pages:[{id:'p1',observations:['clean','table'].map(id=>textObservation(instructions,{id}))}]};
+  assert.equal(readDocument(repeated).documents[0].kind,'unknown');
 });
 
 test('single, conflicting and ambiguous reference rows stay reviewable',()=>{
