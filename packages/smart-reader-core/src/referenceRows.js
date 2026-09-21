@@ -14,13 +14,13 @@ function rowAlignment(lines,labels,label,value){
   for(const other of labels.filter(l=>dateLabel.test(l.text)&&Math.abs(l.box.x-label.box.x)<.035&&l.confidence>=.7)){
     const dates=lines.filter(l=>date.test(l.text.trim())&&l.confidence>=.7&&beside(other.box,l.box)
       &&Math.abs(l.box.x-value.box.x)<.035&&Math.abs(center(l)-center(other))<=.022);
-    if(dates.length===1)anchors.push({label:other,value:dates[0],offset:center(dates[0])-center(other)});
+    if(dates.length===1)anchors.push({label:other,value:dates[0],offset:center(dates[0])-center(other),topOffset:dates[0].box.y-other.box.y});
   }
   if(new Set(anchors.map(a=>dateLabel.exec(a.label.text)[1].toUpperCase())).size<2
     ||new Set(anchors.map(a=>a.value)).size<2)return null;
-  const offsets=anchors.map(a=>a.offset).sort((a,b)=>a-b);
-  if(offsets.at(-1)-offsets[0]>.006)return null;
-  return {offset:offsets[Math.floor(offsets.length/2)],lines:anchors.flatMap(a=>[a.label,a.value])};
+  const offsets=anchors.map(a=>a.offset).sort((a,b)=>a-b),tops=anchors.map(a=>a.topOffset).sort((a,b)=>a-b);
+  if(offsets.at(-1)-offsets[0]>.006||tops.at(-1)-tops[0]>.006)return null;
+  return {offset:offsets[Math.floor(offsets.length/2)],topOffset:tops[Math.floor(tops.length/2)],lines:anchors.flatMap(a=>[a.label,a.value])};
 }
 
 export function referenceRowMatches(page,spec){
@@ -36,20 +36,27 @@ export function referenceRowMatches(page,spec){
         if(line===label||!match||date.test(match[1])||!/[0-9]/.test(match[1])||!beside(a,b))continue;
         const alignment=rowAlignment(lines,labels,label,line),offset=alignment?.offset||0;
         if(!alignment&&b.y<a.y-.004)continue;
-        const distance=Math.abs(center(line)-offset-center(label));
-        if(distance>Math.min(.022,Math.max(a.height,b.height)*1.5))continue;
-        // Competing labels own their rows after alignment, in either direction.
-        if(labels.some(other=>other!==label&&Math.abs(other.box.x-a.x)<.035&&(alignment
-          ?Math.abs(center(line)-offset-center(other))<distance+.003
-          :other.box.y<=b.y+.003&&other.box.y>a.y)))continue;
-        candidates.push({line,alignment});
+        const distance=Math.abs(center(line)-offset-center(label)),limit=Math.min(.022,Math.max(a.height,b.height)*1.5);
+        const neighbors=labels.filter(other=>other!==label&&Math.abs(other.box.x-a.x)<.035);
+        let ambiguous=false;
+        if(alignment){
+          // Tall OCR boxes can move a value's center into the next row. Both
+          // aligned top edges and centers must agree before two passes may
+          // support it; disagreement stays visible as ambiguous evidence.
+          const topDistance=Math.abs(b.y-alignment.topOffset-a.y);
+          const centerOwns=distance<=limit&&!neighbors.some(other=>Math.abs(center(line)-offset-center(other))<distance+.003);
+          const topOwns=topDistance<=limit&&!neighbors.some(other=>Math.abs(b.y-alignment.topOffset-other.box.y)<topDistance+.003);
+          if(!centerOwns&&!topOwns)continue;
+          ambiguous=!centerOwns||!topOwns;
+        }else if(distance>limit||neighbors.some(other=>other.box.y<=b.y+.003&&other.box.y>a.y))continue;
+        candidates.push({line,alignment,ambiguous});
       }
       // Preserve competing numbers as unresolved evidence instead of choosing
       // the first one in reading order.
-      for(const {line,alignment} of candidates){
+      for(const {line,alignment,ambiguous} of candidates){
         const match=token.exec(line.text),strong=[label,line].every(item=>item.confidence!==null&&item.confidence>=.8);
         matches.push({observation,line,start:match.indices[1][0],end:match.indices[1][1],labelLine:label,extraLabelLines:alignment?.lines,
-          supportMethod:'labeled_reference_row',issue:candidates.length===1&&strong?'layout_needs_review':'ambiguous_reference_row'});
+          supportMethod:'labeled_reference_row',issue:candidates.length===1&&strong&&!ambiguous?'layout_needs_review':'ambiguous_reference_row'});
       }
     }
   }

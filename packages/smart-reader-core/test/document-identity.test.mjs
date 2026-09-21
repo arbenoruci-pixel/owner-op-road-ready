@@ -126,6 +126,36 @@ test('unequal rising rows use their own date columns and retain weak competing P
   assert.equal(readDocument(separate).documents[0].fields.packingSlipNumber.value,null);
 });
 
+test('tall OCR boxes cannot promote a neighboring customer ID as the PO',()=>{
+  for(const tilt of [0,.012,-.012]){
+    const input=packingInput({tilt});
+    for(const o of input.pages[0].observations){
+      const set=(text,y,height)=>Object.assign(o.lines.find(l=>l.text===text).box,{y,height});
+      set('Customer Number:',.220,.006);set('CUSTOMER01',.220+tilt,.036);
+      set('Customer PO:',.232,.008);set('902468',.232+tilt,.036);
+      set('Ship Date:',.244,.012);Object.assign(o.lines.filter(l=>l.text==='07/08/2026').at(-1).box,{y:.244+tilt,height:.012});
+    }
+    const result=readDocument(input),field=result.documents[0].fields.poNumber;
+    assert.equal(field.value,null);assert.equal(field.status,'needs_review');
+    assert.ok(field.issues.includes('ambiguous_reference_row'));proof(result);
+  }
+});
+
+test('row spacing and OCR heights never turn a customer ID into a supported PO',()=>{
+  for(const tilt of [0,.012,-.012])for(const gap of [.008,.012,.018])
+  for(const labelHeight of [.006,.012,.036])for(const valueHeight of [.006,.012,.036]){
+    const input=packingInput({tilt});
+    for(const o of input.pages[0].observations){
+      const set=(text,y,height)=>Object.assign(o.lines.find(l=>l.text===text).box,{y,height});
+      set('Customer Number:',.220,labelHeight);set('CUSTOMER01',.220+tilt,valueHeight);
+      set('Customer PO:',.220+gap,valueHeight);set('902468',.220+gap+tilt,labelHeight);
+      set('Ship Date:',.220+gap*2,.012);Object.assign(o.lines.filter(l=>l.text==='07/08/2026').at(-1).box,{y:.220+gap*2+tilt,height:.012});
+    }
+    const f=readDocument(input).documents[0].fields.poNumber;
+    assert.ok(f.value===null||f.value==='902468',JSON.stringify({tilt,gap,labelHeight,valueHeight,value:f.value}));
+  }
+});
+
 test('bracket noise exposes the printed BOL customer PO for review without altering its source',()=>{
   const observation=textObservation('ALTERNATE STRAIGHT BILL OF LADING - SHORT FORM\nShip From: Example Mill\nShip To: Example Market');
   observation.sourceImageId='po-image';
