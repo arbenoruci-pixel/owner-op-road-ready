@@ -1,4 +1,4 @@
-import { classifyDocument, documentTypeMeta } from './smartScan.js';
+import { classifyDocument, classifyDocumentSource, documentTypeMeta } from './smartScan.js';
 
 function text(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -95,6 +95,9 @@ export function arbitrateDocumentTypeV104({
   genericClassification = null,
 } = {}) {
   const generic = genericClassification || classifyDocument(fullText, fileName);
+  // Resolve source evidence even when a caller supplies an older keyword
+  // result. In particular, BOL points must not reverse completed delivery.
+  const sourceIdentity = genericClassification ? classifyDocumentSource(fullText) : generic.sourceIdentity;
   const rate = rateConfirmationEvidenceV104(fullText, fileName, pages);
   const bol = bolEvidenceV104(fullText, fileName);
   const preferred = preferredType && preferredType !== 'auto' ? preferredType : '';
@@ -106,7 +109,11 @@ export function arbitrateDocumentTypeV104({
   let reason = 'generic document classifier';
   let autoCorrected = false;
 
-  if (strongRate) {
+  if (sourceIdentity) {
+    id = sourceIdentity.id;
+    reason = sourceIdentity.reason;
+    autoCorrected = Boolean(preferred&&preferred!==id||generic?.type?.id&&generic.type.id!==id);
+  } else if (strongRate) {
     id = 'rate_confirmation';
     reason = rate.reasons.slice(0, 6).join(' · ');
     autoCorrected = preferred === 'bol' || preferred === 'pod' || (generic?.type?.id && generic.type.id !== id);
@@ -126,6 +133,7 @@ export function arbitrateDocumentTypeV104({
     autoCorrected,
     preferredType:preferredType || 'auto',
     genericType:generic?.type?.id || 'other',
+    sourceIdentity:sourceIdentity||null,
     scores:{ rate_confirmation:rate.score, bol:bol.score, generic:generic?.scores || [] },
     evidence:{ rate, bol },
   };

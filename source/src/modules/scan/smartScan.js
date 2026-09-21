@@ -1,3 +1,6 @@
+import {readDocument,textObservation} from '../../../../packages/smart-reader-core/src/index.js';
+import {PROFILES} from '../../../../packages/smart-reader-core/src/profiles.js';
+
 export const SMART_DOCUMENT_TYPES = [
   { id:'rate_confirmation', label:'Rate Confirmation', short:'Rate Con', target:'loads', documentType:'other' },
   { id:'carrier_settlement', label:'Carrier Settlement', short:'Settlement', target:'settlements', documentType:'other' },
@@ -120,6 +123,12 @@ export function classifyDocument(text = '', fileName = '') {
   const haystack = lower(`${fileName} ${text}`);
   const ranked = Object.keys(RULES).map(id => ({ id, score:scoreType(haystack, id) + filenameBoost(fileName, id) }))
     .sort((a, b) => b.score - a.score);
+  const sourceIdentity=classifyDocumentSource(text);
+  if(sourceIdentity)return {
+    type:typeMeta(sourceIdentity.id),confidence:sourceIdentity.confidence,
+    alternatives:[sourceIdentity.id,...ranked.map(item=>item.id)].filter((id,i,ids)=>ids.indexOf(id)===i).slice(0,4).map(typeMeta),
+    scores:ranked,sourceIdentity,
+  };
   const top = ranked[0] || { id:'other', score:0 };
   const second = ranked[1] || { id:'other', score:0 };
   if (top.score <= 1) {
@@ -138,6 +147,25 @@ export function classifyDocument(text = '', fileName = '') {
     alternatives:ranked.slice(0, 4).map(item => typeMeta(item.id)),
     scores:ranked,
   };
+}
+
+// Classification uses the same page evidence as source review. Keyword scores
+// remain useful diagnostics, but repeated receipt words and filenames cannot
+// outweigh a supported primary type. Confidence is a heuristic, not accuracy.
+export function classifyDocumentSource(text=''){
+  const marked=[...String(text).matchAll(/\[\[PAGE:(\d+)\]\]([\s\S]*?)(?=\[\[PAGE:\d+\]\]|$)/g)];
+  const texts=marked.length?marked.map(match=>match[2]):[String(text)];
+  const review=readDocument({documentId:'text-classification',pages:texts.map((value,i)=>({id:'page-'+(i+1),observations:[textObservation(value)]}))});
+  const pages=review.pageIdentities.map(page=>{
+    const profile=PROFILES.find(item=>item.id===page.kind);
+    return {id:profile?.filingType||page.kind,status:page.status,supporting:profile?.role==='supporting'};
+  });
+  const primary=pages.filter(page=>!page.supporting&&!['other','other_expense','unknown'].includes(page.id));
+  const types=[...new Set(primary.map(page=>page.id))];
+  if(types.length>1||!types.length&&pages.some(page=>page.status==='conflicting'))return {id:'other',confidence:0,requiresTypeReview:true,reason:'Conflicting primary document evidence',pages};
+  if(types.length!==1||!SMART_DOCUMENT_TYPES.some(type=>type.id===types[0]))return null;
+  const id=types[0],requiresTypeReview=pages.some(page=>!page.supporting&&(page.id!==id||page.status!=='supported'));
+  return {id,confidence:requiresTypeReview?.49:id==='fuel_receipt'?.96:.9,requiresTypeReview,reason:'Primary page type established by source document structure',pages};
 }
 
 function moneyValues(text = '') {

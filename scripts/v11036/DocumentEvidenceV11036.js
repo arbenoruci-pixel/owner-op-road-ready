@@ -42,6 +42,11 @@ export function inspectDocumentEvidence(result = {}) {
 }
 
 export function qualifyScanResultV11036(result={},state={}){
+  // Page identity has already cleared the packet's ambiguous filing fields.
+  // Re-parsing its combined text here would restore those cleared guesses.
+  if(result.typeEvidenceV110334?.clearShipmentFields)return {...result,needsReview:true,needsFieldReview:true,
+    routing:{...result.routing,autoFile:false},
+    evidenceReviewV11036:{...result.evidenceReviewV11036,suggestedLoad:null}};
   const review=inspectDocumentEvidence(result),changed=review.suggestedType!==(result.type?.id||'other');
   const suggestion=currentLiveBolContextV11035(state);
   const mustReview=changed||review.issues.length>0||!review.text||result.needsReview===true;

@@ -2,17 +2,21 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const VERSION = '110.3.92', BUILD = 'v110392-lumper-receipt-consensus';
 const read = path => fs.readFileSync(path, 'utf8');
-assert.ok(['0.3.26','0.3.27','0.3.28','0.3.29','0.3.30'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
+assert.ok(['0.3.26','0.3.27','0.3.28','0.3.29','0.3.30','0.3.31'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
 const identityPath='source/src/modules/scan/documentIdentityV110334.js';
 let identity=read(identityPath);
 const beforeImport="import {extraPageIdentity,attachmentRelationship,alignRateContinuationPages} from './ownedPageIdentityV110338.js';";
-const afterImport="import {extraPageIdentity,attachmentRelationship,alignRateContinuationPages,hasMatchingReceiptIdentity} from './ownedPageIdentityV110338.js';";
+const oldImport="import {extraPageIdentity,attachmentRelationship,alignRateContinuationPages,hasMatchingReceiptIdentity} from './ownedPageIdentityV110338.js';";
+const afterImport="import {extraPageIdentity,attachmentRelationship,alignRateContinuationPages,refinedPageIdentity} from './ownedPageIdentityV110338.js';";
+identity=identity.replace(oldImport,afterImport);
 if(!identity.includes(afterImport)){
   assert.equal(identity.split(beforeImport).length,2,'Receipt filing identity import');
   identity=identity.replace(beforeImport,afterImport);
 }
 const beforeVote='    const evidence=page.reads.map(inspectPageIdentity).filter(Boolean),ids=[...new Set(evidence.map(item=>item.typeId))];';
-const afterVote=beforeVote+"\n    if(hasMatchingReceiptIdentity(analysis,page.page,ids))return {page:page.page,supporting:false,typeId:'lumper_receipt',conflicting:false,requiresTypeReview:false,evidence:['Matching receipt number and unloading structure across source readings']};";
+const oldVote=beforeVote+"\n    if(hasMatchingReceiptIdentity(analysis,page.page,ids))return {page:page.page,supporting:false,typeId:'lumper_receipt',conflicting:false,requiresTypeReview:false,evidence:['Matching receipt number and unloading structure across source readings']};";
+const afterVote=beforeVote+"\n    const refined=refinedPageIdentity(analysis,page.page,ids);if(refined)return refined;";
+identity=identity.replace(oldVote,afterVote);
 if(!identity.includes(afterVote)){
   assert.equal(identity.split(beforeVote).length,2,'Receipt filing identity votes');
   identity=identity.replace(beforeVote,afterVote);

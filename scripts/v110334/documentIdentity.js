@@ -43,6 +43,17 @@ export function decideDocumentIdentity(analysis={}){
   const allRefs=[...new Set(refs.flat())];
   const mixedShipments=pages.length>1&&refs.filter(r=>r.length===1).length>1&&allRefs.length>1;
   const unidentifiedExtraPage=types.length>0&&pages.some((page,i)=>!pageTypes[i].typeId&&page.reads.some(text=>text.trim()));
+  // Unclassified or generic attachments cannot erase a clear primary label.
+  // Keep each page's evidence and block automatic filing/load association until
+  // their relationship is reviewed. Two clear document types still conflict.
+  const primaryPages=pageTypes.filter(page=>!page.supporting&&!page.conflicting&&page.typeId&&!['other','other_expense'].includes(page.typeId));
+  const primaryTypes=[...new Set(primaryPages.map(page=>page.typeId))];
+  const uncertainPages=pageTypes.filter(page=>!page.supporting&&!primaryPages.includes(page));
+  if(primaryTypes.length===1&&uncertainPages.length&&!mixedShipments)return {
+    typeId:primaryTypes[0],confidence:.49,requiresTypeReview:true,mixedDocuments:true,clearShipmentFields:true,pageTypes,
+    primaryPages:primaryPages.map(page=>page.page),unclassifiedPages:uncertainPages.map(page=>page.page),
+    reason:'Primary document identified. Review additional pages '+uncertainPages.map(page=>page.page).join(', ')+' before choosing a load folder.',
+  };
   if(pageTypes.some(p=>p.conflicting)||types.length>1||mixedShipments||unidentifiedExtraPage)return {typeId:'other',confidence:0,requiresTypeReview:true,mixedDocuments:true,clearShipmentFields:true,pageTypes,reason:mixedShipments?'Pages have different BOL numbers. Scan each shipment separately.':unidentifiedExtraPage?'Some pages could not be identified. Check whether these documents belong together.':'Pages have conflicting document types. Check and separate the documents.'};
   if(types.length===1&&types[0]!=='other')return {typeId:types[0],confidence:.9,requiresTypeReview:false,pageTypes,reason:pageTypes.find(p=>p.typeId)?.evidence[0]};
   const current=analysis.type?.id||'other';
