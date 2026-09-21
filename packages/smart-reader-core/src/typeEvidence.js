@@ -31,6 +31,45 @@ export function deliveryEvidence(lines){
   return null;
 }
 
+// A received stamp often names the consignee above a generic SIGNATURE field.
+// Keep this a reviewable OCR interpretation, with all original source lines.
+export function receiverStampEvidence(lines){
+  const words=value=>value.toUpperCase().match(/[A-Z]+/g)?.filter(word=>word.length>2&&!['THE','AND','INC','LLC','LTD','CORP'].includes(word))||[];
+  const sameColumn=(a,b)=>!a.box&&!b.box||!!a.box&&!!b.box&&
+    Math.min(a.box.x+a.box.width,b.box.x+b.box.width)-Math.max(a.box.x,b.box.x)>=Math.min(a.box.width,b.box.width)*.5;
+  const below=(a,b,max)=>!a.box&&!b.box||!!a.box&&!!b.box&&b.box.y>=a.box.y-a.box.height&&b.box.y-a.box.y<=max;
+  const recipients=[];
+  for(let i=0;i<lines.length;i++){
+    const label=/^(?:CONSIGNEE|SHIP\s+TO)\s*:\s*(.*)$/i.exec(clean(lines[i]));
+    if(!label)continue;
+    if(label[1].trim())recipients.push({label:lines[i],line:lines[i],words:words(label[1])});
+    else for(const next of lines.slice(i+1,i+3)){
+      // A separately boxed value must sit on the same row, right of its label.
+      if(lines[i].box&&next.box&&(Math.abs(lines[i].box.y-next.box.y)>.02||next.box.x<lines[i].box.x+lines[i].box.width-.01))continue;
+      if(/\b(?:SHIPPER|CARRIER|SIGNATURE|RECEIVED|ADDRESS)\b|\d/i.test(clean(next)))continue;
+      recipients.push({label:lines[i],line:next,words:words(clean(next))});
+    }
+  }
+  for(let i=0;i<lines.length;i++){
+    const stamp=lines[i];
+    if(!/^(?:RECEIVED|(?:IN|OUT)\b.{0,60}\bRECEIVED)\s*:?$/i.test(clean(stamp)))continue;
+    if(signatureSection(lines,i)?.role==='pickup')continue;
+    for(let j=i+1;j<Math.min(lines.length,i+5);j++){
+      const company=lines[j],tokens=words(clean(company));
+      const recipient=recipients.find(item=>item.words.length>=2&&tokens.length>=2&&item.words[0]===tokens[0]&&item.words[1]===tokens[1]);
+      if(!recipient||recipient.line===company||!sameColumn(stamp,company)||!below(stamp,company,.07))continue;
+      for(let k=j+1;k<Math.min(lines.length,i+10);k++){
+        const line=lines[k],text=clean(line);
+        if(/\b(?:PICK\s*UP|DRIVER|CARRIER|SHIPPER|CONSIGNOR)\b.*\b(?:SIGNATURE|ACKNOWLEDGEMENT|ACKNOWLEDGMENT)\b|^PICK\s*UP\b/i.test(text))break;
+        const signed=/^SIGNATURE\s*(?::\s*|\s+)(.+)$/i.exec(text);
+        if(signed&&name(signed[1].trim())&&sameColumn(company,line)&&below(stamp,line,.16))
+          return [...new Set([recipient.label,recipient.line,stamp,company,line])];
+      }
+    }
+  }
+  return null;
+}
+
 export function fuelReceiptEvidence(lines){
   const find=pattern=>lines.find(line=>pattern.test(clean(line)));
   const receipt=find(/^(?:(?:FUEL|DIESEL|SALES|PAYMENT) )?RECEIPT\b|^CUSTOMER COPY\b/i);
