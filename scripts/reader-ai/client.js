@@ -1,5 +1,4 @@
 import {createAiFallback} from '../../../../lib/reader-ai/fallback.js';
-import {cloudSession} from '../../../../lib/owner-op-cloud/client.js';
 import {reviewScanAnalysis} from './ownedReaderAdapter.js';
 import {retainedReviewPageSources} from './readerPageSourcesV110373.js';
 import {decodeImageFileV3,imageDataToFileV3} from './v3/imageUtilsV3.js';
@@ -44,6 +43,8 @@ export async function prepareAiPage(file,signal){
 
 export const assistDocumentClassification = createAiFallback({
   identify:reviewScanAnalysis,sources:aiPageSources,
-  session:signal=>withAbort(cloudSession(),signal),prepare:prepareAiPage,
+  // Keep the local reader independent of cloud SDK loading. This runs only
+  // after the server confirms that AI assistance is enabled.
+  session:signal=>withAbort(import('../../../../lib/owner-op-cloud/client.js').then(({cloudSession})=>cloudSession()),signal),prepare:prepareAiPage,
   online:()=>typeof navigator!=='undefined'&&navigator.onLine!==false,
 });

@@ -120,14 +120,14 @@ test('best-effort instance throttle caps requests and rejects concurrent work',a
 });
 
 function fallbackHarness({pageTexts=['unreadable'],enabled=true,status=200,account='a',onPost,online=true,source=true}={}){
-  const calls=[],analysis={pageTexts,type:{id:'bol'},fields:{bolNo:'KEEP-123'},typeEvidenceV110334:{mixedDocuments:true,clearShipmentFields:true}};
-  const assist=createAiFallback({identify,sources:()=>source?pageTexts.map((_,i)=>({pageNumber:i+1,file:{number:i+1}})):[],session:async()=>({access_token:'test',user:{id:account}}),prepare:async file=>image,online:()=>online,
+  const calls=[],sessionCalls=[],analysis={pageTexts,type:{id:'bol'},fields:{bolNo:'KEEP-123'},typeEvidenceV110334:{mixedDocuments:true,clearShipmentFields:true}};
+  const assist=createAiFallback({identify,sources:()=>source?pageTexts.map((_,i)=>({pageNumber:i+1,file:{number:i+1}})):[],session:async()=>{sessionCalls.push(account);return {access_token:'test',user:{id:account}};},prepare:async file=>image,online:()=>online,
     fetcher:async(url,options={})=>{calls.push(options);if(options.method!=='POST')return Response.json({enabled,version:AI_READER_VERSION,model:'example/vision'});
       onPost?.(JSON.parse(options.body));
       if(status!==200)return Response.json({ok:false,error:'limit_reached'},{status});
       return Response.json({ok:true,pageNumber:JSON.parse(options.body).pageNumber,result:{...validateAiClassification(pod()),imageHash:createHash('sha256').update(Buffer.from(image.split(',')[1],'base64')).digest('hex')}});
     }});
-  return {calls,analysis,assist};
+  return {calls,sessionCalls,analysis,assist};
 }
 
 test('fallback sends only the uncertain page and preserves clear primary type, fields and packet guards',async()=>{
@@ -146,6 +146,7 @@ test('fallback skips offline, unconfigured and absent image cases without an inf
     const h=fallbackHarness(settings);const result=await h.assist(h.analysis);
     assert.equal(h.calls.filter(call=>call.method==='POST').length,0);assert.equal(result.type.id,'bol');
     assert.equal(result.aiClassification.pages[0].status,settings.online===false?'offline':settings.enabled===false?'not_configured':'source_unavailable');
+    assert.equal(h.sessionCalls.length,settings.source===false?1:0,'offline and disabled AI must not load cloud authentication');
   }
 });
 
