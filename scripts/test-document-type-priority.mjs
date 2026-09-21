@@ -43,6 +43,16 @@ test('POD and fuel survive every classifier, filename bias and stale supplied sc
   }
 });
 
+test('received-stamp POD reaches the filing classifiers without losing its review requirement',()=>{
+  const text=bol+'\nRECEIVED\nEXAMPLE MARKET\nDate: 2026-09-21\nSIGNATURE J. DOE';
+  const local=classifyDocument(text,'bol.pdf');
+  assert.equal(local.type.id,'pod');assert.equal(local.sourceIdentity.requiresTypeReview,true);
+  assert.equal(arbitrateDocumentTypeV104({fullText:text,fileName:'bol.pdf',genericClassification:{type:{id:'bol'}}}).id,'pod');
+  assert.equal(extraPageIdentity(text).typeId,'pod');
+  const decision=decideDocumentIdentity({text,type:{id:'bol'}});
+  assert.equal(decision.typeId,'pod');assert.equal(decision.requiresTypeReview,true);
+});
+
 test('fuel evidence bypasses repeated generic receipt keywords',()=>{
   const result=classifyDocument(fuel+'\n'+('receipt subtotal sales tax total amount paid\n'.repeat(15)));
   assert.equal(result.type.id,'fuel_receipt');assert.equal(result.confidence,.96);
