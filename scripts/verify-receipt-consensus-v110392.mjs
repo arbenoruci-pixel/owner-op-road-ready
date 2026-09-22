@@ -11,7 +11,7 @@ const passes=input.pages[0].observations.map(observation=>{
 });
 const analysis={type:{id:'other'},pageCount:1,text:passes[0].text,ocrEvidenceV110323:passes,fields:{},routing:{autoFile:false}};
 const before=JSON.stringify(analysis),result=reviewScanAnalysis(analysis,{documentId:'receipt-app',dimensions}),doc=result.documents[0];
-assert.equal(result.engineVersion,'0.3.33');
+assert.equal(result.engineVersion,'0.3.34');
 assert.equal(doc.kind,'unloading_receipt');
 assert.equal(doc.fields.fee.value,'10.00');assert.equal(doc.fields.total.value,'398.00');
 assert.equal(doc.fields.poNumber.value,'PO-51');assert.equal(doc.fields.trailerNumber.value,'T-700');

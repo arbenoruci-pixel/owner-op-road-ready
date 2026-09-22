@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const VERSION='110.3.93',BUILD='v110393-bol-source-evidence';
 const read=path=>fs.readFileSync(path,'utf8');
-assert.ok(['0.3.27','0.3.28','0.3.29','0.3.30','0.3.31','0.3.32','0.3.33'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
+assert.ok(['0.3.27','0.3.28','0.3.29','0.3.30','0.3.31','0.3.32','0.3.33','0.3.34'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
 const sheetPath='source/src/modules/scan/SmartScanSheetV105.jsx';
 let sheet=read(sheetPath);
 function patch(before,after){if(sheet.includes(after))return;assert.equal(sheet.split(before).length,2,'BOL source display anchor');sheet=sheet.replace(before,after);}

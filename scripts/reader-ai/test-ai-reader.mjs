@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readDocument,textObservation} from '../../packages/smart-reader-core/src/index.js';
 import {clippedPod,soldToPacking,viaPacking} from '../../packages/smart-reader-core/test/local-first-fixture.mjs';
+import {croppedPackingObservation} from '../../packages/smart-reader-core/test/cropped-forms-fixture.mjs';
 import {aiClassificationReason,validateAiClassification,AI_READER_VERSION} from '../../lib/reader-ai/policy.js';
 import {createAiFallback} from '../../lib/reader-ai/fallback.js';
 import {confirmReviewedKind} from '../../lib/reader-ai/confirm.js';
@@ -159,6 +160,25 @@ test('fallback skips offline, unconfigured and absent image cases without an inf
     assert.equal(result.aiClassification.pages[0].status,settings.online===false?'offline':settings.enabled===false?'not_configured':'source_unavailable');
     assert.equal(h.sessionCalls.length,settings.source===false?1:0,'offline and disabled AI must not load cloud authentication');
   }
+});
+
+test('delivery sign-out found after the OCR text cap still selects the original page for AI review',async()=>{
+  const longBol=bol+'\n'+('Printed freight terms\n'.repeat(350))+'Unloaded & Signed Out: unreadable';
+  const packing=croppedPackingObservation().lines.map(l=>l.text).join('\n');
+  const h=fallbackHarness({pageTexts:[longBol,packing]});
+  const result=await h.assist(h.analysis),posts=h.calls.filter(call=>call.method==='POST').map(call=>JSON.parse(call.body));
+  assert.deepEqual(posts.map(p=>p.pageNumber),[1]);assert.equal(posts[0].text.length,6000);
+  assert.equal(result.aiClassification.pages[0].reason,'delivery_acknowledgement');
+  assert.equal(result.type.id,'bol');assert.deepEqual(result.fields,h.analysis.fields);
+});
+
+test('unloading instructions and pickup signatures do not spend AI calls on clear local types',async()=>{
+  const h=fallbackHarness({pageTexts:[bol+'\nDriver Signature: J. Doe\nMust be unloaded and signed out before departure',croppedPackingObservation().lines.map(l=>l.text).join('\n')]});
+  assert.equal(await h.assist(h.analysis),h.analysis);assert.equal(h.calls.length,0);assert.equal(h.sessionCalls.length,0);
+  const disabled=fallbackHarness({pageTexts:[bol+'\nUnloaded & Signed Out: ____'],enabled:false});
+  const result=await disabled.assist(disabled.analysis);
+  assert.equal(result.aiClassification.pages[0].status,'not_configured');assert.equal(disabled.sessionCalls.length,0);
+  assert.equal(disabled.calls.filter(call=>call.method==='POST').length,0);
 });
 
 test('repeat scans use cache and large unclear packets stop after two pages',async()=>{

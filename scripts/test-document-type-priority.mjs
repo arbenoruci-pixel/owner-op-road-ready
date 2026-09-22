@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {clippedPod,soldToPacking,viaPacking} from '../packages/smart-reader-core/test/local-first-fixture.mjs';
+import {croppedPackingObservation} from '../packages/smart-reader-core/test/cropped-forms-fixture.mjs';
 
 // Exercise the real page-identity installation steps without building or
 // publishing the PWA. Only the identity portions of the release scripts run.
@@ -55,7 +56,8 @@ test('received-stamp POD reaches the filing classifiers without losing its revie
 });
 
 test('recovered local forms reach the app classifiers despite misleading filenames',()=>{
-  for(const [text,id] of [[clippedPod,'pod'],[soldToPacking,'packing_list'],[viaPacking,'packing_list']]){
+  const croppedPacking=croppedPackingObservation().lines.map(line=>line.text).join('\n');
+  for(const [text,id] of [[clippedPod,'pod'],[soldToPacking,'packing_list'],[viaPacking,'packing_list'],[croppedPacking,'packing_list']]){
     assert.equal(classifyDocument(text,'fuel-receipt.pdf').type.id,id);
     assert.equal(arbitrateDocumentTypeV104({fullText:text,fileName:'invoice.pdf',genericClassification:{type:{id:'bol'}}}).id,id);
     assert.equal(extraPageIdentity(text).typeId,id);

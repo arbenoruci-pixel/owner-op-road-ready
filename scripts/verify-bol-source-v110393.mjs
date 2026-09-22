@@ -15,7 +15,7 @@ const passes=input.pages[0].observations.map(o=>{
 });
 const analysis={type:{id:'bol'},pageCount:1,text:passes[0].text,ocrEvidenceV110323:passes,fields:{},routing:{autoFile:false}};
 const before=JSON.stringify(analysis),result=reviewScanAnalysis(analysis,{documentId:'bol-app-review',dimensions}),doc=result.documents[0];
-assert.equal(result.engineVersion,'0.3.33');assert.equal(doc.reference,'0012345678');
+assert.equal(result.engineVersion,'0.3.34');assert.equal(doc.reference,'0012345678');
 for(const [key,value]of Object.entries({bolNumber:'0012345678',shipper:'NORTHERN FOODS',consignee:'REGIONAL MARKET / TOWN DEPOT NORTH',carrier:'J AND K TRANSPORT',trailerNumber:'8042',poNumber:'24681357',documentDate:'2026-07-14',temperature:'-10 F'})){
   assert.equal(doc.fields[key].value,value,key);assert.equal(doc.fields[key].status,'supported',key);
 }
