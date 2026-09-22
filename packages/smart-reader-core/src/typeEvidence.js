@@ -41,7 +41,9 @@ export function receiverStampEvidence(lines){
   const below=(a,b,max)=>!a.box&&!b.box||!!a.box&&!!b.box&&b.box.y>=a.box.y-a.box.height&&b.box.y-a.box.y<=max;
   const recipients=[];
   for(let i=0;i<lines.length;i++){
-    const label=/^(?:CONSIGNEE|SHIP\s+TO)\s*:\s*(.*)$/i.exec(clean(lines[i]));
+    // A colon can disappear in OCR; final E/S confusion is confined to this
+    // printed label. The named receiver and local signature are still needed.
+    const label=/^(?:CONSIGNE[ES]|SHIP\s+TO)(?=\s|:|$)\s*:?\s*(.*)$/i.exec(clean(lines[i]));
     if(!label)continue;
     if(label[1].trim())recipients.push({label:lines[i],line:lines[i],words:words(label[1])});
     else for(const next of lines.slice(i+1,i+3)){

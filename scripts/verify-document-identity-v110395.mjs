@@ -17,7 +17,7 @@ const analysis={type:{id:'other'},pageCount:5,ocrEvidenceV110323:passes,
   text:input.pages.map((p,i)=>`[[PAGE:${i+1}]]\n`+p.observations[0].lines.map(l=>l.text).join('\n')).join('\n'),
   fields:{},routing:{autoFile:false}};
 const before=JSON.stringify(analysis),result=reviewScanAnalysis(analysis,{documentId:input.documentId,dimensions});
-assert.equal(result.engineVersion,'0.3.32');
+assert.equal(result.engineVersion,'0.3.33');
 assert.deepEqual(result.documents.map(d=>d.kind),['bol','packing_list','packing_list','packing_list','bol']);
 assert.deepEqual(result.documents.map(d=>d.identityStatus),['supported','supported','supported','supported','needs_review']);
 for(const doc of result.documents.slice(1,4)){

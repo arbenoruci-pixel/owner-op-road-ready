@@ -27,7 +27,7 @@ const BASE_PROFILES = [
 ];
 
 // Common variants share the original fields, normalization and evidence rules.
-BASE_PROFILES.find(p=>p.id==='bol').variants=[{heading:/^\s*(?:(?:UNIFORM|ALTERNATE)\s+)?(?:STRAIGHT\s+)?BILL\s+OF\s+LADING\b(?:\s*[-:]?\s*(?:SHORT\s+FORM|ORIGINAL|NOT\s+NEGOTIABLE))?\s*$/i,signals:[/^\s*(?:SHIPPER|SHIP\s*FROM)\b/i,/^\s*(?:CONSIGNEE|SHIP\s*TO)\b/i]}];
+BASE_PROFILES.find(p=>p.id==='bol').variants=[{heading:/^\s*(?:(?:UNIFORM|ALTERNATE)\s+)?(?:STRAIGHT\s+)?BILL\s+OF\s+LADING\b(?:\s*[-–—:]?\s*(?:SHORT\s+FORM|ORIGINAL|NOT\s+NEGOTIABLE))?\s*[-–—:]?\s*$/i,signals:[/^\s*(?:SHIPPER|SHIP\s*FROM)\b/i,/^\s*(?:CONSIGNEE|SHIP\s*TO)\b/i]}];
 // A short-form straight BOL names its parties in receipt/consignment rows.
 // Keep the explicit title and three independent form labels as its proof.
 BASE_PROFILES.find(p=>p.id==='bol').variants.push({

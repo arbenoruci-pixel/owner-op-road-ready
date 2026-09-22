@@ -65,7 +65,7 @@ export function truckingProfiles(base){
     p('delivery_receipt','Delivery receipt','DELIVERY RECEIPT',[shipmentSignal,partySignal],
       {...shipping,receivedBy:field('Received by','RECEIVED BY|SIGNED BY'),deliveryDate:field('Delivery date','DELIVERY DATE|DELIVERED ON','date')}),
     p('load_tender','Load tender','LOAD TENDER|SHIPMENT TENDER|TENDER OFFER',[shipmentSignal,partySignal],shipping),
-    p('packing_list','Packing list','PACKING LIST|PACKING SLIP',[partySignal,/^\s*(?:PACKING (?:LIST|SLIP)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)|(?:QUANTITY|QTY|ITEM|SKU|PALLETS|CARTONS)\b)/i],
+    p('packing_list','Packing list','PACKING LIST|PACKING SLIP',[sig('SHIPPER|SHIP FROM|CONSIGNEE|SHIP TO|CARRIER|SOLD TO|SHIP VIA'),/^\s*(?:PACKING (?:LIST|SLIP)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)|(?:QUANTITY|QTY|ITEM|SKU|PALLETS|CARTONS|ORDERED|SHIPPED)\b)/i],
       {...shipping,loadNumber:id('Load number','LOAD|SHIPMENT|PRO'),
         packingSlipNumber:{...id('Packing slip number','PACKING SLIP|PACKING LIST'),referenceRow:/^\s*PACKING (?:SLIP|LIST)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:;#]?\s*$/i},
         orderNumber:{...id('Order number','ORDER'),referenceRow:/^\s*ORDER\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:;#]?\s*$/i},

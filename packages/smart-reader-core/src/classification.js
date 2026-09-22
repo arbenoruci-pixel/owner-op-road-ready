@@ -20,14 +20,20 @@ function oneEditApart(a,b){
 }
 function damagedBolModifier(line,profile){
   if(profile.id!=='bol')return false;
-  // Recover one insertion, deletion or substitution in a known form modifier.
+  // Recover one edit or a clipped leading edge of a known form modifier.
   // BILL OF LADING, the rest of the title and independent party signals must
   // still match. Never discard arbitrary words or repair identifier digits.
   const parts=/^([A-Z]+)([ \t]+(?:STRAIGHT[ \t]+)?BILL[ \t]+OF[ \t]+LADING\b.*)$/i.exec(view(line));
   return !!parts&&['ALTERNATE','UNIFORM','STRAIGHT'].some(modifier=>
-    oneEditApart(parts[1].toUpperCase(),modifier)&&profile.heading.test(modifier+parts[2]));
+    (oneEditApart(parts[1].toUpperCase(),modifier)||parts[1].length>=4&&modifier.endsWith(parts[1].toUpperCase()))&&profile.heading.test(modifier+parts[2]));
 }
 function noisyTitle(line,profile){
+  if(profile.id==='packing_list'){
+    // One damaged letter in a whole title is recoverable only with the
+    // profile's independent shipping and item-table signals below.
+    const title=view(line).trim().toUpperCase();
+    return ['PACKING SLIP','PACKING LIST'].some(known=>oneEditApart(title,known));
+  }
   if(damagedBolModifier(line,profile))return true;
   if(profile.id!=='bol'||!line.box||line.box.y>=.2||line.box.height<.015||line.confidence===null||line.confidence>=.8)return false;
   const text=view(line),prefix=/^([A-Za-z0-9]{1,2})[ \t]+/.exec(text);
@@ -63,8 +69,12 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
   const title=lines.find((line,index)=>(line.box?line.box.y<(profile.headingMaxY??.3):(lineIndices?.get(line)??index)<20)&&(matches(line,profile.heading)||noisyTitle(line,profile)));
   const signals=title?profile.signals.map(pattern=>lines.find(line=>(!profile.distinctSignals||line!==title&&view(line).toLowerCase()!==view(title).toLowerCase())&&matches(line,pattern))):[];
   if(title&&signals.every(Boolean)){
-    const exact=profile.heading.test(title.text)&&signals.every((line,i)=>profile.signals[i].test(line.text));
-    return {method:exact?'heading':'noisy_heading',lines:[...new Set([title,...signals])]};
+    // OCR table borders do not weaken an intact packing-form label. Keep
+    // lexical repairs and uncertain titles reviewable, and preserve raw proof.
+    const exact=profile.heading.test(title.text)&&signals.every((line,i)=>profile.signals[i].test(line.text)||
+      profile.id==='packing_list'&&profile.signals[i].test(line.text.replace(/^[ \t|\[\]]+/,'')));
+    const weakPackingTitle=profile.id==='packing_list'&&title.confidence!=null&&title.confidence<.8;
+    return {method:exact&&!weakPackingTitle?'heading':'noisy_heading',lines:[...new Set([title,...signals])]};
   }
   if(profile.structuralSignals){
     const structure=[];

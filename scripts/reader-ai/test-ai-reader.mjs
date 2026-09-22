@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readDocument,textObservation} from '../../packages/smart-reader-core/src/index.js';
+import {clippedPod,soldToPacking,viaPacking} from '../../packages/smart-reader-core/test/local-first-fixture.mjs';
 import {aiClassificationReason,validateAiClassification,AI_READER_VERSION} from '../../lib/reader-ai/policy.js';
 import {createAiFallback} from '../../lib/reader-ai/fallback.js';
 import {confirmReviewedKind} from '../../lib/reader-ai/confirm.js';
@@ -139,6 +140,16 @@ test('fallback sends only the uncertain page and preserves clear primary type, f
   assert.equal(result.aiSourcePages.length,1);assert.equal(result.aiSourcePages[0].pageNumber,2);
   assert.equal('file' in result.aiClassification.pages[0],false,'saved AI provenance excludes source blobs');
   const posts=h.calls.filter(call=>call.method==='POST');assert.equal(posts.length,1);assert.equal(JSON.parse(posts[0].body).pageNumber,2);
+});
+
+test('recovered local forms skip AI while uncertain delivery pages retain the fallback',async()=>{
+  const clear=fallbackHarness({pageTexts:[soldToPacking,viaPacking,bol,rate]});
+  assert.equal(await clear.assist(clear.analysis),clear.analysis);
+  assert.equal(clear.calls.length,0);assert.equal(clear.sessionCalls.length,0);
+  const h=fallbackHarness({pageTexts:[soldToPacking,clippedPod,viaPacking,bol+'\nReceiver Signature: ____']});
+  const before=structuredClone(h.analysis);await h.assist(h.analysis);
+  assert.deepEqual(h.calls.filter(call=>call.method==='POST').map(call=>JSON.parse(call.body).pageNumber),[2,4]);
+  assert.deepEqual(h.analysis,before);
 });
 
 test('fallback skips offline, unconfigured and absent image cases without an inference request',async()=>{
