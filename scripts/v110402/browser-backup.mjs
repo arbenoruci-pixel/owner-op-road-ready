@@ -72,7 +72,12 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
     assert.deepEqual(Buffer.from(blob.base64, 'base64'), original);
     assert.equal(blob.sha256, digest(original));
     assert.equal(archive.inventory.documentBlobRows, 1);
-    assert.equal(Object.keys(archive.payload.dexie).length, 11);
+    const storedTables = await page.evaluate(() => new Promise((resolve, reject) => {
+      const request = indexedDB.open('owner-op-road-ready-offline-v1');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => { const db=request.result; resolve([...db.objectStoreNames]); db.close(); };
+    }));
+    assert.deepEqual(Object.keys(archive.payload.dexie).sort(), storedTables.sort(), 'every actual database table is captured');
     assert.ok(archive.payload.dexie.app_snapshots.length > 0);
     assert.ok(archive.payload.localStorage.some(row => row.key === 'owner-op-road-ready-business-v1'));
     assert.equal(archive.payload.businessStore.expenses[0].amount, 42);
