@@ -350,7 +350,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
             <span>{formatBytes(preparedExport.file.size)}</span>
             <p>Tap Save / Share and choose Save to Files. You can retry without preparing the backup again.</p>
             <button type="button" className="backup-primary" onClick={savePreparedExport} disabled={busy}>Save / Share</button>
-            <a className="backup-secondary" href={preparedExport.url} download={preparedExport.file.name} onClick={() => setStatus('Download requested. Check Files / Downloads for your backup. For a Device Safety Backup, use Verify saved backup from Files after saving.')}>Download backup</a>
+            <a className="backup-secondary" style={{ display:'flex', alignItems:'center', justifyContent:'center', textDecoration:'none', marginTop:10 }} href={preparedExport.url} download={preparedExport.file.name} onClick={() => setStatus('Download requested. Check Files / Downloads for your backup. For a Device Safety Backup, use Verify saved backup from Files after saving.')}>Download backup</a>
           </section>
         ) : null}
         <section className="backup-status-card">

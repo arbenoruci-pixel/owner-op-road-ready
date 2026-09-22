@@ -32,6 +32,7 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
       } });
     });
     const state = baseState();
+    state.view = 'logbook';
     state.customByDay = { '2026-09-07':{ original:'keep me' } };
     state.testInstructionStore = { loads:[], documents:[], expenses:[{ id:'expense', amount:42 }] };
     await seed(page, state, [{ id:'backup-fixture', bytes:[...original] }]);
@@ -120,6 +121,7 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
     await page.screenshot({ path:path.join(output, name+'.png'), fullPage:true });
     console.log(`PASS — ${name}: fresh save gesture, cancel/retry, original bytes, downloaded checksum, corrupt-file rejection and readable export with blocked local writes`);
   } catch (error) {
+    console.error(JSON.stringify({ error:String(error), errors, text:await page.locator('body').innerText() }));
     await page.screenshot({ path:path.join(output, name+'-FAILED.png'), fullPage:true }).catch(() => {});
     fs.writeFileSync(path.join(output, name+'-failure.json'), JSON.stringify({ error:String(error), stack:error.stack, errors, text:await page.locator('body').innerText() }, null, 2));
     throw error;
