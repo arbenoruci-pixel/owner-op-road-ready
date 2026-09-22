@@ -102,6 +102,7 @@ steps.push('finalize-document-type-priority-v110397.mjs','verify-document-type-p
 steps.push('finalize-ai-reader-v110398.mjs','reader-ai/test-ai-reader.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-received-stamp-v110399.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-local-reader-v110400.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-cropped-forms-v110401.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

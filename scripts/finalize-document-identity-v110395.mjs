@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const VERSION='110.3.95',BUILD='v110395-document-identity';
 const read=path=>fs.readFileSync(path,'utf8');
-assert.ok(['0.3.29','0.3.30','0.3.31','0.3.32','0.3.33'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
+assert.ok(['0.3.29','0.3.30','0.3.31','0.3.32','0.3.33','0.3.34'].includes(JSON.parse(read('packages/smart-reader-core/package.json')).version));
 const stamp=new Date().toISOString();
 for(const path of ['release-version.json','public/app-version.json']){
   const value=JSON.parse(read(path));

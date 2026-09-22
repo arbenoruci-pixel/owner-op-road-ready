@@ -70,7 +70,14 @@ export function truckingProfiles(base){
         packingSlipNumber:{...id('Packing slip number','PACKING SLIP|PACKING LIST'),referenceRow:/^\s*PACKING (?:SLIP|LIST)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:;#]?\s*$/i},
         orderNumber:{...id('Order number','ORDER'),referenceRow:/^\s*ORDER\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:;#]?\s*$/i},
         poNumber:{...id('PO number','(?:CUSTOMER )?(?:PO|P\\.O\\.)|PURCHASE ORDER'),referenceRow:/^\s*(?:(?:CUSTOMER )?P\.?\s*O\.?|PURCHASE ORDER)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)?\s*[:;#]?\s*$/i},
-        quantity:field('Quantity','TOTAL QUANTITY|QUANTITY|QTY')},{identity:'packingSlipNumber',distinctSignals:true}),
+        quantity:field('Quantity','TOTAL QUANTITY|QUANTITY|QTY')},{identity:'packingSlipNumber',distinctSignals:true,variants:[{
+          // Cropped party labels do not erase a complete packing form. Require
+          // its own title, reference/date labels and all three table columns.
+          heading:/^\s*PACKING (?:LIST|SLIP)\s*$/i,sameObservation:true,minSignalConfidence:.8,
+          signals:[/^\s*PACKING (?:LIST|SLIP)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)/i,
+            /^\s*ORDER\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)/i,/^\s*SHIP\s+DATE\s*:/i,
+            /^\s*DESCRIPTION\b/i,/^\s*(?:WHSE\s+)?ORDERED\b/i,/^\s*SHIPPED\b/i],
+        }]}),
     p('gate_pass','Gate pass','GATE PASS|GATE RECEIPT|DROP LOAD',[sig('TRAILER|CONTAINER'),sig('APPOINTMENT|ARRIVAL|GATE|DOCK|CARRIER')],
       {...shipping,appointment:field('Appointment','APPOINTMENT(?: TIME| DATE| WINDOW)?'),gate:field('Gate','GATE'),door:field('Door','DOOR|DOCK')}),
     p('detention_approval','Detention approval','DETENTION APPROVAL|DETENTION AUTHORIZATION',[shipmentSignal,sig('APPROVED|AUTHORIZED|AMOUNT|HOURS')],approval),

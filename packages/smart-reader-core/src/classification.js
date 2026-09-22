@@ -7,6 +7,12 @@ const matches=(line,pattern)=>pattern.test(line.text)||pattern.test(view(line));
 // Confusable letters affect only the BOL matching view. Raw proof stays exact,
 // and all shipping structure signals are still required on the same page.
 const bolView=line=>view(line).replace(/\b(bill[ \t]+of[ \t]+)[I1]ading\b/gi,'$1lading').replace(/\b((?:this|original)[ \t]+)bil[ \t]+of[ \t]+lading\b/gi,'$1bill of lading');
+function clippedShippingLabel(line){
+  // A crop can remove the first printed letter at the page's left edge.
+  // This matching view is classification-only: never repair source or values.
+  if(!line.box||line.box.x>.015||line.box.y>.45)return '';
+  return view(line).replace(/^ROM(?=\s*:)/i,'FROM').replace(/^ARRIER(?=\s*:)/i,'CARRIER');
+}
 function oneEditApart(a,b){
   if(Math.abs(a.length-b.length)>1)return false;
   let i=0,j=0,edits=0;
@@ -60,6 +66,7 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
     if(support)return {method:support.every(line=>line.confidence==null||line.confidence>=.8)?'fuel_transaction':'weak_fuel_transaction',lines:support};
   }
   for(const variant of profile.variants||[]){
+    if(variant.sameObservation&&lineIndices)continue;
     // Sertifi also stamps signed primary/continuation pages. Their explicit
     // RateCon heading owns the page; the stamp is supporting content only.
     if(variant.method==='sertifi_signature'&&lines.some(line=>matches(line,rateConfirmationProfile.heading)))continue;
@@ -67,7 +74,8 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
     if(support)return {...support,method:variant.method||support.method};
   }
   const title=lines.find((line,index)=>(line.box?line.box.y<(profile.headingMaxY??.3):(lineIndices?.get(line)??index)<20)&&(matches(line,profile.heading)||noisyTitle(line,profile)));
-  const signals=title?profile.signals.map(pattern=>lines.find(line=>(!profile.distinctSignals||line!==title&&view(line).toLowerCase()!==view(title).toLowerCase())&&matches(line,pattern))):[];
+  const signals=title?profile.signals.map(pattern=>lines.find(line=>(!profile.distinctSignals||line!==title&&view(line).toLowerCase()!==view(title).toLowerCase())&&
+    (profile.minSignalConfidence==null||line.confidence==null||line.confidence>=profile.minSignalConfidence)&&matches(line,pattern))):[];
   if(title&&signals.every(Boolean)){
     // OCR table borders do not weaken an intact packing-form label. Keep
     // lexical repairs and uncertain titles reviewable, and preserve raw proof.
@@ -79,7 +87,7 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
   if(profile.structuralSignals){
     const structure=[];
     for(const pattern of profile.structuralSignals){
-      const line=lines.find(line=>matches(line,pattern)||profile.id==='bol'&&pattern.test(bolView(line)));
+      const line=lines.find(line=>matches(line,pattern)||profile.id==='bol'&&(pattern.test(bolView(line))||!lineIndices&&pattern.test(clippedShippingLabel(line))));
       if(!line)return null;
       structure.push(line);
     }
