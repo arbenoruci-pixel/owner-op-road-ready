@@ -36,7 +36,7 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
     state.customByDay = { '2026-09-07':{ original:'keep me' } };
     state.testInstructionStore = { loads:[], documents:[], expenses:[{ id:'expense', amount:42 }] };
     await seed(page, state, [{ id:'backup-fixture', bytes:[...original] }]);
-    await page.getByRole('button', { name:'Logbook', exact:true }).click();
+    await page.getByRole('button', { name:'Open logbook', exact:true }).click();
     await page.getByRole('button', { name:'Tools', exact:true }).click();
     await page.getByRole('button', { name:/^Backup Logs/ }).click();
     const protection = () => page.evaluate(() => localStorage.getItem('owner-op-road-ready-last-device-safety-export-v1'));
