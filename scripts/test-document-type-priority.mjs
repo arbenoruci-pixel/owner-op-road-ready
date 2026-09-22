@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
+import {clippedPod,soldToPacking,viaPacking} from '../packages/smart-reader-core/test/local-first-fixture.mjs';
 
 // Exercise the real page-identity installation steps without building or
 // publishing the PWA. Only the identity portions of the release scripts run.
@@ -51,6 +52,15 @@ test('received-stamp POD reaches the filing classifiers without losing its revie
   assert.equal(extraPageIdentity(text).typeId,'pod');
   const decision=decideDocumentIdentity({text,type:{id:'bol'}});
   assert.equal(decision.typeId,'pod');assert.equal(decision.requiresTypeReview,true);
+});
+
+test('recovered local forms reach the app classifiers despite misleading filenames',()=>{
+  for(const [text,id] of [[clippedPod,'pod'],[soldToPacking,'packing_list'],[viaPacking,'packing_list']]){
+    assert.equal(classifyDocument(text,'fuel-receipt.pdf').type.id,id);
+    assert.equal(arbitrateDocumentTypeV104({fullText:text,fileName:'invoice.pdf',genericClassification:{type:{id:'bol'}}}).id,id);
+    assert.equal(extraPageIdentity(text).typeId,id);
+    assert.equal(decideDocumentIdentity({text,type:{id:'bol'}}).typeId,id);
+  }
 });
 
 test('fuel evidence bypasses repeated generic receipt keywords',()=>{

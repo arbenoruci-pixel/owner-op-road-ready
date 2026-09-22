@@ -26,7 +26,7 @@ const analysis={type:{id:'other'},pageCount:input.pages.length,ocrEvidenceV11032
   text:input.pages.map((p,i)=>`[[PAGE:${i+1}]]\n`+p.observations[0].lines.map(l=>l.text).join('\n')).join('\n'),
   fields:{},routing:{autoFile:false}};
 const before=JSON.stringify(analysis),result=reviewScanAnalysis(analysis,{documentId:'followup-identity',dimensions});
-assert.equal(result.engineVersion,'0.3.32');
+assert.equal(result.engineVersion,'0.3.33');
 assert.deepEqual(result.documents.map(d=>d.kind),['bol','packing_list','packing_list','unknown','bol','packing_list']);
 assert.equal(result.documents[0].identityStatus,'needs_review');assert.equal(result.documents[0].fields.bolNumber.value,null);
 assert.equal(result.documents[5].fields.packingSlipNumber.value,'700012345');

@@ -1,0 +1,26 @@
+import fs from 'node:fs';
+const VERSION='110.4.0',BUILD='v110400-local-document-recognition',stamp=new Date().toISOString();
+for(const path of ['release-version.json','public/app-version.json']){
+  const value=JSON.parse(fs.readFileSync(path,'utf8'));
+  Object.assign(value,{version:VERSION,build:BUILD,force:false,label:'v110.4.0 Local document recognition',releasedAt:stamp,updatedAt:stamp,
+    sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,
+    notes:['Recognize clipped BOL titles and Packing Slips from independent form structure.','Keep recognized Packing Slips ahead of misleading filename hints.','Use AI assistance only for uncertain page types; preserve conflicting references and original-page review.']});
+  fs.writeFileSync(path,JSON.stringify(value,null,2)+'\n');
+}
+for(const path of ['package.json','package-lock.json']){
+  const value=JSON.parse(fs.readFileSync(path,'utf8'));value.version=VERSION;if(value.packages?.[''])value.packages[''].version=VERSION;
+  fs.writeFileSync(path,JSON.stringify(value,null,2)+'\n');
+}
+for(const [path,name]of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
+  let value=fs.readFileSync(path,'utf8');
+  for(const [key,replacement]of [['VERSION',VERSION],['BUILD',BUILD]])value=value.replace(new RegExp(`const ${name}_${key}\\s*=\\s*['"][^'"]+['"];?`),`const ${name}_${key} = '${replacement}';`);
+  fs.writeFileSync(path,value);
+}
+for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx'])fs.writeFileSync(path,fs.readFileSync(path,'utf8').replace(/App v\d+\.\d+\.\d+/g,'App v'+VERSION).replace(/APP V\d+\.\d+\.\d+/g,'APP V'+VERSION));
+for(const path of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'])fs.writeFileSync(path,fs.readFileSync(path,'utf8').replaceAll("'110.3.99'","'"+VERSION+"'").replaceAll("'v110399-received-stamp-review'","'"+BUILD+"'"));
+for(const path of ['scripts/browser-native-pdf-v110363.mjs','scripts/v110373/browser-reader-evidence.mjs','scripts/v110382/browser-bol.mjs','scripts/v110384/browser-rows.mjs','scripts/browser-ratecon-structure-v110388.mjs','scripts/v110393/browser-bol-source.mjs','scripts/v110394/browser-bol-form.mjs']){
+  fs.writeFileSync(path,fs.readFileSync(path,'utf8').replaceAll("'0.3.32'","'0.3.33'"));
+}
+const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));locks.release=VERSION;
+fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
+console.log('PASS — 110.4.0 local document recognition and selective AI fallback');

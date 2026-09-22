@@ -45,6 +45,15 @@ test('stamp survives the inline consignee and merged time-row OCR layout',()=>{
   assert.equal(read(input).pageIdentities[0].kind,'pod');
 });
 
+test('receiver labels tolerate a missing colon and final E/S OCR confusion with the same geometry guards',()=>{
+  for(const label of ['Consignee','Consignes:']){
+    const input=observation();input.lines.find(l=>l.id==='consignee').text=label;
+    assert.equal(read(input).pageIdentities[0].kind,'pod');
+    input.lines.find(l=>l.id==='company').box.y=.26;
+    assert.equal(read(input).pageIdentities[0].kind,'bol');
+  }
+});
+
 test('blank, pickup, unrelated-company and misplaced signature marks remain BOL',()=>{
   for(const change of [
     input=>{input.lines.find(l=>l.id==='signature').text='SIGNATURE ______';},

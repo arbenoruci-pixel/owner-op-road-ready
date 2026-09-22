@@ -14,7 +14,7 @@ for(const [text,id] of [[bol,'bol'],[pod,'pod'],[fuel,'fuel_receipt']]){
   assert.equal(extraPageIdentity(text).typeId,id);
   assert.equal(decideDocumentIdentity({text,type:{id:'other'}}).typeId,id);
   const result=readDocument({documentId:'release',pages:[{observations:[textObservation(text)]}]});
-  assert.equal(result.engineVersion,'0.3.32');assert.equal(result.documents[0].canAutoFile,false);
+  assert.equal(result.engineVersion,'0.3.33');assert.equal(result.documents[0].canAutoFile,false);
 }
 const packet=decideDocumentIdentity({text:'[[PAGE:1]]\n'+bol+'\n[[PAGE:2]]\nAdditional notes: keep this sheet',type:{id:'bol'}});
 assert.equal(packet.typeId,'bol');assert.equal(packet.mixedDocuments,true);assert.equal(packet.requiresTypeReview,true);

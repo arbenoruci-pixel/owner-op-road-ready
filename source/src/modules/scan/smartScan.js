@@ -6,6 +6,7 @@ export const SMART_DOCUMENT_TYPES = [
   { id:'carrier_settlement', label:'Carrier Settlement', short:'Settlement', target:'settlements', documentType:'other' },
   { id:'bol', label:'Bill of Lading', short:'BOL', target:'documents', documentType:'bol' },
   { id:'pod', label:'Proof of Delivery', short:'POD', target:'documents', documentType:'pod' },
+  { id:'packing_list', label:'Packing List / Slip', short:'Packing', target:'documents', documentType:'other' },
   { id:'fuel_receipt', label:'Fuel Receipt', short:'Fuel', target:'fuel', documentType:'fuel_receipt' },
   { id:'repair_invoice', label:'Repair / Service Invoice', short:'Repair', target:'maintenance', documentType:'other' },
   { id:'lumper_receipt', label:'Lumper Receipt', short:'Lumper', target:'expenses', documentType:'other' },
