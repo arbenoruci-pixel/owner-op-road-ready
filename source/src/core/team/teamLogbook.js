@@ -179,13 +179,23 @@ export function teamDriverSummary(state = {}) {
   };
 }
 
+function realImportedEvents(rows = []) {
+  return (Array.isArray(rows) ? rows : []).filter(row => {
+    if (!row || typeof row !== 'object') return false;
+    if (row.carriedFromPreviousDay) return false;
+    if (String(row.source || '').toLowerCase() === 'carryover') return false;
+    if (row.synthetic === true || row._synthetic === true) return false;
+    return true;
+  });
+}
+
 export function importedLogbookIntegrity(source = {}, restored = {}) {
   const sourceDays = Object.entries(source.eventsByDay || {})
-    .filter(([, rows]) => Array.isArray(rows) && rows.length > 0)
-    .map(([day, rows]) => [day, rows.length]);
+    .map(([day, rows]) => [day, realImportedEvents(rows).length])
+    .filter(([, count]) => count > 0);
   const missing = [];
   for (const [day, count] of sourceDays) {
-    const restoredCount = Array.isArray(restored.eventsByDay?.[day]) ? restored.eventsByDay[day].length : 0;
+    const restoredCount = realImportedEvents(restored.eventsByDay?.[day]).length;
     if (restoredCount < count) missing.push({ day, sourceCount:count, restoredCount });
   }
   return {
