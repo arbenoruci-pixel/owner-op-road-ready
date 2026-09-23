@@ -12,6 +12,7 @@ import TimeZoneSheet from '../shared/ui/TimeZoneSheet.jsx';
 import DigitalWalletScreen from '../modules/wallet/DigitalWalletScreen.jsx';
 import BackupLogsScreen from '../modules/backup/BackupLogsScreen.jsx';
 import DayTransferSheet from '../modules/backup/DayTransferSheet.jsx';
+import TeamDriverBar from '../modules/logbook/TeamDriverBar.jsx';
 import UpdateBanner from '../modules/update/UpdateBanner.jsx';
 import DotMode from '../modules/dot/DotMode.jsx';
 import DriveTrackerSheet from '../modules/gps/DriveTrackerSheet.jsx';
@@ -34,6 +35,7 @@ import { normalizeWallet } from '../core/wallet/dotWallet.js';
 import { CURRENT_APP_VERSION, UPDATE_CHECK_INTERVAL_MS, buildUpdateMeta, fetchRemoteAppVersion, isNewerVersion, requestServiceWorkerUpdate, updateReloadUrl } from '../core/update/appUpdate.js';
 import { sanitizeLogText } from '../shared/utils/logText.js';
 import { normalizeLoadInfoFromRouteLegs, normalizeRoadReadyState } from '../core/routes/routeNormalization.js';
+import { addTeamDriver, importedLogbookIntegrity, normalizeTeamDriverState, switchTeamDriver } from '../core/team/teamLogbook.js';
 import { applyRouteLegDetailsToLinkedEvents, applyShippingDocumentReference, enrichLoadEventFromLinkedRoute, findShippingDocsTargetEvent } from '../core/routes/shippingDocsRepair.js';
 import { appendRecoveredLiveTail, applyLiveStatusTransition, chooseRecoveryCandidate, isSuspiciousMidnightDrivingOverwrite, recoverEventsFromLocalRevisions, safeInsertRolloverDriving } from '../core/timeline/liveDrivingSafety.js';
 import { applyManualDrivingMidnightContinuity } from '../core/timeline/manualDrivingContinuity.js';
@@ -578,7 +580,8 @@ function normalizeState(s) {
   };
 
   const routeNormalized = normalizeRoadReadyState(normalized);
-  return reconcilePreTripInspections(routeNormalized, Object.keys(routeNormalized.eventsByDay || eventsByDay));
+  const teamNormalized = normalizeTeamDriverState(routeNormalized, today);
+  return reconcilePreTripInspections(teamNormalized, Object.keys(teamNormalized.eventsByDay || eventsByDay));
 }
 
 function defaultInitialState() {
@@ -970,10 +973,13 @@ export default function App() {
     const previousEventsByDay = lastEventsByDayRef.current;
     const previousInspectionByDay = lastInspectionByDayRef.current;
     saveAppSnapshot(APP_STATE_KEY, state).catch(() => {});
-    if (previousEventsByDay) {
+    const primaryTeamDriverId = state.teamDrivers?.[0]?.id || '';
+    const activeTeamDriverId = state.activeDriverId || primaryTeamDriverId;
+    const cloudSyncAllowed = !primaryTeamDriverId || activeTeamDriverId === primaryTeamDriverId;
+    if (previousEventsByDay && cloudSyncAllowed) {
       queueDutyEventDiffs(previousEventsByDay, state.eventsByDay || {}).catch(() => {});
     }
-    if (previousInspectionByDay) {
+    if (previousInspectionByDay && cloudSyncAllowed) {
       queueInspectionDiffs(previousInspectionByDay, state.inspectionByDay || {}).catch(() => {});
     }
     lastEventsByDayRef.current = state.eventsByDay || {};
@@ -2903,8 +2909,11 @@ export default function App() {
     if (!imported || typeof imported !== 'object' || (!imported.eventsByDay && !imported.signatureByDay && !imported.inspectionByDay)) {
       throw new Error('Backup file is missing log data.');
     }
+    const sourceDays = Object.keys(imported.eventsByDay || {}).sort();
+    const latestSourceDay = sourceDays[sourceDays.length - 1] || localDayKey();
     const restored = normalizeState({
       ...imported,
+      activeDay: imported.activeDay || latestSourceDay,
       view:'logs',
       sheet:null,
       selectMode:false,
@@ -2915,8 +2924,19 @@ export default function App() {
         filename:meta?.filename || '',
         sourceVersion:payload?.appVersion || '',
         schemaVersion:payload?.schemaVersion || '',
+        latestSourceDay,
       },
     });
+    const integrity = importedLogbookIntegrity(imported, restored);
+    if (!integrity.ok) {
+      const first = integrity.missing[0];
+      throw new Error(`Import stopped safely: ${first?.day || 'a log day'} lost duty events during restore validation.`);
+    }
+    restored._restoredBackupMeta = {
+      ...(restored._restoredBackupMeta || {}),
+      importedEventDays:integrity.sourceEventDays,
+      importedEvents:integrity.sourceEvents,
+    };
     await saveAppSnapshot(APP_STATE_KEY, restored);
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -2926,6 +2946,27 @@ export default function App() {
     lastEventsByDayRef.current = restored.eventsByDay || {};
     lastInspectionByDayRef.current = restored.inspectionByDay || {};
     setState(restored);
+    return restored._restoredBackupMeta;
+  }
+
+  function addTeamDriverToLogbook(name) {
+    setState(s => {
+      const day = localDayKey(new Date(), getHomeTerminalTimeZone(s));
+      const next = addTeamDriver(s, name, day);
+      lastEventsByDayRef.current = next.eventsByDay || {};
+      lastInspectionByDayRef.current = next.inspectionByDay || {};
+      return next;
+    });
+  }
+
+  function switchActiveTeamDriver(driverId) {
+    setState(s => {
+      const day = localDayKey(new Date(), getHomeTerminalTimeZone(s));
+      const next = switchTeamDriver(s, driverId, day);
+      lastEventsByDayRef.current = next.eventsByDay || {};
+      lastInspectionByDayRef.current = next.inspectionByDay || {};
+      return next;
+    });
   }
   async function importSingleDayBackup(payload = {}, meta = {}) {
     const targetDay = meta?.targetDay || state.activeDay;
@@ -3027,6 +3068,11 @@ export default function App() {
   return (
     <>
       {updateBanner}
+      <TeamDriverBar
+        state={state}
+        onAddDriver={addTeamDriverToLogbook}
+        onSwitchDriver={switchActiveTeamDriver}
+      />
       <DayLogScreen
         state={state}
         onToggleGps={()=>setState(s=>({ ...s, sheet:{ type:'status' }, gpsPanelOpen:false }))}
