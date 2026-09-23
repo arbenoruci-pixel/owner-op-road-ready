@@ -9,7 +9,7 @@
 .rr-docs-browser button:disabled{opacity:.55;cursor:wait}
 .rr-docs-browser :is(button,a,input,summary):focus-visible{outline:3px solid #275ac9;outline-offset:3px}
 .rr-docs-browser :is(p,small,em,dd){color:var(--rr-muted)}
-.rr-docs-browser h2{font-size:24px;line-height:1.2;font-weight:800;letter-spacing:-.02em;overflow-wrap:anywhere;scroll-margin-top:18px}
+.rr-docs-browser h2{font-size:24px;line-height:1.2;font-weight:800;letter-spacing:-.02em;overflow-wrap:anywhere;scroll-margin-top:160px}
 .rr-docs-browser h2:focus{outline:none}
 .rr-docs-browser h3{font-size:17px;line-height:1.4;font-weight:750}
 .rr-docs-breadcrumb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--rr-muted)}
