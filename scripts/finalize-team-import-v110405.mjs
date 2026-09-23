@@ -204,15 +204,15 @@ patch(
   'source/src/modules/backup/BackupLogsScreen.jsx',
   `function formatBytes(bytes = 0) {
   const value = Number(bytes || 0);
-  if (value < 1024) return \`${value} B\`;
-  if (value < 1024 * 1024) return \`${(value / 1024).toFixed(1)} KB\`;
-  return \`${(value / 1024 / 1024).toFixed(2)} MB\`;
+  if (value < 1024) return \`\${value} B\`;
+  if (value < 1024 * 1024) return \`\${(value / 1024).toFixed(1)} KB\`;
+  return \`\${(value / 1024 / 1024).toFixed(2)} MB\`;
 }`,
   `function formatBytes(bytes = 0) {
   const value = Number(bytes || 0);
-  if (value < 1024) return \`${value} B\`;
-  if (value < 1024 * 1024) return \`${(value / 1024).toFixed(1)} KB\`;
-  return \`${(value / 1024 / 1024).toFixed(2)} MB\`;
+  if (value < 1024) return \`\${value} B\`;
+  if (value < 1024 * 1024) return \`\${(value / 1024).toFixed(1)} KB\`;
+  return \`\${(value / 1024 / 1024).toFixed(2)} MB\`;
 }
 
 function hasMeaningfulDeviceData(inventory = {}) {
