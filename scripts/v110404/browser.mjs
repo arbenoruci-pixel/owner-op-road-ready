@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes,simplePdf} from '../v110328/browserFixture.mjs';
 
@@ -31,7 +33,10 @@ async function fits(page,locator){
   for(const box of boxes)assert.ok(box.content<=box.width+1&&box.left>=-1&&box.right<=box.screen+1,JSON.stringify(box));
 }
 for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
-  const browser=await type.launch({headless:true}),context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
+  // WebKit needs a disk-backed test profile to store Blob originals in IndexedDB,
+  // as in the existing saved-document regression suite.
+  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'simple-documents-'));
+  const context=await type.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
   page.setDefaultTimeout(30000);page.on('pageerror',error=>errors.push(error.message));
   try{
     await setupRoutes(context);
@@ -119,8 +124,8 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(await page.evaluate(()=>localStorage.getItem('road_ready_repair_overlay_v1')),null,'Undo restores the original assignment');
     assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),businessBefore);
     assert.deepEqual(protectedData(await snapshot(page)),protectedBefore);
-    assert.deepEqual(errors,[]);reports.push({browser:name,passed:true,widths:[320,390,430],exactOriginal:true});
+    assert.deepEqual(errors,[]);reports.push({browser:name,passed:true,widths:[320,390,430],exactOriginal:true});console.log('PASS — '+name+': weeks, loads, documents, original bytes, mobile layout and reversible organization');
   }catch(error){console.error('Document browser failure',JSON.stringify({error:error.message,pageErrors:errors,body:await page.locator('body').innerText()}));await page.screenshot({path:`${output}/${name}-failure.png`}).catch(()=>{});fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify({error:error.stack,pageErrors:errors,body:await page.locator('body').innerText()},null,2));throw error;}
-  finally{await browser.close();}
+  finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}
 }
 fs.writeFileSync(`${output}/report.json`,JSON.stringify(reports,null,2));console.log(JSON.stringify(reports));
