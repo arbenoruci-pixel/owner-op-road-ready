@@ -34,6 +34,21 @@ function formatBytes(bytes = 0) {
   return `${(value / 1024 / 1024).toFixed(2)} MB`;
 }
 
+function hasMeaningfulDeviceData(inventory = {}) {
+  return [
+    inventory.events,
+    inventory.signedLogs,
+    inventory.inspections,
+    inventory.routeLegs,
+    inventory.walletDocuments,
+    inventory.logDocuments,
+    inventory.fuelReceipts,
+    inventory.businessLoads,
+    inventory.businessDocuments,
+    inventory.documentBlobRows,
+  ].some(value => Number(value || 0) > 0);
+}
+
 function validSafetyMeta(value) {
   const createdAt = String(value?.createdAt || '');
   const filename = String(value?.filename || '');
@@ -130,6 +145,8 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
   const [lastSafetyExport, setLastSafetyExport] = useState(null);
   const businessStore = readBusinessStore();
   const summary = useMemo(() => fullBackupSummaryV105(state, businessStore), [state, businessStore.updatedAt]);
+  const deviceHasUserData = useMemo(() => hasMeaningfulDeviceData(safetyInventory || {}), [safetyInventory]);
+  const restoreUnlocked = Boolean(lastSafetyExport) || (Boolean(safetyInventory) && !deviceHasUserData);
 
   async function scanDevice() {
     setSafetyError('');
@@ -260,12 +277,13 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
   async function importFile(file) {
     if (!file) return;
     const verifiedSafety = lastSafetyExport || readStoredSafetyExport();
-    if (!verifiedSafety) {
-      setStatus('Restore is locked until a verified Device Safety Backup is created and saved from this device.');
+    const requiresSafety = hasMeaningfulDeviceData(safetyInventory || {});
+    if (requiresSafety && !verifiedSafety) {
+      setStatus('This device already has Road Ready data. Create a verified Device Safety Backup here before importing another device.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
-    if (!lastSafetyExport) setLastSafetyExport(verifiedSafety);
+    if (verifiedSafety && !lastSafetyExport) setLastSafetyExport(verifiedSafety);
     setBusy(true);
     setStatus('Reading and validating the full backup…');
     try {
@@ -275,11 +293,13 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
       if (!extracted?.state) throw new Error('This file does not contain Road Ready log data.');
       const sum = extracted.summary || {};
       const message = [
-        'RESTORE all Road Ready data from this file?',
+        'IMPORT Road Ready data from this file?',
         '',
         ...summaryLines(sum),
         '',
-        'Current local app data will be replaced. A verified Device Safety Backup was created first and saved from this device.',
+        requiresSafety
+          ? 'Current local app data will be replaced. A verified Device Safety Backup protects this device first.'
+          : 'This device has no meaningful Road Ready history, so the phone backup can be loaded directly.',
       ].join('\n');
       if (typeof window !== 'undefined' && !window.confirm(message)) {
         setStatus('Restore cancelled. Your current data is unchanged.');
@@ -372,9 +392,11 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
         </section>
 
         <section className="backup-info-card">
-          <b>Restore protection</b>
-          <p>Restore stays locked until this device has a valid verified Device Safety Backup record. Returning from iPhone Files or reopening the PWA will not relock it.</p>
-          <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy || !lastSafetyExport}>Restore from readable backup</button>
+          <b>Import from phone / iPad</b>
+          <p>{deviceHasUserData
+            ? 'This device already has Road Ready records. Make the verified safety backup above before importing another device.'
+            : 'Fresh device detected. You can import the readable all-data JSON from your phone directly.'}</p>
+          <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy || !restoreUnlocked}>Import Road Ready backup</button>
           <input ref={fileInputRef} type="file" accept="application/json,.json,.roadready" hidden onChange={event => importFile(event.target.files?.[0])} />
         </section>
 
