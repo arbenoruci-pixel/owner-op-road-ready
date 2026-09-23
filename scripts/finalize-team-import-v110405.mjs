@@ -79,28 +79,6 @@ patch(
 );
 patch(
   'source/src/app/App.jsx',
-  `    if (previousEventsByDay) {
-      queueDutyEventDiffs(previousEventsByDay, state.eventsByDay || {}).catch(() => {});
-    }
-    if (previousInspectionByDay) {
-      queueInspectionDiffs(previousInspectionByDay, state.inspectionByDay || {}).catch(() => {});
-    }
-    lastEventsByDayRef.current = state.eventsByDay || {};
-    lastInspectionByDayRef.current = state.inspectionByDay || {};`,
-  `    const primaryTeamDriverId = state.teamDrivers?.[0]?.id || '';
-    const activeTeamDriverId = state.activeDriverId || primaryTeamDriverId;
-    const cloudSyncAllowed = !primaryTeamDriverId || activeTeamDriverId === primaryTeamDriverId;
-    if (previousEventsByDay && cloudSyncAllowed) {
-      queueDutyEventDiffs(previousEventsByDay, state.eventsByDay || {}).catch(() => {});
-    }
-    if (previousInspectionByDay && cloudSyncAllowed) {
-      queueInspectionDiffs(previousInspectionByDay, state.inspectionByDay || {}).catch(() => {});
-    }
-    lastEventsByDayRef.current = state.eventsByDay || {};
-    lastInspectionByDayRef.current = state.inspectionByDay || {};`
-);
-patch(
-  'source/src/app/App.jsx',
   `  async function importManualBackup(payload = {}, meta = {}) {
     const imported = payload?.state || payload?.appState || payload;
     if (!imported || typeof imported !== 'object' || (!imported.eventsByDay && !imported.signatureByDay && !imported.inspectionByDay)) {
