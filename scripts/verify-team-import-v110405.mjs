@@ -55,4 +55,11 @@ const broken = importedLogbookIntegrity(
 assert.equal(broken.ok, false);
 assert.equal(broken.missing[0].day, day);
 
+const carryoverCleanup = importedLogbookIntegrity(
+  { eventsByDay:{ [day]:[{ id:'real' }, { id:'carry', source:'carryover', carriedFromPreviousDay:true }] } },
+  { eventsByDay:{ [day]:[{ id:'real' }] } },
+);
+assert.equal(carryoverCleanup.ok, true);
+assert.equal(carryoverCleanup.sourceEvents, 1);
+
 console.log('team/import v110.4.5 checks passed');
