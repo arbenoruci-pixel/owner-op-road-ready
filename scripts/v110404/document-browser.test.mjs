@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {documentGroups,documentKind,documentDescription,visibleWeeks,documentCount} from './documentBrowser.js';
+import {documentGroups,documentKind,documentDescription,visibleWeeks,documentCount,uniqueDocumentFiles} from './documentBrowser.js';
 test('explicit imported POD remains POD even when its file name says BOL',()=>{
  const pod={id:'pod',document_type:'pod',type:'bol',title:'Signed bill of lading',stopSequence:2,document_date:'2026-07-23'};
  const pickup={id:'bol',type:'bol',title:'Received by (blank delivery form)'};
@@ -23,4 +23,14 @@ test('unsupported types remain accessible; dates never fall back to import times
  assert.equal(documentDescription({created_at:'2026-09-23T01:00:00Z'}),'');
  assert.equal(documentDescription({created_at:'2026-09-23T01:00:00Z',vaultDate:'2026-09-23'}),'','normalized vault records must not present import dates');
  assert.equal(documentDescription({document_date:'2026-02-30'}),'');
+});
+test('a business mirror of the same original renders once while distinct originals remain separate',()=>{
+ const source={local_id:'scan-local',client_document_id:'original-client',type:'pod',stopSequence:2,title:'signed-bol.pdf'};
+ const mirror={local_id:'business-mirror',client_document_id:'original-client',type:'bol',title:'signed-bol.pdf'};
+ const other={local_id:'another-local',client_document_id:'different-original',type:'pod',stopSequence:1,title:'signed-bol.pdf'};
+ const docs=[source,mirror,other],before=JSON.stringify(docs);
+ assert.deepEqual(uniqueDocumentFiles(docs),[source,other]);
+ assert.equal(documentCount({documents:docs}),2);
+ assert.deepEqual(documentGroups(docs).map(g=>g.id),['pod']);
+ assert.equal(JSON.stringify(docs),before);
 });

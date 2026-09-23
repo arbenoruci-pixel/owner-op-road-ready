@@ -48,4 +48,7 @@ patch('scripts/browser-saved-documents-v110344.mjs',
   "for(const button of await wizard.locator('.load-folder-actions-v10969 button').all())await fit(page,button);\n      assert.equal(await wizard.locator('.load-folder-actions-v10969').evaluate(el=>getComputedStyle(el).position),'static');\n      await fit(page,wizard.locator('article button'));",
   "assert.equal(await wizard.locator('.rr-docs-file').count(),42,'every unassigned original remains accessible');\n      await fit(page,wizard.locator('.rr-docs-file').first());\n      await fit(page,wizard.locator('.rr-docs-file').filter({hasText:'very-long-original-file-name'}));");
 for(const path of ['source/src/modules/scan/SmartScanSheetV105.jsx','scripts/browser-scanner-workflow-v110328.mjs'])patch(path,'Documents → Recent documents','Documents → Browse all saved files');
+patch('scripts/browser-fullscreen-reader-v110369.mjs',
+  "const recent=page.getByRole('region',{name:'Recent documents'});await recent.locator('.saved-document-row-v344').first().click();",
+  "const recent=page.getByRole('region',{name:'Recent documents'});assert.equal(await recent.locator('li').count(),1,'the business mirror and vault row display one original');await recent.locator('.saved-document-row-v344').first().click();");
 console.log('PASS — 110.4.4 simple document folders installed');

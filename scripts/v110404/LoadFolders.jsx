@@ -12,7 +12,7 @@ import SavedDocumentFilesV110344 from './SavedDocumentFilesV110344.jsx';
 import WeeklyEvidenceV1103 from './WeeklyEvidenceV1103.jsx';
 import {historicalLogbookDatesV10981,openAllHistoricalLogbooksPdfV10981,openCurrentMilesPdfV1103} from './historicalLogbookV10981.js';
 import {markTrailerReturnedV10976,undoTrailerReturnedV10976} from './loadEvidenceV10976.js';
-import {documentGroups,documentCount,documentDescription,documentId,documentLoad,documentKind,documentDate,documentStop,documentTypeOptions,visibleWeeks,savedExport} from './documentBrowserV110404.js';
+import {documentGroups,documentCount,documentDescription,documentId,documentLoad,documentKind,documentDate,documentStop,documentTypeOptions,visibleWeeks,savedExport,uniqueDocumentFiles} from './documentBrowserV110404.js';
 import './documentsBrowserV110404.css';
 
 const text=value=>String(value??'').trim();
@@ -49,12 +49,13 @@ export default function LoadFoldersV10969({loads=[],documents=[],state={},busine
   useEffect(()=>()=>{if(auditPackage?.url)URL.revokeObjectURL(auditPackage.url);},[auditPackage]);
   const model=useMemo(()=>reconcileLoadFoldersV10974({loads,documents,state,businessStore}),[loads,documents,state,businessStore,revision]);
   const {folders,reviewItems,allDocuments}=model;
+  const savedFiles=useMemo(()=>uniqueDocumentFiles(allDocuments),[allDocuments]);
   const weeks=useMemo(()=>visibleWeeks(archiveWeeks(folders,projectArchiveState(state),{...businessStore,documents:allDocuments})).map(week=>({...week,id:week.start||'undated'})),[folders,state,businessStore,allDocuments]);
   const week=weeks.find(w=>w.id===weekId),folder=folders.find(f=>f.loadNo===loadNo);
   const filtered=(week?.items||[]).filter(f=>!query||[f.loadNo,f.title,f.broker].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   const knownLoads=useMemo(()=>new Set(folders.map(f=>text(f.loadNo).toUpperCase())),[folders]);
   const loose=(week?.documents||[]).filter(d=>!knownLoads.has(documentLoad(d)));
-  const unassigned=reviewItems.filter(d=>!savedExport(d));
+  const unassigned=uniqueDocumentFiles(reviewItems.filter(d=>!savedExport(d)));
   useEffect(()=>{heading.current?.focus({preventScroll:true});heading.current?.scrollIntoView({block:'start'});},[weekId,loadNo,library]);
   function navigate(nextWeek='',nextLoad='',showLibrary=false){setWeekId(nextWeek);setLoadNo(nextLoad);setLibrary(showLibrary);setFileError('');setEditing(null);setEditError('');}
   function organize(doc){setEditError('');setEditing({doc,loadNo:knownLoads.has(documentLoad(doc))?documentLoad(doc):'',documentType:documentKind(doc),documentDate:documentDate(doc),stopSequence:documentStop(doc)||'',ignore:false});}
@@ -95,7 +96,7 @@ export default function LoadFoldersV10969({loads=[],documents=[],state={},busine
         {documentGroups(folder.documents,true).length?<details><summary>Saved logbook &amp; mileage files</summary><DocumentList documents={folder.documents||[]} snapshots openDocument={openDocument}/></details>:null}
       </details>
       <button type="button" className="rr-docs-back" onClick={()=>navigate(weekId)}>‹ Back to loads</button>
-    </>:library?<><SavedDocumentFilesV110344 documents={allDocuments} loading={loading}/><button type="button" className="rr-docs-back" onClick={()=>navigate()}>‹ Back to weeks</button></>:week?<>
+    </>:library?<><SavedDocumentFilesV110344 documents={savedFiles} loading={loading}/><button type="button" className="rr-docs-back" onClick={()=>navigate()}>‹ Back to weeks</button></>:week?<>
       {week.items.length>4?<label className="rr-docs-search">Find a load<input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Load number, route or broker"/></label>:null}
       <div className="rr-docs-cards">{filtered.map(f=><button type="button" className="rr-docs-card" key={f.loadNo} onClick={()=>navigate(week.id,f.loadNo)}><span className="rr-docs-card-copy"><strong>Load {f.loadNo}</strong><span>{f.title}</span><small>{f.isAmazon?'Amazon Relay':f.broker||'Broker not set'}</small><em>{documentCount(f)} documents{f.stops?.length?` · ${f.stops.length} delivery ${f.stops.length===1?'stop':'stops'}`:''}</em></span><span className="rr-docs-chevron" aria-hidden="true">›</span></button>)}</div>
       {!filtered.length?<p className="rr-docs-empty">{query?'No loads match your search.':'No loads saved for this week.'}</p>:null}

@@ -14,6 +14,16 @@ export function documentKind(doc = {}) {
   return aliases[raw] || raw;
 }
 export function documentId(doc = {}) { return clean(doc.local_id || doc.id || doc.client_document_id || doc.localDocumentId || doc.clientDocumentId); }
+// The vault and business store can mirror the same original under different row
+// IDs. Collapse that shared client identity, never different files with the same name.
+export function uniqueDocumentFiles(documents = []) {
+  const seen=new Set();
+  return documents.filter(doc=>{
+    if(!doc)return false;
+    const id=clean(doc.client_document_id||doc.clientDocumentId)||documentId(doc);
+    if(id&&seen.has(id))return false;if(id)seen.add(id);return true;
+  });
+}
 export function documentLoad(doc = {}) { return clean(doc.load_no || doc.loadNo || doc.canonicalLoadNo || doc.extracted?.canonicalLoadNo || doc.extracted?.loadNo).toUpperCase(); }
 export function documentStop(doc = {}) {const value=Number(doc.stopSequence||doc.stop_sequence||doc.extracted?.stopSequence||0);return Number.isInteger(value)&&value>0?value:0;}
 export function documentDate(doc = {}) {
@@ -24,10 +34,9 @@ export function documentDate(doc = {}) {
 }
 export function savedExport(doc) { return /^(logbook|miles)_snapshot$/.test(documentKind(doc)); }
 export function documentGroups(documents = [], snapshots = false) {
-  const groups = new Map(), seen = new Set();
-  documents.forEach((doc,index) => {
+  const groups = new Map();
+  uniqueDocumentFiles(documents).forEach(doc => {
     if (!doc || savedExport(doc)!==snapshots) return;
-    const id=documentId(doc); if(id && seen.has(id)) return; if(id)seen.add(id);
     const type=documentKind(doc), key=names[type]?type:'other';
     if(!groups.has(key))groups.set(key,{id:key,badge:names[key][0],label:names[key][1],documents:[]});
     groups.get(key).documents.push(doc);
