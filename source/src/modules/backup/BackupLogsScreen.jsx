@@ -122,6 +122,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
   void LEGACY_IMPORT_MARKER;
   const fileInputRef = useRef(null);
   const safetyFileInputRef = useRef(null);
+  const transferFileInputRef = useRef(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [lastExport, setLastExport] = useState(null);
@@ -257,6 +258,50 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
     }
   }
 
+  async function importFromAnotherDevice(file) {
+    if (!file) return;
+    setBusy(true);
+    setStatus('Checking transfer file…');
+    try {
+      if (!Number.isFinite(file.size) || file.size <= 0) throw new Error('The selected transfer file is empty.');
+      const payload = JSON.parse(await file.text());
+      const extracted = extractFullBackupV105(payload);
+      if (!extracted?.state) {
+        if (payload?.kind === SAFETY_KIND) {
+          throw new Error('Choose the readable all-data JSON from the other device.');
+        }
+        throw new Error('This file does not contain Road Ready log data.');
+      }
+      const sum = extracted.summary || {};
+      const message = [
+        'IMPORT Road Ready data from another device?',
+        '',
+        ...summaryLines(sum),
+        '',
+        'This will replace the Road Ready app data on this device with the selected transfer file.',
+      ].join('\n');
+      if (typeof window !== 'undefined' && !window.confirm(message)) {
+        setStatus('Device transfer cancelled. Current data is unchanged.');
+        return;
+      }
+
+      await onImportBackup?.(payload, {
+        filename:file.name,
+        summary:sum,
+        schemaVersion:extracted.schemaVersion,
+        source:'device_transfer',
+      });
+      if (extracted.businessStore) writeBusinessStore(extracted.businessStore);
+      setStatus(`Device transfer complete: ${sum.logDays || 0} log days and ${sum.events || 0} duty events imported from ${file.name}.`);
+      await scanDevice();
+    } catch (error) {
+      setStatus(error?.message || 'Device transfer failed.');
+    } finally {
+      if (transferFileInputRef.current) transferFileInputRef.current.value = '';
+      setBusy(false);
+    }
+  }
+
   async function importFile(file) {
     if (!file) return;
     const verifiedSafety = lastSafetyExport || readStoredSafetyExport();
@@ -369,6 +414,13 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
           <b>Readable Road Ready JSON</b>
           <p>This second export is easier to inspect in chat and contains the normalized logbook/app records.</p>
           <button type="button" className="backup-secondary" onClick={exportBackup} disabled={busy}>2 · Export readable all-data JSON</button>
+        </section>
+
+        <section className="backup-actions-card">
+          <b>Move data to this device</b>
+          <p>Use the readable all-data JSON exported from your other iPhone or iPad. The app checks the file and shows the log/event counts before replacing this device's Road Ready data.</p>
+          <button type="button" className="backup-primary" onClick={() => transferFileInputRef.current?.click()} disabled={busy}>Import from another device</button>
+          <input ref={transferFileInputRef} type="file" accept="application/json,.json,.roadready" hidden onChange={event => importFromAnotherDevice(event.target.files?.[0])} />
         </section>
 
         <section className="backup-info-card">
