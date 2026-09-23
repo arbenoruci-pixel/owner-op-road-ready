@@ -106,6 +106,7 @@ steps.push('finalize-cropped-forms-v110401.mjs','test-duty-graph-continuity.mjs'
 steps.push('finalize-backup-save-v110402.mjs','v110402/backup-export.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-documents-export-v110403.mjs','v110403/audit-package.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-simple-documents-v110404.mjs','v110404/document-browser.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-team-import-v110405.mjs','verify-team-import-v110405.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

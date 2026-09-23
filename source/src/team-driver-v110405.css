@@ -1,0 +1,141 @@
+.team-driver-shell{
+  max-width:430px;
+  margin:0 auto;
+  background:#fff;
+  border-bottom:1px solid #e3e7ec;
+  position:relative;
+  z-index:55;
+}
+.team-driver-bar{
+  display:grid;
+  grid-template-columns:1fr 44px;
+  gap:8px;
+  align-items:center;
+  padding:calc(env(safe-area-inset-top) + 7px) 10px 7px;
+  background:#0d1b2a;
+}
+.team-driver-current{
+  min-width:0;
+  border:0;
+  background:transparent;
+  color:#fff;
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr) auto;
+  gap:9px;
+  align-items:center;
+  text-align:left;
+  padding:0;
+}
+.team-driver-avatar{
+  width:36px;
+  height:36px;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#e9f2ff;
+  color:#1164c0;
+  font-weight:900;
+  font-size:16px;
+}
+.team-driver-current span:nth-child(2){min-width:0;display:grid;gap:1px}
+.team-driver-current small{
+  color:#aebdcd;
+  font-size:9px;
+  letter-spacing:.8px;
+  font-weight:850;
+}
+.team-driver-current b{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:14px;
+  letter-spacing:.1px;
+}
+.team-driver-current em{
+  color:#c9d5e2;
+  font-size:11px;
+  font-style:normal;
+  font-weight:750;
+  white-space:nowrap;
+}
+.team-driver-toggle{
+  width:42px;
+  height:38px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:12px;
+  background:rgba(255,255,255,.08);
+  color:#fff;
+  font-size:20px;
+  font-weight:800;
+}
+.team-driver-panel{
+  position:absolute;
+  left:8px;
+  right:8px;
+  top:calc(100% - 2px);
+  padding:10px;
+  background:#fff;
+  border:1px solid #dfe4ea;
+  border-radius:0 0 16px 16px;
+  box-shadow:0 16px 32px rgba(15,23,42,.18);
+}
+.team-driver-list{display:grid;gap:7px}
+.team-driver-list>button{
+  width:100%;
+  min-height:48px;
+  display:grid;
+  grid-template-columns:34px 1fr auto;
+  gap:9px;
+  align-items:center;
+  text-align:left;
+  border:1px solid #e3e7ec;
+  border-radius:12px;
+  background:#fff;
+  padding:6px 9px;
+}
+.team-driver-list>button.active{
+  border-color:#8bbcf2;
+  background:#f1f7ff;
+}
+.team-driver-list>button>span{
+  width:32px;
+  height:32px;
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#edf2f7;
+  color:#334155;
+  font-weight:900;
+}
+.team-driver-list>button b{font-size:14px;color:#182334}
+.team-driver-list>button em{font-size:11px;color:#64748b;font-style:normal;font-weight:750}
+.team-driver-add{
+  display:grid;
+  grid-template-columns:1fr 76px;
+  gap:8px;
+  margin-top:10px;
+}
+.team-driver-add input{
+  min-width:0;
+  height:42px;
+  border:1px solid #d8dee6;
+  border-radius:11px;
+  padding:0 10px;
+  font-size:14px;
+}
+.team-driver-add button{
+  border:0;
+  border-radius:11px;
+  background:#1164c0;
+  color:#fff;
+  font-weight:850;
+}
+.team-driver-add button:disabled{opacity:.45}
+.team-driver-panel p{
+  margin:9px 2px 2px;
+  color:#667085;
+  font-size:11px;
+  line-height:1.35;
+}
