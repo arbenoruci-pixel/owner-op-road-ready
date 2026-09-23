@@ -86,7 +86,8 @@ patch(
     }
     const restored = normalizeState({
       ...imported,
-      view:'logs',
+      view:'logbook',
+      activeDay:localDayKey(),
       sheet:null,
       selectMode:false,
       selectedIds:[],
@@ -117,8 +118,8 @@ patch(
     const latestSourceDay = sourceDays[sourceDays.length - 1] || localDayKey();
     const restored = normalizeState({
       ...imported,
+      view:'logbook',
       activeDay: imported.activeDay || latestSourceDay,
-      view:'logs',
       sheet:null,
       selectMode:false,
       selectedIds:[],
@@ -175,8 +176,13 @@ patch(
 );
 patch(
   'source/src/app/App.jsx',
-  "      <DayLogScreen\n        state={state}",
-  "      <TeamDriverBar\n        state={state}\n        onAddDriver={addTeamDriverToLogbook}\n        onSwitchDriver={switchActiveTeamDriver}\n      />\n      <DayLogScreen\n        state={state}"
+  "      {updateBanner}\n      <LogbookHomeScreen",
+  "      {updateBanner}\n      <TeamDriverBar\n        state={state}\n        onAddDriver={addTeamDriverToLogbook}\n        onSwitchDriver={switchActiveTeamDriver}\n      />\n      <LogbookHomeScreen"
+);
+patch(
+  'source/src/app/App.jsx',
+  "      {updateBanner}{undoBar}\n      <DayLogScreen",
+  "      {updateBanner}{undoBar}\n      <TeamDriverBar\n        state={state}\n        onAddDriver={addTeamDriverToLogbook}\n        onSwitchDriver={switchActiveTeamDriver}\n      />\n      <DayLogScreen"
 );
 
 patch(
@@ -187,12 +193,11 @@ patch(
 patch(
   'source/src/modules/backup/fullBackupV105.js',
   `export function compactRoadReadyStateV105(state = {}) {
-  return normalizeRoadReadyState({
+  const normalized = normalizeRoadReadyState({
     ...state,`,
   `export function compactRoadReadyStateV105(state = {}) {
-  const sealedState = sealActiveDriverLogbook(state);
-  return normalizeRoadReadyState({
-    ...sealedState,`
+  const normalized = normalizeRoadReadyState({
+    ...sealActiveDriverLogbook(state),`
 );
 
 patch(
