@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import '../../team-driver-v110405.css';
 import { teamDriverSummary } from '../../core/team/teamLogbook.js';
 
 export default function TeamDriverBar({ state, onAddDriver, onSwitchDriver }) {
