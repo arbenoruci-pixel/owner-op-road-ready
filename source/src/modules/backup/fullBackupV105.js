@@ -1,5 +1,6 @@
 import { normalizeRoadReadyState } from '../../core/routes/routeNormalization.js';
 import { normalizeBusinessStore } from '../business/businessStore.js';
+import { sealActiveDriverLogbook } from '../../core/team/teamLogbook.js';
 
 export const FULL_BACKUP_KIND_V105 = 'owner_op_road_ready_full_backup';
 export const FULL_BACKUP_SCHEMA_V105 = 2;
@@ -45,8 +46,9 @@ function statusesForRows(rows = []) {
 }
 
 export function compactRoadReadyStateV105(state = {}) {
+  const sealedState = sealActiveDriverLogbook(state);
   return normalizeRoadReadyState({
-    ...state,
+    ...sealedState,
     sheet:null,
     gpsPanelOpen:false,
     selectMode:false,
