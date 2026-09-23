@@ -62,6 +62,7 @@ jobs:
           done
           # Check the changed BOL/source flow first so a failure produces
           # diagnostics immediately. The complete suite still gates success.
+          node scripts/v110404/browser.mjs
           node scripts/reader-ai/browser.mjs
           node scripts/v110394/browser-bol-form.mjs
           node scripts/v110393/browser-bol-source.mjs
@@ -84,6 +85,7 @@ jobs:
         with:
           name: owned-reader-evidence
           path: |
+            browser-test-results/simple-documents-v110404/
             browser-test-results/fullscreen-reader-v110369/
             browser-test-results/owned-reader/
             browser-test-results/reader-evidence-v110373/

@@ -22,4 +22,30 @@ const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));locks.rel
 fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 
 for(const [input,output] of [['LoadFolders.jsx','LoadFoldersV10969.jsx'],['documentBrowser.js','documentBrowserV110404.js'],['documentsBrowser.css','documentsBrowserV110404.css']])fs.copyFileSync('scripts/v110404/'+input,'source/src/modules/owneros/'+output);
+
+// These tests follow the same saved-file entry point as a driver. Keep all
+// original-byte, sharing, offline-cache and rereading assertions intact.
+function patch(path,before,after,count=1){
+  const source=fs.readFileSync(path,'utf8');
+  if(source.includes(after))return;
+  if(source.split(before).length!==count+1)throw new Error('Simple documents anchor changed: '+path);
+  fs.writeFileSync(path,source.replaceAll(before,after));
+}
+for(const path of ['scripts/browser-owned-reader.mjs','scripts/browser-fullscreen-reader-v110369.mjs','scripts/v110384/browser-rows.mjs']){
+  const before="await page.getByRole('button',{name:/^Documents/}).first().click();";
+  patch(path,before,before+"\n    await page.getByRole('button',{name:'Browse all saved files',exact:true}).click();",path.includes('owned-reader')?1:2);
+}
+patch('scripts/browser-saved-documents-v110344.mjs',
+  "await page.getByRole('heading',{name:'Recent documents',exact:true}).waitFor();",
+  "await page.getByText('Documents to organize (42)',{exact:true}).waitFor();\n  await page.getByRole('button',{name:'Browse all saved files',exact:true}).click();\n  await page.getByRole('heading',{name:'Recent documents',exact:true}).waitFor();");
+patch('scripts/browser-saved-documents-v110344.mjs',
+  "assert.match(await page.locator('.load-folder-review-v10974').innerText(),/42 documents need identity review/);",
+  "assert.equal(await page.getByRole('heading',{name:'All saved files',exact:true}).count(),1);");
+patch('scripts/browser-saved-documents-v110344.mjs',
+  "const wizard=page.locator('.load-folder-review-v10974');\n    await wizard.locator(':scope>button').click();",
+  "await page.getByRole('button',{name:'‹ Back to weeks',exact:true}).click();\n    const wizard=page.locator('.rr-docs-options').filter({has:page.getByText('Documents to organize (42)',{exact:true})});\n    await wizard.locator('summary').click();");
+patch('scripts/browser-saved-documents-v110344.mjs',
+  "for(const button of await wizard.locator('.load-folder-actions-v10969 button').all())await fit(page,button);\n      assert.equal(await wizard.locator('.load-folder-actions-v10969').evaluate(el=>getComputedStyle(el).position),'static');\n      await fit(page,wizard.locator('article button'));",
+  "assert.equal(await wizard.locator('.rr-docs-file').count(),42,'every unassigned original remains accessible');\n      await fit(page,wizard.locator('.rr-docs-file').first());\n      await fit(page,wizard.locator('.rr-docs-file').filter({hasText:'very-long-original-file-name'}));");
+for(const path of ['source/src/modules/scan/SmartScanSheetV105.jsx','scripts/browser-scanner-workflow-v110328.mjs'])patch(path,'Documents → Recent documents','Documents → Browse all saved files');
 console.log('PASS — 110.4.4 simple document folders installed');
