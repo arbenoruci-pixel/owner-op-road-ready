@@ -120,7 +120,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),businessBefore);
     assert.deepEqual(protectedData(await snapshot(page)),protectedBefore);
     assert.deepEqual(errors,[]);reports.push({browser:name,passed:true,widths:[320,390,430],exactOriginal:true});
-  }catch(error){await page.screenshot({path:`${output}/${name}-failure.png`}).catch(()=>{});fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify({error:error.stack,pageErrors:errors,body:await page.locator('body').innerText()},null,2));throw error;}
+  }catch(error){console.error('Document browser failure',JSON.stringify({error:error.message,pageErrors:errors,body:await page.locator('body').innerText()}));await page.screenshot({path:`${output}/${name}-failure.png`}).catch(()=>{});fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify({error:error.stack,pageErrors:errors,body:await page.locator('body').innerText()},null,2));throw error;}
   finally{await browser.close();}
 }
 fs.writeFileSync(`${output}/report.json`,JSON.stringify(reports,null,2));console.log(JSON.stringify(reports));
