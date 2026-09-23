@@ -290,10 +290,4 @@ patch(
         </section>`
 );
 
-patch(
-  'app/layout.jsx',
-  "import '../source/src/road-ready-2026.css';",
-  "import '../source/src/road-ready-2026.css';\nimport '../source/src/team-driver-v110405.css';"
-);
-
 console.log('PASS — 110.4.5 team logbook and phone→iPad import installed');
