@@ -74,8 +74,8 @@ patch(
 );
 patch(
   'source/src/app/App.jsx',
-  "  const routeNormalized = normalizeRoadReadyState(normalized);\n  return reconcilePreTripInspections(routeNormalized, Object.keys(routeNormalized.eventsByDay || eventsByDay));",
-  "  const routeNormalized = normalizeRoadReadyState(normalized);\n  const teamNormalized = normalizeTeamDriverState(routeNormalized, today);\n  return reconcilePreTripInspections(teamNormalized, Object.keys(teamNormalized.eventsByDay || eventsByDay));"
+  "  const routeNormalized = normalizeRoadReadyState(normalized);",
+  "  const routeNormalized = normalizeRoadReadyState(normalizeTeamDriverState(normalized, today));"
 );
 patch(
   'source/src/app/App.jsx',
