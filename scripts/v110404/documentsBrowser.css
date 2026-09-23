@@ -60,6 +60,13 @@
 .rr-docs-export p{flex-basis:100%}
 .rr-docs-search{display:grid;gap:7px;font-size:14px;font-weight:600}
 .rr-docs-search input{width:100%;min-height:44px;border:1px solid #b7c9dc;border-radius:9px;padding:11px;background:#fff;color:var(--rr-ink);font-size:16px}
+.rr-docs-browser .rr-docs-organize{display:block;margin:0 12px 10px auto;border:1px solid #b7c9dc;border-radius:8px;background:#fff;color:#2858a0;min-height:44px;padding:8px 14px;font-size:14px}
+.rr-docs-editor{display:grid;gap:14px;padding:16px;border:1px solid var(--rr-line);border-radius:12px;background:#fff;overflow-wrap:anywhere}
+.rr-docs-editor h3{scroll-margin-top:160px}
+.rr-docs-editor>label{display:grid;gap:5px;font-size:14px;font-weight:650}
+.rr-docs-editor :is(input,select){width:100%;max-width:100%;min-height:44px;border:1px solid #b7c9dc;border-radius:8px;padding:10px;background:#fff;color:var(--rr-ink);font:inherit;font-size:16px}
+.rr-docs-editor>.rr-docs-checkbox{display:flex;align-items:center;gap:10px}
+.rr-docs-editor .rr-docs-checkbox input{width:22px;height:22px;min-height:22px;flex:none}
 .rr-docs-browser .load-folder-detail-v10969{display:grid;gap:12px;min-width:0;max-width:100%;font-size:14px}
 .rr-docs-browser .load-folder-detail-v10969 :is(article,section,details){min-width:0;max-width:100%;overflow-wrap:anywhere}
 .rr-docs-browser .load-folder-detail-v10969 button{min-height:44px;white-space:normal}

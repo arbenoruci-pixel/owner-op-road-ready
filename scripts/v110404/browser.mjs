@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {chromium,webkit} from 'playwright';
-import {baseState,seed,setupRoutes,simplePdf,snapshot,protectedData} from '../v110328/browserFixture.mjs';
+import {baseState,seed,setupRoutes,simplePdf} from '../v110328/browserFixture.mjs';
 
 const output='browser-test-results/simple-documents-v110404';
 fs.mkdirSync(output,{recursive:true});
@@ -13,9 +13,15 @@ const documents=[
   {id:'lumper',type:'lumper_receipt',file:'unloading-receipt.pdf'},
   {id:'fuel',type:'fuel_receipt',file:'diesel-receipt-with-a-very-long-original-filename-'.repeat(4)+'.pdf'},
   {id:'missing',type:'other',file:'unavailable-original.pdf'},
+  {id:'unassigned',type:'other',file:'unassigned-delivery.pdf'},
 ];
 const original=Object.fromEntries(documents.map(d=>[d.id,simplePdf('SYNTHETIC ORIGINAL '+d.id)]));
 const reports=[];
+const protectedData=state=>Object.fromEntries(['eventsByDay','signatureByDay','certifyStatus','inspectionByDay','formByDay'].map(key=>[key,state[key]]));
+async function snapshot(page){return page.evaluate(()=>new Promise((resolve,reject)=>{
+  const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onerror=()=>reject(request.error);
+  request.onsuccess=()=>{const db=request.result,tx=db.transaction('app_snapshots','readonly'),read=tx.objectStore('app_snapshots').get('owner-op-road-ready-state-v1');tx.oncomplete=()=>{db.close();resolve(read.result?.state);};tx.onerror=()=>reject(tx.error);};
+}));}
 async function records(page){return page.evaluate(()=>new Promise((resolve,reject)=>{
   const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onerror=()=>reject(request.error);
   request.onsuccess=()=>{const db=request.result,tx=db.transaction('documents_local','readonly'),read=tx.objectStore('documents_local').getAll();tx.oncomplete=()=>{db.close();resolve(read.result);};tx.onerror=()=>reject(tx.error);};
@@ -35,7 +41,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     await page.evaluate(docs=>new Promise((resolve,reject)=>{
       const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onerror=()=>reject(request.error);
       request.onsuccess=()=>{const db=request.result,tx=db.transaction(['documents_local','document_blobs'],'readwrite');
-        for(const doc of docs)tx.objectStore('documents_local').put({local_id:doc.id+'-local',client_document_id:doc.id+'-client',load_no:'38324346',document_type:doc.type,type:doc.type,document_date:'2026-09-15',mime_type:'application/pdf',original_file_name:doc.file,created_at:'2026-09-23T01:00:00Z',stopSequence:doc.stop||0,extracted:{type:doc.type,loadNo:'38324346',documentDate:'2026-09-15'}});
+        for(const doc of docs){const loadNo=doc.id==='unassigned'?'':'38324346';tx.objectStore('documents_local').put({local_id:doc.id+'-local',client_document_id:doc.id+'-client',load_no:loadNo,document_type:doc.type,type:doc.type,document_date:'2026-09-15',mime_type:'application/pdf',original_file_name:doc.file,created_at:'2026-09-23T01:00:00Z',stopSequence:doc.stop||0,extracted:{type:doc.type,loadNo,documentDate:'2026-09-15'}});}
         tx.objectStore('document_blobs').delete('missing-blob');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);
       };
     }),documents);
@@ -87,6 +93,32 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     assert.deepEqual(await records(page),before,'browsing does not change imported records');
     assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),businessBefore);
     assert.deepEqual(protectedData(await snapshot(page)),protectedBefore,'document browsing preserves logbook data');
+    await docs.getByRole('button',{name:'‹ Back to weeks',exact:true}).click();
+    await docs.getByText('Documents to organize (1)',{exact:true}).click();
+    await docs.getByRole('button',{name:'Organize unassigned-delivery.pdf',exact:true}).click();
+    const editor=docs.getByRole('form',{name:'Organize document',exact:true});
+    await editor.getByLabel('Load',{exact:true}).selectOption('38324346');
+    await editor.getByLabel('Document type',{exact:true}).selectOption('pod');
+    await editor.getByLabel('Stop number (optional)',{exact:true}).fill('2');
+    await editor.getByRole('button',{name:'Cancel',exact:true}).click();
+    assert.equal(await page.evaluate(()=>localStorage.getItem('road_ready_repair_overlay_v1')),null,'Cancel does not write an assignment');
+    await docs.getByRole('button',{name:'Organize unassigned-delivery.pdf',exact:true}).click();
+    await editor.getByLabel('Load',{exact:true}).selectOption('38324346');
+    await editor.getByLabel('Document type',{exact:true}).selectOption('pod');
+    await editor.getByLabel('Stop number (optional)',{exact:true}).fill('2');
+    await fits(page,editor);
+    await editor.getByRole('button',{name:'Save document details',exact:true}).click();
+    await docs.getByRole('status').filter({hasText:'Document saved under Load 38324346.'}).waitFor();
+    await docs.getByRole('button',{name:/Sep 14.*Sep 20, 2026/}).click();
+    await docs.getByRole('button',{name:/Load 38324346/}).click();
+    assert.equal(await docs.getByRole('button',{name:/^Open POD · Stop 2.*unassigned-delivery/}).count(),1,'confirmed assignment moves the file into its load');
+    assert.deepEqual(await records(page),before,'organizing changes only the reversible assignment, never originals or OCR');
+    await docs.getByRole('button',{name:'Undo last document change',exact:true}).click();
+    await docs.getByRole('button',{name:'Weeks',exact:true}).click();
+    await docs.getByText('Documents to organize (1)',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>localStorage.getItem('road_ready_repair_overlay_v1')),null,'Undo restores the original assignment');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),businessBefore);
+    assert.deepEqual(protectedData(await snapshot(page)),protectedBefore);
     assert.deepEqual(errors,[]);reports.push({browser:name,passed:true,widths:[320,390,430],exactOriginal:true});
   }catch(error){await page.screenshot({path:`${output}/${name}-failure.png`}).catch(()=>{});fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify({error:error.stack,pageErrors:errors,body:await page.locator('body').innerText()},null,2));throw error;}
   finally{await browser.close();}

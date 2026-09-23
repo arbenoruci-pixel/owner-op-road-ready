@@ -21,5 +21,6 @@ test('hide weeks containing only operational records; retain empty-load weeks wi
 test('unsupported types remain accessible; dates never fall back to import timestamps',()=>{
  assert.equal(documentGroups([{id:'bill',type:'bill_of_sale',title:'Trailer sale'}])[0].documents.length,1);
  assert.equal(documentDescription({created_at:'2026-09-23T01:00:00Z'}),'');
+ assert.equal(documentDescription({created_at:'2026-09-23T01:00:00Z',vaultDate:'2026-09-23'}),'','normalized vault records must not present import dates');
  assert.equal(documentDescription({document_date:'2026-02-30'}),'');
 });
