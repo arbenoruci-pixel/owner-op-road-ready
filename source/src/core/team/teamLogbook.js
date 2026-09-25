@@ -14,6 +14,7 @@ const DRIVER_LOG_FIELDS = [
   'gpsTrip',
   'manualDrivingSession',
   'dutySafetyBackupByDay',
+  'formByDay',
 ];
 
 function cleanName(value = '') {
@@ -51,6 +52,7 @@ function defaultLogbook(day = '') {
     gpsTrip:null,
     manualDrivingSession:null,
     dutySafetyBackupByDay:{},
+    formByDay:{},
   };
 }
 
@@ -99,7 +101,13 @@ export function normalizeTeamDriverState(state = {}, today = '') {
   const teamLogbooksByDriverId = state.teamLogbooksByDriverId && typeof state.teamLogbooksByDriverId === 'object'
     ? { ...state.teamLogbooksByDriverId }
     : {};
-  const coDrivers = teamDrivers.filter(driver => driver.id !== activeDriver.id).map(driver => driver.name).join(', ');
+  // Preserve the old free-text field verbatim; commas are not a safe driver-ID migration.
+  const legacyCoDrivers = typeof state.legacyCoDrivers === 'string'
+    ? state.legacyCoDrivers
+    : (!Array.isArray(state.teamDrivers) || !state.teamDrivers.length ? String(state.coDrivers || '') : '');
+  const names = teamDrivers.filter(driver => driver.id !== activeDriver.id).map(driver => driver.name);
+  if (legacyCoDrivers && !teamDrivers.some(driver => cleanName(driver.name) === cleanName(legacyCoDrivers))) names.push(legacyCoDrivers);
+  const coDrivers = names.join(', ');
 
   return {
     ...state,
@@ -108,8 +116,30 @@ export function normalizeTeamDriverState(state = {}, today = '') {
     activeDriverId:activeDriver.id,
     teamLogbooksByDriverId,
     driverProfile:{ ...(state.driverProfile || {}), name:activeDriver.name },
+    legacyCoDrivers,
     coDrivers,
   };
+}
+
+// Profile changes have one authority. Signed/daily Form names are not rewritten.
+export function updateActiveTeamDriverName(state = {}, name = '') {
+  const normalized = normalizeTeamDriverState(state);
+  const clean = cleanName(name);
+  if (!clean) return normalized;
+  return normalizeTeamDriverState({
+    ...normalized,
+    teamDrivers:normalized.teamDrivers.map(driver => driver.id === normalized.activeDriverId
+      ? { ...driver, name:clean, updatedAt:Date.now() } : driver),
+    driverProfile:{ ...normalized.driverProfile, name:clean },
+  });
+}
+
+// Top-level fields are authoritative for the active driver; its sealed copy may be stale.
+export function driverLogbookEntries(state = {}) {
+  const activeId = String(state.activeDriverId || state.teamDrivers?.[0]?.id || PRIMARY_DRIVER_ID);
+  const saved = state.teamLogbooksByDriverId || {};
+  const active = DRIVER_LOG_FIELDS.some(field => state[field] !== undefined) ? state : (saved[activeId] || state);
+  return [[activeId, active], ...Object.entries(saved).filter(([id, value]) => id !== activeId && value && typeof value === 'object')];
 }
 
 export function sealActiveDriverLogbook(state = {}, today = '') {
@@ -133,7 +163,7 @@ export function addTeamDriver(state = {}, name = '', today = '') {
 
   const id = driverId(clean);
   const now = Date.now();
-  return {
+  return normalizeTeamDriverState({
     ...normalized,
     teamDrivers:[
       ...normalized.teamDrivers,
@@ -146,7 +176,7 @@ export function addTeamDriver(state = {}, name = '', today = '') {
     coDrivers:[...normalized.teamDrivers.map(driver => driver.name), clean]
       .filter(nameValue => nameValue !== normalized.driverProfile?.name)
       .join(', '),
-  };
+  });
 }
 
 export function switchTeamDriver(state = {}, targetDriverId = '', today = '') {
@@ -157,7 +187,7 @@ export function switchTeamDriver(state = {}, targetDriverId = '', today = '') {
   const savedTarget = normalized.teamLogbooksByDriverId?.[target.id] || defaultLogbook(today);
   const next = {
     ...normalized,
-    ...clonePlain(savedTarget, defaultLogbook(today)),
+    ...snapshotDriverLogbook(savedTarget),
     activeDriverId:target.id,
     driverProfile:{ ...(normalized.driverProfile || {}), name:target.name },
     coDrivers:normalized.teamDrivers.filter(driver => driver.id !== target.id).map(driver => driver.name).join(', '),
@@ -167,7 +197,7 @@ export function switchTeamDriver(state = {}, targetDriverId = '', today = '') {
     sheet:null,
     gpsPanelOpen:false,
   };
-  return next;
+  return normalizeTeamDriverState(next, today);
 }
 
 export function teamDriverSummary(state = {}) {
@@ -190,18 +220,61 @@ function realImportedEvents(rows = []) {
 }
 
 export function importedLogbookIntegrity(source = {}, restored = {}) {
-  const sourceDays = Object.entries(source.eventsByDay || {})
-    .map(([day, rows]) => [day, realImportedEvents(rows).length])
-    .filter(([, count]) => count > 0);
   const missing = [];
-  for (const [day, count] of sourceDays) {
-    const restoredCount = realImportedEvents(restored.eventsByDay?.[day]).length;
-    if (restoredCount < count) missing.push({ day, sourceCount:count, restoredCount });
+  let sourceEventDays = 0;
+  let sourceEvents = 0;
+  const restoredBooks = new Map(driverLogbookEntries(restored));
+  const restoredIds = new Set((restored.teamDrivers || []).map(driver => driver.id));
+  for (const driver of source.teamDrivers || []) {
+    if (!restoredIds.has(driver.id)) missing.push({ driverId:driver.id, reason:'driver missing' });
+  }
+  for (const [driverId, book] of driverLogbookEntries(source)) {
+    const target = restoredBooks.get(driverId);
+    if (!target) missing.push({ driverId, reason:'logbook missing' });
+    for (const [day, rows] of Object.entries(book.eventsByDay || {})) {
+      const expected = realImportedEvents(rows);
+      if (!expected.length) continue;
+      sourceEventDays += 1;
+      sourceEvents += expected.length;
+      const candidates = [...realImportedEvents(target?.eventsByDay?.[day])];
+      for (const event of expected) {
+        const index = candidates.findIndex(row => importedEventMatches(event, row));
+        if (index < 0) missing.push({ driverId, day, eventId:event.id || '', reason:'event missing or changed', sourceCount:expected.length, restoredCount:candidates.length });
+        else candidates.splice(index, 1);
+      }
+    }
+    for (const field of ['signatureByDay','inspectionByDay','formByDay','dutySafetyBackupByDay']) {
+      for (const [day, value] of Object.entries(book[field] || {})) {
+        if (!containsRecordedValue(value, target?.[field]?.[day])) missing.push({ driverId, day, field, reason:'record missing or changed' });
+      }
+    }
+    if (book.driverSignature && !containsRecordedValue(book.driverSignature, target?.driverSignature)) {
+      missing.push({ driverId, field:'driverSignature', reason:'signature missing or changed' });
+    }
   }
   return {
     ok:missing.length === 0,
-    sourceEventDays:sourceDays.length,
-    sourceEvents:sourceDays.reduce((sum, [, count]) => sum + count, 0),
+    sourceEventDays,
+    sourceEvents,
     missing,
   };
+}
+
+function containsRecordedValue(expected, actual) {
+  if (expected === undefined) return true;
+  if (expected === null || typeof expected !== 'object') return Object.is(expected, actual);
+  if (!actual || typeof actual !== 'object' || Array.isArray(expected) !== Array.isArray(actual)) return false;
+  if (Array.isArray(expected) && expected.length !== actual.length) return false;
+  return Object.entries(expected).every(([key, value]) => containsRecordedValue(value, actual[key]));
+}
+
+function importedEventMatches(expected, actual) {
+  // Match recorded identity and duty evidence, not just a day's row count.
+  const fields = ['id','status','startMin','endMin','city','state','note','description','source',
+    'shippingDocs','loadNo','bol','po','truck','trailer','container','chassis','manualMiles','miles','odometer'];
+  return fields.every(key => {
+    if (expected[key] === undefined) return true;
+    if (['startMin','endMin','manualMiles','miles','odometer'].includes(key)) return Number(expected[key]) === Number(actual[key]);
+    return containsRecordedValue(expected[key], actual[key]);
+  });
 }
