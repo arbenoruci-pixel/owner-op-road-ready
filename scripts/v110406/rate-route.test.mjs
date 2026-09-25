@@ -61,6 +61,21 @@ test('reads locations on the same line as their role labels', () => {
   assert.equal(fields.destination, 'Portland, ME');
 });
 
+test('recovers comma-less postal addresses from invalid cached routes', () => {
+  const text = document.replace('MADISON, WI', 'MADISON WI').replace('PORTLAND, ME', 'PORTLAND ME');
+  const fields = analyze(text, { origin: 'INSTRUCTIONS:', destination: 'Time:' });
+  assert.equal(fields.origin, 'MADISON, WI');
+  assert.equal(fields.destination, 'PORTLAND, ME');
+});
+
+test('reads inline comma-less postal locations without treating company CO as a state', () => {
+  const fields = analyze('RATE CONFIRMATION\nLoad # 987654321\nOrigin: Madison WI 53703\nDestination: Portland ME 04101');
+  assert.equal(fields.origin, 'Madison, WI');
+  assert.equal(fields.destination, 'Portland, ME');
+  const missing = analyze(document.replace('EXAMPLE SHIPPER', 'EXAMPLE CO').replace('MADISON, WI 53703\n', ''));
+  assert.equal(missing.origin || '', '');
+});
+
 test('does not borrow a destination when the pickup address is missing', () => {
   const fields = analyze(document.replace('MADISON, WI 53703\n', ''));
   assert.equal(fields.origin || '', '');
