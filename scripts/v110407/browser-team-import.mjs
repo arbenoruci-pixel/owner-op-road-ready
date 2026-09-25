@@ -9,7 +9,7 @@ import { buildFullBackupPayloadV105 } from '../../source/src/modules/backup/full
 const output = 'browser-test-results/team-import-v110407';
 fs.mkdirSync(output,{recursive:true});
 const day='2026-09-23';
-const empty=()=>({...baseState(),activeDay:day,eventsByDay:{},signatureByDay:{},inspectionByDay:{},formByDay:{},certifyStatus:{},routeLegsByDay:{},loadInfo:{},loadGuidesById:{},testInstructionStore:{}});
+const empty=()=>({...baseState(),view:'logbook',activeDay:day,eventsByDay:{},signatureByDay:{},inspectionByDay:{},formByDay:{},certifyStatus:{},routeLegsByDay:{},loadInfo:{},loadGuidesById:{},testInstructionStore:{}});
 const a={...empty(),driverProfile:{name:'Alpha Driver'},coDrivers:'Legacy Partner',eventsByDay:{[day]:[
   {id:'a-off',status:'OFF',startMin:0,endMin:600,city:'Lima',state:'IN',note:'Off Duty',source:'manual'},
   {id:'a-on',status:'ON',startMin:600,endMin:630,city:'Lima',state:'IN',note:'Pre-trip inspection',source:'manual'},
@@ -76,6 +76,24 @@ for(const[name,engine]of engines){
       await page.getByRole('status').filter({hasText:'Create and save a verified Device Safety Backup'}).waitFor();
       assert.deepEqual((await stored(page)).teamLogbooksByDriverId,before.teamLogbooksByDriverId);
       assert.equal((await stored(page))._restoredBackupMeta,undefined);
+    });
+    await scenario('profile-name-persists',async page=>{
+      const today='2026-09-25';
+      const profileTeam=addTeamDriver({...empty(),activeDay:today,eventsByDay:{[today]:[{id:'name-off',status:'OFF',startMin:0,endMin:600,city:'Lima',state:'IN',source:'manual',note:'Off Duty'}]}},'Profile Partner',today);
+      await seed(page,profileTeam);
+      await page.getByRole('button',{name:'Open logbook',exact:true}).click();
+      await page.getByRole('button',{name:'Form',exact:true}).click();
+      page.once('dialog',dialog=>dialog.accept('Updated Driver'));
+      await page.locator('.road-paper-form').getByRole('button',{name:/^Driver /}).click();
+      await waitStored(page,s=>s?.teamDrivers?.find(driver=>driver.id===s.activeDriverId)?.name==='Updated Driver');
+      await page.reload();await page.locator('.team-driver-shell').waitFor();
+      assert.equal((await stored(page)).driverProfile.name,'Updated Driver');
+      await page.getByRole('button',{name:'Open team drivers',exact:true}).click();
+      await page.locator('.team-driver-list').getByRole('button',{name:/Profile Partner/}).click();
+      await waitStored(page,s=>s?.driverProfile?.name==='Profile Partner');
+      await page.getByRole('button',{name:'Open team drivers',exact:true}).click();
+      await page.locator('.team-driver-list').getByRole('button',{name:/Updated Driver/}).click();
+      assert.equal((await waitStored(page,s=>s?.driverProfile?.name==='Updated Driver')).teamDrivers[0].name,'Updated Driver');
     });
     await scenario('rescan-catches-late-business-record',async page=>{
       await seed(page,empty());await openBackup(page);

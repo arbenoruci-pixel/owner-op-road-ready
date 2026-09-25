@@ -137,6 +137,9 @@ replaceFunction(backup, '  async function importFile(file) {', '\n  return (', `
 `);
 patch(backup, '<p>{deviceHasUserData', "<p>{safetyError ? 'The device scan could not be completed. Import stays locked until the scan succeeds.' : !safetyInventory ? 'Checking all drivers and local records…' : deviceHasUserData");
 patch(backup, '>Import Road Ready backup</button>', '>Import from another device</button>');
+patch(backup,
+  '          <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy || !restoreUnlocked}>Import from another device</button>',
+  '          <button type="button" className="backup-secondary" onClick={scanDevice} disabled={busy}>Scan again</button>\n          <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy || !restoreUnlocked}>Import from another device</button>');
 patch(backup, "`${summary.logDays || 0} total log day(s)`,", "`${summary.driverCount || 1} driver logbook(s)`,\n    `${summary.logDays || 0} total log day(s)`,");
 
 const fullBackup = 'source/src/modules/backup/fullBackupV105.js';
