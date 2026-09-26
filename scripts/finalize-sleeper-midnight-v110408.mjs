@@ -19,20 +19,22 @@ patch(display,
   '  const raw = realDisplayBase(eventsByDay?.[day] || []);',
   '  const raw = historicalStatusTailV110317(realDisplayBase(eventsByDay?.[day] || []), !!day && day < today);');
 
-// Keep internal gaps and manual boundaries exact while independently projecting
-// the final open status. Never borrow a different row's computed end.
-patch('source/src/modules/logbook/dutyViewV110212.js',
+// Complete only a past home-terminal day. Apply the rule to exact rows so a
+// normalized same-status row cannot hide a real gap or lose the final row ID.
+const dutyView = 'source/src/modules/logbook/dutyViewV110212.js';
+patch(dutyView,
+  "import {confirmedDrivingDayView} from './drivingDayViewV110372.js';",
+  "import {confirmedDrivingDayView} from './drivingDayViewV110372.js';\nimport { historicalStatusTailV110317 } from '../../core/timeline/historicalStatusTailV110317.js';");
+patch(dutyView,
   '  exactEvents=confirmedDrivingDayView(exactEvents,context);',
   `  exactEvents=confirmedDrivingDayView(exactEvents,context);
-  const recordedTail=exactEvents.at(-1), projectedTail=continuousEvents.at(-1);
-  if(recordedTail?.source==='live_status' && !recordedTail.isLive && !recordedTail.paperLogEndV110315
-    && ['OFF','SB','ON'].includes(recordedTail.status)
-    && projectedTail?.id===recordedTail.id && projectedTail.status===recordedTail.status
-    && projectedTail.startMin===recordedTail.startMin
-    && Number.isInteger(projectedTail.endMin) && projectedTail.endMin>recordedTail.endMin
-    && projectedTail.endMin===1440) {
-    exactEvents=[...exactEvents.slice(0,-1),{...recordedTail,endMin:projectedTail.endMin}];
+  if(context.day && context.clock?.day && context.day<context.clock.day) {
+    const completed=historicalStatusTailV110317(exactEvents,true);
+    if(completed.at(-1)?.endMin!==exactEvents.at(-1)?.endMin) exactEvents=completed;
   }`);
+patch('source/src/modules/logbook/archiveDayV1103.js',
+  'dutyViewEvents(exact,continuous,{eventsByDay:state.eventsByDay,day})',
+  'dutyViewEvents(exact,continuous,{eventsByDay:state.eventsByDay,day,clock})');
 
 const VERSION = '110.4.8', BUILD = 'v110408-sleeper-midnight', stamp = new Date().toISOString();
 for (const path of ['release-version.json', 'public/app-version.json']) {

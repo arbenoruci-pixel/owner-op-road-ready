@@ -38,11 +38,25 @@ function visible(state, selectedDay = day, instant = at) {
     displayEventsForDayFromState(state.eventsByDay, selectedDay, {
       today:clock.day, nowMinute:clock.minute, currentStatus:state.currentStatus,
     }),
-    {day:selectedDay, eventsByDay:state.eventsByDay},
+    {day:selectedDay, eventsByDay:state.eventsByDay, clock},
   );
 }
 let passed = 0;
 const test = (label, run) => { run(); passed++; console.log('PASS — ' + label); };
+for (const kind of ['gap', 'overlap']) {
+  for (const status of ['SB', 'OFF', 'ON']) test(`${status} midnight tail preserves an earlier same-status ${kind}`, () => {
+    const state = fixture(kind, status), before = structuredClone(state);
+    state.eventsByDay[day][1].status = status;
+    before.eventsByDay[day][1].status = status;
+    const result = visible(state);
+    assert.deepEqual(result.slice(0,-1), state.eventsByDay[day].slice(0,-1));
+    assert.equal(result.at(-1).id, 'rest');
+    assert.equal(result.at(-1).startMin, 1320);
+    assert.equal(result.at(-1).endMin, 1440);
+    assert.deepEqual(readArchiveLogbookDay(state, day, at), result);
+    assert.deepEqual(state, before);
+  });
+}
 for (const kind of ['manual-end', 'gap', 'overlap']) {
   for (const status of ['SB', 'OFF', 'ON']) test(`${status} reaches midnight despite an earlier ${kind}`, () => {
     const state = fixture(kind, status), before = structuredClone(state);
@@ -84,9 +98,9 @@ test('an earlier explicit End still bounds that row before midnight', () => {
   assert.equal(result[1].endMin, 1320);
   assert.equal(result.at(-1).endMin, 1425);
 });
-test('a mismatched display tail cannot extend the recorded event', () => {
+test('a display tail cannot extend a day without a past home-terminal clock', () => {
   const exact = fixture().eventsByDay[day];
-  for (const patch of [{id:'other'}, {status:'OFF'}, {startMin:1319}, {endMin:1441}]) {
+  for (const patch of [{}, {id:'other'}, {status:'OFF'}, {startMin:1319}, {endMin:1441}]) {
     const continuous = [...exact.slice(0, -1), {...exact.at(-1), endMin:1440, ...patch}];
     assert.equal(dutyViewEvents(exact, continuous, {day}).at(-1).endMin, 1321);
   }
