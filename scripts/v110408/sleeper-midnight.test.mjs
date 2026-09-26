@@ -91,6 +91,17 @@ test('a mismatched display tail cannot extend the recorded event', () => {
     assert.equal(dutyViewEvents(exact, continuous, {day}).at(-1).endMin, 1321);
   }
 });
+test('a just-started live ON row stays at Now instead of projecting its future sentinel minute', () => {
+  const state = {activeDay:today, homeTerminalTimeZone:'America/Chicago', currentStatus:'ON', eventsByDay:{[today]:[
+    row('rest', 'SB', 0, 420),
+    row('pretrip', 'ON', 420, 435, {note:'Pre-trip inspection'}),
+    row('pickup', 'ON', 435, 436, {note:'Pickup / Loading', loadDetailsExplicit:true}),
+  ]}};
+  const exact = projectLogbookEvents(state, today, at);
+  assert.equal(exact.at(-1).isLive, true);
+  assert.equal(exact.at(-1).endMin, 435);
+  assert.deepEqual(visible(state, today), exact, 'The current-day Now projection retains its zero-minute live row');
+});
 test('team switching and backup export retain the same original Sleeper evidence', () => {
   const state = fixture(), team = addTeamDriver(state, 'Beta', today);
   const away = switchTeamDriver(team, team.teamDrivers[1].id, today);

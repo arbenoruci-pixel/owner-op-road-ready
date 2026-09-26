@@ -25,12 +25,12 @@ patch('source/src/modules/logbook/dutyViewV110212.js',
   '  exactEvents=confirmedDrivingDayView(exactEvents,context);',
   `  exactEvents=confirmedDrivingDayView(exactEvents,context);
   const recordedTail=exactEvents.at(-1), projectedTail=continuousEvents.at(-1);
-  if(recordedTail?.source==='live_status' && !recordedTail.paperLogEndV110315
+  if(recordedTail?.source==='live_status' && !recordedTail.isLive && !recordedTail.paperLogEndV110315
     && ['OFF','SB','ON'].includes(recordedTail.status)
     && projectedTail?.id===recordedTail.id && projectedTail.status===recordedTail.status
     && projectedTail.startMin===recordedTail.startMin
     && Number.isInteger(projectedTail.endMin) && projectedTail.endMin>recordedTail.endMin
-    && projectedTail.endMin<=1440) {
+    && projectedTail.endMin===1440) {
     exactEvents=[...exactEvents.slice(0,-1),{...recordedTail,endMin:projectedTail.endMin}];
   }`);
 
