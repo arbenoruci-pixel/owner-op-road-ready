@@ -2,11 +2,29 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { chromium, webkit } from 'playwright';
-import { baseState, seed, setupRoutes, snapshot } from '../v110328/browserFixture.mjs';
+import { baseState, seed, setupRoutes } from '../v110328/browserFixture.mjs';
 
 const output = 'browser-test-results/sleeper-midnight-v110408';
 fs.mkdirSync(output, {recursive:true});
 const prior = '2026-09-25', today = '2026-09-26';
+const snapshot = page => page.evaluate(() => new Promise((resolve, reject) => {
+  const request = indexedDB.open('owner-op-road-ready-offline-v1');
+  request.onerror = () => reject(request.error);
+  request.onsuccess = () => {
+    const db = request.result;
+    const query = db.transaction('app_snapshots', 'readonly').objectStore('app_snapshots').get('owner-op-road-ready-state-v1');
+    query.onsuccess = () => { db.close(); resolve(query.result?.state); };
+    query.onerror = () => { db.close(); reject(query.error); };
+  };
+}));
+async function waitStored(page, predicate) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const value = await snapshot(page);
+    if (value && predicate(value)) return value;
+    await page.waitForTimeout(100);
+  }
+  throw new Error('Sleeper fixture persistence timeout');
+}
 const row = (id, status, startMin, endMin, extra = {}) => ({
   id, status, startMin, endMin, source:'live_status', city:'Chicago', state:'IL',
   note:status === 'SB' ? 'Sleeper Berth' : status === 'D' ? 'Driving' : 'Off Duty', ...extra,
@@ -23,6 +41,7 @@ function fixture(scenario) {
   };
 }
 async function openLog(page) {
+  await page.locator('.drive-mode-log-btn, .logbook-ui-v110 .log-graph-v110').first().waitFor();
   const driveLog = page.locator('.drive-mode-log-btn');
   if (await driveLog.isVisible()) await driveLog.click();
   await page.locator('.logbook-ui-v110 .log-graph-v110').waitFor();
@@ -58,6 +77,7 @@ for (const [name, engine] of [['chromium', chromium], ['webkit', webkit]]) {
           await page.locator('.duty-grid [data-status="D"]').click();
           await page.getByPlaceholder('City, ST', {exact:true}).fill('Chicago, IL');
           await page.getByRole('button', {name:'Save D',exact:true}).click();
+          await waitStored(page, state => state.currentStatus === 'D' && state.eventsByDay[today]?.some(event => event.status === 'D' && event.startMin === 420));
           await page.clock.setFixedTime(new Date('2026-09-26T11:15:00Z'));
           await openLog(page);
           await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -69,6 +89,7 @@ for (const [name, engine] of [['chromium', chromium], ['webkit', webkit]]) {
           await expectPriorTail(page, false);
         }
 
+        await waitStored(page, state => state.activeDay === prior);
         await page.reload();
         await openLog(page);
         await expectPriorTail(page, scenario === 'explicit-sleeper-end');
