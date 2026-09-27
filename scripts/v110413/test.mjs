@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {buildEvidence,validateFacts,makeBookEntry,day,clone,isReviewed,possibleFuelDuplicate,registerEvidenceTypes,CATALOG} from './evidenceCore.js';
 const recoverySource=fs.readFileSync(new URL('./recoveryCore.js',import.meta.url),'utf8').replace('./evidenceCoreV110413.js',new URL('./evidenceCore.js',import.meta.url).href);
 const {validateRecoveryPlan,prepareRecoveryBusiness,checkDocumentCorrection}=await import('data:text/javascript;base64,'+Buffer.from(recoverySource).toString('base64'));
+assert.equal(CATALOG.invoice.readerType,'load_invoice');assert.equal(CATALOG.maintenance.readerType,'repair_invoice');
 const hash='a'.repeat(64),range={from:'2026-09-21',to:'2026-09-27'},load={id:'one',loadNo:'L100',pickupDate:'2026-09-25',deliveryDate:'2026-09-28',documentWorkflowStage:'booked'};
 const source=(kind,fields={},reviewed=false,id=kind)=>({local_id:id,client_document_id:id+'-client',sha256:hash,load_no:fields.loadNo??'L100',document_date:fields.date??'2026-09-25',type:kind,extracted:{...fields,...(reviewed?{evidenceFactsV1:{version:1,reviewedAt:'2026-09-27T10:00:00Z',sourceSha256:hash,fields,components:[]}}:{})}});
 const build=extra=>buildEvidence({range,loads:[load],today:'2026-09-27',...extra});
