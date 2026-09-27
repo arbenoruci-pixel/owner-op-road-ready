@@ -59,6 +59,7 @@ jobs:
             sleep 1
           done
           failed=0
+          node scripts/v110409/browser-edit-gps.mjs 2>&1 | tee /tmp/browser-edit-gps-v110409.log
           node scripts/v110408/browser-sleeper-midnight.mjs 2>&1 | tee /tmp/browser-sleeper-midnight-v110408.log
           node scripts/v110407/browser-team-import.mjs 2>&1 | tee /tmp/browser-team-import-v110407.log
           node scripts/v110402/browser-backup.mjs 2>&1 | tee /tmp/browser-backup-v110402.log
