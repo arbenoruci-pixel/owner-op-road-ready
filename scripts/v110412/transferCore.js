@@ -12,6 +12,10 @@ export function validDay(value) {
   return Number.isFinite(+date) && date.toISOString().slice(0, 10) === value;
 }
 export function recordDay(row) { return text(row.date || row.document_date || row.documentDate || row.transactionDate || row.extracted?.date).slice(0, 10); }
+export function documentDays(row) {
+  const linked = [...(Array.isArray(row.archiveEventDays) ? row.archiveEventDays : []), row.archiveEventDay].filter(validDay);
+  return linked.length ? linked : [text(row.document_date || row.documentDate || row.extracted?.documentDate || row.extracted?.date || row.vaultDate || row.date).slice(0, 10)];
+}
 export function inWeek(day, start) {
   if (!start || start === 'undated') return !validDay(day);
   return validDay(day) && day >= start && day < new Date(Date.parse(start + 'T12:00:00Z') + 7 * 86400000).toISOString().slice(0, 10);
@@ -43,10 +47,11 @@ export function selectTransfer({scope, folder, week, folders = [], documents = [
   const effective = new Map(allDocuments.map(d => [documentIdentity(d), d]));
   const docs = new Map();
   // Read raw vault rows too: display reconciliation can collapse distinct originals.
-  for (const raw of [...documents, ...(businessStore.documents || []), ...shown]) {
+  for (const raw of [...documents, ...(businessStore.documents || []), ...allDocuments, ...shown]) {
     const key = documentIdentity(raw);
     const row = {...raw, ...(effective.get(key) || {})};
-    if (!numbers.has(loadNumber(row)) && !ids.has(key)) continue;
+    const looseInWeek = scope === 'week' && !loadNumber(row) && documentDays(row).some(day => inWeek(day, week.start || 'undated'));
+    if (!numbers.has(loadNumber(row)) && !ids.has(key) && !looseInWeek) continue;
     if (!key) throw new Error('A document has no saved identity. Open and save it again before export.');
     docs.set(key, {...docs.get(key), ...row});
   }
@@ -135,4 +140,16 @@ export function mergeRecords(current, incoming) {
     next[bucket] = rows;
   }
   return {next, summary};
+}
+export function existingTransferDocument(rows, localId, clientId) {
+  const clients = rows.filter(row => row.client_document_id === clientId);
+  const local = rows.find(row => row.local_id === localId);
+  if (clients.length > 1 || local && local.client_document_id !== clientId) throw new Error('A document ID conflicts with another saved file. Import stopped.');
+  // Cloud pulls use the stable client ID as local_id; preserve that device's key.
+  return clients[0] || local;
+}
+export function assertRestoreOriginal(existing, original) {
+  const hash = text(existing.sha256 || existing.content_hash || existing.contentHash).toLowerCase();
+  const size = Number(existing.file_size_bytes || existing.fileSizeBytes || 0);
+  if (hash && hash !== original.sha256.toLowerCase() || size > 0 && size !== original.size) throw new Error('The transfer conflicts with the saved original checksum or size. Existing records were kept.');
 }

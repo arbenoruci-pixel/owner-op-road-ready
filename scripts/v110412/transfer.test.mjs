@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {prepareTransfer,validateTransfer,selectTransfer,mergeRecords,clone,FORMAT} from './transferCore.js';
+import {prepareTransfer,validateTransfer,selectTransfer,mergeRecords,clone,FORMAT,existingTransferDocument,assertRestoreOriginal} from './transferCore.js';
 const doc=(id,load,date,type='bol')=>({local_id:id,client_document_id:id+'-client',load_no:load,document_date:date,type,original_file_name:id+'.pdf',extracted:{bolNo:'BOL-'+id},metadata:{readerEvidence:{confirmed:true}}});
 const a=doc('a','A123','2026-09-21'),b=doc('b','B123','2026-09-23'),other=doc('other','C123','2026-09-14'),loose=doc('loose','','2026-09-26','fuel_receipt');
 const folders=[{loadNo:'A123',days:['2026-09-21'],documents:[a],origin:'Alpha, IL',destination:'Beta, IN'},{loadNo:'B123',days:['2026-09-23'],documents:[b]},{loadNo:'C123',days:['2026-09-14'],documents:[other]}];
@@ -8,6 +8,7 @@ const week={start:'2026-09-21',items:folders.slice(0,2),documents:[a,b,loose]};
 const options={scope:'week',week,folders,documents:[a,b,other,loose],allDocuments:[a,b,other,loose],businessStore};
 const original=new Uint8Array([37,80,68,70,0,255,8,42]),read=async()=>new Blob([original],{type:'application/pdf'});
 const selected=selectTransfer(options);assert.deepEqual(selected.records.loads.map(r=>r.loadNo),['A123','B123']);assert.equal(selected.documents.length,3);assert.equal(selected.records.fuel.length,1);assert.equal(selected.records.expenses.length,1);
+const withoutWeekDocs=selectTransfer({...options,week:{start:week.start,items:week.items}});assert.equal(withoutWeekDocs.documents.length,3,'dated loose documents do not depend on a precomputed week.documents list');
 const weekly=await prepareTransfer(options,read);const checked=await validateTransfer(JSON.parse(await weekly.file.text()));
 assert.equal(checked.decoded.length,3);assert.deepEqual(new Uint8Array(await checked.decoded[0].blob.arrayBuffer()),original);assert.deepEqual(checked.documents[0].record.metadata,a.metadata);
 const single=await prepareTransfer({...options,scope:'load',folder:folders[0]},read);assert.equal(single.payload.documents.length,1);assert.equal(single.payload.records.expenses.length,0);assert.equal(single.payload.records.fuel.length,1);
@@ -26,4 +27,11 @@ const existing={loads:[{id:'local-a',loadNo:'A123',rate:777,status:'delivered'}]
 const first=mergeRecords(existing,weekly.payload.records),again=mergeRecords(first.next,weekly.payload.records);
 assert.deepEqual(first.next,again.next);assert.equal(first.next.loads[0].rate,777);assert.equal(first.next.loads[1].status,'archived');assert.deepEqual(existing.documents,first.next.documents);assert.equal(existing.loads.length,1);
 assert.equal(again.summary.addedRecords,0);
+const cloud={local_id:'a-client',client_document_id:'a-client',title:'Newer cloud device edit',sha256:'a'.repeat(64),file_size_bytes:40};
+assert.equal(existingTransferDocument([cloud],'a-local','a-client'),cloud);
+assert.throws(()=>existingTransferDocument([cloud,{local_id:'a-local',client_document_id:'other'}],'a-local','a-client'),/conflicts/);
+assert.throws(()=>existingTransferDocument([cloud,{...cloud,local_id:'duplicate'}],'a-local','a-client'),/conflicts/);
+assert.doesNotThrow(()=>assertRestoreOriginal(cloud,{sha256:'a'.repeat(64),size:40}));
+assert.throws(()=>assertRestoreOriginal(cloud,{sha256:'b'.repeat(64),size:40}),/checksum/);
+assert.throws(()=>assertRestoreOriginal({...cloud,sha256:''},{sha256:'a'.repeat(64),size:39}),/size/);
 console.log('PASS — scoped week/load export, all original bytes and metadata, missing originals, corrupt files, invalid scope/version, duplicate identities, safe repeat merge and inactive archive loads');

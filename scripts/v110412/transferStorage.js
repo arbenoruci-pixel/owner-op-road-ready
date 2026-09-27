@@ -3,7 +3,7 @@ import Dexie from 'dexie';
 import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {BUSINESS_STORE_KEY, BUSINESS_STORE_EVENT} from '../business/businessStore.js';
 import {vaultBlobV102} from './documentVaultV102.js';
-import {clone, digest, documentIdentity, loadNumber, mergeRecords, validateTransfer} from './transferCoreV110412.js';
+import {clone, digest, documentIdentity, loadNumber, mergeRecords, validateTransfer, existingTransferDocument, assertRestoreOriginal} from './transferCoreV110412.js';
 
 export async function readTransferOriginal(record) {
   const clientId = record.client_document_id || record.clientDocumentId;
@@ -57,15 +57,15 @@ export async function importTransfer(payload, options = {}) {
           const raw = item.record, identity = documentIdentity(raw);
           const localId = raw.local_id || raw.localDocumentId || `transfer-${identity}`;
           const clientId = raw.client_document_id || raw.clientDocumentId || identity;
-          const existing = rows.find(row => row.client_document_id === clientId || row.local_id === localId);
+          const existing = existingTransferDocument(rows, localId, clientId);
           if (existing) {
-            if (existing.client_document_id !== clientId || existing.local_id !== localId) throw new Error('A document ID conflicts with another saved file. Import stopped.');
             const original = await db.document_blobs.where('client_document_id').equals(clientId).first();
             if (original?.blob?.size) {
               const hash = await Dexie.waitFor(original.blob.arrayBuffer().then(digest));
               if (hash !== item.original.sha256) throw new Error('A saved document has different original bytes. Existing files were kept.');
               result.keptDocuments++;
             } else {
+              assertRestoreOriginal(existing, item.original);
               const restored = {local_blob_id:original?.local_blob_id || `transfer-blob-${clientId}`, client_document_id:clientId, blob:item.blob, created_at:new Date().toISOString()};
               if (original) await db.document_blobs.put(restored); else await db.document_blobs.add(restored);
               result.restoredOriginals++;
@@ -83,6 +83,7 @@ export async function importTransfer(payload, options = {}) {
           if (!next.documents.some(doc => documentIdentity(doc) === clientId || doc.localDocumentId === localId)) next.documents.push({
             id:localId, localDocumentId:localId, clientDocumentId:clientId, loadNo:row.load_no, canonicalLoadNo:row.load_no,
             type:row.type, title:row.title, fileName:row.original_file_name, mimeType:row.mime_type,
+            sha256:row.sha256, fileSizeBytes:row.file_size_bytes,
             documentDate:row.document_date || row.documentDate, status:row.status, reviewStatus:row.reviewStatus,
             stopSequence:row.stopSequence || row.stop_sequence, originalPreserved:true, syncState:'local_only', linkToLogbook:false,
             createdAt:Date.now(), updatedAt:Date.now()

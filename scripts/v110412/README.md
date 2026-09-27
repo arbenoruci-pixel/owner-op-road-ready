@@ -17,7 +17,12 @@ the iOS share call happens within the driver's click.
 Import validates format, scope, all original sizes and SHA-256 values before
 showing a preview and again on Apply. It merges additively by stable identities,
 keeps local edits, refuses conflicting original bytes, and can restore a missing
-original. New archive loads do not activate a trip. All originals and vault rows
+original. A unique client identity matches documents already pulled on another
+device even when their local keys differ. Restore checks the saved hash and size
+before writing, and business mirrors retain the same original hash so loose
+documents are counted once. Dated unassigned originals are selected directly as
+well as through the selected week's precomputed document list.
+New archive loads do not activate a trip. All originals and vault rows
 are written in one IndexedDB transaction. A strict business-store write aborts
 that transaction on quota failure, and a subsequent transaction failure restores
 the previous business-store value. The importer rescans current records on Apply
