@@ -114,7 +114,7 @@ steps.push('finalize-edit-gps-v110409.mjs','v110409/edit-gps.test.mjs','v110408/
 steps.push('finalize-bol-columns-v110410.mjs','../packages/smart-reader-core/test/bol-columns.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-document-filing-v110411.mjs','v110411/filing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-load-week-transfer-v110412.mjs','v110412/transfer.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
-steps.push('finalize-document-evidence-v110413.mjs','v110413/test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-document-evidence-v110413.mjs','v110413/test.mjs','v110413/billing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

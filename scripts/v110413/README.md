@@ -1,5 +1,7 @@
 # Shared document evidence — 110.4.13
 
+Billing also recognizes reviewed packet components and includes only their supporting pages when generating a new invoice; the previous invoice page remains in the saved original. TONU does not require delivery proof.
+
 A missing-document checklist now uses one catalog of source types, fields and uses across Documents, IFTA, Tax and Audit. It distinguishes missing, unreviewed, reviewed and future requirements. Expected loads/documents make an absent folder visible. Booked deliveries and TONU follow different rules. Existing registered readers remain the source-reading path; their output is a proposal until reviewed against the original.
 
 Reviewed facts are bound to the source SHA-256 and stored with the original vault identity. A receipt can create one source-linked book entry. Fuel amounts and eligible tax-paid volume are separate; DEF/reefer purchases do not enter reviewed truck fuel. Actual jurisdiction mileage is required independently of ratecon estimates, without assuming a fuel purchase in each state.

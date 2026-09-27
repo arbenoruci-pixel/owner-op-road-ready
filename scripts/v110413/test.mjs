@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {buildEvidence,validateFacts,makeBookEntry,day,clone,isReviewed,possibleFuelDuplicate,registerEvidenceTypes,CATALOG,assertSourceHash,evidenceLoadResolver} from './evidenceCore.js';
+import {buildEvidence,validateFacts,makeBookEntry,day,clone,isReviewed,possibleFuelDuplicate,registerEvidenceTypes,CATALOG,assertSourceHash,evidenceLoadResolver,reconcileFuelSources} from './evidenceCore.js';
 const recoverySource=fs.readFileSync(new URL('./recoveryCore.js',import.meta.url),'utf8').replace('./evidenceCoreV110413.js',new URL('./evidenceCore.js',import.meta.url).href);
 const {validateRecoveryPlan,prepareRecoveryBusiness,checkDocumentCorrection}=await import('data:text/javascript;base64,'+Buffer.from(recoverySource).toString('base64'));
 assert.equal(CATALOG.invoice.readerType,'load_invoice');assert.equal(CATALOG.maintenance.readerType,'repair_invoice');
@@ -34,6 +34,7 @@ const customs={evidenceExpectations:[{id:'receipt2',kind:'expense_receipt',label
 const expenseFields={date:'2026-09-25',merchant:'Test Store',total:20,currency:'USD',purpose:'Supplies',payment:'paid',reference:'R22',loadNo:''};
 model=build({documents:[source('expense_receipt',expenseFields,true)],businessStore:customs});assert.equal(model.checks.find(c=>c.id==='receipt2').status,'missing','one receipt cannot satisfy a different transaction day');
 const fuelFields={date:'2026-09-25',loadNo:'',merchant:'Test Stop',sellerAddress:'1 Test Road',total:100,currency:'USD',quantity:37.85411784,volumeUnit:'L',fuelType:'diesel',state:'NJ',vehicle:'22',purchaser:'Test Carrier',taxPaid:true,qualifiedVehicle:true};
+const twin={transactionId:'fuel-tx',date:'2026-09-25',state:'NJ',total:100,gallons:10,merchant:'Test Stop'};assert.equal(reconcileFuelSources([twin,{...twin,source:'fuel_csv_v102'}]).length,1);assert.equal(reconcileFuelSources([{date:twin.date,total:100},{date:twin.date,total:100}]).length,2);assert.equal(reconcileFuelSources([{...twin,externalId:'csv-1',transactionId:''},{...twin,sourceFuelImportId:'csv-1',transactionId:''}]).length,1);
 const fuel=source('fuel_receipt',fuelFields,true);let entry=makeBookEntry(fuel,fuelFields);assert.equal(entry.bucket,'fuel');assert.ok(Math.abs(entry.row.gallons-10)<1e-8);assert.equal(entry.row.iftaEligible,true);
 assert.equal(possibleFuelDuplicate(entry.row,{date:fuelFields.date,state:'NJ',total:100,gallons:10}),true);
 assert.equal(possibleFuelDuplicate({...entry.row,transactionId:'TX55'},{date:fuelFields.date,transactionId:'TX55'}),true);

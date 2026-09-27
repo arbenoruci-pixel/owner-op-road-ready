@@ -126,6 +126,18 @@ function coverage(doc,kind,loadNo,resolve=text) {
     return isReviewed(doc) && component.kind===kind && resolve(fields.loadNo)===loadNo && (CATALOG[kind]?.fields||[]).filter(k=>k!=='notes').every(k=>usable(fields[k],k)) && component.reviewed===true;
   });
 }
+export function hasReviewedEvidence(doc,kinds,loadNo,businessStore={}) {
+  const resolve=evidenceLoadResolver(businessStore);
+  return kinds.some(kind=>coverage(doc,kind,resolve(loadNo),resolve));
+}
+export function billingEvidencePages(doc,loadNo) {
+  if(!isReviewed(doc)||kindOf(doc)!=='supporting_packet')return [];
+  return [...new Set(componentsOf(doc).filter(c=>c.reviewed===true&&['rate_confirmation','tonu','bol','pod'].includes(c.kind)&&text(c.fields?.loadNo).toUpperCase()===text(loadNo).toUpperCase()&&(CATALOG[c.kind]?.fields||[]).filter(k=>k!=='notes').every(k=>usable(({...documentFacts(doc),...c.fields})[k],k))).flatMap(c=>list(c.pages)))].sort((a,b)=>a-b);
+}
+export function billingPageIndices(pages,pageCount) {
+  if(!Array.isArray(pages)||!pages.length||pages.some(n=>!Number.isInteger(n)||n<1||n>pageCount))throw new Error('A reviewed packet page is unavailable. Review the original before sending.');
+  return [...new Set(pages)].map(n=>n-1);
+}
 export function rangeContains(value,range={}) { const d=day(value);return !!d&&(!range.from||d>=range.from)&&(!range.to||d<=range.to); }
 export function buildEvidence({documents=[],loads=[],businessStore={},ownerStore={},range={},loadNo='',area='load',today=localToday()}={}) {
   const resolve=evidenceLoadResolver(businessStore),refOf=row=>resolve(loadOf(row));
@@ -208,4 +220,17 @@ export function possibleFuelDuplicate(left={},right={}) {
   return amount(left.total)>0&&amount(right.total)>0&&amount(left.gallons)>0&&amount(right.gallons)>0
     && Math.abs(amount(left.total)-amount(right.total))<.005 && Math.abs(amount(left.gallons)-amount(right.gallons))<.005
     && !!text(left.state)&&text(left.state).toUpperCase()===text(right.state).toUpperCase();
+}
+export function reconcileFuelSources(rows=[]) {
+  const unique=new Map(),result=[];
+  for(const row of rows){
+    const reference=text(row.transactionId),source=text(row.sourceFuelImportId||row.externalId);
+    // A CSV import intentionally has both an owner-ops row and a business mirror.
+    // Match their stable import ID or a full transaction identity, never amount alone.
+    const identity=reference?JSON.stringify([reference,day(row.date),text(row.state),amount(row.total),amount(row.gallons),text(row.merchant).toUpperCase().replace(/[^A-Z0-9]/g,'')]):source?'import:'+source:'';
+    if(!identity){result.push(row);continue;}
+    if(!unique.has(identity)){unique.set(identity,result.length);result.push(row);}
+    else if(row.iftaEligible===true&&result[unique.get(identity)].iftaEligible!==true)result[unique.get(identity)]=row;
+  }
+  return result;
 }
