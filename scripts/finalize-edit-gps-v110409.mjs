@@ -18,7 +18,6 @@ function range(file,start,end,after) {
 for(const [input,output] of [
   ['bulkShift.js','core/timeline/bulkShiftV110409.js'],
   ['BulkMovePanel.jsx','modules/logbook/BulkMovePanelV110409.jsx'],
-  ['bulk-move.css','modules/logbook/bulk-move-v110409.css'],
   ['gpsPosition.js','core/gps/gpsPositionV110409.js'],
   ['gpsFeedback.js','core/gps/gpsFeedbackV110409.js'],
   ['useGpsRequest.js','shared/duty/useGpsRequestV110409.js'],
@@ -26,6 +25,9 @@ for(const [input,output] of [
   const target='source/src/'+output; fs.mkdirSync(path.dirname(target),{recursive:true});
   fs.copyFileSync('scripts/v110409/'+input,target);
 }
+// Keep styles alongside the component without requiring a CSS loader when
+// the existing graph contracts render the actual React tree in Node.
+write('source/src/modules/logbook/bulkMoveStylesV110409.js','export default '+JSON.stringify(read('scripts/v110409/bulk-move.css'))+';\n');
 
 const screen='source/src/modules/logbook/DayLogScreen.jsx';
 const locks=JSON.parse(read('module-locks.v1.json'));
@@ -117,6 +119,7 @@ patch(shared,'aria-label="Use GPS location" onClick={onGps}','aria-label="Use GP
 patch(shared,'    {children}',`    {onGps?<div className="dd-gps-actions" style={{display:'flex',gap:8,marginTop:6}}>{gpsPending
       ? <button type="button" style={{minHeight:44}} onClick={onCancelGps}>Cancel GPS</button>
       : <button type="button" style={{minHeight:44}} onClick={onGps}>{gpsStatus?'Retry GPS':'Use current GPS'}</button>}</div>:null}
+    <style>{${JSON.stringify('.dd-gps-actions button{min-height:44px;border:1px solid #cbd8e9;border-radius:9px;background:#f5f8ff;color:#214d9a;padding:8px 12px;font:inherit}')}}</style>
     {children}`);
 const fields='source/src/modules/editor/components/EditorLocationFields.jsx';
 patch(fields,"  gpsStatus = '',","  gpsStatus = '',\n  gpsPending = false,\n  onCancelGps = null,");
@@ -184,4 +187,10 @@ for(const file of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/u
 for(const file of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs']) write(file,read(file).replaceAll("'110.4.8'","'"+VERSION+"'").replaceAll("'v110408-sleeper-midnight'","'"+BUILD+"'"));
 locks.release=VERSION;locks.files[screen]=createHash('sha256').update(read(screen)).digest('hex');
 write('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
+// Register only these reviewed downstream outputs with the legacy idempotence
+// checks. An unknown edit still fails before any legacy installer writes files.
+const reviewed=JSON.parse(read('scripts/v110409/reviewed-runtime-hashes.json'));
+for(const [file,hash] of Object.entries(reviewed)) assert.equal(createHash('sha256').update(read(file)).digest('hex'),hash,'Reviewed GPS/edit runtime: '+file);
+patch('scripts/v110378/install.mjs','const prepared=[],seen=new Set();',`Object.assign(completedHashes,${JSON.stringify(reviewed)});\nconst prepared=[],seen=new Set();`);
+patch('scripts/v110378/finish-mobile.mjs',' const source=fs.readFileSync(file,\'utf8\');',` const source=fs.readFileSync(file,'utf8');\n if(hash(source)===${JSON.stringify(reviewed)}[file])return;`);
 console.log('PASS — v110.4.9 reviewed event preview/apply and cancellable GPS');

@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import { timeLabel } from '../../shared/utils/time.js';
 import { shiftLabel } from '../../core/timeline/bulkShiftV110409.js';
-import './bulk-move-v110409.css';
+import bulkMoveStyles from './bulkMoveStylesV110409.js';
 
 export default function BulkMovePanel({events, selectedIds, delta, onDelta, result, onAll, onClear, onCancel, onApply}) {
   const [expanded,setExpanded] = useState(false);
@@ -12,6 +12,7 @@ export default function BulkMovePanel({events, selectedIds, delta, onDelta, resu
   const available = result.appliedDeltaMin || 0;
   const limited = !!delta && available !== delta;
   return <section className="bulk-move-panel-v9660 bulk-move-v110409" aria-label="Move selected events">
+    <style>{bulkMoveStyles}</style>
     <header><b>{selectedIds.length} selected</b><button type="button" onClick={()=>{if(expanded){onDelta(0);setExpanded(false);}else onAll();}}>{expanded?'Choose events':'All day'}</button><button type="button" onClick={onClear}>Clear</button></header>
     <p>{expanded?'Preview the time change, then Apply once.':'Select rows below, then tap Move selected.'}</p>
     {!expanded ? <div className="bulk-actions"><button type="button" onClick={onCancel}>Cancel</button><button type="button" className="primary" disabled={!selectedIds.length} onClick={()=>setExpanded(true)}>Move selected</button></div> : <>

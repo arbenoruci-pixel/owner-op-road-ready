@@ -110,7 +110,7 @@ steps.push('finalize-team-import-v110405.mjs','verify-team-import-v110405.mjs','
 steps.push('finalize-rate-route-v110406.mjs','v110406/rate-route.test.mjs','release-rate-route-v110406.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-team-safety-v110407.mjs','v110407/team-safety.test.mjs','v110407/runtime-import.test.mjs','verify-team-import-v110405.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-sleeper-midnight-v110408.mjs','v110408/sleeper-midnight.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
-steps.push('finalize-edit-gps-v110409.mjs','v110409/edit-gps.test.mjs','v110408/sleeper-midnight.test.mjs','verify-gps-best-fix-v962.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-edit-gps-v110409.mjs','v110409/edit-gps.test.mjs','v110408/sleeper-midnight.test.mjs','verify-gps-best-fix-v962.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','v110378/test-review-regressions.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
