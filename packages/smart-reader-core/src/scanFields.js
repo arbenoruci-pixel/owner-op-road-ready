@@ -8,6 +8,7 @@ const referenceKinds={bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailer
 const aliases={shipper:'origin',consignee:'destination',documentDate:'date'};
 const bolWarning='BOL number was not verified from its label. Check the original.';
 const dateWarning='Document date was not read. Enter it after checking the original.';
+const payWarning='Agreed carrier pay was not found under a payment label. Fees and detention amounts are excluded.';
 const layoutWarning='Some fields could not be verified beside their labels. Check Reader preview and the original.';
 
 // Derive the filing display from this exact scan's current source review.
@@ -51,7 +52,8 @@ export function scanWithSourceFields(analysis,review,selectedType){
   fields.readerSourceFieldsV110393={engineVersion:result.engineVersion,documentId:result.documentId,reviewRevision:result.reviewRevision,fields:proofs};
   const removed=(analysis.layoutGuardV110337?.removedFields||[]).filter(key=>!accepted.includes(key));
   const issues=(oldReview.issues||[]).filter(issue=>!(issue===bolWarning&&accepted.includes('bolNo')
-    ||issue===dateWarning&&accepted.includes('documentDate')||issue===layoutWarning&&analysis.layoutGuardV110337&&!removed.length));
+    ||issue===dateWarning&&accepted.includes('documentDate')||issue===payWarning&&rate&&accepted.includes('gross')
+    ||issue===layoutWarning&&analysis.layoutGuardV110337&&!removed.length));
   if(!rate&&!fields.bolNo&&!issues.includes(bolWarning))issues.push(bolWarning);
   for(const warning of savedWarnings)if(!issues.includes(warning))issues.push(warning);
   return {...analysis,fields,fieldEvidence,fieldConfidence,needsReview:true,routing:{...analysis.routing,autoFile:false},

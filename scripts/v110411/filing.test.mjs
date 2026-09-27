@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readDocument} from '../../packages/smart-reader-core/src/index.js';
+import {scanWithSourceFields} from '../../packages/smart-reader-core/src/scanFields.js';
 import {columnBolInput} from '../../packages/smart-reader-core/test/bol-columns-fixture.mjs';
 import {numberedRateInput,numberedRateText} from '../../packages/smart-reader-core/test/numbered-rate-fixture.mjs';
 import {reviewAssignment} from '../../source/src/modules/scan/reviewAssignmentV110411.js';
@@ -29,6 +30,11 @@ test('full scanner keeps numbered RateCon plus delivery-related terms together',
  const value=finalizeSmartScanAnalysisV11039({text,type:{id:'other'},fields:{},pageCount:2},{state:{},businessStore:{}});
  assert.equal(value.type.id,'rate_confirmation');assert.notEqual(value.typeEvidenceV110334.mixedDocuments,true);
  const review={analysis:value,result:readDocument(numberedRateInput())};
+ const payWarning='Agreed carrier pay was not found under a payment label. Fees and detention amounts are excluded.';
+ assert.ok(value.evidenceReviewV11036.issues.includes(payWarning),'legacy scan does not recognize the numbered pay table');
+ assert.ok(!scanWithSourceFields(value,review,value.type.id).evidenceReviewV11036.issues.includes(payWarning),'source-supported pay clears its stale warning');
+ const unresolved=structuredClone(review.result);unresolved.documents[0].fields.totalRate={...unresolved.documents[0].fields.totalRate,status:'needs_review',value:null};
+ assert.ok(scanWithSourceFields(value,{analysis:value,result:unresolved},value.type.id).evidenceReviewV11036.issues.includes(payWarning),'unresolved pay retains its warning');
  const refreshed=reviewAssignment({analysis:value,review,typeId:value.type.id,state:{},businessStore:{}});
  assert.equal(refreshed.loadNo,'24680');assert.equal(refreshed.documentDate,'2026-09-24');
 });

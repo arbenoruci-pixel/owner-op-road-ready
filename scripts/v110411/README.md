@@ -23,6 +23,8 @@ secondary OCR observations. Explicit folder choices and Choose later remain
 unchanged. The supported document date replaces an automatic delivery-date
 fallback, while a manually edited date remains unchanged. The original save
 confirmation and load-identity checks remain in place.
+The missing-pay notice clears only after the current Reader has exact source
+evidence for the total; unresolved amounts retain the notice.
 
 Home now reads the current load's verified document summary directly from the
 existing business store, including a load projected from a recorded pickup with

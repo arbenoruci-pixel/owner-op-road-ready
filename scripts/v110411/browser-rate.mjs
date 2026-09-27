@@ -28,6 +28,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
   assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
   assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'24680');
   assert.equal(await page.getByLabel('Document date',{exact:true}).inputValue(),'2026-09-24');
+  assert.ok(!(await page.getByRole('region',{name:'Document reading checks',exact:true}).innerText()).includes('Agreed carrier pay was not found'),'source-supported total removes the stale missing-pay warning');
   const [download]=await Promise.all([page.waitForEvent('download'),review.getByRole('button',{name:'Export reading review',exact:true}).click()]);
   const result=JSON.parse(fs.readFileSync(await download.path(),'utf8'));
   assert.equal(result.engineVersion,'0.3.36');assert.equal(result.documents.length,1);assert.equal(result.documents[0].fields.totalRate.value,'1700.00');
