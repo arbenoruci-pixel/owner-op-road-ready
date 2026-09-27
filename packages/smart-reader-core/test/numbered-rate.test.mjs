@@ -11,6 +11,10 @@ test('numbered Pay Items table and matching footer produce one RateCon with sour
   }
   assert.equal(doc.fields.pickupAddress.candidates[0].value,'120 Example Drive, Kingfield, ME 04947');
   assert.equal(doc.fields.deliveryAddress.candidates[0].value,'1 Sample Dr, Rockleigh, NJ 07647');
+  assert.equal(doc.fields.pickupCity.value,'Kingfield, ME');assert.equal(doc.fields.deliveryCity.value,'Rockleigh, NJ');
+  assert.deepEqual(doc.fields.broker.candidates.map(c=>c.value),['EXAMPLE LOGISTICS, INC.']);
+  assert.deepEqual(doc.fields.carrier.candidates.map(c=>c.value),['EXAMPLE CARRIER LLC']);
+  assert.equal(doc.fields.broker.status,'needs_review');assert.equal(doc.fields.carrier.status,'needs_review');
   assert.equal(doc.fields.shipper.status,'needs_review');assert.equal(doc.canAutoFile,false);assert.equal(JSON.stringify(input),before);
 });
 test('each independent table signal is required, and invoice instructions are insufficient',()=>{

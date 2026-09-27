@@ -29,6 +29,17 @@ export function numberedRateMatches(page,spec){
   for(const observation of page.observations){
     const lines=observation.lines;if(!isNumberedRateTable(lines))continue;
     const add=(line,start,end,labelLine,extra={})=>matches.push({observation,line,start,end,...(labelLine?{labelLine}:{}),...extra});
+    const carrierIndex=lines.findIndex(l=>/^\s*Carrier Information\s*$/i.test(l.text));
+    const company=/\b(?:LLC|INC\.?|LTD\.?|CORP\.?)\s*$/i;
+    if(key==='broker'&&carrierIndex>0)for(let i=0;i<carrierIndex-2;i++){
+      const name=lines[i].text.trim(),street=lines[i+1],city=lines[i+2];
+      if(!company.test(name)||!/^\s*\d+[A-Z]?\s+\S/.test(street.text)||!/^\s*[A-Z][A-Z .'-]*,?\s+[A-Z]{2}\s+\d{5}\s*$/i.test(city.text))continue;
+      add(lines[i],lines[i].text.indexOf(name),lines[i].text.indexOf(name)+name.length,lines.find(l=>title.test(l.text)),{issue:'layout_needs_review',extraLabelLines:[street,city,lines[carrierIndex]]});
+    }
+    if(key==='carrier'&&carrierIndex>=0){
+      const line=lines[carrierIndex+1],name=line?.text.replace(/\s+(?:DOT\s+Number|Contact\s+Name)\s*:.*$/i,'').trim();
+      if(name&&company.test(name))add(line,line.text.indexOf(name),line.text.indexOf(name)+name.length,lines[carrierIndex],{issue:'layout_needs_review'});
+    }
     const patterns={totalRate:/^\s*Total\s+(USD\s+\d[\d,.]*)\s*$/id,
       documentDate:/^\s*Document Date\s+(\d{1,2}\/\d{1,2}\/\d{4})\s*$/id,
       equipment:/^\s*Equipment\s+([A-Za-z][A-Za-z -]+)\s*$/id,
@@ -44,6 +55,12 @@ export function numberedRateMatches(page,spec){
       const block=boundary<0?following:following.slice(0,boundary);
       const street=block.find(l=>/^\s*\d+[A-Z]?\s+\S/.test(l.text)),city=block.find(l=>/^\s*[A-Z][A-Z .'-]*,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\s*$/i.test(l.text));
       if(!street||!city)continue;
+      if(key.endsWith('City')){
+        const m=/^\s*([A-Z][A-Z .'-]*,\s*[A-Z]{2})\s+\d{5}(?:-\d{4})?\s*$/id.exec(city.text);
+        const unique=block.filter(l=>/^\s*[A-Z][A-Z .'-]*,\s*[A-Z]{2}\s+\d{5}/i.test(l.text)).length===1;
+        const native=observation.source==='pdf-text-layer'&&lines.some(l=>/^\s*#\s+Action\s+Date\/Time\s+Location\s+Contact\s*$/i.test(l.text));
+        if(m&&unique)add(city,...m.indices[1],label,{extraLabelLines:[street],...(native?{}:{issue:'layout_needs_review'})});
+      }
       if(key==='shipper'||key==='consignee'){
         const value=m[4].replace(/\s+Main Contact\s*$/i,'').trim();
         if(value)add(label,m.indices[4][0],m.indices[4][0]+value.length,label,{issue:'layout_needs_review',extraLabelLines:[street,city]});

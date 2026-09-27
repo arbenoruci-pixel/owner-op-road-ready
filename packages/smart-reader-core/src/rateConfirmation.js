@@ -141,5 +141,6 @@ export const rateConfirmationProfile={
     deliveryAppointment:{label:'Delivery appointment',kind:'text',required:true,rateSection:'delivery',ratePart:'appointment'},
   },
 };
-for(const key of ['loadNumber','totalRate','equipment','miles','billingEmail','shipper','consignee','pickupDate','deliveryDate','pickupAddress','deliveryAddress','pickupAppointment','deliveryAppointment'])rateConfirmationProfile.fields[key].numberedRate=key;
+for(const key of ['loadNumber','totalRate','equipment','miles','billingEmail','broker','carrier','shipper','consignee','pickupDate','deliveryDate','pickupAddress','deliveryAddress','pickupAppointment','deliveryAppointment'])rateConfirmationProfile.fields[key].numberedRate=key;
 rateConfirmationProfile.fields.documentDate={label:'Document date',kind:'date',required:false,numberedRate:'documentDate'};
+for(const role of ['pickup','delivery'])rateConfirmationProfile.fields[role+'City']={label:role==='pickup'?'Pickup city / state':'Delivery city / state',kind:'text',required:false,displayWhenFound:true,numberedRate:role+'City'};

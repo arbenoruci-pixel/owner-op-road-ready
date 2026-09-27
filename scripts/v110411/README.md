@@ -11,7 +11,9 @@ This release recognizes that complete table structure, extracts exact source
 references, rate, equipment, miles and dated stop rows, and joins terms pages
 only when their explicit load and sequential page-count footers agree. A new
 primary document, conflicting reference, weak footer or broken pagination stays
-separate. Full-year context comes from the document; no current-year guess is
+separate. Pickup/delivery cities from the explicit native stop table reach the saved load;
+company proposals remain separate from route locations. Broker/carrier names
+are offered with source evidence for confirmation. Full-year context comes from the document; no current-year guess is
 used. Table party/address proposals still require source confirmation. Original
 text, offsets and files remain unchanged; automatic acceptance stays disabled.
 

@@ -27,6 +27,11 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
   const result=JSON.parse(fs.readFileSync(await download.path(),'utf8'));
   assert.equal(result.engineVersion,'0.3.36');assert.equal(result.documents.length,1);assert.equal(result.documents[0].fields.totalRate.value,'1700.00');
   assert.equal(result.documents[0].fields.deliveryDate.value,'2026-09-25');assert.equal(result.documents[0].canAutoFile,false);
+  for(const value of ['EXAMPLE LOGISTICS, INC.','EXAMPLE CARRIER LLC','SAMPLE WATER','SAMPLE MARKET']){
+    await review.getByRole('button',{name:value+' · Page 1',exact:true}).click();
+    const dialog=page.getByRole('dialog',{name:'Check source',exact:true});await dialog.waitFor();
+    await dialog.getByRole('button',{name:'Confirm value',exact:true}).click();await dialog.waitFor({state:'hidden'});
+  }
   for(const selector of ['.ratecon-risk-ack-v10970 input','.scan-driver-check-v105 input'])if(await page.locator(selector).count())await page.locator(selector).check();
   await page.screenshot({path:`${output}/${name}-rate-review.png`,fullPage:true});
   await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();await page.locator('.scan-saved-v105').waitFor();
@@ -34,6 +39,9 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
   const saved=await page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,t=db.transaction('documents_local','readonly'),q=t.objectStore('documents_local').getAll();t.oncomplete=()=>{resolve(q.result.find(row=>row.extracted?.readerReviewV110345));db.close();};};}));
   assert.equal(saved.extracted.type,'rate_confirmation');assert.equal(saved.extracted.canonicalLoadNo,'24680');
   assert.equal(Number(saved.extracted.gross),1700);assert.equal(saved.extracted.readerReviewV110345.documents.length,1);
+  assert.equal(saved.extracted.origin,'Kingfield, ME');assert.equal(saved.extracted.destination,'Rockleigh, NJ');
+  assert.equal(saved.extracted.shipper,'SAMPLE WATER');assert.equal(saved.extracted.consignee,'SAMPLE MARKET');
+  assert.equal(saved.extracted.broker,'EXAMPLE LOGISTICS, INC.');assert.equal(saved.extracted.carrierName,'EXAMPLE CARRIER LLC');
   assert.deepEqual(saved.extracted.readerReviewV110345.documents[0].pages,[1,2]);assert.deepEqual(errors,[]);
   console.log(`PASS ${name} native two-page Load Confirmation → exact type/load/date → save and reload`);
  }catch(error){await page.screenshot({path:`${output}/${name}-rate-failure.png`,fullPage:true}).catch(()=>{});fs.writeFileSync(`${output}/${name}-rate-failure.txt`,JSON.stringify({error:String(error),errors,body:await page.locator('body').innerText()},null,2));throw error;}

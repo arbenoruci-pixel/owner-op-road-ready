@@ -20,12 +20,12 @@ export function scanWithSourceFields(analysis,review,selectedType){
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
   const rate=selectedType==='rate_confirmation';
   if(rate&&!result.pages.some(page=>page.observations.some(o=>isNumberedRateTable(o.lines))))return analysis;
-  const fieldMapping=rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress'}:mapping;
+  const fieldMapping=rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',broker:'broker',carrierName:'carrier',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress',origin:'pickupCity',destination:'deliveryCity'}:mapping;
   const fields={...analysis.fields},fieldEvidence={...analysis.fieldEvidence},fieldConfidence={...analysis.fieldConfidence};
   const oldReview=analysis.evidenceReviewV11036||{},evidence={...oldReview.evidence},accepted=[],proofs={},savedWarnings=[];
   for(const [key,ownedKey]of Object.entries(fieldMapping)){
     const field=doc.fields[ownedKey];if(!field)continue;
-    const alias=aliases[key],replaceAlias=alias&&fields[alias]===fields[key];
+    const alias=rate?null:aliases[key],replaceAlias=alias&&fields[alias]===fields[key];
     if(replaceAlias){delete fields[alias];delete fieldEvidence[alias];delete fieldConfidence[alias];delete evidence[alias];}
     delete fields[key];delete fieldEvidence[key];delete fieldConfidence[key];delete evidence[key];
     if(key==='weight'){delete fields.weightUnit;delete fieldEvidence.weightUnit;delete evidence.weightUnit;}
