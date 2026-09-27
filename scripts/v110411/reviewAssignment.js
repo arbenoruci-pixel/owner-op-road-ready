@@ -9,8 +9,10 @@ export function reviewAssignment({analysis,review,typeId,state,businessStore,loa
   const result={...source,type:{...source.type,id:typeId}};
   const match=matchScanDocumentToLoadV11037({state,businessStore,typeId,fields:result.fields||{},analysis:{...result,text:[result.text||result.rawText||'',...Object.values(source.fields?.readerSourceFieldsV110393?.fields||{}).flatMap(field=>(field.evidence||[]).map(ref=>ref.quote))].join('\n')}});
   const manual=assignment.startsWith('driver_');
-  const selected=manual?loadNo:initialScanLoadV11037(result,match);
-  return {match,loadNo:selected,assignment:manual?assignment:selected?(match.source||'document_reference'):'unassigned',
+  const attachmentReview=Boolean(result.typeEvidenceV110334?.attachmentReview?.required);
+  const selected=manual?loadNo:attachmentReview?'':initialScanLoadV11037(result,match);
+  const safeMatch=attachmentReview?{...match,automatic:false,requiresConfirmation:true,reason:result.typeEvidenceV110334.reason||'Check the attached pages before choosing a load folder.'}:match;
+  return {match:safeMatch,loadNo:selected,assignment:manual?assignment:selected?(match.source||'document_reference'):'unassigned',
     documentDate:source.fields?.documentDate||source.fields?.date||'',
     stopSequence:selected===match.loadNo?Number(match.stopSequence||0):0};
 }

@@ -37,6 +37,12 @@ test('full scanner keeps numbered RateCon plus delivery-related terms together',
  assert.ok(scanWithSourceFields(value,{analysis:value,result:unresolved},value.type.id).evidenceReviewV11036.issues.includes(payWarning),'unresolved pay retains its warning');
  const refreshed=reviewAssignment({analysis:value,review,typeId:value.type.id,state:{},businessStore:{}});
  assert.equal(refreshed.loadNo,'24680');assert.equal(refreshed.documentDate,'2026-09-24');
+ const attachment={...value,typeEvidenceV110334:{...value.typeEvidenceV110334,attachmentReview:{required:true},reason:'Check the signature attachment.'}};
+ const guarded={analysis:attachment,review:{...review,analysis:attachment},typeId:value.type.id,state:{},businessStore:{}};
+ const pending=reviewAssignment(guarded);assert.equal(pending.loadNo,'');assert.equal(pending.assignment,'unassigned');assert.equal(pending.match.automatic,false);assert.equal(pending.match.requiresConfirmation,true);
+ for(const [loadNo,assignment]of [['24680','driver_selected'],['','driver_unassigned']]){
+   const chosen=reviewAssignment({...guarded,loadNo,assignment});assert.equal(chosen.loadNo,loadNo);assert.equal(chosen.assignment,assignment);
+ }
 });
 test('a verified saved POD covers BOL on its exact current load without duty linking',()=>{
  const store={documents:[{id:'pod',canonicalLoadNo:'00654321',type:'pod',status:'verified',documentDate:'2026-09-24',linkToLogbook:false}]};

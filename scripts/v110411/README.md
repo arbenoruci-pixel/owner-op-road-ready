@@ -23,6 +23,8 @@ secondary OCR observations. Explicit folder choices and Choose later remain
 unchanged. The supported document date replaces an automatic delivery-date
 fallback, while a manually edited date remains unchanged. The original save
 confirmation and load-identity checks remain in place.
+An unresolved signing attachment still requires an explicit folder choice;
+the asynchronous Reader cannot undo that initial protection.
 The missing-pay notice clears only after the current Reader has exact source
 evidence for the total; unresolved amounts retain the notice.
 
