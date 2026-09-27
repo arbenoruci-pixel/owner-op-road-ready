@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {chromium,webkit} from 'playwright';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 import {baseState,seed,setupRoutes} from '../v110328/browserFixture.mjs';
@@ -9,7 +11,10 @@ const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helv
 for(const text of numberedRateText){const page=pdf.addPage([612,842]);text.split('\n').forEach((line,i)=>page.drawText(line,{x:32,y:808-i*19,size:9,font}));}
 const buffer=Buffer.from(await pdf.save());
 for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
- const instance=await browser.launch({headless:true}),context=await instance.newContext({viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
+ // Match the installed-app storage model and the other saved-document suites.
+ // WebKit's ephemeral context can reject File/Blob writes to IndexedDB.
+ const profile=fs.mkdtempSync(path.join(os.tmpdir(),'numbered-rate-'));
+ const context=await browser.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
  const page=await context.newPage(),errors=[];page.setDefaultTimeout(45000);page.on('pageerror',e=>errors.push(e.message));
  try{
   await setupRoutes(context);await page.clock.setFixedTime(new Date('2026-09-26T18:00:00Z'));
@@ -42,8 +47,13 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
   assert.equal(saved.extracted.origin,'Kingfield, ME');assert.equal(saved.extracted.destination,'Rockleigh, NJ');
   assert.equal(saved.extracted.shipper,'SAMPLE WATER');assert.equal(saved.extracted.consignee,'SAMPLE MARKET');
   assert.equal(saved.extracted.broker,'EXAMPLE LOGISTICS, INC.');assert.equal(saved.extracted.carrierName,'EXAMPLE CARRIER LLC');
+  const original=await page.evaluate(async clientId=>{
+    const blob=await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,t=db.transaction('document_blobs','readonly'),q=t.objectStore('document_blobs').index('client_document_id').get(clientId);t.oncomplete=()=>{resolve(q.result?.blob);db.close();};t.onabort=()=>reject(t.error);};});
+    return blob?Array.from(new Uint8Array(await blob.arrayBuffer())):null;
+  },saved.client_document_id);
+  assert.deepEqual(Buffer.from(original||[]),buffer,'Reloaded original must be byte-for-byte identical to the imported PDF');
   assert.deepEqual(saved.extracted.readerReviewV110345.documents[0].pages,[1,2]);assert.deepEqual(errors,[]);
   console.log(`PASS ${name} native two-page Load Confirmation → exact type/load/date → save and reload`);
  }catch(error){await page.screenshot({path:`${output}/${name}-rate-failure.png`,fullPage:true}).catch(()=>{});fs.writeFileSync(`${output}/${name}-rate-failure.txt`,JSON.stringify({error:String(error),errors,body:await page.locator('body').innerText()},null,2));throw error;}
- finally{await context.close();await instance.close();}
+ finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}
 }

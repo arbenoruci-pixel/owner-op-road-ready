@@ -38,7 +38,12 @@ cannot clear the warning.
   manual choices, ambiguity, full scanner classification and document coverage.
 - Chromium and WebKit flows in the Owned reader workflow: synthetic POD intake,
   manual folder/date changes, source confirmation, save/reload and Home coverage;
-  real native two-page PDF intake, exact type/load/date, export and save/reload.
+  real native two-page PDF intake, exact type/load/date, export and save/reload,
+  including byte-for-byte equality of the reloaded original.
+  Storage flows use persistent browser profiles, as the existing saved-document
+  suites do. The first RateCon run used an ephemeral WebKit context and reached
+  a Blob/File IndexedDB preparation error; private-context storage is not covered
+  by this release. No application storage checks were bypassed.
 - Existing architecture, runtime locks and all repository workflow gates remain.
 - Only synthetic fixtures are committed. Customer reports/photos are not changed
   or committed. No customer-account or physical-device writes are performed.
