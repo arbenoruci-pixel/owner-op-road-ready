@@ -1,4 +1,4 @@
-import {text,list,clone,loadOf,kindOf,documentFacts,validateFacts,day,CATALOG,FIELD_LABELS} from './evidenceCoreV110413.js';
+import {text,list,clone,loadOf,kindOf,documentFacts,validateFacts,day,CATALOG,FIELD_LABELS,sourceHashes} from './evidenceCoreV110413.js';
 export const RECOVERY_FORMAT='road-ready-evidence-recovery';
 const loadFields=new Set(['loadNo','broker','origin','destination','gross','revenue','pickupDate','deliveryDate','documentWorkflowStage','notes','documentTransferDays','aliases']);
 function scalarMatch(a,b){return a==null||a===''?(b==null||b===''):JSON.stringify(a)===JSON.stringify(b);}
@@ -65,7 +65,7 @@ export function prepareRecoveryBusiness(current,p) {
   return next;
 }
 export function checkDocumentCorrection(doc,c) {
-  if(text(doc.sha256)&&doc.sha256!==c.sha256)throw new Error('A saved original differs from the recovery source.');
+  if(sourceHashes(doc).some(hash=>hash!==c.sha256))throw new Error('A saved original differs from the recovery source.');
   const values={loadNo:loadOf(doc),kind:kindOf(doc),date:documentFacts(doc).date||''},after={loadNo:c.after.fields.loadNo||'',kind:c.after.kind,date:c.after.fields.date||''};
   for(const key of Object.keys(values))if(!scalarMatch(values[key],c.before[key])&&!scalarMatch(values[key],after[key]))throw new Error(`Document ${key} changed since this export. Existing data was kept.`);
   const review=doc.extracted?.evidenceFactsV1;

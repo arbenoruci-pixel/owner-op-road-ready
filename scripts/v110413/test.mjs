@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {buildEvidence,validateFacts,makeBookEntry,day,clone,isReviewed,possibleFuelDuplicate,registerEvidenceTypes,CATALOG} from './evidenceCore.js';
+import {buildEvidence,validateFacts,makeBookEntry,day,clone,isReviewed,possibleFuelDuplicate,registerEvidenceTypes,CATALOG,assertSourceHash,evidenceLoadResolver} from './evidenceCore.js';
 const recoverySource=fs.readFileSync(new URL('./recoveryCore.js',import.meta.url),'utf8').replace('./evidenceCoreV110413.js',new URL('./evidenceCore.js',import.meta.url).href);
 const {validateRecoveryPlan,prepareRecoveryBusiness,checkDocumentCorrection}=await import('data:text/javascript;base64,'+Buffer.from(recoverySource).toString('base64'));
 assert.equal(CATALOG.invoice.readerType,'load_invoice');assert.equal(CATALOG.maintenance.readerType,'repair_invoice');
@@ -8,6 +8,13 @@ const hash='a'.repeat(64),range={from:'2026-09-21',to:'2026-09-27'},load={id:'on
 const source=(kind,fields={},reviewed=false,id=kind)=>({local_id:id,client_document_id:id+'-client',sha256:hash,load_no:fields.loadNo??'L100',document_date:fields.date??'2026-09-25',type:kind,extracted:{...fields,...(reviewed?{evidenceFactsV1:{version:1,reviewedAt:'2026-09-27T10:00:00Z',sourceSha256:hash,fields,components:[]}}:{})}});
 const build=extra=>buildEvidence({range,loads:[load],today:'2026-09-27',...extra});
 const baseline=build();assert.equal(baseline.checks.find(c=>c.kind==='pod').status,'not_due');assert.equal(baseline.checks.find(c=>c.kind==='bol').status,'missing');
+const aliasSource=source('pod',{loadNo:'BOL-100',date:'2026-09-26',reference:'BOL-100',podSigned:true},true);
+for(const area of ['load','ifta','tax','audit']){const scoped=build({area,documents:[aliasSource],businessStore:{evidenceAliases:[{from:'BOL-100',to:'L100'}]}});assert.equal(scoped.checks.find(c=>c.kind==='pod').status,'ready',area+' resolves saved aliases');}
+assert.equal(evidenceLoadResolver({evidenceAliases:[{from:'A',to:'B'},{from:'B',to:'A'}]})('A'),'A');
+const octoberFuel=source('fuel_receipt',{loadNo:'Q300',date:'2026-10-01',quantity:20},false);
+for(const area of ['ifta','tax','audit']){const scoped=buildEvidence({area,documents:[octoberFuel],loads:[{loadNo:'Q300',pickupDate:'2026-09-30',deliveryDate:'2026-10-01'}],range:{from:'2026-07-01',to:'2026-09-30'}});assert.equal(scoped.docs.length,0,area+' excludes next-quarter transactions on this-quarter loads');assert.ok(scoped.issues.some(i=>i.id==='fuel-coverage'));}
+const loadWide=buildEvidence({area:'load',loadNo:'Q300',documents:[octoberFuel],loads:[{loadNo:'Q300',pickupDate:'2026-09-30'}],range:{from:'2026-07-01',to:'2026-09-30'}});assert.equal(loadWide.docs.length,1,'load-wide view keeps its documents');
+assert.doesNotThrow(()=>assertSourceHash({content_hash:hash},hash));assert.doesNotThrow(()=>assertSourceHash({contentHash:hash.toUpperCase()},hash));assert.throws(()=>assertSourceHash({content_hash:'b'.repeat(64)},hash),/checksum/);assert.throws(()=>assertSourceHash({sha256:hash,contentHash:'b'.repeat(64)},hash),/checksum/);
 const completed=build({loads:[{...load,documentWorkflowStage:'delivered'}]});assert.equal(completed.checks.find(c=>c.kind==='pod').status,'missing');
 assert.deepEqual(build({loads:[{...load,documentWorkflowStage:'tonu'}]}).checks.map(c=>c.kind),['rate_confirmation','invoice']);
 assert.equal(build({loads:[{...load,pickupDate:'2026-09-14',deliveryDate:'2026-09-15'}]}).checks.length,0);

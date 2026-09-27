@@ -1,7 +1,7 @@
 'use client';
 import './evidenceCatalogV110413.js';
 import React,{useEffect,useMemo,useState} from 'react';
-import {CATALOG,FIELD_LABELS,buildEvidence,documentFacts,kindOf,loadOf,idOf,text,day,localToday,validateFacts} from './evidenceCoreV110413.js';
+import {CATALOG,FIELD_LABELS,buildEvidence,documentFacts,kindOf,loadOf,idOf,text,day,localToday,validateFacts,evidenceLoadResolver} from './evidenceCoreV110413.js';
 import {saveReviewedFacts,addExpectedLoad,addExpectation} from './evidenceStorageV110413.js';
 import {readBusinessStore,BUSINESS_STORE_EVENT} from '../business/businessStore.js';
 import {readOwnerOpsStoreV102} from './ownerOpsStoreV102.js';
@@ -37,13 +37,13 @@ export default function EvidenceCenter({documents:providedDocuments,businessStor
     for(const l of providedLoads||[])map.set(loadOf(l),{...map.get(loadOf(l)),...l});
     return [...map.values()];
   },[businessStore.loads,providedLoads]);
-  const model=useMemo(()=>buildEvidence({documents,loads,businessStore,ownerStore,range:effectiveRange,loadNo:folder?.loadNo||''}),[documents,loads,businessStore,ownerStore,effectiveRange.from,effectiveRange.to,folder?.loadNo]);
+  const model=useMemo(()=>buildEvidence({documents,loads,businessStore,ownerStore,range:effectiveRange,area,loadNo:folder?.loadNo||''}),[documents,loads,businessStore,ownerStore,area,effectiveRange.from,effectiveRange.to,folder?.loadNo]);
   const rows=[...model.checks,...model.issues].filter(r=>r.area===area);
-  function review(doc){setSelected(doc);setKind(CATALOG[kindOf(doc)]?kindOf(doc):'other');setFields(documentFacts(doc));setError('');setMessage('');setChooser(false);}
+  function review(doc){setSelected(doc);setKind(CATALOG[kindOf(doc)]?kindOf(doc):'other');setFields({...documentFacts(doc),loadNo:evidenceLoadResolver(businessStore)(loadOf(doc))});setError('');setMessage('');setChooser(false);}
   async function save(book){setBusy(true);setError('');try{const next=await saveReviewedFacts(selected,kind,validateFacts(kind,fields),{book});setSelected(next);setMessage(book?'Reviewed source and book entry saved. Fuel, Tax and Audit use this same source.':'Reviewed source details saved.');}catch(e){setError(e.message);}finally{setBusy(false);}}
   function scan(type,loadNo){onScan?.({kind:CATALOG[type]?.readerType||type||'auto',loadNo:loadNo||folder?.loadNo||'',date:effectiveRange.from||''});}
   async function add(event){event.preventDefault();setBusy(true);setError('');try{if(adding==='load')await addExpectedLoad(draft);else await addExpectation({...draft,loadNo:draft.loadNo||folder?.loadNo||'',area});setAdding('');setDraft({});setMessage('Added to your document checklist.');}catch(e){setError(e.message);}finally{setBusy(false);}}
-  function exportIndex(){const file=new File([JSON.stringify({format:'road-ready-evidence-index',version:1,createdAt:new Date().toISOString(),range:effectiveRange,loadNo:folder?.loadNo||'',coverage:'Saved source records only. Check against dispatch, bank and fuel statements.',documents:model.docs.map(d=>({id:idOf(d),fileName:d.original_file_name||d.fileName,sha256:d.sha256,kind:kindOf(d),fields:documentFacts(d),review:d.extracted?.evidenceFactsV1||null})),checks:[...model.checks,...model.issues].map(({document,...r})=>({...r,sourceDocumentId:document?idOf(document):''}))},null,2)],`road-ready-evidence-${effectiveRange.from||'all'}.json`,{type:'application/json'});setDownload({url:URL.createObjectURL(file),name:file.name});}
+  function exportIndex(){const file=new File([JSON.stringify({format:'road-ready-evidence-index',version:1,createdAt:new Date().toISOString(),range:effectiveRange,area,loadNo:folder?.loadNo||'',coverage:'Saved source records only. Check against dispatch, bank and fuel statements.',documents:model.docs.map(d=>({id:idOf(d),fileName:d.original_file_name||d.fileName,sha256:d.sha256,kind:kindOf(d),fields:documentFacts(d),review:d.extracted?.evidenceFactsV1||null})),checks:[...model.checks,...model.issues].map(({document,...r})=>({...r,sourceDocumentId:document?idOf(document):''}))},null,2)],`road-ready-evidence-${effectiveRange.from||'all'}.json`,{type:'application/json'});setDownload({url:URL.createObjectURL(file),name:file.name});}
   return <section className="rr-evidence" aria-label="Document evidence checklist">
     <details open={!!folder}>
       <summary><span><strong>What’s missing</strong><small>{model.counts.missing} missing · {model.counts.review} to review{model.counts.notDue?` · ${model.counts.notDue} not due yet`:''}</small></span></summary>

@@ -72,8 +72,14 @@ export function documentFacts(doc={}) {
   return {...fields,...(saved?.version===1?saved.fields:{})};
 }
 export function isReviewed(doc) {
-  const review=doc?.extracted?.evidenceFactsV1,hash=text(doc?.sha256||doc?.content_hash);
-  return review?.version===1 && !!review.reviewedAt && /^[a-f0-9]{64}$/.test(hash) && review.sourceSha256===hash;
+  const review=doc?.extracted?.evidenceFactsV1,hashes=sourceHashes(doc);
+  return review?.version===1 && !!review.reviewedAt && hashes.length>0 && hashes.every(hash=>/^[a-f0-9]{64}$/.test(hash)&&review.sourceSha256===hash);
+}
+export const sourceHashes=doc=>[...new Set([doc?.sha256,doc?.content_hash,doc?.contentHash].map(v=>text(v).toLowerCase()).filter(Boolean))];
+export function assertSourceHash(doc,hash){if(sourceHashes(doc).some(saved=>saved!==hash))throw new Error('The original does not match its saved checksum.');}
+export function evidenceLoadResolver(businessStore={}) {
+  const aliases=new Map(list(businessStore.evidenceAliases).map(a=>[text(a.from).toUpperCase(),text(a.to).toUpperCase()]));
+  return value=>{const initial=text(value).toUpperCase(),seen=new Set();let result=initial;while(aliases.has(result)){if(seen.has(result))return initial;seen.add(result);result=aliases.get(result);}return result||initial;};
 }
 export function uniqueDocuments(documents=[]) {
   const map=new Map();
@@ -111,30 +117,33 @@ export function validateFacts(kind,input={}) {
 }
 export function componentsOf(doc) {
   const review=doc.extracted?.evidenceFactsV1;
-  if(isReviewed(doc) && Array.isArray(review.components) && review.components.length)return review.components;
+  if(review?.version===1 && Array.isArray(review.components) && review.components.length)return review.components.map(c=>({...c,reviewed:isReviewed(doc)&&c.reviewed===true}));
   return [{kind:kindOf(doc),fields:documentFacts(doc),reviewed:isReviewed(doc)}];
 }
-function coverage(doc,kind,loadNo) {
+function coverage(doc,kind,loadNo,resolve=text) {
   return componentsOf(doc).some(component=>{
     const fields={...documentFacts(doc),...component.fields};
-    return isReviewed(doc) && component.kind===kind && text(fields.loadNo).toUpperCase()===loadNo && (CATALOG[kind]?.fields||[]).filter(k=>k!=='notes').every(k=>usable(fields[k],k)) && component.reviewed===true;
+    return isReviewed(doc) && component.kind===kind && resolve(fields.loadNo)===loadNo && (CATALOG[kind]?.fields||[]).filter(k=>k!=='notes').every(k=>usable(fields[k],k)) && component.reviewed===true;
   });
 }
 export function rangeContains(value,range={}) { const d=day(value);return !!d&&(!range.from||d>=range.from)&&(!range.to||d<=range.to); }
-export function buildEvidence({documents=[],loads=[],businessStore={},ownerStore={},range={},loadNo='',today=localToday()}={}) {
-  const all=uniqueDocuments(documents), target=text(loadNo).toUpperCase();
-  const scopedLoads=loads.filter(l=>target?loadOf(l)===target:!range.from&&!range.to||[l.pickupDate,l.deliveryDate,...list(l.documentTransferDays),...list(l.days)].some(d=>rangeContains(d,range)));
-  const refs=new Set(scopedLoads.map(loadOf));
-  const docs=all.filter(d=>target?loadOf(d)===target:!range.from&&!range.to||refs.has(loadOf(d))||rangeContains(documentFacts(d).date,range)||componentsOf(d).some(c=>rangeContains(c.fields?.date,range))||!loadOf(d)&&!day(documentFacts(d).date));
+export function buildEvidence({documents=[],loads=[],businessStore={},ownerStore={},range={},loadNo='',area='load',today=localToday()}={}) {
+  const resolve=evidenceLoadResolver(businessStore),refOf=row=>resolve(loadOf(row));
+  const all=uniqueDocuments(documents), target=resolve(loadNo);
+  const scopedLoads=[...new Map(loads.filter(l=>target?refOf(l)===target:!range.from&&!range.to||[l.pickupDate,l.deliveryDate,...list(l.documentTransferDays),...list(l.days)].some(d=>rangeContains(d,range))).map(l=>[refOf(l),l])).values()];
+  const refs=new Set(scopedLoads.map(refOf));
+  const inPeriod=d=>!range.from&&!range.to||rangeContains(documentFacts(d).date,range)||componentsOf(d).some(c=>rangeContains(c.fields?.date,range));
+  const docs=all.filter(d=>(!target||refOf(d)===target)&&(area==='load'?(target||refs.has(refOf(d))||inPeriod(d)||!refOf(d)&&!day(documentFacts(d).date)):inPeriod(d)));
   const issues=[],checks=[];
   const issue=(id,label,detail,area,document=null,extra={})=>issues.push({id,label,detail,area,document,status:'review',...extra});
+  if(area!=='load')for(const doc of all.filter(d=>(!target||refOf(d)===target)&&!docs.includes(d)&&!day(documentFacts(d).date)&&!componentsOf(d).some(c=>day(c.fields?.date))))issue(idOf(doc)+':period-date','Undated source needs review','Not included in this period. Check the original to establish its transaction or service date.','audit',doc,{outsidePeriod:true});
   for(const load of scopedLoads){
-    const ref=loadOf(load),stage=load.documentWorkflowStage||load.serviceStatus||load.status;
+    const ref=refOf(load),stage=load.documentWorkflowStage||load.serviceStatus||load.status;
     const tonu=stage==='tonu', cancelled=stage==='cancelled';
     for(const rule of LOAD_RULES) {
       if((tonu||cancelled)&&['bol','pod'].includes(rule.id))continue;
-      const matching=docs.filter(d=>loadOf(d)===ref&&rule.kinds.some(kind=>componentsOf(d).some(c=>c.kind===kind)));
-      const verified=matching.some(d=>rule.kinds.some(kind=>coverage(d,kind,ref)));
+      const matching=docs.filter(d=>refOf(d)===ref&&rule.kinds.some(kind=>componentsOf(d).some(c=>c.kind===kind)));
+      const verified=matching.some(d=>rule.kinds.some(kind=>coverage(d,kind,ref,resolve)));
       const due=day(rule.stage==='pickup'?load.pickupDate:rule.stage==='delivery'?load.deliveryDate:'');
       const later=!matching.length&&due&&due>today&&!['delivered','tonu','invoiced','submitted','paid'].includes(stage);
       checks.push({id:ref+':'+rule.id,label:rule.label,loadNo:ref,kind:rule.id,status:verified?'ready':matching.length?'review':later?'not_due':'missing',detail:later?`Expected ${due}`:verified?'Reviewed source on file':matching.length?'Check the saved original and confirm its details':'Add or choose a saved file',document:matching[0]||null,area:'load'});
@@ -143,7 +152,7 @@ export function buildEvidence({documents=[],loads=[],businessStore={},ownerStore
   const hashes=new Map();
   for(const doc of docs){
     const id=idOf(doc), f=documentFacts(doc), kind=kindOf(doc), review=doc.extracted?.evidenceFactsV1;
-    const rawRefs=new Set([doc.load_no,doc.loadNo,doc.canonicalLoadNo,doc.extracted?.loadNo,doc.extracted?.canonicalLoadNo].map(v=>text(v).toUpperCase()).filter(Boolean));
+    const rawRefs=new Set([doc.load_no,doc.loadNo,doc.canonicalLoadNo,doc.extracted?.loadNo,doc.extracted?.canonicalLoadNo].map(resolve).filter(Boolean));
     if(rawRefs.size>1&&!doc.repairOverlayApplied)issue(id+':identity','Load references disagree','Compare the broker load number with the BOL / pickup references.','load',doc);
     if(CATALOG[kind]?.uses.includes('load')&&!loadOf(doc))issue(id+':unassigned','Document has no load','Choose its broker load number. A BOL number can be a separate reference.','load',doc);
     if(!day(f.date))issue(id+':date','Document date needs review','The upload date does not establish the service or transaction date.','audit',doc);
@@ -162,16 +171,16 @@ export function buildEvidence({documents=[],loads=[],businessStore={},ownerStore
     }
   }
   for(const row of list(businessStore.evidenceExpectations)) {
-    if(target?row.loadNo!==target:row.date&&!rangeContains(row.date,range))continue;
-    const candidates=docs.filter(d=>(!row.loadNo||loadOf(d)===row.loadNo)&&componentsOf(d).some(c=>c.kind===row.kind&&(!row.date||day(c.fields?.date||documentFacts(d).date)===row.date)));
-    const valid=d=>isReviewed(d)&&componentsOf(d).some(c=>c.kind===row.kind&&c.reviewed===true&&(!row.date||day(c.fields?.date||documentFacts(d).date)===row.date)&&(CATALOG[row.kind]?.fields||[]).filter(k=>k!=='notes'&&k!=='loadNo').every(k=>usable(({...documentFacts(d),...c.fields})[k],k)));
+    if(target?resolve(row.loadNo)!==target:row.date&&!rangeContains(row.date,range))continue;
+    const candidates=docs.filter(d=>(!row.loadNo||refOf(d)===resolve(row.loadNo))&&componentsOf(d).some(c=>c.kind===row.kind&&(!row.date||day(c.fields?.date||documentFacts(d).date)===row.date)));
+    const valid=d=>isReviewed(d)&&componentsOf(d).some(c=>c.kind===row.kind&&c.reviewed===true&&(!row.loadNo||resolve(c.fields?.loadNo||documentFacts(d).loadNo)===resolve(row.loadNo))&&(!row.date||day(c.fields?.date||documentFacts(d).date)===row.date)&&(CATALOG[row.kind]?.fields||[]).filter(k=>k!=='notes'&&k!=='loadNo').every(k=>usable(({...documentFacts(d),...c.fields})[k],k)));
     const matching=candidates.find(valid)||candidates[0],complete=matching&&valid(matching);
     checks.push({id:row.id,label:row.label,loadNo:row.loadNo,kind:row.kind,area:row.area||'load',status:complete?'ready':matching?'review':'missing',document:matching||null,detail:complete?'Reviewed source on file':matching?'Source available for review':'Expected document not on file'});
   }
   const mileage=list(ownerStore.mileageImports).filter(r=>rangeContains(r.date,range));
   if(!mileage.length)issue('jurisdiction-mileage','State mileage is not on file','Import actual miles by jurisdiction, including empty travel. Ratecon miles are estimates.','ifta',null,{action:'mileage'});
   if(!docs.some(d=>kindOf(d)==='fuel_receipt')&&!list(businessStore.fuel).some(r=>rangeContains(r.date,range))&&!list(ownerStore.fuelImports).some(r=>rangeContains(r.date,range)))issue('fuel-coverage','Fuel purchases have not been reconciled','Add receipts or a fuel statement, or verify that no purchases occurred.','ifta',null,{kind:'fuel_receipt'});
-  for(const bucket of ['fuel','expenses','maintenance'])for(const row of list(businessStore[bucket]).filter(r=>target?loadOf(r)===target:rangeContains(r.date,range))){
+  for(const bucket of ['fuel','expenses','maintenance'])for(const row of list(businessStore[bucket]).filter(r=>(!target||refOf(r)===target)&&(area==='load'&&target||rangeContains(r.date,range)))){
     const source=text(row.sourceDocumentId||row.documentId||row.clientDocumentId);
     if(!source||!all.some(d=>[idOf(d),d.local_id,d.id].includes(source)))issue(bucket+':'+row.id,'Book entry needs its source',`${bucket}: ${row.merchant||row.vendor||row.date||row.id}`,'tax',null,{kind:bucket==='fuel'?'fuel_receipt':bucket==='maintenance'?'maintenance':'expense_receipt'});
   }

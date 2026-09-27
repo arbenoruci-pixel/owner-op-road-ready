@@ -1,7 +1,7 @@
 'use client';
 import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../business/businessStore.js';
-import {CATALOG,clone,text,list,idOf,loadOf,kindOf,day,validateFacts,makeBookEntry,documentFacts,possibleFuelDuplicate} from './evidenceCoreV110413.js';
+import {CATALOG,clone,text,list,idOf,loadOf,kindOf,day,validateFacts,makeBookEntry,documentFacts,possibleFuelDuplicate,sourceHashes,assertSourceHash} from './evidenceCoreV110413.js';
 import {readOwnerOpsStoreV102} from './ownerOpsStoreV102.js';
 import {readTransferOriginal} from './transferStorageV110412.js';
 import {digest} from './transferCoreV110412.js';
@@ -43,7 +43,7 @@ export function mirrorFacts(store,doc) {
 export async function saveReviewedFacts(doc,kind,input,{book=false}={}) {
   const fields=validateFacts(kind,input),db=getOwnerOpDb();if(!db)throw new Error('Device storage is unavailable.');
   const original=await readTransferOriginal(doc);if(!original?.size)throw new Error('Open or restore the original before confirming its evidence.');
-  const sourceHash=await digest(await original.arrayBuffer());if(doc.sha256&&doc.sha256!==sourceHash)throw new Error('The original does not match its saved checksum.');
+  const sourceHash=await digest(await original.arrayBuffer());assertSourceHash(doc,sourceHash);
   return locked(async()=>{
     const storage=window.localStorage,{before,store}=currentStore(storage);let written=null,result;
     try{
@@ -51,7 +51,8 @@ export async function saveReviewedFacts(doc,kind,input,{book=false}={}) {
         const matches=await db.documents_local.where('client_document_id').equals(doc.client_document_id||idOf(doc)).toArray();
         if(matches.length!==1)throw new Error('The saved original could not be identified uniquely. Reopen the document.');
         const current=matches[0];
-        if(text(current.sha256)!==text(doc.sha256))throw new Error('The original changed. Reopen it before reviewing.');
+        assertSourceHash(current,sourceHash);
+        if(JSON.stringify(sourceHashes(current))!==JSON.stringify(sourceHashes(doc)))throw new Error('The original changed. Reopen it before reviewing.');
         if(text(current.extracted?.evidenceFactsV1?.reviewedAt)!==text(doc.extracted?.evidenceFactsV1?.reviewedAt))throw new Error('These details were changed on this device. Reopen the document.');
         // A metadata review of a packet keeps its already-reviewed page components.
         // Reassigning the packet requires a fresh component review instead.
