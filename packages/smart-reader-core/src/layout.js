@@ -61,9 +61,10 @@ export function fieldMatches(lines,spec){
     }
     const noisy=line.box&&line.box.y<.4&&spec.noisyPattern?.exec(line.text);
     if(noisy){matches.push({line,start:noisy.indices[1][0],end:noisy.indices[1][1],issue:'label_needs_review'});continue;}
-    if(rightLabel&&line.box&&!column){
+    if((rightLabel||column)&&line.box){
       const label=line.box,side=label.x+label.width/2<.5?0:.5;
-      const right=lines.filter(candidate=>{const box=candidate.box;return candidate!==line&&box&&!isRule(candidate,line)&&box.x>=label.x+label.width-.003&&box.x-(label.x+label.width)<=.3&&box.x>=side&&box.x+box.width<=side+.5&&Math.min(box.y+box.height,label.y+label.height)-Math.max(box.y,label.y)>=Math.min(box.height,label.height)*.5;}).sort((a,b)=>a.box.x-b.box.x);
+      const columnLeft=column?.left??side,columnRight=column?.right??(side+.5);
+      const right=lines.filter(candidate=>{const box=candidate.box;return candidate!==line&&box&&!isRule(candidate,line)&&box.x>=label.x+label.width-.003&&box.x-(label.x+label.width)<=.3&&box.x>=columnLeft&&box.x+box.width<=columnRight&&Math.min(box.y+box.height,label.y+label.height)-Math.max(box.y,label.y)>=Math.min(box.height,label.height)*.5;}).sort((a,b)=>a.box.x-b.box.x);
       const eligible=spec.measurementRow?right.filter(candidate=>measurementRow(label,candidate.box)):right;
       // A separate unit cell belongs only to its unique numeric cell on this
       // label's baseline. Two numeric cells or competing units stay unresolved.

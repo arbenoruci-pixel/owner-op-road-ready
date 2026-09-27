@@ -57,6 +57,17 @@ test('missing company rows never borrow the other column or the corporate page h
   }
 });
 
+test('paired headings still read names placed beside their own labels',()=>{
+  const input=columnBolInput();
+  for(const o of input.pages[0].observations)for(const [heading,name]of [['FROM','Northern Water Inc'],['TO','Example Market']]){
+    const label=o.lines.find(l=>l.text.includes('SHIP '+heading)),value=o.lines.find(l=>l.text===name);
+    value.box.x=label.box.x+label.box.width+.008;value.box.y=label.box.y+.002;
+  }
+  const f=fields(input);
+  assert.deepEqual(candidates(f.shipper),['Northern Water Inc']);
+  assert.deepEqual(candidates(f.consignee),['Example Market']);
+});
+
 test('an unclear first row and competing company cells are not skipped',()=>{
   const input=columnBolInput();
   for(const o of input.pages[0].observations){

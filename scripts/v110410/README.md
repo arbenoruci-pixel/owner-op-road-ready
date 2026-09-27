@@ -18,7 +18,7 @@ not relabeled as trailer numbers. Automatic acceptance and filing remain disable
 
 ## Verification
 
-- 374 core tests, including nine targeted regression groups.
+- 375 core tests, including ten targeted regression groups.
 - Synthetic Chromium/WebKit intake → source review → confirm both parties →
   export → save → reload, with cloud/account requests intercepted.
 - The final production build and existing repository workflow gates.

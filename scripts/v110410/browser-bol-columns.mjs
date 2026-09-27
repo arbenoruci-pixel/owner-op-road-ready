@@ -83,7 +83,8 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     assert.equal(saved.readerSourceFieldsV110393.fields.bolNo.status,'supported');
     assert.equal(saved.readerSourceFieldsV110393.fields.shipper.status,'confirmed');
     assert.equal(saved.readerSourceFieldsV110393.fields.consignee.status,'confirmed');
-    assert.equal(saved.readerReviewV110345.documents[0].fields.bolNumber.value,'00654321');assert.deepEqual(errors,[]);
+    assert.equal(saved.readerReviewV110345.documents[0].fields.shipper.value,'Northern Water Inc');
+    assert.equal(saved.readerReviewV110345.documents[0].fields.consignee.value,'Example Market');assert.deepEqual(errors,[]);
     console.log(`PASS ${name} combined BOL/PO, column source review, export and confirmed-party persistence`);
   }catch(error){
     await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});
