@@ -4,6 +4,9 @@ import {isPartyBoilerplate} from './fieldGuards.js';
 const NEXT_FIELD=/(?:^|[\s|])(?:SALES\s+ORDER|DELIVERY|LOAD\s+DESCRIPTION|RESTACKS|BAD\s+PALLETS|DOOR\s+NO\.?|DEPARTMENT|TRUCK\s+NO\.?|TRAILER\s+NO\.?|STARTED\s+AT|COMPLETED\s+AT|ARRIVAL|PRINTED|DATE|PHONE|NET\s+TOTAL|CHECKOUT\s+FEE)\s*[:#]/i;
 const FOOTNOTE=/\s+\*\s+(?:IF|WHEN|THE|SHIPPER|CARRIER)\b/i;
 export function inlineFieldRange(line,spec){
+  // Footer prose and check-in/out headings are not carrier identities. A
+  // carrier name lower on a BOL needs an explicitly delimited party label.
+  if(spec.footerLabel&&line.box?.y>.4&&!spec.footerLabel.test(line.text))return null;
   // Tiny lower-case header fragments can be broken boilerplate. Full names and
   // explicitly delimited labels remain eligible.
   if(spec.kind==='party'&&line.box?.y<.16&&line.box.height<.008&&/^\s*(?:carrier|shipper|consignee)\s+[a-z]{1,3}\s*$/.test(line.text))return null;
