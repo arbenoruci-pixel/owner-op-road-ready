@@ -1,5 +1,6 @@
 import {resolveEvidence} from './input.js';
 import {isDocumentParty} from './fieldGuards.js';
+import {isNumberedRateTable} from './numberedRate.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
   poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
@@ -13,13 +14,16 @@ const layoutWarning='Some fields could not be verified beside their labels. Chec
 // The raw analysis and review stay immutable; load assignment and duty links
 // remain the driver's choices. Source support never means automatic filing.
 export function scanWithSourceFields(analysis,review,selectedType){
-  if(!analysis||review?.analysis!==analysis||!['bol','pod'].includes(selectedType))return analysis;
+  if(!analysis||review?.analysis!==analysis||!['bol','pod','rate_confirmation'].includes(selectedType))return analysis;
   const result=review.result,doc=result?.documents?.[0];
   if(result?.engine!=='owned-smart-reader'||result.documents.length!==1||doc.kind!==selectedType
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
+  const rate=selectedType==='rate_confirmation';
+  if(rate&&!result.pages.some(page=>page.observations.some(o=>isNumberedRateTable(o.lines))))return analysis;
+  const fieldMapping=rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress'}:mapping;
   const fields={...analysis.fields},fieldEvidence={...analysis.fieldEvidence},fieldConfidence={...analysis.fieldConfidence};
   const oldReview=analysis.evidenceReviewV11036||{},evidence={...oldReview.evidence},accepted=[],proofs={},savedWarnings=[];
-  for(const [key,ownedKey]of Object.entries(mapping)){
+  for(const [key,ownedKey]of Object.entries(fieldMapping)){
     const field=doc.fields[ownedKey];if(!field)continue;
     const alias=aliases[key],replaceAlias=alias&&fields[alias]===fields[key];
     if(replaceAlias){delete fields[alias];delete fieldEvidence[alias];delete fieldConfidence[alias];delete evidence[alias];}
@@ -48,7 +52,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
   const removed=(analysis.layoutGuardV110337?.removedFields||[]).filter(key=>!accepted.includes(key));
   const issues=(oldReview.issues||[]).filter(issue=>!(issue===bolWarning&&accepted.includes('bolNo')
     ||issue===dateWarning&&accepted.includes('documentDate')||issue===layoutWarning&&analysis.layoutGuardV110337&&!removed.length));
-  if(!fields.bolNo&&!issues.includes(bolWarning))issues.push(bolWarning);
+  if(!rate&&!fields.bolNo&&!issues.includes(bolWarning))issues.push(bolWarning);
   for(const warning of savedWarnings)if(!issues.includes(warning))issues.push(warning);
   return {...analysis,fields,fieldEvidence,fieldConfidence,needsReview:true,routing:{...analysis.routing,autoFile:false},
     ...(analysis.layoutGuardV110337?{layoutGuardV110337:{...analysis.layoutGuardV110337,removedFields:removed}}:{}),

@@ -1,9 +1,11 @@
 import {documentReferences} from './documentReference.js';
+import {numberedRateContinuation} from './numberedRate.js';
 
 // A repeated complete RateCon stays separate even if its PRO matches. Only a
 // terms-only continuation with the same explicit envelope can join its parent.
 export function rateContinuation(previousPages,page,identity,profile) {
   if(identity.kind!=='unknown'||identity.status==='conflicting')return false;
+  if(numberedRateContinuation(previousPages,page,identity))return true;
   const before=documentReferences(previousPages),after=documentReferences([page]);
   const all=[...before,...after];
   if(!before.length||!after.length||new Set(all.map(r=>r.value)).size!==1

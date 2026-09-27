@@ -3,6 +3,7 @@ import {certificateMatches} from './signingCertificate.js';
 import {normalizeValue} from './profiles.js';
 import {documentReferences} from './documentReference.js';
 import {rateSectionMatches} from './rateConfirmation.js';
+import {isNumberedRateTable} from './numberedRate.js';
 
 const strong=line=>line.confidence===null||line.confidence>=.8;
 const refs=documentReferences;
@@ -34,6 +35,19 @@ function nativeDateOrder(pages,year){
 // A short year can use the full year on a certificate for the exact same
 // envelope. Never use today's year or an unrelated packet page.
 export function rateDateContext(groupPages,allPages,identities){
+  const tableDates=[];
+  for(const page of groupPages)for(const observation of page.observations){
+    if(!isNumberedRateTable(observation.lines))continue;
+    for(const line of observation.lines){
+      const m=/^\s*(?:Document Date|First Pickup Date)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+\d{2}:\d{2})?\s*$/id.exec(line.text);
+      if(!m||!strong(line))continue;
+      const raw=`${m[1]}/${m[2]}/${m[3]}`;
+      if(!normalizeValue('date',raw).value)continue;
+      const order=Number(m[1])<=12&&Number(m[2])>12?'mdy':Number(m[1])>12&&Number(m[2])<=12?'dmy':null;
+      if(order)tableDates.push({year:Number(m[3]),order,evidence:evidenceFor(page,observation,line,m.indices[1][0],m.indices[3][1])});
+    }
+  }
+  if(tableDates.length&&new Set(tableDates.map(a=>a.year+':'+a.order)).size===1)return {year:tableDates[0].year,order:tableDates[0].order,evidence:tableDates.map(a=>a.evidence)};
   const references=refs(groupPages),values=new Set(references.map(r=>r.value));
   if(values.size!==1||references.some(r=>!strong(r.line)))return null;
   const value=references[0].value;

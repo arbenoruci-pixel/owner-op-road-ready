@@ -1,0 +1,8 @@
+  function acceptReaderReviewV110345(value) {
+    setReaderReviewV110345(value);
+    const typeId=filingTypeForReview(value.summary);
+    if(typeId&&typeId!==selectedType){
+      setSelectedType(typeId);setReviewed(false);setRiskAcknowledged(false);setLinkToLogbook(false);setSelectedStopSequence(0);setMatch(null);
+      if(!loadSelectionSourceV11037.startsWith('driver_')){setSelectedLoadNo('');setLoadSelectionSourceV11037('driver_unassigned');}
+    }
+  }

@@ -1,0 +1,18 @@
+  function acceptReaderReviewV110345(value) {
+    if(value?.analysis!==analysis)return;
+    setReaderReviewV110345(value);
+    const typeId=filingTypeForReview(value.summary)||selectedType;
+    if(typeId!==selectedType){
+      setSelectedType(typeId);setReviewed(false);setRiskAcknowledged(false);setLinkToLogbook(false);setSelectedStopSequence(0);
+    }
+    const refreshed=reviewAssignment({analysis,review:value,typeId,state,businessStore:migrateBusinessStoreV105(readBusinessStore(),state),loadNo:selectedLoadNo,assignment:loadSelectionSourceV11037});
+    if(!refreshed)return;
+    setMatch(refreshed.match);
+    if(!loadSelectionSourceV11037.startsWith('driver_')){
+      setSelectedLoadNo(refreshed.loadNo);setLoadSelectionSourceV11037(refreshed.assignment);
+      if(refreshed.loadNo!==selectedLoadNo){setSelectedStopSequence(refreshed.stopSequence);setLinkToLogbook(false);setReviewed(false);}
+    }
+    if(!dateChosenByDriverV110411.current&&refreshed.documentDate){
+      const date=safeDocumentDate(refreshed.documentDate);if(date&&date!==documentDate){setDocumentDate(date);setLinkDay(date);setReviewed(false);}
+    }
+  }
