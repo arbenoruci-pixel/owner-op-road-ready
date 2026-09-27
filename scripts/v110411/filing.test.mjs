@@ -18,12 +18,13 @@ test('a supported secondary OCR reference can match without appearing in the pri
 test('source updates preserve a manual folder and explicit Choose later',()=>{
  for(const [loadNo,assignment]of [['OTHER','driver_selected'],['','driver_unassigned']])assert.equal(reviewAssignment({...base,loadNo,assignment}).loadNo,loadNo);
  assert.equal(reviewAssignment({...base,analysis:{...analysis}}),null,'stale source review cannot update another scan');
+ assert.equal(reviewAssignment({...base,typeId:'other'}),null,'a Reader result for another type cannot rematch raw fields');
 });
 test('ambiguous aliases and mixed packets cannot choose a folder',()=>{
  const businessStore={loads:[{source:'rate_confirmation_v105',loadNo:'A1234',aliases:[{kind:'bol_number',value:'00654321'}]},{source:'rate_confirmation_v105',loadNo:'B1234',aliases:[{kind:'bol_number',value:'00654321'}]}]};
  assert.equal(reviewAssignment({...base,businessStore}).loadNo,'');
  const mixed={...analysis,typeEvidenceV110334:{mixedDocuments:true}};
- assert.equal(reviewAssignment({...base,analysis:mixed,review:{analysis:mixed,result}}).loadNo,'');
+ assert.equal(reviewAssignment({...base,analysis:mixed,review:{analysis:mixed,result}}),null,'mixed packets retain the initial explicit-review decision');
 });
 test('full scanner keeps numbered RateCon plus delivery-related terms together',()=>{
  const text=numberedRateText.map((t,i)=>`[[PAGE:${i+1}]]\n${t}`).join('\n');

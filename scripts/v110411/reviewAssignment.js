@@ -6,6 +6,7 @@ import {matchScanDocumentToLoadV11037,initialScanLoadV11037} from './scanLoadAss
 export function reviewAssignment({analysis,review,typeId,state,businessStore,loadNo='',assignment='unassigned'}){
   if(review?.analysis!==analysis)return null;
   const source=scanWithSourceFields(analysis,review,typeId);
+  if(source===analysis)return null; // No applicable source update: retain the initial filing decision.
   const result={...source,type:{...source.type,id:typeId}};
   const match=matchScanDocumentToLoadV11037({state,businessStore,typeId,fields:result.fields||{},analysis:{...result,text:[result.text||result.rawText||'',...Object.values(source.fields?.readerSourceFieldsV110393?.fields||{}).flatMap(field=>(field.evidence||[]).map(ref=>ref.quote))].join('\n')}});
   const manual=assignment.startsWith('driver_');
