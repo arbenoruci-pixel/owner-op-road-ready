@@ -113,6 +113,7 @@ steps.push('finalize-sleeper-midnight-v110408.mjs','v110408/sleeper-midnight.tes
 steps.push('finalize-edit-gps-v110409.mjs','v110409/edit-gps.test.mjs','v110408/sleeper-midnight.test.mjs','verify-gps-best-fix-v962.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','v110378/test-review-regressions.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-bol-columns-v110410.mjs','../packages/smart-reader-core/test/bol-columns.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-document-filing-v110411.mjs','v110411/filing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-load-week-transfer-v110412.mjs','v110412/transfer.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
