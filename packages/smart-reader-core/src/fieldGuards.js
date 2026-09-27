@@ -10,7 +10,6 @@ export function isPartyBoilerplate(raw){
 export function isDocumentParty(raw) {
   const value=String(raw||'').trim();
   return value.length>0&&value.length<=200&&/\p{L}/u.test(value)
-    && !/^[\s|\[\]{}]*(?:SHIP\s*FROM|SHIP\s*TO|SHIPPER|CONSIGNEE|CARRIER)\s*[:._]*\s*$/i.test(value)
     && !isPartyBoilerplate(value)
     && !/^[\s|.,;:_-]*(?:(?:BOL|B\/L|BILL\s+OF\s+LADING|INVOICE|RECEIPT|TRAILER|(?:CUSTOMER\s+)?(?:P\.?\s*O\.?|PURCHASE\s+ORDER))\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)|(?:DATE|TOTAL\s+(?:NET\s+)?WEIGHT)\s*:)/i.test(value)
     && !/^(?:[\s.,;:_-]*)(?:signature(?:\s*[/;:]|$|\s+(?:date|of|shipper|carrier|required)\b)|sign(?:\s+(?:here|below|parties|pusties)\b|\s*[:/]|$)|n\s*[/;:]|n[ag]me\s*[:;]|number\b|collect\b|prepaid\b)/i.test(value)
