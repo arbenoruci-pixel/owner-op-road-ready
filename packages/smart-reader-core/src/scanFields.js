@@ -1,5 +1,6 @@
 import {resolveEvidence} from './input.js';
 import {isDocumentParty} from './fieldGuards.js';
+import {isNumberedRateTable} from './numberedRate.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
   poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
@@ -7,21 +8,25 @@ const referenceKinds={bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailer
 const aliases={shipper:'origin',consignee:'destination',documentDate:'date'};
 const bolWarning='BOL number was not verified from its label. Check the original.';
 const dateWarning='Document date was not read. Enter it after checking the original.';
+const payWarning='Agreed carrier pay was not found under a payment label. Fees and detention amounts are excluded.';
 const layoutWarning='Some fields could not be verified beside their labels. Check Reader preview and the original.';
 
 // Derive the filing display from this exact scan's current source review.
 // The raw analysis and review stay immutable; load assignment and duty links
 // remain the driver's choices. Source support never means automatic filing.
 export function scanWithSourceFields(analysis,review,selectedType){
-  if(!analysis||review?.analysis!==analysis||!['bol','pod'].includes(selectedType))return analysis;
+  if(!analysis||review?.analysis!==analysis||!['bol','pod','rate_confirmation'].includes(selectedType))return analysis;
   const result=review.result,doc=result?.documents?.[0];
   if(result?.engine!=='owned-smart-reader'||result.documents.length!==1||doc.kind!==selectedType
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
+  const rate=selectedType==='rate_confirmation';
+  if(rate&&!result.pages.some(page=>page.observations.some(o=>isNumberedRateTable(o.lines))))return analysis;
+  const fieldMapping=rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',broker:'broker',carrierName:'carrier',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress',origin:'pickupCity',destination:'deliveryCity'}:mapping;
   const fields={...analysis.fields},fieldEvidence={...analysis.fieldEvidence},fieldConfidence={...analysis.fieldConfidence};
   const oldReview=analysis.evidenceReviewV11036||{},evidence={...oldReview.evidence},accepted=[],proofs={},savedWarnings=[];
-  for(const [key,ownedKey]of Object.entries(mapping)){
+  for(const [key,ownedKey]of Object.entries(fieldMapping)){
     const field=doc.fields[ownedKey];if(!field)continue;
-    const alias=aliases[key],replaceAlias=alias&&fields[alias]===fields[key];
+    const alias=rate?null:aliases[key],replaceAlias=alias&&fields[alias]===fields[key];
     if(replaceAlias){delete fields[alias];delete fieldEvidence[alias];delete fieldConfidence[alias];delete evidence[alias];}
     delete fields[key];delete fieldEvidence[key];delete fieldConfidence[key];delete evidence[key];
     if(key==='weight'){delete fields.weightUnit;delete fieldEvidence.weightUnit;delete evidence.weightUnit;}
@@ -47,8 +52,9 @@ export function scanWithSourceFields(analysis,review,selectedType){
   fields.readerSourceFieldsV110393={engineVersion:result.engineVersion,documentId:result.documentId,reviewRevision:result.reviewRevision,fields:proofs};
   const removed=(analysis.layoutGuardV110337?.removedFields||[]).filter(key=>!accepted.includes(key));
   const issues=(oldReview.issues||[]).filter(issue=>!(issue===bolWarning&&accepted.includes('bolNo')
-    ||issue===dateWarning&&accepted.includes('documentDate')||issue===layoutWarning&&analysis.layoutGuardV110337&&!removed.length));
-  if(!fields.bolNo&&!issues.includes(bolWarning))issues.push(bolWarning);
+    ||issue===dateWarning&&accepted.includes('documentDate')||issue===payWarning&&rate&&accepted.includes('gross')
+    ||issue===layoutWarning&&analysis.layoutGuardV110337&&!removed.length));
+  if(!rate&&!fields.bolNo&&!issues.includes(bolWarning))issues.push(bolWarning);
   for(const warning of savedWarnings)if(!issues.includes(warning))issues.push(warning);
   return {...analysis,fields,fieldEvidence,fieldConfidence,needsReview:true,routing:{...analysis.routing,autoFile:false},
     ...(analysis.layoutGuardV110337?{layoutGuardV110337:{...analysis.layoutGuardV110337,removedFields:removed}}:{}),

@@ -3,6 +3,7 @@
 // unproven section-derived value still needs confirmation against its source.
 import {isDocumentParty} from './fieldGuards.js';
 import {nativeStopEvidence} from './nativeStopEvidence.js';
+import {numberedRateSignals} from './numberedRate.js';
 
 const pickup=/^\s*(?:PICK(?:\s*UP)?|SHIPPER)(?:\s*[:#]?\s*\d+)?\s*:?\s*$/i;
 const delivery=/^\s*(?:DELIVERY|DELIVER|DROP(?:\s*OFF)?|CONSIGNEE)(?:\s*[:#]?\s*\d+)?\s*:?\s*$/i;
@@ -106,6 +107,7 @@ export const rateConfirmationProfile={
   heading:/^\s*(?:(?:PRO|LOAD|ORDER)\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]?\s*[A-Z0-9][A-Z0-9._/-]*\s+)?(?:CARRIER\s+)?(?:RATE\s*(?:CONFIRMATION|CON)|LOAD\s+CONFIRMATION)(?:\s+(?:FOR\s+)?(?:LOAD|PRO|ORDER|PO)\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]?\s*[A-Z0-9][A-Z0-9._/-]*)?\s*$/i,
   signals:[/^\s*(?:TOTAL\s+(?:RATE|CARRIER\s+(?:PAY|RATE))|CARRIER\s+PAY|ALL[ -]IN\s+RATE|RATE\s*\(\$\))(?=\s|:)/i,/^\s*(?:PICK(?:\s*UP)?|SHIPPER|ORIGIN|LOAD AT)\b/i,/^\s*(?:DELIVERY|DELIVER|DROP|CONSIGNEE|DESTINATION|STOP)\b/i],
   identity:'loadNumber',
+  variants:[{heading:/^\s*LOAD CONFIRMATION\s*$/i,signals:numberedRateSignals,sameObservation:true}],
   fields:{
     loadNumber:{label:'Load / PRO number',kind:'identifier',required:true,nativeCell:'loadNumber',
       pattern:/^\s*(?:PRO|LOAD|ORDER)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:#]?\s*([A-Z0-9][A-Z0-9._/-]*)(?=\s*(?:$|\||(?:CARRIER\s+)?RATE\s*(?:CONFIRMATION|CON)\s*$))/id},
@@ -139,3 +141,6 @@ export const rateConfirmationProfile={
     deliveryAppointment:{label:'Delivery appointment',kind:'text',required:true,rateSection:'delivery',ratePart:'appointment'},
   },
 };
+for(const key of ['loadNumber','totalRate','equipment','miles','billingEmail','broker','carrier','shipper','consignee','pickupDate','deliveryDate','pickupAddress','deliveryAddress','pickupAppointment','deliveryAppointment'])rateConfirmationProfile.fields[key].numberedRate=key;
+rateConfirmationProfile.fields.documentDate={label:'Document date',kind:'date',required:false,numberedRate:'documentDate'};
+for(const role of ['pickup','delivery'])rateConfirmationProfile.fields[role+'City']={label:role==='pickup'?'Pickup city / state':'Delivery city / state',kind:'text',required:false,displayWhenFound:true,numberedRate:role+'City'};

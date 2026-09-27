@@ -20,6 +20,7 @@ const confusablePair=(a,b)=>a.length===b.length&&a.length>=5&&a.length<=20&&/\d/
   &&[...a].filter((letter,index)=>letter!==b[index]).length===1
   &&[...a].every((letter,index)=>letter===b[index]||['8B','0O','1I','1L','5S','2Z','6G'].some(pair=>pair.includes(letter)&&pair.includes(b[index])));
 
+import {numberedRateMatches} from './numberedRate.js';
 export function pageFieldMatches(page,spec){
   const matches=spec.pattern?page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match}))):[];
   if(spec.referenceRow)matches.push(...referenceRowMatches(page,spec));
@@ -36,6 +37,7 @@ export function pageFieldMatches(page,spec){
       if(observations.size>=2)delete match.issue;
     }
   }
+  if(spec.numberedRate)matches.push(...numberedRateMatches(page,spec));
   if(spec.rateSection)matches.push(...rateSectionMatches(page,spec));
   if(spec.rateParty)matches.push(...ratePartyMatches(page,spec));
   if(spec.nativeCell)matches.push(...nativeCellMatches(page,spec));

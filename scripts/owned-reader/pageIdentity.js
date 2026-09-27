@@ -39,15 +39,15 @@ export function refinedPageIdentity(analysis,pageNumber,observedTypes){
 // The core joins a terms-only RateCon page only with matching PRO, envelope
 // and compatible parties. Carry that established relationship into filing.
 export function alignRateContinuationPages(analysis,pageTypes){
-  if(!pageTypes.some(page=>!page.typeId&&!page.conflicting))return;
   const review=reviewScanAnalysis(analysis);
   for(const document of review.documents){
     if(document.kind!=='rate_confirmation'||document.pageIds.length<2)continue;
     for(const id of document.pageIds.slice(1)){
       const number=review.pages.find(page=>page.id===id)?.number;
       const page=pageTypes.find(page=>page.page===number);
-      if(page&&!page.typeId&&!page.conflicting)Object.assign(page,{typeId:'rate_confirmation',confidence:.85,
-        evidence:['Rate confirmation continuation with matching PRO and signing reference']});
+      const identity=review.pageIdentities.find(item=>item.pageId===id);
+      if(page&&!page.conflicting&&identity?.kind==='unknown')Object.assign(page,{typeId:'rate_confirmation',confidence:.85,
+        evidence:['Rate confirmation continuation verified from matching document references']});
     }
   }
 }
