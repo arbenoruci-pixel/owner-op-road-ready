@@ -15,6 +15,24 @@ const isStreetAddress=value=>{
   // Suppress only complete address shapes; trailing company words remain evidence.
   return !!address&&ADDRESS_TAIL.test(value.slice(address[0].length));
 };
+// Two explicit shipping headings on one baseline establish separate columns.
+// Use only this observation's coordinates; enlarged retry crops have their own
+// coordinate space and cannot supply page-column boundaries.
+function shippingColumn(lines,line){
+  const heading=/^[\s|\[\]{}]*(SHIP\s*FROM|SHIP\s*TO|SHIPPER|CONSIGNEE)\s*[:.]*\s*$/i;
+  const role=value=>/^(?:SHIP\s*FROM|SHIPPER)$/i.test(value)?'from':'to';
+  const match=heading.exec(line.text),a=line.box;
+  if(!match||!a||a.y>=.4||a.height>.04||a.width>.25)return null;
+  const peers=lines.filter(other=>{
+    const text=heading.exec(other.text),b=other.box;
+    return other!==line&&text&&b&&b.height<=.04&&b.width<=.25
+      &&role(text[1])!==role(match[1])&&Math.abs(a.y+a.height/2-b.y-b.height/2)<=Math.max(a.height,b.height)
+      &&(b.x>=a.x+a.width+.02||a.x>=b.x+b.width+.02);
+  });
+  if(peers.length!==1)return null;
+  const b=peers[0].box;
+  return {left:Math.max(0,a.x-.015),right:b.x>a.x?b.x-.005:(a.x<.5?.5:1)};
+}
 export function fieldMatches(lines,spec){
   const detail=isolatedMeasurementMatch(lines,spec);if(detail)return [detail];
   const matches=[];
@@ -23,10 +41,17 @@ export function fieldMatches(lines,spec){
   const certification=shortForm?lines.find(line=>line.box?.y>.4&&/^\s*SHIPPER[’'S]*\s+CERTIFICATION\s*:/i.test(line.text)):null;
   for(const line of lines){
     if(spec.excludePattern?.test(line.text))continue;
+    // OCR sometimes isolates "consigned" from "packages ..., marked,
+    // consigned" in footer prose. Its adjacent sentence is not a form label.
+    if(spec.wrappedConsigned&&/^\s*CONSIGNED\s*$/i.test(line.text)&&line.box?.y>.4
+      &&lines.some(other=>other!==line&&other.box&&/\b(?:PACKAGES|CONTENTS|MARKED)\b/i.test(other.text)
+        &&other.box.x+other.box.width<=line.box.x+.003&&line.box.x-other.box.x-other.box.width<.04
+        &&Math.abs(other.box.y+other.box.height/2-line.box.y-line.box.height/2)<=Math.max(other.box.height,line.box.height)*.6))continue;
     if(line.box&&spec.maxY!=null&&line.box.y>spec.maxY)continue;
     if(spec.kind==='party'&&line.box&&signatures.some(anchor=>line.box.y>=anchor.box.y-.015&&line.box.y<=anchor.box.y+.09))continue;
     if(spec.kind==='party'&&line.box&&certification&&line.box.y>=certification.box.y)continue;
     const blockLabel=spec.blockLabel?.test(line.text),rightLabel=spec.rightLabel?.test(line.text);
+    const column=spec.shippingColumns&&blockLabel?shippingColumn(lines,line):null;
     const inline=blockLabel||rightLabel?null:inlineFieldRange(line,spec);
     if(inline){
       const value=line.text.slice(inline.start,inline.end);
@@ -36,7 +61,7 @@ export function fieldMatches(lines,spec){
     }
     const noisy=line.box&&line.box.y<.4&&spec.noisyPattern?.exec(line.text);
     if(noisy){matches.push({line,start:noisy.indices[1][0],end:noisy.indices[1][1],issue:'label_needs_review'});continue;}
-    if(rightLabel&&line.box){
+    if(rightLabel&&line.box&&!column){
       const label=line.box,side=label.x+label.width/2<.5?0:.5;
       const right=lines.filter(candidate=>{const box=candidate.box;return candidate!==line&&box&&!isRule(candidate,line)&&box.x>=label.x+label.width-.003&&box.x-(label.x+label.width)<=.3&&box.x>=side&&box.x+box.width<=side+.5&&Math.min(box.y+box.height,label.y+label.height)-Math.max(box.y,label.y)>=Math.min(box.height,label.height)*.5;}).sort((a,b)=>a.box.x-b.box.x);
       const eligible=spec.measurementRow?right.filter(candidate=>measurementRow(label,candidate.box)):right;
@@ -66,8 +91,8 @@ export function fieldMatches(lines,spec){
             :{issue:right.length>1&&spec.kind==='party'?'ambiguous_party_row':spec.receiptRow&&right.length>1?'ambiguous_receipt_row':'layout_needs_review'})});}continue;}
     }
     if(!blockLabel||!line.box)continue;
-    const label=line.box,center=label.x+label.width/2;if(label.width>.4||Math.abs(center-.5)<.06)continue;
-    const left=center<.5?0:.5,right=center<.5?.5:1;
+    const label=line.box,center=label.x+label.width/2;if(!column&&(label.width>.4||Math.abs(center-.5)<.06))continue;
+    const left=column?.left??(center<.5?0:.5),right=column?.right??(center<.5?.5:1);
     const below=lines.filter(candidate=>{const box=candidate.box;return candidate!==line&&box&&candidate.text.trim()&&!isRule(candidate,line)&&box.x>=left&&box.x+box.width<=right&&box.x<=label.x+label.width+.025&&box.y>=label.y+label.height*.6&&box.y<=label.y+label.height+.035;}).sort((a,b)=>a.box.y-b.box.y||a.box.x-b.box.x);
     const first=below[0];if(!first)continue;
     if(below.some(other=>other!==first&&Math.abs(other.box.y-first.box.y)<Math.min(other.box.height,first.box.height)*.5))continue;

@@ -35,6 +35,20 @@ BASE_PROFILES.find(p=>p.id==='bol').variants.push({
   signals:[/^\s*NAME\s+OF\s+CARRIER\s*:/i,/^\s*CONSIGNED\s*TO\s*:/i,/^\s*TOTAL\s+WEIGHT\s*:/i],
 });
 const bolParties=BASE_PROFILES.find(p=>p.id==='bol').fields;
+// Combined BOL/delivery is an explicit BOL label; standalone delivery and
+// neighboring sales-order numbers remain separate references.
+bolParties.bolNumber.pattern=identifier('BOL[ \\t]*/[ \\t]*DELIVERY|BOL|B/L|BILL OF LADING');
+bolParties.bolNumber.inlineLabel=/(?:^|\|)[ \t]*(?:BOL[ \t]*\/[ \t]*DELIVERY|BOL|B\/L|BILL OF LADING)[ \t]*(?:NUMBER\b|NO\b\.?|ID\b|#|:)[ \t:#;]*/i;
+bolParties.bolNumber.rightLabel=/^\s*(?:BOL\s*\/\s*DELIVERY|BOL|B\/L|BILL OF LADING)\s*(?:NUMBER\b|NO\b\.?|#)\s*[:;#]*\s*$/i;
+bolParties.bolNumber.valueStop=/\s+SO\s*\/\s*STO\s*(?:NUMBER\b|NO\b\.?|#|:)\s*[:#]*/i;
+bolParties.poNumber.pattern=identifier('(?:(?:CUSTOMER|CUST\\.?)[ \\t]+)?(?:P\\.?[ \\t]*O\\.?|PURCHASE ORDER)');
+for(const [key,label]of [['shipper','SHIP\\s*FROM|SHIPPER'],['consignee','SHIP\\s*TO|CONSIGNEE']]){
+  bolParties[key].shippingColumns=true;
+  bolParties[key].blockLabel=new RegExp('^[\\s|\\[\\]{}]*(?:'+label+')\\s*[:.]*\\s*$','i');
+}
+bolParties.carrier.blockLabel=/^\s*CARRIER(?:\s+NAME)?\s*:\s*[_\s]*$/i;
+bolParties.carrier.rightLabel=bolParties.carrier.blockLabel;
+bolParties.carrier.footerLabel=/^[\s|]*(?:CARRIER(?:\s+NAME)?|NAME\s+OF\s+CARRIER)\s*[:#]/i;
 bolParties.carrier.pattern=labeled('CARRIER(?: NAME)?|NAME OF CARRIER');
 bolParties.carrier.valueStop=/\s+(?:KEEP\s+FROZEN\b|SHIPPER[’\x27]S\s+NO\s*:)/i;
 bolParties.consignee.pattern=labeled('SHIP[ \\t]*TO|CONSIGNEE|CONSIGNED(?:[ \\t]*TO)?|TO(?=[ \\t]*:)');
