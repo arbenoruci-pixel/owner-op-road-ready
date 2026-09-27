@@ -1,0 +1,11 @@
+.bulk-move-v110409{padding:14px!important;margin:12px 10px!important;border:1px solid #cbd8e9!important;border-radius:16px!important;background:#f8fbff!important;color:#14263c}
+.bulk-move-v110409 header,.bulk-direction,.bulk-amount,.bulk-shortcuts,.bulk-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bulk-move-v110409 header b{margin-right:auto}.bulk-move-v110409 p{font-size:13px;line-height:1.4;margin:9px 0;color:#46596f}
+.bulk-move-v110409 button{min-height:44px;border:1px solid #cbd8e9;border-radius:10px;background:#fff;padding:8px 12px;color:#15304e;font:inherit;font-weight:600;cursor:pointer}
+.bulk-move-v110409 button:disabled{opacity:.45;cursor:default}.bulk-move-v110409 button:focus-visible,.bulk-move-v110409 input:focus-visible{outline:3px solid #78a9ff;outline-offset:2px}
+.bulk-direction button{flex:1}.bulk-direction button[aria-pressed=true]{background:#e3eeff;border-color:#2860cf;color:#15479f}
+.bulk-amount{margin:12px 0}.bulk-amount label{flex:1;min-width:80px;font-size:13px}.bulk-move-v110409 .bulk-amount input{display:block;box-sizing:border-box;width:100%;font:inherit;font-size:20px;min-height:46px;border:1px solid #b5c6db;border-radius:10px;padding:8px;margin-top:4px;background:white!important;color:#14263c!important}
+.bulk-shortcuts button{white-space:nowrap;flex:1;min-width:42px;padding:8px 5px;font-size:14px}.bulk-preview-total{display:block;font-size:22px;padding:12px 0 2px}.bulk-move-v110409 .bulk-limit{color:#854600;background:#fff3d7;padding:9px;border-radius:9px}
+.bulk-preview-rows{max-height:220px;overflow:auto;margin:10px 0}.bulk-preview-rows>div{display:flex;gap:12px;justify-content:space-between;padding:8px 0;border-bottom:1px solid #dde5ef;font-size:12px;line-height:1.6}.bulk-preview-rows span{text-align:right}
+.bulk-actions{margin-top:12px}.bulk-actions .primary{flex:1;background:#235bdb;color:white;border-color:#235bdb;min-width:150px}.bulk-move-v110409{overflow-wrap:anywhere}
+.dd-gps-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.dd-gps-actions button{min-height:44px;border:1px solid #cbd8e9;border-radius:9px;background:#f5f8ff;color:#214d9a;padding:8px 12px;font:inherit}.dd-gps-actions p{flex:1;min-width:160px;margin:0}
