@@ -1,7 +1,8 @@
 'use client';
 import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../business/businessStore.js';
-import {CATALOG,clone,text,list,idOf,loadOf,kindOf,day,validateFacts,makeBookEntry,documentFacts} from './evidenceCoreV110413.js';
+import {CATALOG,clone,text,list,idOf,loadOf,kindOf,day,validateFacts,makeBookEntry,documentFacts,possibleFuelDuplicate} from './evidenceCoreV110413.js';
+import {readOwnerOpsStoreV102} from './ownerOpsStoreV102.js';
 import {readTransferOriginal} from './transferStorageV110412.js';
 import {digest} from './transferCoreV110412.js';
 
@@ -60,6 +61,7 @@ export async function saveReviewedFacts(doc,kind,input,{book=false}={}) {
           if(list(current.extracted?.transactions).length>1)throw new Error('This is a statement. Import its individual transactions through the statement workflow.');
           const {bucket,row}=makeBookEntry(next,fields),ids=[idOf(current),current.local_id];
           const duplicates=['fuel','expenses','maintenance'].flatMap(b=>list(store[b]).filter(r=>ids.includes(r.sourceDocumentId||r.documentId||r.clientDocumentId)||row.sourceDocumentHash&&r.sourceDocumentHash===row.sourceDocumentHash).map(r=>({bucket:b,row:r})));
+          if(!duplicates.length&&bucket==='fuel'&&[...list(store.fuel),...list(readOwnerOpsStoreV102().fuelImports)].some(r=>possibleFuelDuplicate(row,r)))throw new Error('This purchase may already exist in Fuel or an imported fuel statement. Save the source details and reconcile the existing transaction before adding another entry.');
           if(duplicates.length){
             const old=duplicates[0];
             if(duplicates.length!==1||old.bucket!==bucket||old.row.evidenceVersion!==1)throw new Error('This source already has a book entry. Review the existing entry in Expenses or Fuel.');

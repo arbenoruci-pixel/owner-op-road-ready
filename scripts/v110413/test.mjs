@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {buildEvidence,validateFacts,makeBookEntry,day,clone,isReviewed} from './evidenceCore.js';
+import {buildEvidence,validateFacts,makeBookEntry,day,clone,isReviewed,possibleFuelDuplicate,registerEvidenceTypes,CATALOG} from './evidenceCore.js';
 const recoverySource=fs.readFileSync(new URL('./recoveryCore.js',import.meta.url),'utf8').replace('./evidenceCoreV110413.js',new URL('./evidenceCore.js',import.meta.url).href);
 const {validateRecoveryPlan,prepareRecoveryBusiness,checkDocumentCorrection}=await import('data:text/javascript;base64,'+Buffer.from(recoverySource).toString('base64'));
 const hash='a'.repeat(64),range={from:'2026-09-21',to:'2026-09-27'},load={id:'one',loadNo:'L100',pickupDate:'2026-09-25',deliveryDate:'2026-09-28',documentWorkflowStage:'booked'};
@@ -27,6 +27,10 @@ const expenseFields={date:'2026-09-25',merchant:'Test Store',total:20,currency:'
 model=build({documents:[source('expense_receipt',expenseFields,true)],businessStore:customs});assert.equal(model.checks.find(c=>c.id==='receipt2').status,'missing','one receipt cannot satisfy a different transaction day');
 const fuelFields={date:'2026-09-25',loadNo:'',merchant:'Test Stop',sellerAddress:'1 Test Road',total:100,currency:'USD',quantity:37.85411784,volumeUnit:'L',fuelType:'diesel',state:'NJ',vehicle:'22',purchaser:'Test Carrier',taxPaid:true,qualifiedVehicle:true};
 const fuel=source('fuel_receipt',fuelFields,true);let entry=makeBookEntry(fuel,fuelFields);assert.equal(entry.bucket,'fuel');assert.ok(Math.abs(entry.row.gallons-10)<1e-8);assert.equal(entry.row.iftaEligible,true);
+assert.equal(possibleFuelDuplicate(entry.row,{date:fuelFields.date,state:'NJ',total:100,gallons:10}),true);
+assert.equal(possibleFuelDuplicate({...entry.row,transactionId:'TX55'},{date:fuelFields.date,transactionId:'TX55'}),true);
+assert.equal(possibleFuelDuplicate(entry.row,{date:'2026-09-26',state:'NJ',total:100,gallons:10}),false);
+registerEvidenceTypes([{id:'future_tax_document',label:'New tax source',stacks:['tax'],required:['date','invoiceNo']}]);assert.ok(CATALOG.future_tax_document.uses.includes('tax'));assert.ok(CATALOG.future_tax_document.fields.includes('reference'));
 assert.equal(makeBookEntry(fuel,{...fuelFields,fuelType:'def'}).row.iftaEligible,false);
 assert.equal(makeBookEntry(fuel,{...fuelFields,qualifiedVehicle:false}).row.iftaEligible,false);
 assert.throws(()=>makeBookEntry(fuel,{...fuelFields,currency:'CAD'}),/conversion/);

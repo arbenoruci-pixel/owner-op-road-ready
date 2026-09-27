@@ -192,3 +192,11 @@ export function makeBookEntry(doc,fields) {
   if(bucket==='expenses')row.category=kind==='toll_receipt'?'tolls':'other';
   return {bucket,row};
 }
+export function possibleFuelDuplicate(left={},right={}) {
+  if(!day(left.date)||day(left.date)!==day(right.date))return false;
+  const a=text(left.transactionId||left.reference),b=text(right.transactionId||right.reference);
+  if(a&&b&&a.toUpperCase()===b.toUpperCase())return true;
+  return amount(left.total)>0&&amount(right.total)>0&&amount(left.gallons)>0&&amount(right.gallons)>0
+    && Math.abs(amount(left.total)-amount(right.total))<.005 && Math.abs(amount(left.gallons)-amount(right.gallons))<.005
+    && !!text(left.state)&&text(left.state).toUpperCase()===text(right.state).toUpperCase();
+}
