@@ -33,21 +33,26 @@ patch(reconcile,`    const raw=applyDocRepair(rawDoc,assignment,aliases),key=doc
   }
   const allDocs=`);
 // Exports retain every distinct original identity, with the same corrected filing.
+const archive=base+'archiveEvidenceV1103.js';
+patch(archive,'export function archiveDocumentKey(',"import {sourceConflictIdentity} from './sourceCopiesV110419.js';\nexport function archiveDocumentKey(");
+patch(archive,"  return hash ? `hash:${hash}|${scope}` : documentIdentity(doc) ? `id:${documentIdentity(doc)}` : '';","  return (hash ? `hash:${hash}|${scope}` : documentIdentity(doc) ? `id:${documentIdentity(doc)}` : '') + sourceConflictIdentity(doc);");
 const transfer=base+'transferCoreV110412.js';
 patch(transfer,'export function selectTransfer(',"import {projectReviewedCopies} from './sourceCopiesV110419.js';\nexport function selectTransfer(");
 patch(transfer,'  for (const raw of [...documents, ...(businessStore.documents || []), ...allDocuments, ...shown]) {','  for (const raw of projectReviewedCopies([...documents, ...(businessStore.documents || []), ...allDocuments, ...shown])) {');
 // Checklists outside the folder browser use the same source-copy decision.
 const core=base+'evidenceCoreV110413.js';
-patch(core,'export function uniqueDocuments(documents=[]) {',"import {projectReviewedCopies,preferredSourceCopy} from './sourceCopiesV110419.js';\nexport function uniqueDocuments(documents=[],resolve) {");
+patch(core,'export function uniqueDocuments(documents=[]) {',"import {projectReviewedCopies,preferredSourceCopy,sourceCopyIdentity,sourceConflictIdentity} from './sourceCopiesV110419.js';\nexport function uniqueDocuments(documents=[],resolve) {");
 patch(core,'  for(const doc of documents) {','  for(const doc of projectReviewedCopies(documents,resolve)) {');
 patch(core,`    const old=map.get(id), oldReview=old?.extracted?.evidenceFactsV1, review=doc.extracted?.evidenceFactsV1;
-    if(!old || review && (!oldReview || text(review.reviewedAt)>=text(oldReview.reviewedAt)))map.set(id,doc);`,`    const key=[id,loadOf(doc),kindOf(doc),sourceHashes(doc).join(',')].join('|');
+    if(!old || review && (!oldReview || text(review.reviewedAt)>=text(oldReview.reviewedAt)))map.set(id,doc);`,`    const key=[sourceCopyIdentity(doc),loadOf(doc),kindOf(doc),sourceHashes(doc).join(','),sourceConflictIdentity(doc)].join('|');
     const old=map.get(key);
     map.set(key,old?preferredSourceCopy(old,doc):doc);`);
 patch(core,'  const all=uniqueDocuments(documents), target=resolve(loadNo);','  const all=uniqueDocuments(documents,resolve), target=resolve(loadNo);');
+patch(core,'    const identity=documentLoadIdentityIssue(doc,resolve);',`    if(doc.sourceCopyConflictV110419)issue(id+':source-copy','Conflicting reviewed copies','Two saved copies have different confirmed details. Compare the originals before changing the load.','load',doc);
+    const identity=documentLoadIdentityIssue(doc,resolve);`);
 const storage=base+'evidenceStorageV110413.js';
 patch(storage,"import {getOwnerOpDb}","import {selectReviewRecord} from './sourceCopiesV110419.js';\nimport {getOwnerOpDb}");
 patch(storage,`        if(matches.length!==1)throw new Error('The saved original could not be identified uniquely. Reopen the document.');
         const current=matches[0];`,`        const current=selectReviewRecord(matches,doc,sourceHash);`);
-patch(storage,'  next.auditTrail=[...list(doc.auditTrail)', '  delete next.sourceCopyReviewV110419;\n  next.auditTrail=[...list(doc.auditTrail)');
+patch(storage,'  next.auditTrail=[...list(doc.auditTrail)', '  delete next.sourceCopyReviewV110419;\n  delete next.sourceCopyConflictV110419;\n  next.auditTrail=[...list(doc.auditTrail)');
 console.log('PASS — v110419 confirmed source copies reconciled before filing and export; current reviewed details displayed');

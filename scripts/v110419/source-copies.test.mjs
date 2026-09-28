@@ -40,6 +40,11 @@ for(const documents of [[old,checked],[checked,old]]){
   assert.equal(weekExport.documents.length,2);assert.deepEqual(weekExport.documents.map(d=>d.sha256),[hash,hash]);
 }
 assert.equal(buildEvidence({documents:[old,checked],loads,businessStore,loadNo:'LOAD100',today:'2026-09-27'}).docs.length,0,'other evidence checklists do not reuse a stale foreign BOL');
+for(const documents of [[old,checked],[checked,old]]){
+  const evidence=buildEvidence({documents,loads,businessStore,loadNo:'LOAD300',today:'2026-09-27'});
+  assert.equal(evidence.docs.length,1);
+  assert.equal(evidence.checks.find(row=>row.kind==='bol').document.client_document_id,checked.client_document_id,'Review source always opens the writable reviewed record, including checklists outside folders');
+}
 // Exact local/client identity can join a compact mirror without a checksum.
 const mirror={localDocumentId:checked.local_id,clientDocumentId:checked.client_document_id,loadNo:'LOAD100',type:'bol'};
 assert.equal(projectReviewedCopies([mirror,checked])[0].load_no,'LOAD300');
@@ -57,6 +62,16 @@ const unrelated={...old,sha256:'b'.repeat(64),original_file_name:'same-name.pdf'
 assert.equal(projectReviewedCopies([unrelated,{...checked,original_file_name:'same-name.pdf'}])[0],unrelated,'filename/reference similarity alone never files a document');
 const conflicting=structuredClone(checked);conflicting.client_document_id='third-client';conflicting.local_id='third-local';conflicting.load_no='LOAD900';conflicting.extracted.evidenceFactsV1.fields.loadNo='LOAD900';
 assert.equal(projectReviewedCopies([old,checked,conflicting])[0],old,'different verified owners of an identical packet require review');
+for(const target of ['LOAD300','LOAD900']){
+  const conflictingCopy=structuredClone(conflicting);conflictingCopy.load_no=target;conflictingCopy.extracted.evidenceFactsV1.fields.loadNo=target;conflictingCopy.extracted.evidenceFactsV1.fields.origin='Different confirmed address';
+  const records=[checked,conflictingCopy],allLoads=[...loads,{loadNo:'LOAD900',pickupDate:'2026-09-25'}];
+  const model=reconcile({loads:allLoads,documents:records,businessStore:{loads:allLoads,documents:[]}});
+  assert.equal(model.allDocuments.length,2,'conflicting confirmed copies survive checksum deduplication, even inside the same load/type');
+  assert.equal(model.folders.find(f=>f.loadNo===target).documents.length,target==='LOAD300'?2:1,'folder and week counts keep both conflicting originals');
+  const evidence=buildEvidence({documents:model.allDocuments,loads:allLoads,loadNo:target,today:'2026-09-27'});
+  assert.ok(evidence.issues.some(row=>row.label==='Conflicting reviewed copies'),'confirmed copy disagreement stays actionable');
+}
+assert.ok(projectReviewedCopies([{...checked,sourceCopyConflictV110419:true},structuredClone(checked)]).every(d=>!d.sourceCopyConflictV110419),'resolved copy checks are recomputed, never sticky import flags');
 const changedAssignment={...checked,load_no:'LOAD900'};
 assert.equal(confirmedSource(changedAssignment),false);assert.equal(projectReviewedCopies([changedAssignment,checked])[0],changedAssignment);
 assert.ok(buildEvidence({documents:[checked,changedAssignment],loads:[{loadNo:'LOAD900'}],loadNo:'LOAD900',today:'2026-09-27'}).issues.some(i=>i.id.endsWith(':identity')),'an explicit contradictory filing stays visible even when another copy is verified');

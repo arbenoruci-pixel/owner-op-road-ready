@@ -18,6 +18,8 @@ const sameIdentity=(a,b)=>tokens(a).some(token=>tokens(b).includes(token));
 const time=value=>typeof value==='number'?value:Date.parse(value)||0;
 const stable=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
 const signature=doc=>stable({kind:kind(doc),fields:review(doc)?.fields,components:review(doc)?.components||[]});
+export const sourceCopyIdentity=doc=>text(doc.sourceCopyReviewV110419?.clientDocumentId||doc.sourceCopyReviewV110419?.localDocumentId||doc.client_document_id||doc.clientDocumentId||doc.local_id||doc.localDocumentId||doc.id);
+export const sourceConflictIdentity=doc=>doc.sourceCopyConflictV110419?text(doc.local_id||doc.localDocumentId||doc.id)+'|'+signature(doc):'';
 export function confirmedSource(doc,resolve=upper){
   const r=review(doc),h=hash(doc),target=resolve(r?.fields?.loadNo);
   return !!(h&&r?.version===1&&['driver_review','source_recovery'].includes(r.source)&&time(r.reviewedAt)&&r.sourceSha256===h&&target&&resolve(load(doc))===target&&!list(r.components).some(c=>c.fields?.loadNo&&resolve(c.fields.loadNo)!==target));
@@ -32,14 +34,24 @@ function laterAssignment(doc,at){
   return list(doc.auditTrail).some(item=>time(item.at)>at&&/assign|organiz|evidence_review|document_update/i.test(text(item.action)));
 }
 export function projectReviewedCopies(documents=[],resolve=upper){
-  const originals=list(documents).filter(Boolean),index=new Map();
+  const originals=list(documents).filter(Boolean).map(doc=>{
+    if(!doc.sourceCopyConflictV110419)return doc;
+    const clean={...doc};delete clean.sourceCopyConflictV110419;return clean;
+  }),index=new Map(),hashGroups=new Map(),conflicts=new Set();
   for(const doc of originals){
     if(!confirmedSource(doc,resolve)||doc.sourceCopyReviewV110419)continue;
+    const group=owner(doc)+'|'+hash(doc);
+    if(!hashGroups.has(group))hashGroups.set(group,[]);hashGroups.get(group).push(doc);
     for(const key of [...tokens(doc),...(hash(doc)?['hash:'+hash(doc)]:[])]){
       if(!index.has(key))index.set(key,[]);index.get(key).push(doc);
     }
   }
+  for(const group of hashGroups.values()){
+    const current=group.filter(doc=>!group.some(other=>sameIdentity(doc,other)&&time(review(other).reviewedAt)>time(review(doc).reviewedAt)));
+    if(new Set(current.map(signature)).size>1)for(const doc of current)conflicts.add(doc);
+  }
   return originals.map(doc=>{
+    if(conflicts.has(doc))return {...doc,sourceCopyConflictV110419:true};
     // Keep explicit reorganizations and contradictory/replaced originals visible.
     if(doc.repairOverlayApplied||doc.sourceCopyReviewV110419)return doc;
     const candidates=[...new Set([...tokens(doc),...(hash(doc)?['hash:'+hash(doc)]:[])].flatMap(key=>index.get(key)||[]))].filter(other=>other!==doc&&compatible(doc,other));
