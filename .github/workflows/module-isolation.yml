@@ -60,6 +60,7 @@ jobs:
             sleep 1
           done
           failed=0
+          node scripts/v110420/browser-bol-filing.mjs 2>&1 | tee /tmp/browser-bol-filing-v110420.log
           node scripts/v110419/browser-source-copies.mjs 2>&1 | tee /tmp/browser-source-copies-v110419.log
           node scripts/v110418/browser-identity.mjs 2>&1 | tee /tmp/browser-identity-v110418.log
           node scripts/v110417/browser-loads.mjs 2>&1 | tee /tmp/browser-loads-v110417.log
