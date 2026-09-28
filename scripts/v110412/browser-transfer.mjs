@@ -16,7 +16,9 @@ async function stored(page){return page.evaluate(async()=>{
  return {docs,blobs:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await b.blob.arrayBuffer())]}))),state:states.find(s=>s.key==='owner-op-road-ready-state-v1')?.state,business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1'))};
 });}
 const logs=s=>JSON.stringify({events:s.eventsByDay,team:s.teamLogbooksByDriverId,signature:s.signatureByDay,forms:s.formByDay,inspection:s.inspectionByDay,loadInfo:s.loadInfo});
+async function openMore(page){const button=page.getByRole('button',{name:'More document options',exact:true});if(await button.getAttribute('aria-expanded')!=='true')await button.click();}
 async function files(page,kind,payload){
+ await openMore(page);
  const area=page.getByLabel('Load and week transfer',{exact:true});
  const [chooser]=await Promise.all([page.waitForEvent('filechooser'),area.getByRole('button',{name:`Import ${kind}`,exact:true}).click()]);
  await chooser.setFiles({name:`road-ready-${kind}.json`,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(payload))});
@@ -41,6 +43,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]) {
  try {
   const source=await device(true),sourceBefore=await stored(source);
   await source.locator('.rr-docs-card').filter({hasText:'Sep 21'}).click();
+  await openMore(source);
   const transfer=source.getByLabel('Load and week transfer',{exact:true});
   await transfer.getByRole('button',{name:'Export week',exact:true}).click();
   await transfer.getByLabel('Prepared transfer',{exact:true}).waitFor();
@@ -49,6 +52,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]) {
   assert.equal(week.documents.length,4,'both same-kind originals exported even if display deduplicates them');assert.equal(week.records.loads.length,2);
   assert.equal(week.records.fuel.length,1);assert.equal(week.records.expenses.length,1);
   await source.locator('.rr-docs-card').filter({hasText:'Load 82002'}).click();
+  await openMore(source);
   await transfer.getByRole('button',{name:'Export load',exact:true}).click();await transfer.getByLabel('Prepared transfer',{exact:true}).waitFor();
   const [loadDownload]=await Promise.all([source.waitForEvent('download'),transfer.getByRole('link',{name:'Download transfer'}).click()]);
   const load=JSON.parse(fs.readFileSync(await loadDownload.path(),'utf8'));assert.equal(load.documents.length,2);assert.equal(load.records.loads.length,1);assert.equal(load.records.fuel.length,0);
@@ -79,6 +83,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]) {
   after=await stored(target);assert.equal(after.docs.length,4);assert.equal(after.business.loads.length,3);assert.equal(after.business.expenses.length,2);assert.equal(logs(after.state),logs(before.state));
   assert.equal(after.docs.find(d=>d.local_id==='a-local').title,'My newer local title');assert.equal(after.blobs.length,4,'the missing original is restored');
   await target.locator('.rr-docs-card').filter({hasText:'Sep 21'}).click();await target.getByText('Other documents this week (1)',{exact:true}).waitFor();await target.locator('.rr-docs-card').filter({hasText:'Load 82002'}).click();
+  await openMore(target);
   await target.getByRole('button',{name:'Export load',exact:true}).click();await target.getByLabel('Prepared transfer',{exact:true}).waitFor();
   const [roundTrip]=await Promise.all([target.waitForEvent('download'),target.getByRole('link',{name:'Download transfer'}).click()]);
   const reexport=JSON.parse(fs.readFileSync(await roundTrip.path(),'utf8'));assert.equal(reexport.documents.length,2);assert.deepEqual(reexport.documents.map(d=>d.original.sha256).sort(),load.documents.map(d=>d.original.sha256).sort());

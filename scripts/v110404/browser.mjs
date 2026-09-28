@@ -33,6 +33,7 @@ async function fits(page,locator){
   for(const box of boxes)assert.ok(box.content<=box.width+1&&box.left>=-1&&box.right<=box.screen+1,JSON.stringify(box));
 }
 for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
+  if(process.env.TEST_BROWSERS&&!process.env.TEST_BROWSERS.split(',').includes(name))continue;
   // WebKit needs a disk-backed test profile to store Blob originals in IndexedDB,
   // as in the existing saved-document regression suite.
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'simple-documents-'));
@@ -63,26 +64,28 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
       await fits(page,docs);await fits(page,docs.locator('.rr-docs-card'));
       await page.screenshot({path:`${output}/${name}-weeks-${width}.png`});
       await docs.getByRole('button',{name:/Sep 14.*Sep 20, 2026/}).click();
-      await docs.getByRole('heading',{name:/Sep 14.*Sep 20, 2026/}).waitFor();
+      await docs.getByRole('navigation',{name:'Choose week'}).getByText(/Sep 14.*Sep 20, 2026/).waitFor();
       assert.equal(await docs.locator('.rr-docs-card').count(),2);
       await fits(page,docs.locator('.rr-docs-card'));
       await page.screenshot({path:`${output}/${name}-loads-${width}.png`});
       await docs.getByRole('button',{name:/Load 38324346/}).click();
-      await docs.getByRole('heading',{name:'Load 38324346',exact:true}).waitFor();
+      await docs.getByRole('heading',{name:'Load #38324346',exact:true}).waitFor();
+      await docs.getByText('View originals ›',{exact:true}).click();
       assert.equal(await docs.locator('.rr-docs-file').count(),7);
       assert.equal(await docs.getByRole('region',{name:'Proof of delivery',exact:true}).locator('.rr-docs-file').count(),2);
       assert.match(await docs.innerText(),/POD · Stop 1/);assert.match(await docs.innerText(),/POD · Stop 2/);
-      const advanced=docs.locator('details').filter({has:page.getByText('Load details & other records',{exact:true})}).first();
+      const advanced=docs.locator('details').filter({has:page.getByText('Load details',{exact:true})}).first();
       assert.equal(await advanced.getAttribute('open'),null,'operational details start collapsed');
       await fits(page,docs);await fits(page,docs.locator('.rr-docs-file'));
       const colors=await docs.locator('.rr-docs-file-copy strong').first().evaluate(el=>({ink:getComputedStyle(el).color,paper:getComputedStyle(el.closest('button')).backgroundColor}));
-      assert.equal(colors.ink,'rgb(22, 44, 72)');assert.equal(colors.paper,'rgb(255, 255, 255)');
+      assert.equal(colors.ink,'rgb(21, 43, 70)');assert.equal(colors.paper,'rgb(255, 255, 255)');
       await page.screenshot({path:`${output}/${name}-documents-${width}.png`});
-      await docs.getByRole('button',{name:'‹ Back to loads',exact:true}).click();
-      await docs.getByRole('button',{name:'‹ Back to weeks',exact:true}).click();
+      await docs.getByRole('button',{name:'Back to loads',exact:true}).click();
+      await docs.getByRole('button',{name:'Back to weeks',exact:true}).click();
     }
     await docs.getByRole('button',{name:/Sep 14.*Sep 20, 2026/}).click();
     await docs.getByRole('button',{name:/Load 38324346/}).click();
+    await docs.getByText('View originals ›',{exact:true}).click();
     await page.evaluate(()=>{const create=URL.createObjectURL.bind(URL);URL.createObjectURL=blob=>{const url=create(blob);window.__lastDocumentUrl=url;return url;};});
     const opening=page.waitForEvent('popup');
     await docs.getByRole('button',{name:/^Open POD · Stop 2/}).click();const opened=await opening;
@@ -92,13 +95,13 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     await opened.close();
     await docs.getByRole('button',{name:/^Open File .*unavailable-original/}).click();
     await docs.getByRole('alert').filter({hasText:'This original could not be opened'}).waitFor();
-    await docs.getByRole('button',{name:'Weeks',exact:true}).click();
+    await docs.getByRole('button',{name:'Back to loads',exact:true}).click();await docs.getByRole('button',{name:'Back to weeks',exact:true}).click();
     await docs.getByRole('button',{name:'Browse all saved files',exact:true}).click();
     await docs.getByRole('heading',{name:'Recent documents',exact:true}).waitFor();
     assert.deepEqual(await records(page),before,'browsing does not change imported records');
     assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),businessBefore);
     assert.deepEqual(protectedData(await snapshot(page)),protectedBefore,'document browsing preserves logbook data');
-    await docs.getByRole('button',{name:'‹ Back to weeks',exact:true}).click();
+    await docs.getByRole('button',{name:'Back to weeks',exact:true}).click();
     await docs.getByText('Documents to organize (1)',{exact:true}).click();
     await docs.getByRole('button',{name:'Organize unassigned-delivery.pdf',exact:true}).click();
     const editor=docs.getByRole('form',{name:'Organize document',exact:true});
@@ -116,10 +119,11 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     await docs.getByRole('status').filter({hasText:'Document saved under Load 38324346.'}).waitFor();
     await docs.getByRole('button',{name:/Sep 14.*Sep 20, 2026/}).click();
     await docs.getByRole('button',{name:/Load 38324346/}).click();
+    await docs.getByText('View originals ›',{exact:true}).click();
     assert.equal(await docs.getByRole('button',{name:/^Open POD · Stop 2.*unassigned-delivery/}).count(),1,'confirmed assignment moves the file into its load');
     assert.deepEqual(await records(page),before,'organizing changes only the reversible assignment, never originals or OCR');
     await docs.getByRole('button',{name:'Undo last document change',exact:true}).click();
-    await docs.getByRole('button',{name:'Weeks',exact:true}).click();
+    await docs.getByRole('button',{name:'Back to loads',exact:true}).click();await docs.getByRole('button',{name:'Back to weeks',exact:true}).click();
     await docs.getByText('Documents to organize (1)',{exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>localStorage.getItem('road_ready_repair_overlay_v1')),null,'Undo restores the original assignment');
     assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),businessBefore);
