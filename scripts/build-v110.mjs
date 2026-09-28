@@ -120,6 +120,7 @@ steps.push('finalize-driver-documents-v110415.mjs','v110415/driver-documents.tes
 steps.push('finalize-document-weeks-v110416.mjs','v110416/document-weeks.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-clear-loads-v110417.mjs','v110417/load-presentation.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-reviewed-load-reference-v110418.mjs','v110418/identity.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-source-copy-filing-v110419.mjs','v110419/source-copies.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
