@@ -62,7 +62,11 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]) {
      await page.getByRole('button',{name:'Use GPS location',exact:true}).click();await page.getByText('Location permission is off.',{exact:false}).waitFor();
      await page.evaluate(()=>window.__gpsMode='timeout');await page.getByRole('button',{name:'Retry GPS',exact:true}).click();await page.getByText('Location took too long.',{exact:false}).waitFor();
      await page.evaluate(()=>window.__gpsMode='coarse');await page.getByRole('button',{name:'Retry GPS',exact:true}).click();await page.getByText('GPS is approximate',{exact:false}).waitFor();
-     await page.evaluate(()=>window.__gpsMode='good');await page.getByRole('button',{name:'Retry GPS',exact:true}).click();await page.getByText('GPS found · Chicago, IL',{exact:false}).waitFor();assert.equal(await input.inputValue(),'Chicago, IL');assert.equal(reverseCalls,1);
+     await page.evaluate(()=>window.__gpsMode='good');await page.getByRole('button',{name:'Retry GPS',exact:true}).click();await page.getByText('GPS found · Chicago, IL',{exact:false}).waitFor();
+     // The status renders before the controlled field's effect on WebKit.
+     // Wait for the same required value instead of sampling the prior render.
+     await page.waitForFunction(()=>document.querySelector('input[aria-label="Location"]')?.value==='Chicago, IL',null,{timeout:5000});
+     assert.equal(await input.inputValue(),'Chicago, IL');assert.equal(reverseCalls,1);
      await page.evaluate(()=>window.__gpsMode='late');await page.getByRole('button',{name:'Retry GPS',exact:true}).click();await page.getByRole('button',{name:'Cancel GPS',exact:true}).click();await page.evaluate(()=>window.__deliverLateGps());assert.equal(await input.inputValue(),'Chicago, IL');
      await page.getByRole('button',{name:'Retry GPS',exact:true}).click();await input.fill('Manual Town, TX');await page.evaluate(()=>window.__deliverLateGps());await input.blur();assert.equal(await input.inputValue(),'Manual Town, TX');
      assert.equal(await page.evaluate(()=>Object.keys(window.__gpsWatches).length),0);
