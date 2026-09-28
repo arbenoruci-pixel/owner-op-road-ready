@@ -14,9 +14,15 @@ assert.match(issue.label,/BOL55/);assert.match(issue.detail,/LOAD300/);
 assert.equal(model.issues.some(r=>r.label==='Source details need review'),false,'specific filing action replaces the vague source issue');
 for(const edit of [
  d=>d.type='pod',d=>d.document_date='2026-09-26',d=>d.extracted.bolNo='BOL56',
- d=>d.sha256='',d=>d.content_hash='c'.repeat(64),d=>d.owner_user_id='different-owner',
- d=>d.extracted.evidenceFactsV1={version:1,source:'driver_review'},d=>d.load_no='LOAD300'
+  d=>d.sha256='',d=>d.content_hash='c'.repeat(64),d=>d.owner_user_id='different-owner',
+ d=>d.extracted.evidenceFactsV1={version:1,source:'driver_review'},d=>d.load_no='LOAD300',
+ d=>d.extracted.origin='Gamma, TX',d=>d.extracted.destination='Delta, CA',
+ d=>Object.assign(d.extracted,{origin:'Gamma, TX',destination:'Delta, CA'})
 ]){const d=structuredClone(scan);edit(d);assert.equal(reviewedBolFilingMatch(d,[d,source]),null);}
+for(const route of [{origin:'alpha NJ',destination:'  BETA, IL '},{origin:'to be not exceeding:',destination:'N/A'},{origin:'NA'}]){
+ const d=structuredClone(scan);Object.assign(d.extracted,route);
+ assert.equal(reviewedBolFilingMatch(d,[d,source])?.fields.loadNo,'LOAD300','compatible formatting and empty form labels do not contradict a reviewed route');
+}
 for(const edit of [
  d=>d.extracted.evidenceFactsV1.sourceSha256='c'.repeat(64),
  d=>d.extracted.evidenceFactsV1.source='ocr',d=>d.extracted.evidenceFactsV1.reviewedAt=null,

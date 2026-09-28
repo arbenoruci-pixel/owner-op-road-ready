@@ -14,6 +14,14 @@ export function reviewedBolFilingMatch(doc,documents,resolve=value=>text(value).
   const proposals=matches.map(other=>{const f=documentFacts(other);return {loadNo:resolve(f.loadNo),reference:ref,date,origin:text(f.origin),destination:text(f.destination)};});
   if(new Set(proposals.map(f=>JSON.stringify(f))).size!==1)return null;
   const proposed=proposals[0];
-  if(!proposed.loadNo||proposed.loadNo===resolve(loadOf(doc))||!usable(proposed.origin,'origin')||!usable(proposed.destination,'destination'))return null;
+  const routeKey=value=>{
+    const route=text(value);
+    // A clipped form label is not a location. Other existing route text must
+    // agree with the proposal, even when it has not been reviewed yet.
+    if(!usable(route,'origin')||/^(?:NA|to be not(?: exceeding)?)\s*:?\s*$/i.test(route))return '';
+    return route.normalize('NFKC').toUpperCase().replace(/[.,]/g,' ').replace(/\s+/g,' ').trim();
+  };
+  if(!proposed.loadNo||proposed.loadNo===resolve(loadOf(doc))||!routeKey(proposed.origin)||!routeKey(proposed.destination))return null;
+  if(['origin','destination'].some(key=>routeKey(fields[key])&&routeKey(fields[key])!==routeKey(proposed[key])))return null;
   return {fields:proposed,sourceDocumentId:idOf(matches[0]),sourceSha256:sourceHashes(matches[0])[0],previousLoadNo:resolve(loadOf(doc))};
 }
