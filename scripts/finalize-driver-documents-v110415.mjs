@@ -13,4 +13,6 @@ for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/u
 for(const path of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'])fs.writeFileSync(path,fs.readFileSync(path,'utf8').replaceAll("'110.4.14'","'"+VERSION+"'").replaceAll("'v110414-recovery-review'","'"+BUILD+"'"));
 const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 for(const [input,output] of [['LoadFolders.jsx','LoadFoldersV10969.jsx'],['driverDocuments.js','driverDocumentsV110415.js'],['documentActions.js','documentActionsV110415.js'],['driverDocuments.css','driverDocumentsV110415.css']])fs.copyFileSync('scripts/v110415/'+input,'source/src/modules/owneros/'+output);
+const savedBrowser='scripts/browser-saved-documents-v110344.mjs';
+fs.writeFileSync(savedBrowser,fs.readFileSync(savedBrowser,'utf8').replaceAll("name:'‹ Back to weeks'","name:'Back to weeks'"));
 console.log('PASS — v110415 compact driver documents installed');
