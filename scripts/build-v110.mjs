@@ -117,6 +117,7 @@ steps.push('finalize-load-week-transfer-v110412.mjs','v110412/transfer.test.mjs'
 steps.push('finalize-document-evidence-v110413.mjs','v110413/test.mjs','v110413/billing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-recovery-review-v110414.mjs','v110414/recovery-review.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-driver-documents-v110415.mjs','v110415/driver-documents.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-document-weeks-v110416.mjs','v110416/document-weeks.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
