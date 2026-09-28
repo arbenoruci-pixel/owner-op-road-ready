@@ -36,6 +36,8 @@ assert.deepEqual(reviewedLoadAliases({evidenceAliases:[{from:'X',to:'Y'},{from:'
 assert.deepEqual(reviewedLoadAliases({evidenceRecoveryHistory:[{aliases:[{from:'X',to:'Y'},{from:'X',to:'Z'}]}]}),{});
 assert.deepEqual(reviewedLoadAliases({evidenceAliases:[{from:'X',to:'Z'}],evidenceRecoveryHistory:[{aliases:[{from:'X',to:'Y'}]}]}),{X:'Z'});
 assert.equal(reviewedLoadAliases(store,[{...documents[0],auditTrail:[]}]).BOL100,undefined,'no identity inference from route, current reference or ID alone');
+const alreadyOrganized=structuredClone(documents[0]);alreadyOrganized.auditTrail=[];alreadyOrganized.extracted.evidenceFactsV1.fields.reference='BOL100';
+assert.equal(reviewedLoadAliases(store,[alreadyOrganized]).BOL100,'LOAD100','a reviewed BOL reference plus original transfer ID also proves the recovered rename');
 assert.equal(reviewedLoadAliases(store,[{...documents[0],sha256:'b'.repeat(64)}]).BOL100,undefined,'a changed source cannot establish a rename');
 const regularMove=structuredClone(documents[0]);regularMove.auditTrail[0].source='driver_review';
 assert.equal(reviewedLoadAliases(store,[regularMove]).BOL100,undefined,'moving one file never merges two loads');
@@ -59,5 +61,10 @@ const selected=selectTransfer({scope:'week',week,folders:result.folders,allDocum
 assert.deepEqual(selected.records.loads.find(l=>l.loadNo==='LOAD100').documentTransferAliases,[{from:'BOL100',to:'LOAD100'}]);
 const imported=mergeRecords({},selected.records).next;
 assert.deepEqual(model(normalizeBusinessStore(JSON.parse(JSON.stringify(imported))),[],state).folders.map(f=>f.loadNo).sort(),['EMPTY300','LOAD100','LOAD200']);
+const existing={loads:[{id:'native',loadNo:'LOAD100',broker:'Locally edited'}]};
+const merged=mergeRecords(existing,selected.records).next;
+assert.equal(merged.loads.find(l=>l.loadNo==='LOAD100').broker,'Locally edited');
+assert.equal(reviewedLoadAliases(merged).BOL100,'LOAD100','import keeps the identity mapping when the canonical load is already present');
+assert.equal(existing.loads[0].documentTransferAliases,undefined,'import does not mutate the input store');
 assert.equal(selected.documents.some(d=>d.load_no==='TONU400'),false,'week export excludes another service week');
 console.log('PASS — reviewed aliases after reload/transfer, no ghost folders, service weeks, cross-week actual activity, legitimate empty loads, conflict guards and unchanged originals/logs');

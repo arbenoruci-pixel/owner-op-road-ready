@@ -35,6 +35,14 @@ patch(transfer,'// Portable Documents packages.',"import {reviewedLoadAliases} f
 patch(transfer,'  records.loads = selected.map(f => {','  const aliases=reviewedLoadAliases(businessStore,allDocuments);\n  records.loads = selected.map(f => {');
 patch(transfer,'      documentTransferDays:[...new Set(f.days || [])].filter(validDay),',`      documentTransferDays:[...new Set(f.days || [])].filter(validDay),
       documentTransferAliases:Object.entries(aliases).filter(([,to])=>to===loadNumber(f)).map(([from,to])=>({from,to})),`);
+patch(transfer,'      if (match) { summary.keptRecords++; continue; }',`      if (match) {
+        if(bucket==='loads'&&Array.isArray(raw.documentTransferAliases)){
+          const mappings=Array.isArray(match.documentTransferAliases)?[...match.documentTransferAliases]:[];
+          for(const a of raw.documentTransferAliases)if(a?.to===loadNumber(match)&&a.from&&!mappings.some(old=>old.from===a.from))mappings.push(clone(a));
+          if(mappings.length)match.documentTransferAliases=mappings;
+        }
+        summary.keptRecords++;continue;
+      }`);
 const folders='source/src/modules/owneros/LoadFoldersV10969.jsx';
 patch(folders,"import {loadView}","import {documentWeeks,folderWeekDates} from './documentWeeksV110416.js';\nimport {loadView}");
 patch(folders,'  const {folders,reviewItems,allDocuments}=model;','  const {folders,reviewItems,allDocuments,archiveState,evidenceStore}=model;');
