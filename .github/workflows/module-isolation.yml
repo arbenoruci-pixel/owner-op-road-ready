@@ -60,6 +60,7 @@ jobs:
             sleep 1
           done
           failed=0
+          node scripts/v110417/browser-loads.mjs 2>&1 | tee /tmp/browser-loads-v110417.log
           node scripts/v110416/browser-weeks.mjs 2>&1 | tee /tmp/browser-weeks-v110416.log
           node scripts/v110415/browser-documents.mjs 2>&1 | tee /tmp/browser-documents-v110415.log
           node scripts/v110414/browser-recovery.mjs 2>&1 | tee /tmp/browser-recovery-v110414.log
