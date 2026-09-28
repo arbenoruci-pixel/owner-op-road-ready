@@ -57,6 +57,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await page.evaluate(()=>{const k='owner-op-road-ready-business-v1',s=JSON.parse(localStorage.getItem(k));s.loads[0].gross=777;localStorage.setItem(k,JSON.stringify(s));});
   await page.getByRole('button',{name:'Apply reviewed recovery',exact:true}).click();await page.getByRole('alert').filter({hasText:'gross changed'}).waitFor();assert.equal((await stored(page)).docs.length,1);
   await page.evaluate(()=>{const k='owner-op-road-ready-business-v1',s=JSON.parse(localStorage.getItem(k));s.loads[0].gross=0;localStorage.setItem(k,JSON.stringify(s));});
+  await chooseRecovery(page);
   await page.getByRole('button',{name:'Apply reviewed recovery',exact:true}).click();await page.getByRole('status').filter({hasText:'Recovered 2 originals'}).waitFor();
   await page.waitForTimeout(500);after=await stored(page);assert.equal(after.docs.length,3);assert.equal(after.docs.find(d=>d.client_document_id==='a-client').type,'pod');assert.equal(after.business.loads.length,1);assert.equal(after.business.loads[0].loadNo,'L100');assert.equal(after.business.loads[0].gross,500);assert.equal(logs(after.state),logs(before.state));assert.deepEqual(after.blobs.find(b=>b.id==='a-client').bytes,[...bytes]);
   await panel.getByRole('button',{name:'Choose saved document',exact:true}).click();await panel.getByLabel('Choose saved source',{exact:true}).selectOption('fuel-client');
