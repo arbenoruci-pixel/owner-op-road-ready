@@ -23,7 +23,7 @@ patch(reconciliation,'  for(const load of loads||[]){',`  // Canonical records w
 patch(reconciliation,'  return {folders,reviewItems,allDocuments:allDocs,repairOverlay:overlay};',`  return {folders,reviewItems,allDocuments:allDocs,repairOverlay:overlay,archiveState:state,
     evidenceStore:{...businessStore,evidenceAliases:[...aliases].map(([from,to])=>({from,to}))}};`);
 const archive='source/src/modules/owneros/archiveEvidenceV1103.js';
-patch(archive,'  const actualDays=days.length?days:unique([...folder.documents.flatMap(doc=>doc.archiveEventDays || []),...(load.documentTransferDays || []).filter(day)]).sort();',`  const stage=text(load.documentWorkflowStage).toLowerCase();
+patch(archive,'  const actualDays=days.length?days:unique([...folder.documents.flatMap(doc=>doc.archiveEventDays || []),...(load.documentTransferDays || []).filter(day)]).sort();',`  const stage=text(load.documentWorkflowStage||load.serviceStatus||(text(load.status).toLowerCase()==='archived'?load.documentTransferEvidence?.originalStatus:load.status)).toLowerCase();
   const transferred=(load.documentTransferDays || []).filter(day).filter(date=>
     !(['booked','picked_up'].includes(stage) && date===day(load.deliveryDate) && date!==day(load.pickupDate)));
   const actualDays=days.length?days:unique([...folder.documents.flatMap(doc=>doc.archiveEventDays || []),...transferred]).sort();`);

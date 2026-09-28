@@ -49,6 +49,10 @@ const crossing=structuredClone(state);crossing.eventsByDay['2026-09-28']=[{id:'d
 assert.deepEqual(weeks(model(store,documents,crossing)).map(w=>w.id),['2026-09-28','2026-09-21','2026-09-14']);
 const documentOnly=model(store,documents,{});
 assert.deepEqual(documentOnly.folders.find(f=>f.loadNo==='LOAD100').days,['2026-09-25'],'old transferred planned delivery is not actual activity');
+for(const saved of [{status:'booked'},{serviceStatus:'picked_up'},{status:'archived',documentTransferEvidence:{originalStatus:'booked'}}]){
+  const legacy=structuredClone(store);Object.assign(legacy.loads[0],saved);delete legacy.loads[0].documentWorkflowStage;
+  assert.deepEqual(model(legacy,documents,{}).folders.find(f=>f.loadNo==='LOAD100').days,['2026-09-25'],'legacy service stage excludes a merely planned delivery week');
+}
 
 // Current canonical business fields must win if a stale source row is also saved.
 const duplicate={...history,loads:[...store.loads,{id:'old',loadNo:'BOL100',broker:'Stale Broker'}]};
