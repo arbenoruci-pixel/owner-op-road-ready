@@ -44,14 +44,14 @@ export function validateRecoveryPlan(packageValue) {
   for(const from of map.keys()){const visited=new Set();let ref=from;while(map.has(ref)){if(visited.has(ref))throw new Error('Load alias cycle.');visited.add(ref);ref=map.get(ref);}}
   return p;
 }
-export function prepareRecoveryBusiness(current,p) {
+export function prepareRecoveryBusiness(current,p,approved=new Set()) {
   const next=clone(current);
   if(list(next.evidenceRecoveryHistory).some(h=>h.id===p.id))return next;
   for(const c of p.loadCorrections){
     const matches=list(next.loads).filter(l=>c.id&&l.id===c.id||loadOf(l)===c.loadNo);
     if(matches.length>1)throw new Error(`Load ${c.loadNo} has conflicting saved records. Review it first.`);
     const row=matches[0];if(!row)continue;
-    for(const [key,value] of Object.entries(c.before))if(!scalarMatch(row[key],value)&&!scalarMatch(row[key],c.after[key]))throw new Error(`Load ${c.loadNo}: ${key} changed since this export. Existing data was kept.`);
+    for(const [key,value] of Object.entries(c.before))if(!scalarMatch(row[key],value)&&!scalarMatch(row[key],c.after[key])&&!approved.has(`load:${c.loadNo}:${key}`))throw new Error(`Load ${c.loadNo}: ${key} changed since this export. Existing data was kept.`);
     Object.assign(row,clone(c.after),{updatedAt:Date.now()});
     if(c.after.loadNo&&c.after.loadNo!==c.loadNo){
       for(const key of ['load_no','canonicalLoadNo'])if(row[key]){if(row[key]!==c.loadNo&&row[key]!==c.after.loadNo)throw new Error('Saved load identities disagree. Review the load first.');row[key]=c.after.loadNo;}
@@ -64,10 +64,51 @@ export function prepareRecoveryBusiness(current,p) {
   next.evidenceAliases=[...aliases.values()];
   return next;
 }
-export function checkDocumentCorrection(doc,c) {
+export function checkDocumentCorrection(doc,c,approved=new Set()) {
   if(sourceHashes(doc).some(hash=>hash!==c.sha256))throw new Error('A saved original differs from the recovery source.');
   const values={loadNo:loadOf(doc),kind:kindOf(doc),date:documentFacts(doc).date||''},after={loadNo:c.after.fields.loadNo||'',kind:c.after.kind,date:c.after.fields.date||''};
-  for(const key of Object.keys(values))if(!scalarMatch(values[key],c.before[key])&&!scalarMatch(values[key],after[key]))throw new Error(`Document ${key} changed since this export. Existing data was kept.`);
+  for(const key of Object.keys(values))if(!scalarMatch(values[key],c.before[key])&&!scalarMatch(values[key],after[key])&&!approved.has(`document:${c.clientId}:${key}`))throw new Error(`Document ${key} changed since this export. Existing data was kept.`);
   const review=doc.extracted?.evidenceFactsV1;
-  if(review?.source==='driver_review'&&JSON.stringify(review.fields)!==JSON.stringify(c.after.fields))throw new Error('A document has newer reviewed details. Existing data was kept.');
+  if(review?.source==='driver_review'&&canonical(reviewedDetails(review))!==canonical(reviewedDetails(c.after))&&!approved.has(`document:${c.clientId}:review`))throw new Error('A document has newer reviewed details. Existing data was kept.');
+}
+
+// Compare all original device rows before any write. Exported folder projections
+// can differ from vault rows; a source-bound, explicit review resolves those
+// differences without weakening checksum, identity or concurrent-edit guards.
+const canonical=value=>JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
+const reviewedDetails=review=>({fields:review.fields,components:list(review.components)});
+function planToken(p){return canonical({...p,transfer:{...p.transfer,documents:list(p.transfer.documents).map(d=>({...d,original:{...d.original,base64:undefined}}))}});}
+export function reviewRecoveryRecords(current,rows,p){
+  validateRecoveryPlan(p);
+  const conflicts=[],snapshots={loads:[],documents:[],history:list(current.evidenceRecoveryHistory)};
+  const already=list(current.evidenceRecoveryHistory).some(h=>h.id===p.id);
+  const files=new Map(p.transfer.documents.map(d=>[d.record.client_document_id||d.record.clientDocumentId,d]));
+  function difference(key,label,field,expected,saved,recovered){if(!scalarMatch(saved,expected)&&!scalarMatch(saved,recovered))conflicts.push({key,label,field,expected:expected??null,saved:saved??null,recovered:recovered??null});}
+  for(const c of p.loadCorrections){
+    const matches=list(current.loads).filter(l=>c.id&&l.id===c.id||loadOf(l)===c.loadNo);
+    if(matches.length>1)throw new Error(`Load ${c.loadNo} has conflicting saved records. Review it first.`);
+    const row=matches[0];snapshots.loads.push([c.loadNo,row||null]);
+    if(row&&!already)for(const [field,value]of Object.entries(c.before))difference(`load:${c.loadNo}:${field}`,`Load ${c.loadNo}`,field,value,row[field],c.after[field]);
+  }
+  for(const c of p.documentCorrections){
+    const matches=list(rows).filter(d=>d.client_document_id===c.clientId);
+    if(matches.length>1)throw new Error('A recovery document has conflicting saved identities.');
+    const existing=matches[0],doc=existing||files.get(c.clientId).record;
+    snapshots.documents.push([c.clientId,existing||null]);
+    if(sourceHashes(doc).some(hash=>hash!==c.sha256))throw new Error('A saved original differs from the recovery source.');
+    if(already)continue;
+    const label=text(doc.original_file_name||doc.fileName||doc.title)||'Saved document';
+    const values={loadNo:loadOf(doc),kind:kindOf(doc),date:documentFacts(doc).date||''};
+    const after={loadNo:c.after.fields.loadNo||'',kind:c.after.kind,date:c.after.fields.date||''};
+    for(const field of Object.keys(values))difference(`document:${c.clientId}:${field}`,label,field,c.before[field],values[field],after[field]);
+    const review=doc.extracted?.evidenceFactsV1;
+    if(review?.source==='driver_review'&&canonical(reviewedDetails(review))!==canonical(reviewedDetails(c.after)))conflicts.push({key:`document:${c.clientId}:review`,label,field:'review',saved:reviewedDetails(review),recovered:reviewedDetails(c.after),expected:null});
+  }
+  return {id:p.id,planToken:planToken(p),snapshotToken:canonical(snapshots),conflicts,already};
+}
+export function confirmRecoveryReview(current,rows,p,review,acceptDifferences=false){
+  const fresh=reviewRecoveryRecords(current,rows,p);
+  if(!review||fresh.id!==review.id||fresh.planToken!==review.planToken||fresh.snapshotToken!==review.snapshotToken)throw new Error('Saved details changed after this preview. Check the updated differences before applying.');
+  if(fresh.conflicts.length&&!acceptDifferences)throw new Error('Review the saved and recovered values, then choose Use recovered details.');
+  return new Set(acceptDifferences?fresh.conflicts.map(c=>c.key):[]);
 }
