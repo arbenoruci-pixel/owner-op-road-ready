@@ -1,0 +1,15 @@
+/* A visible identity, service dates and one disclosure per load. */
+.rr-driver-documents .rr-driver-load-id{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#19314c;font-size:14px;font-weight:750}
+.rr-driver-documents .rr-driver-load-id b{font-size:14px;white-space:nowrap}
+.rr-driver-documents .rr-driver-card-date{font-size:13px;font-weight:500;line-height:1.45}
+.rr-driver-documents .rr-driver-status{margin:0;border:0;line-height:1.4}
+.rr-driver-documents .rr-driver-checks{border:1px solid #edcf94;border-radius:10px;background:#fff4df;overflow:hidden}
+.rr-driver-documents .rr-driver-check-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;width:100%;padding:10px 12px;border:0;border-radius:0;background:transparent;color:#844715;text-align:left;font-size:14px;font-weight:650}
+.rr-driver-check-toggle>span:last-child{color:#2458b6;white-space:nowrap;font-size:13px}
+.rr-driver-documents .rr-driver-check-body{padding:0 12px 12px;display:grid;gap:10px}
+.rr-driver-documents .rr-driver-check-body h4{margin:0;font-size:15px}
+.rr-driver-documents .rr-driver-check-body p{margin:8px 0;font-size:13px;line-height:1.5;color:#70451e}
+.rr-driver-documents .rr-driver-check-body .rr-driver-review{border:0;border-radius:0;background:transparent}
+.rr-driver-documents .rr-driver-check-body .rr-evidence-rows{padding:0;margin:0}
+.rr-driver-documents .rr-driver-check-body .rr-evidence-review{padding:10px 0}
+.rr-driver-documents .rr-driver-check-body .rr-evidence-review input,.rr-driver-documents .rr-driver-check-body .rr-evidence-review select{color-scheme:light;background:#fff!important;color:#152b46!important}
