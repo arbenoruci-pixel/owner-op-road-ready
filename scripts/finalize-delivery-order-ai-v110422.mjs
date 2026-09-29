@@ -13,7 +13,7 @@ patch(identity,"  const pages=documentPages(analysis),pageTypes=pages.map(page=>
 const VERSION='110.4.22',BUILD='v110422-delivery-order-ai',stamp=new Date().toISOString();
 for(const file of ['release-version.json','public/app-version.json']) {
   const value=JSON.parse(read(file));
-  Object.assign(value,{version:VERSION,build:BUILD,force:false,label:'v110.4.22 GPS, DOT Inspection and signing',releasedAt:stamp,updatedAt:stamp,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || null,notes:['Recognize sideways Delivery Orders without mislabeling them as BOL or POD.','Route Delivery Orders through the existing verified load matching flow.','Enable project-scoped AI assistance and cover four unclear pages per scan.']});
+  Object.assign(value,{version:VERSION,build:BUILD,force:false,label:'v110.4.22 Delivery order and AI reader',releasedAt:stamp,updatedAt:stamp,sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || null,notes:['Recognize sideways Delivery Orders without mislabeling them as BOL or POD.','Route Delivery Orders through the existing verified load matching flow.','Enable project-scoped AI assistance and cover four unclear pages per scan.']});
   fs.writeFileSync(file,JSON.stringify(value,null,2)+'\n');
 }
 for(const file of ['package.json','package-lock.json']) {const value=JSON.parse(read(file));value.version=VERSION;if(value.packages?.[''])value.packages[''].version=VERSION;fs.writeFileSync(file,JSON.stringify(value,null,2)+'\n');}
