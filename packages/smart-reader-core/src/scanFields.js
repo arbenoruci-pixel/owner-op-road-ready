@@ -4,7 +4,7 @@ import {isNumberedRateTable} from './numberedRate.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
   poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
-const referenceKinds={loadNo:'load_number',bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailerNo'};
+const referenceKinds={bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailerNo'};
 const aliases={shipper:'origin',consignee:'destination',documentDate:'date'};
 const bolWarning='BOL number was not verified from its label. Check the original.';
 const dateWarning='Document date was not read. Enter it after checking the original.';
@@ -48,8 +48,9 @@ export function scanWithSourceFields(analysis,review,selectedType){
     evidence[key]=fieldEvidence[key]={fieldLabel:field.label,value:field.value,source:field.status==='confirmed'?'driver_confirmed':'document_text',
       status:field.status==='confirmed'?'confirmed':'read',excerpt:[...new Set(valid.map(ref=>ref.quote))].join('\n').slice(0,350)};
   }
-  fields.references=(Array.isArray(fields.references)?fields.references:[]).filter(ref=>!Object.values(referenceKinds).includes(ref.kind));
-  for(const key of accepted)if(referenceKinds[key])fields.references.push({kind:referenceKinds[key],value:fields[key],source:'reader_source'});
+  const fieldReferenceKinds=delivery?{...referenceKinds,loadNo:'load_number'}:referenceKinds;
+  fields.references=(Array.isArray(fields.references)?fields.references:[]).filter(ref=>!Object.values(fieldReferenceKinds).includes(ref.kind));
+  for(const key of accepted)if(fieldReferenceKinds[key])fields.references.push({kind:fieldReferenceKinds[key],value:fields[key],source:'reader_source'});
   fields.readerSourceFieldsV110393={engineVersion:result.engineVersion,documentId:result.documentId,reviewRevision:result.reviewRevision,fields:proofs};
   const removed=(analysis.layoutGuardV110337?.removedFields||[]).filter(key=>!accepted.includes(key));
   const issues=(oldReview.issues||[]).filter(issue=>!(issue===bolWarning&&accepted.includes('bolNo')
