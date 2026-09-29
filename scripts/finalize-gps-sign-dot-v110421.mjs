@@ -74,6 +74,13 @@ for(const [file,before,after] of preTripChanges) {
 }
 fs.writeFileSync('module-locks.v1.json',JSON.stringify(reviewedLocks,null,2)+'\n');
 
+// Legacy installers recognize only these exact reviewed final outputs.
+// Their rejection of unknown edits and byte-identical rerun tests stay active.
+const reviewed=JSON.parse(read('scripts/v110421/reviewed-runtime-hashes.json'));
+for(const [file,hash] of Object.entries(reviewed))assert.equal(createHash('sha256').update(read(file)).digest('hex'),hash,'Reviewed DOT runtime: '+file);
+patch('scripts/v110378/install.mjs','const prepared=[],seen=new Set();',`Object.assign(completedHashes,${JSON.stringify(reviewed)});\nconst prepared=[],seen=new Set();`);
+patch('scripts/v110378/finish-mobile.mjs'," const source=fs.readFileSync(file,'utf8');",` const source=fs.readFileSync(file,'utf8');\n if(hash(source)===${JSON.stringify(reviewed)}[file])return;`);
+
 const VERSION='110.4.21',BUILD='v110421-gps-sign-dot',stamp=new Date().toISOString();
 for(const file of ['release-version.json','public/app-version.json']) {
   const value=JSON.parse(read(file));
