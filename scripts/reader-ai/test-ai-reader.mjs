@@ -181,9 +181,9 @@ test('unloading instructions and pickup signatures do not spend AI calls on clea
   assert.equal(disabled.calls.filter(call=>call.method==='POST').length,0);
 });
 
-test('repeat scans use cache and large unclear packets stop after two pages',async()=>{
-  const h=fallbackHarness({pageTexts:['unclear first','unclear second','unclear third']});
-  const first=await h.assist(h.analysis);assert.equal(h.calls.filter(call=>call.method==='POST').length,2);assert.equal(first.aiClassification.pages[2].status,'limit_reached');
+test('repeat scans use cache and three-page packets are covered and larger packets stop after four pages',async()=>{
+  const h=fallbackHarness({pageTexts:['unclear first','unclear second','unclear third','unclear fourth','unclear fifth']});
+  const first=await h.assist(h.analysis);assert.equal(h.calls.filter(call=>call.method==='POST').length,4);assert.equal(first.aiClassification.pages[4].status,'limit_reached');
   const single=fallbackHarness();await single.assist(single.analysis);await single.assist(single.analysis);assert.equal(single.calls.filter(call=>call.method==='POST').length,1);
 });
 

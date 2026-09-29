@@ -123,6 +123,7 @@ steps.push('finalize-reviewed-load-reference-v110418.mjs','v110418/identity.test
 steps.push('finalize-source-copy-filing-v110419.mjs','v110419/source-copies.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-rescanned-bol-v110420.mjs','v110420/bol-filing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-gps-sign-dot-v110421.mjs','v110421/gps-sign.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-delivery-order-ai-v110422.mjs','v110422/reader.test.mjs','v110422/filing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
