@@ -22,3 +22,5 @@ test('delivery reference updates come from this exact source review',()=>{
   assert.equal(scanWithSourceFields(analysis,{analysis:{},result},'delivery_order'),analysis);
   const updated=scanWithSourceFields(analysis,{analysis,result},'delivery_order');assert.equal(updated.fields.loadNo,'L-1234');assert.equal(updated.routing.autoFile,false);assert.equal(updated.fields.readerSourceFieldsV110393.fields.loadNo.evidence[0].quote,'L-1234');
 });
+
+test('rotated OCR line ordering can place a real heading after twenty lines',()=>{const result=readDocument({documentId:'late-title',pages:[{id:'p',observations:[textObservation(Array(30).fill('form detail').join('\n')+'\n'+text)]}]});assert.equal(result.pageIdentities[0].kind,'delivery_order');});

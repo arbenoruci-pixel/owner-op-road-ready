@@ -4,7 +4,7 @@ import {isNumberedRateTable} from './numberedRate.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
   poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
-const referenceKinds={bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailerNo'};
+const referenceKinds={loadNo:'load_number',bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailerNo'};
 const aliases={shipper:'origin',consignee:'destination',documentDate:'date'};
 const bolWarning='BOL number was not verified from its label. Check the original.';
 const dateWarning='Document date was not read. Enter it after checking the original.';

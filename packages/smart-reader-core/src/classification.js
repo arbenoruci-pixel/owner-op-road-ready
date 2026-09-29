@@ -75,7 +75,7 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
   }
   const vertical=profile.orientationAware&&lines.filter(line=>line.box&&line.box.height>line.box.width*3).length>lines.length*.6;
   // Rotation affects the matching view only. Evidence retains source boxes.
-  const title=lines.find((line,index)=>(line.box?(vertical?line.box.x>.8||line.box.x<.2:line.box.y<(profile.headingMaxY??.3)):(lineIndices?.get(line)??index)<20)&&(matches(line,profile.heading)||noisyTitle(line,profile)));
+  const title=lines.find((line,index)=>(line.box?(vertical?line.box.x>.8||line.box.x<.2:line.box.y<(profile.headingMaxY??.3)):(profile.headingSearchAll||(lineIndices?.get(line)??index)<20))&&(matches(line,profile.heading)||noisyTitle(line,profile)));
   const signals=title?profile.signals.map(pattern=>lines.find(line=>(!profile.distinctSignals||line!==title&&view(line).toLowerCase()!==view(title).toLowerCase())&&
     (profile.minSignalConfidence==null||line.confidence==null||line.confidence>=profile.minSignalConfidence)&&matches(line,pattern))):[];
   if(title&&signals.every(Boolean)){

@@ -58,11 +58,11 @@ const receiptType=(id,label,heading,signals=[],fields={})=>p(id,label,heading,[.
 export function truckingProfiles(base){
   const bol=base.find(p=>p.id==='bol');
   const profiles=[
-    p('delivery_order','Delivery order',/^(?!.*\b(?:send|submit|provide|attach|return|required|must|shall)\b).*\bDELIVERY[ \t]+ORDE[R]?\s*$/i,
+    p('delivery_order','Delivery order',/^(?!.*\b(?:send|submit|provide|attach|return|required|must|shall|not|no)\b).*\bDELIVERY[ \t]+ORDE[R]?\s*$/i,
       [/\b(?:MASTER[ \t]+BILL|HOUSE[ \t]+BILL|WEIGHT|CTNS|NOT.{0,20}Bill[ \t]+of[ \t]+Lading)\b/i,
         /\b(?:DELIVERING[ \t]+CARRIER|DELIVER[ \t]*\.?[ \t]*TO|BILL[ \t]+TO|CHARGES)\b/i],
       {...shipping,deliveryNumber:id('Delivery number','DELIVERY ORDER|DELIVERY'),
-        poNumber:id('PO number','PO|PURCHASE ORDER')},{identity:'deliveryNumber',orientationAware:true}),
+        poNumber:id('PO number','PO|PURCHASE ORDER')},{identity:'deliveryNumber',orientationAware:true,headingSearchAll:true}),
     ...additionalProfiles({p,sig,field,id,amount,date,receiptType,equipment,vin,unit,business}),
     p('pod','Proof of delivery','PROOF OF DELIVERY|POD|CUSTOMER DELIVERY COPY',
       [shipmentSignal,sig('RECEIVED BY|DELIVERED TO|DELIVERY DATE|CONSIGNEE|SHIP TO')],
