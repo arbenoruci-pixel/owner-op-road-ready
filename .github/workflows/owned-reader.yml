@@ -20,7 +20,7 @@ jobs:
           node-version: '20'
       - run: node --test packages/smart-reader-core/test/*.test.mjs
       - run: node --test scripts/test-document-type-priority.mjs
-      - run: node --test scripts/reader-ai/test-ai-reader.mjs
+      - run: node --test scripts/reader-ai/test-ai-reader.mjs scripts/reader-ai/test-runtime-credentials.mjs
       - run: node --test experiments/owned-ocr/test-*.mjs
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - uses: actions/setup-python@v5

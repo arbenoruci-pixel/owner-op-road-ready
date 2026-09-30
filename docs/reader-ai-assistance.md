@@ -6,7 +6,7 @@ AI results are suggestions. The review screen shows their evidence, opens the so
 
 ## Activation
 
-Owner-Op Road Ready activates AI using its server-only, project-scoped Vercel OIDC token and `openai/gpt-5.4-mini`. The project ID must match the Owner-Op production project. Other projects remain disabled unless explicitly configured with `READER_AI_ENABLED=true`, `READER_AI_GATEWAY_KEY` and an image-capable `READER_AI_MODEL`. Set `READER_AI_ENABLED=false` to disable assistance. No credential is embedded in the PWA, and unrelated provider credentials are ignored.
+Owner-Op Road Ready activates AI using its server-only, project-scoped Vercel OIDC token and `openai/gpt-5.4-mini`. The project ID must match the Owner-Op production project. Runtime credentials come from the platform-injected `x-vercel-oidc-token` request header; local/build credentials fall back to `VERCEL_OIDC_TOKEN`. The runtime token is checked for this project/team, issuer, audience and expiry before activation; AI Gateway verifies its signature before inference. The public status endpoint never exposes credentials. Other projects remain disabled unless explicitly configured with `READER_AI_ENABLED=true`, `READER_AI_GATEWAY_KEY` and an image-capable `READER_AI_MODEL`. Set `READER_AI_ENABLED=false` to disable assistance. No credential is embedded in the PWA, and unrelated provider credentials are ignored.
 
 Gateway quota/payment failures stop the batch. No automatic credit purchases or model substitutions are made. Four requests per minute and one concurrent request per account are best-effort instance limits; they are not a monetary cap. Configure project spend limits in Gateway. Cached responses are isolated by account, image, OCR context, model and prompt version.
 
