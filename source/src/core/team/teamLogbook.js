@@ -2,6 +2,14 @@ const PRIMARY_DRIVER_ID = 'driver_primary';
 
 export const TEAM_DRIVER_SCHEMA_VERSION = 1;
 
+// Stored daily totals and legacy mileage formats belong to the selected driver.
+// Route legs remain shared freight records; their distances are suggestions.
+export const DRIVER_MILEAGE_FIELDS = Object.freeze([
+  'manualMilesByDay','dailyMilesByDay','milesByDay','drivingMilesByDay',
+  'dailyDrivingMilesByDay','driveMilesByDay','dayDataByDate','logbookByDay',
+  'dailyLogByDay','dailyLogs','formsByDay','logDays','days',
+]);
+
 const DRIVER_LOG_FIELDS = [
   'eventsByDay',
   'certifyStatus',
@@ -15,6 +23,7 @@ const DRIVER_LOG_FIELDS = [
   'manualDrivingSession',
   'dutySafetyBackupByDay',
   'formByDay',
+  ...DRIVER_MILEAGE_FIELDS,
 ];
 
 function cleanName(value = '') {
@@ -53,6 +62,7 @@ function defaultLogbook(day = '') {
     manualDrivingSession:null,
     dutySafetyBackupByDay:{},
     formByDay:{},
+    ...Object.fromEntries(DRIVER_MILEAGE_FIELDS.map(field => [field, {}])),
   };
 }
 
@@ -243,7 +253,7 @@ export function importedLogbookIntegrity(source = {}, restored = {}) {
         else candidates.splice(index, 1);
       }
     }
-    for (const field of ['signatureByDay','inspectionByDay','formByDay','dutySafetyBackupByDay']) {
+    for (const field of ['signatureByDay','inspectionByDay','formByDay','dutySafetyBackupByDay',...DRIVER_MILEAGE_FIELDS]) {
       for (const [day, value] of Object.entries(book[field] || {})) {
         if (!containsRecordedValue(value, target?.[field]?.[day])) missing.push({ driverId, day, field, reason:'record missing or changed' });
       }

@@ -1,0 +1,51 @@
+name: Team mileage and freight
+on:
+  pull_request:
+    paths:
+      - 'source/src/core/team/**'
+      - 'scripts/v110423/**'
+      - 'scripts/finalize-team-freight-v110423.mjs'
+      - 'scripts/build-v110.mjs'
+      - '.github/workflows/team-freight.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'source/src/core/team/**'
+      - 'scripts/v110423/**'
+      - 'scripts/finalize-team-freight-v110423.mjs'
+      - '.github/workflows/team-freight.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Exact production build and core regressions
+        run: node scripts/build-v110.mjs > /tmp/team-freight-build.log 2>&1 || { tail -n 100 /tmp/team-freight-build.log; exit 1; }
+      - run: npm install --no-save --package-lock=false playwright@1.55.1
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Driver switch, mileage edit, reload and shipment dates
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/team-freight-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/v110423/browser-team-freight.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: team-freight-evidence
+          path: |
+            browser-test-results/team-freight-v110423/
+            /tmp/team-freight-build.log
+            /tmp/team-freight-server.log
