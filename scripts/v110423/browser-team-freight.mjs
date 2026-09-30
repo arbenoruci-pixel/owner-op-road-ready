@@ -6,7 +6,7 @@ import {addTeamDriver,switchTeamDriver} from '../../source/src/core/team/teamLog
 const day='2026-09-28',pickupDay='2026-09-27',deliveryDay='2026-09-29',after='2026-09-30';
 const output='browser-test-results/team-freight-v110423';fs.mkdirSync(output,{recursive:true});
 const rows=(prefix,miles)=>[{id:prefix+'-sleep',status:'SB',startMin:0,endMin:600,city:'Columbus',state:'OH',note:'Sleeper berth',source:'manual'},{id:prefix+'-drive',status:'D',startMin:600,endMin:1000,city:'Columbus',state:'OH',note:'Driving',source:'manual',manualMiles:miles},{id:prefix+'-off',status:'OFF',startMin:1000,endMin:1440,city:'Columbus',state:'OH',note:'Off Duty',source:'manual'}];
-const pickup={id:'beta-pickup',status:'ON',startMin:500,endMin:540,city:'Philadelphia',state:'PA',note:'Pickup / Loading',source:'manual',shippingDocs:'BOL-TEST'};
+const pickup={id:'beta-pickup',status:'ON',startMin:500,endMin:540,city:'Broadview Heights',state:'OH',note:'Pickup / Loading',source:'manual',shippingDocs:'BOL-TEST'};
 const delivery={id:'alpha-delivery',status:'ON',startMin:500,endMin:530,city:'Chicago',state:'IL',note:'Delivery / Unloading',source:'manual',shippingDocs:'BOL-TEST'};
 let team=addTeamDriver({...baseState(),view:'logbook',activeDay:day,driverProfile:{name:'Alpha Driver'},manualMilesByDay:{[day]:300},eventsByDay:{[day]:rows('alpha',300),[deliveryDay]:[delivery]},signatureByDay:{},inspectionByDay:{},formByDay:{},loadInfo:{loadNo:'BOL-TEST',shippingDocs:'BOL-TEST',sourceEventId:pickup.id,sourceEventDay:pickupDay},routeLegsByDay:{[pickupDay]:[{id:'freight-1',day:pickupDay,pickupDay,pickupEventId:pickup.id,pickupMin:500,kind:'loaded',status:'open',shippingDocs:'BOL-TEST',fromCity:'Columbus',fromState:'OH',toCity:'Chicago',toState:'IL',miles:700}]},loadGuidesById:{},activeLoadGuideId:''},'Beta Driver',day);
 const alpha=team.activeDriverId,beta=team.teamDrivers[1].id;
@@ -23,10 +23,16 @@ for(const[name,engine]of[['chromium',chromium],['webkit',webkit]]){
    try{
     await seed(page,{...structuredClone(team),activeDay:selected});await form(page,selected);
     const paper=page.locator('.road-paper-form');
-    if(selected!==after){await page.getByRole('button',{name:/Philadelphia, PA.*Chicago, IL/}).first().waitFor();assert.match(await paper.innerText(),/BOL-TEST/);}
+    if(selected!==after){
+     const routeButton=page.getByRole('button',{name:/Broadview Heights, OH.*Chicago, IL/}).first();await routeButton.waitFor();
+     let promptIndex=0;const answers=['Philadelphia, PA','Chicago, IL','BOL-TEST'];const dialog=d=>d.accept(answers[promptIndex++]);page.on('dialog',dialog);await routeButton.click();await waitState(page,s=>s?.routeLegsByDay?.[pickupDay]?.some(l=>l.freightOriginOverride?.city==='Philadelphia'));page.off('dialog',dialog);assert.equal(promptIndex,3);
+     await page.getByRole('button',{name:/Philadelphia, PA.*Chicago, IL/}).first().waitFor();assert.match(await paper.innerText(),/BOL-TEST/);
+     const corrected=await stored(page);assert.equal(corrected.teamLogbooksByDriverId[beta].eventsByDay[pickupDay][0].city,'Broadview Heights');
+     await page.reload();await page.locator('.team-driver-shell').waitFor();await form(page,selected);await page.getByRole('button',{name:/Philadelphia, PA.*Chicago, IL/}).first().waitFor();
+    }
     else{assert.doesNotMatch(await paper.innerText(),/BOL-TEST|Philadelphia/);}
     if(selected===day){assert.match(await paper.getByRole('button',{name:/^Distance/}).innerText(),/300.00 mi/);page.once('dialog',d=>d.accept('333'));await paper.getByRole('button',{name:/^Distance/}).click();await waitState(page,s=>s?.manualMilesByDay?.[day]===333);await switchDriver(page,'Beta Driver',beta);await form(page,selected);assert.match(await paper.getByRole('button',{name:/^Distance/}).innerText(),/225.00 mi/);page.once('dialog',d=>d.accept('244'));await paper.getByRole('button',{name:/^Distance/}).click();await waitState(page,s=>s?.manualMilesByDay?.[day]===244);await page.reload();await page.locator('.team-driver-shell').waitFor();await form(page,selected);assert.match(await paper.getByRole('button',{name:/^Distance/}).innerText(),/244.00 mi/);await switchDriver(page,'Alpha Driver',alpha);await form(page,selected);assert.match(await paper.getByRole('button',{name:/^Distance/}).innerText(),/333.00 mi/);const saved=await stored(page);assert.deepEqual(saved.eventsByDay[day],team.eventsByDay[day]);assert.equal(saved.teamLogbooksByDriverId[beta].manualMilesByDay[day],244);}
-    else{await switchDriver(page,'Beta Driver',beta);await form(page,selected);if(selected===after)assert.doesNotMatch(await paper.innerText(),/BOL-TEST|Philadelphia/);else assert.match(await paper.innerText(),/BOL-TEST/);}
+    else{await switchDriver(page,'Beta Driver',beta);await form(page,selected);if(selected===after)assert.doesNotMatch(await paper.innerText(),/BOL-TEST|Philadelphia/);else {assert.match(await paper.innerText(),/BOL-TEST/);await page.getByRole('button',{name:/Philadelphia, PA.*Chicago, IL/}).first().waitFor();}}
     assert.deepEqual(errors,[]);await page.screenshot({path:`${output}/${name}-${selected}.png`,fullPage:true});console.log(`PASS — ${name} ${selected}: driver mileage and day-scoped freight form`);
    }catch(e){console.error(await page.locator('body').innerText());await page.screenshot({path:`${output}/${name}-${selected}-failed.png`,fullPage:true});throw e;}finally{await context.close();}
   }

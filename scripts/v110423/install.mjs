@@ -35,6 +35,11 @@ patch(day,'function legLabel(leg) {\n  const from = joinCityState(leg.fromCity, 
 fs.writeFileSync(day,read(day).replaceAll('legLabel(leg)', 'legLabel(leg, state)'));
 patch(day,'  const legDocs = uniqueClean(routeLegs.map(leg => leg.shippingDocs || leg.loadNo));', '  const freightOriginV110423 = routeLegs[0] ? freightOriginForLeg(state, routeLegs[0]) : {};\n  const legDocs = uniqueClean(routeLegs.map(leg => leg.shippingDocs || leg.loadNo));');
 patch(day,'from: routeLegs[0] ? joinCityState(routeLegs[0].fromCity, routeLegs[0].fromState)', 'from: routeLegs[0] ? joinCityState(freightOriginV110423.city, freightOriginV110423.state)');
+// Explicit freight corrections are metadata; preserve the pickup event's physical location.
+patch(shipment,'  const pickup = routeHistoryWindow(leg, index).pickup;', '  if (leg.freightOriginOverride && text(leg.freightOriginOverride.city)) return {city:text(leg.freightOriginOverride.city), state:text(leg.freightOriginOverride.state)};\n  const pickup = routeHistoryWindow(leg, index).pickup;');
+patch(day,'saveLegacySingleRouteField({ fromCity:parsed.city, fromState:parsed.state });', 'saveLegacySingleRouteField({ freightOriginOverride:{city:parsed.city,state:parsed.state} });');
+patch(day,"    const fromValue = window.prompt('Pickup from (City, ST)', joinCityState(leg.fromCity, leg.fromState) === 'None' ? '' : joinCityState(leg.fromCity, leg.fromState));", "    const origin = freightOriginForLeg(state, leg);\n    const fromValue = window.prompt('Pickup from (City, ST)', joinCityState(origin.city, origin.state) === 'None' ? '' : joinCityState(origin.city, origin.state));");
+patch(day,'      ...leg,\n      fromCity:from.city,\n      fromState:from.state,', '      ...leg,\n      freightOriginOverride:{city:from.city,state:from.state},');
 locks.files[day]=hash(read(day));fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 const reviewed={[day]:hash(read(day))};
 patch('scripts/v110378/install.mjs','const prepared=[],seen=new Set();',`Object.assign(completedHashes,${JSON.stringify(reviewed)});\nconst prepared=[],seen=new Set();`);

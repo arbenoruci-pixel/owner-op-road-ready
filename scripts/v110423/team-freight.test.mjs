@@ -41,3 +41,8 @@ assert.deepEqual(team,raw,'freight projections must not change saved records');
 assert.equal(routeLegsForDayCanonical(team,driveDay)[0].fromCity,'Columbus','projection preserves stored endpoints for route editing and deletion');
 assert.match(fs.readFileSync('source/src/modules/logbook/DayLogScreen.jsx','utf8'),/legLabel\(leg, state\)/);
 console.log('7 team mileage and freight regression groups passed');
+
+const correction=structuredClone(team);correction.routeLegsByDay[pickupDay][0].freightOriginOverride={city:'Philadelphia',state:'PA'};correction.teamLogbooksByDriverId[beta].eventsByDay[pickupDay][0].city='Broadview Heights';correction.teamLogbooksByDriverId[beta].eventsByDay[pickupDay][0].state='OH';
+for(const id of [alpha,beta]){const state=switchTeamDriver(JSON.parse(JSON.stringify(correction)),id,driveDay);const leg=routeLegsForDayCanonical(state,driveDay)[0];assert.deepEqual(freightOriginForLeg(state,leg),{city:'Philadelphia',state:'PA'});assert.equal(normalizeLoadInfoFromRouteLegs(state).loadInfo.pickupState,'PA');assert.equal(leg.fromCity,'Columbus');}
+const correctedBackup=buildFullBackupPayloadV105(sealActiveDriverLogbook(correction),{},{});assert.deepEqual(correctedBackup.state.routeLegsByDay[pickupDay][0].freightOriginOverride,{city:'Philadelphia',state:'PA'});
+console.log('PASS — explicit freight correction survives reload, driver switch and backup without changing physical pickup location');
