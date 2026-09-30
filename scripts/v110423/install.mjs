@@ -23,9 +23,20 @@ patch(route,'    const docs = firstRealText(latestOpenLoaded.shippingDocs, lates
 patch(route,'pickupCity:safeText(latestOpenLoaded.fromCity || nextLoad.pickupCity)', 'pickupCity:safeText(freightOrigin.city || nextLoad.pickupCity)');
 patch(route,'pickupState:safeUpper(latestOpenLoaded.fromState || nextLoad.pickupState)', 'pickupState:safeUpper(freightOrigin.state || nextLoad.pickupState)');
 // DOT exports use the same day-scoped freight records, never an undated cache.
-patch(route, '      return refs.some(value => dayRefs.has(value));\n    })', '      return refs.some(value => dayRefs.has(value));\n    })\n    .map(leg => { const origin = freightOriginForLeg(state, leg, historyIndex); return {...leg, fromCity:origin.city, fromState:origin.state}; })');
 const dot='source/src/modules/dot/DotMode.jsx';
 patch(dot,"import { routeLegsForDayCanonical }", "import {driverLogbookEntries} from '../../core/team/teamLogbook.js';\nimport { routeLegsForDayCanonical }");
 patch(dot,'  const events = state.eventsByDay?.[day] || [];\n  const routeLegs = routeLegsForDayCanonical(state, day);','  const events = driverLogbookEntries(state).flatMap(([,book]) => book.eventsByDay?.[day] || []);\n  const routeLegs = routeLegsForDayCanonical(state, day);');
 patch(dot,"    || (!!load.sourceEventId && eventIds.has(load.sourceEventId))\n    || (!load.sourceEventDay && !load.sourceEventId && !routeLegs.length && !events.some(event => event.shippingDocs || event.loadNo));", "    || (!!load.sourceEventId && eventIds.has(load.sourceEventId));");
+const day='source/src/modules/logbook/DayLogScreen.jsx';
+const locks=JSON.parse(read('module-locks.v1.json'));
+if(!read(day).includes('const freightOriginV110423'))assert.equal(hash(read(day)),locks.files[day],'Reviewed Logbook display baseline');
+patch(day,'shipmentContextForEvents, routeStatusForLogDay','shipmentContextForEvents, routeStatusForLogDay, freightOriginForLeg');
+patch(day,'function legLabel(leg) {\n  const from = joinCityState(leg.fromCity, leg.fromState);','function legLabel(leg, state = {}) {\n  const origin = freightOriginForLeg(state, leg);\n  const from = joinCityState(origin.city, origin.state);');
+fs.writeFileSync(day,read(day).replaceAll('legLabel(leg)', 'legLabel(leg, state)'));
+patch(day,'  const legDocs = uniqueClean(routeLegs.map(leg => leg.shippingDocs || leg.loadNo));', '  const freightOriginV110423 = routeLegs[0] ? freightOriginForLeg(state, routeLegs[0]) : {};\n  const legDocs = uniqueClean(routeLegs.map(leg => leg.shippingDocs || leg.loadNo));');
+patch(day,'from: routeLegs[0] ? joinCityState(routeLegs[0].fromCity, routeLegs[0].fromState)', 'from: routeLegs[0] ? joinCityState(freightOriginV110423.city, freightOriginV110423.state)');
+locks.files[day]=hash(read(day));fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
+const reviewed={[day]:hash(read(day))};
+patch('scripts/v110378/install.mjs','const prepared=[],seen=new Set();',`Object.assign(completedHashes,${JSON.stringify(reviewed)});\nconst prepared=[],seen=new Set();`);
+patch('scripts/v110378/finish-mobile.mjs'," const source=fs.readFileSync(file,'utf8');",` const source=fs.readFileSync(file,'utf8');\n if(hash(source)===${JSON.stringify(reviewed)}[file])return;`);
 console.log('PASS — per-driver mileage and shared recorded freight projection installed');

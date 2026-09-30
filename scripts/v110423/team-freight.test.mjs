@@ -38,5 +38,6 @@ const broken=structuredClone(payload.state);broken.teamLogbooksByDriverId[beta].
 assert.equal(importedLogbookIntegrity(sealed,broken).ok,false);
 console.log('PASS — full backup preserves and validates each driver mileage');
 assert.deepEqual(team,raw,'freight projections must not change saved records');
-assert.equal(routeLegsForDayCanonical(team,driveDay)[0].fromCity,'Philadelphia');
+assert.equal(routeLegsForDayCanonical(team,driveDay)[0].fromCity,'Columbus','projection preserves stored endpoints for route editing and deletion');
+assert.match(fs.readFileSync('source/src/modules/logbook/DayLogScreen.jsx','utf8'),/legLabel\(leg, state\)/);
 console.log('7 team mileage and freight regression groups passed');
