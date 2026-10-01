@@ -11,7 +11,7 @@ export async function saveLoadAttachment({file, context, date, state, storage, b
   if (!file || !context?.guideId || !context.loadNo || !['bol', 'pod'].includes(context.type)) throw new Error('Open the load again and choose Add.');
   const fields = {type:context.type, title:`${context.type.toUpperCase()} · Load ${context.loadNo}`, loadNo:context.loadNo, canonicalLoadNo:context.loadNo, guideId:context.guideId, documentDate:date, date, stopSequence:context.stopSequence, linkToLogbook:false};
   if (context.type === 'pod') Object.assign(fields, {podSigned:true, signatureSource:'driver_added_signed_pod'});
-  const stored = await storage({file, type:context.type === 'pod' ? 'proof_of_delivery' : 'bill_of_lading', title:fields.title, metadata:{loadNo:context.loadNo, relationType:context.type}, extracted:fields, classification:{selectedType:context.type, method:'driver_add', confidence:0}});
+  const stored = await storage({file, type:context.type, title:fields.title, metadata:{loadNo:context.loadNo, relationType:context.type}, extracted:fields, classification:{selectedType:context.type, method:'driver_add', confidence:0}});
   const record = buildRecord({stored, type:{id:context.type, label:context.type.toUpperCase()}, fields, analysis:{fields, method:'driver_add'}, match:{matched:true, loadNo:context.loadNo, canonicalLoadId:context.guideId, broker:context.broker}, selectedLoadNo:context.loadNo, selectedStop:context.stop, selectedStopSequence:context.stopSequence, documentDate:date, userConfirmed:true, linkToLogbook:false});
   Object.assign(record, {guideId:context.guideId, isFinalStop:context.isFinalStop, attachmentSource:'driver_checklist', ...(context.type === 'pod' ? {podSigned:true} : {})});
   writeStore(upsertRecord(readStore(), record, state));

@@ -13,7 +13,7 @@ const record=await saveLoadAttachment({file,context:pod,date:'2026-10-01',state,
  storage:async args=>{storageArgs=args;return {localDocument:{local_id:'doc1'}};},
  buildRecord:args=>({...args.fields, canonicalLoadId:args.match.canonicalLoadId, selectedType:args.type.id}),
  upsertRecord:(store,doc)=>({...store,documents:[doc]}),readStore:()=>({documents:[]}),writeStore:store=>{persisted=store;}});
-assert.equal(storageArgs.file,file);assert.equal(storageArgs.type,'proof_of_delivery');
+assert.equal(storageArgs.file,file);assert.equal(storageArgs.type,'pod');
 assert.equal(record.loadNo,'69349132');assert.equal(record.canonicalLoadId,'guide_A');assert.equal(record.selectedType,'pod');assert.equal(record.podSigned,true);assert.equal(record.linkToLogbook,false);
 assert.equal(persisted.documents[0],record);assert.equal(JSON.stringify(state),original);
 await assert.rejects(saveLoadAttachment({file,context:null}),/Open the load/);
