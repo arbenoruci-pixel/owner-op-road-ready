@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 const read = p => fs.readFileSync(p, 'utf8');
 function patch(p, before, after) {const s=read(p);if(s.includes(after))return;assert.equal(s.split(before).length-1,1,'Attachment anchor: '+p);fs.writeFileSync(p,s.replace(before,after));}
 for (const [from,to] of [['attachmentContext.js','attachmentContextV110426.js'],['LoadAttachmentSheet.jsx','LoadAttachmentSheetV110426.jsx']]) fs.copyFileSync('scripts/v110426/'+from,'source/src/modules/scan/'+to);
-for (const p of ['source/src/modules/loads/SafeDriverMissionV10966.jsx','source/src/modules/loads/DriverLoadGuideV103.jsx']) {
+for (const p of ['source/src/modules/loads/SafeDriverMissionV10966.jsx','source/src/modules/loads/DriverLoadGuideV103.jsx','source/src/modules/home/AdaptiveHomeV1038.jsx']) {
   let s=read(p);
   const statement="import {attachmentContext} from '../scan/attachmentContextV110426.js';\n";
   if(!s.includes(statement))s=statement+s;
   s=s.replaceAll("onOpenScan?.(step.documentType || 'auto');", "onOpenScan?.(step.documentType || 'auto', attachmentContext(guide, step));");
+  s=s.replaceAll("onScan?.(step.documentType || 'auto');", "onScan?.(step.documentType || 'auto', attachmentContext(guide, step));");
   s=s.replaceAll("step.documentType === 'pod' ? 'Scan POD' : 'Scan BOL'", "'Add'");
+  s=s.replaceAll("step.documentType === 'pod' ? 'Scan POD' : 'Scan document'", "'Add'");
   fs.writeFileSync(p,s);
 }
 const home='source/src/modules/home/HomeScreen.jsx';
@@ -22,7 +24,9 @@ patch(home,'  if (scanOpen) {',`  if (loadAttachment) {
 let h=read(home);
 const old="onOpenScan={type => { setScanPreferredType(type || 'auto'); setScanOpen(true); }}";
 const next="onOpenScan={(type, context) => { if (context) { setLoadAttachment(context); return; } setScanPreferredType(type || 'auto'); setScanOpen(true); }}";
-assert.ok(h.includes(old)||h.includes(next),'Mission scanner entry missing');h=h.replaceAll(old,next);fs.writeFileSync(home,h);
+assert.ok(h.includes(old)||h.includes(next),'Mission scanner entry missing');h=h.replaceAll(old,next);
+h=h.replaceAll("onOpenScan={type => { setScanPreferredType(normalizeScanPreferenceV11039(type)); setScanOpen(true); }}",next);
+fs.writeFileSync(home,h);
 const css='source/src/command-center.css',styles=`\n.load-attachment-v110426{background:#f4f7fa;min-height:100dvh;color:#18243c}.load-attachment-v110426 header{display:flex;gap:20px;align-items:center;padding:18px}.load-attachment-v110426 h1{font-size:1.4rem;margin:0}.load-attachment-v110426 main{max-width:600px;margin:auto;padding:18px}.load-attachment-v110426 button{font:inherit;font-size:1rem;min-height:48px;padding:12px 18px;border:1px solid #b8c9dd;border-radius:14px;background:white;color:#234ea0}.load-attachment-v110426 button:disabled{opacity:.55}.attachment-choices{display:flex;flex-wrap:wrap;gap:12px}.attachment-preview{margin:20px 0;padding:10px;background:white;border-radius:18px;overflow-wrap:anywhere}.attachment-preview img{display:block;width:100%;max-height:60dvh;object-fit:contain}.load-attachment-v110426 .attachment-save{margin-top:20px;width:100%;background:#2859b8;color:white}.load-attachment-v110426 h2{overflow-wrap:anywhere}\n`;
 if(!read(css).includes('.load-attachment-v110426{'))fs.appendFileSync(css,styles);
 const VERSION='110.4.26',BUILD='v110426-direct-load-attachments';

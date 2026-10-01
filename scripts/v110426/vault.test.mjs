@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {attachmentContext,saveLoadAttachment} from './attachmentContext.js';
+import {buildVaultDocumentV105,upsertVaultDocumentV105} from '../../source/src/modules/documents/documentFoundationV105.js';
+import {resolveChecklistEvidenceV110321} from '../../source/src/modules/loads/checklistEvidenceV110321.js';
+const guide={id:'guide_ECHO',source:'rate_confirmation',loadNo:'69349132',broker:'Echo',stops:[{id:'pickup',type:'pickup'},{id:'delivery',type:'delivery',city:'East Haven',state:'CT'}],steps:[{id:'pickup_bol',kind:'document',documentType:'bol'},{id:'final_pod',kind:'document',documentType:'pod',stopSequence:1}]};
+const state={loadGuidesById:{[guide.id]:guide},activeLoadGuideId:guide.id,eventsByDay:{}};
+let store={documents:[],loads:[]};
+for(const step of guide.steps)await saveLoadAttachment({file:{name:step.id+'.jpg'},context:attachmentContext(guide,step),date:new Date().toISOString().slice(0,10),state,storage:async()=>({localDocument:{local_id:step.id,original_file_name:step.id+'.jpg'}}),buildRecord:buildVaultDocumentV105,upsertRecord:upsertVaultDocumentV105,readStore:()=>store,writeStore:s=>{store=s;}});
+store=JSON.parse(JSON.stringify(store));
+assert.equal(store.documents.length,2);
+const progress=resolveChecklistEvidenceV110321(state,guide,store);
+assert.equal(progress.steps.find(s=>s.id==='pickup_bol').complete,true);
+assert.equal(progress.steps.find(s=>s.id==='final_pod').complete,true);
+assert.deepEqual(state.eventsByDay,{});
+console.log('PASS — real Vault save/reload recognizes BOL and final POD checklist completion');
