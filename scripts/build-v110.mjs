@@ -125,6 +125,7 @@ steps.push('finalize-rescanned-bol-v110420.mjs','v110420/bol-filing.test.mjs','t
 steps.push('finalize-gps-sign-dot-v110421.mjs','v110421/gps-sign.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-delivery-order-ai-v110422.mjs','v110422/reader.test.mjs','v110422/filing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-team-freight-v110423.mjs','v110423/team-freight.test.mjs','reader-ai/test-runtime-credentials.mjs','test-route-delete-v110350.mjs','v110407/team-safety.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-load-attachment-v110426.mjs','v110426/attachment.test.mjs','verify-isolation-locks-v110.mjs');
 const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
