@@ -34,8 +34,8 @@ with zipfile.ZipFile(sys.argv[1]) as z:
 `,zipFile],{encoding:'utf8'});assert.equal(check.status,0,check.stderr);
   // Native share is called synchronously from a fresh user tap; cancellation can retry.
   await page.evaluate(()=>{window.shareCalls=[];Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});Object.defineProperty(navigator,'share',{configurable:true,value:async data=>{window.shareCalls.push({name:data.files[0].name,active:navigator.userActivation?.isActive});if(window.shareCalls.length===1)throw new DOMException('Cancelled','AbortError');}});});
-  await ready.getByRole('button',{name:'Save / Share',exact:true}).click();await page.getByRole('status').filter({hasText:'Save cancelled'}).waitFor();
-  await ready.getByRole('button',{name:'Save / Share',exact:true}).click();await page.getByRole('status').filter({hasText:'Backup shared'}).waitFor();
+  await ready.getByRole('button',{name:'Share backup',exact:true}).click();await page.getByRole('status').filter({hasText:'Sharing closed'}).waitFor();
+  await ready.getByRole('button',{name:'Share backup',exact:true}).click();await page.getByRole('status').filter({hasText:'Backup shared'}).waitFor();
   const calls=await page.evaluate(()=>window.shareCalls);assert.equal(calls.length,2);assert.ok(calls.every(c=>c.active!==false&&c.name.endsWith('.zip')));
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:`${output}/${name}-ready.png`,fullPage:true});assert.deepEqual(errors,[]);
