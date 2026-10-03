@@ -7,6 +7,22 @@ const ext=mime=>({'application/pdf':'.pdf','image/jpeg':'.jpg','image/png':'.png
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const portableKey=key=>/^(owner-op-|road-ready)/i.test(key)&&!/(auth|session|token|password|secret)/i.test(key)&&!/^owner-op-(cloud-|full-migration-)/i.test(key)&&!/^owner-op-road-ready-(last-device-safety-export|prepared-device-safety)/i.test(key);
 function storageRows(){const rows=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(portableKey(key))rows.push({key,value:localStorage.getItem(key)});}return rows;}
+export function requiresChunkedBackup({inventory={},state={},businessStore={},localRows=storageRows()}={}){
+ const limit=32*1024*1024;
+ let bytes=Object.values(inventory.dexieTables||{}).reduce((sum,table)=>sum+(table.binaryBytes||0),0);
+ function count(value){
+  if(bytes>limit||value==null)return;
+  if(typeof value==='string'){bytes+=value.length*2;return;}
+  if(value instanceof Blob){bytes+=value.size;return;}
+  if(value instanceof ArrayBuffer||ArrayBuffer.isView(value)){bytes+=value.byteLength;return;}
+  if(typeof value==='object')for(const child of Object.values(value)){count(child);if(bytes>limit)break;}
+ }
+ // Include wallet/data-URL attachments and persisted JSON without serializing
+ // another full copy just to decide which export path is safe.
+ count(state);count(businessStore);
+ for(const row of localRows)if(portableKey(row.key))count(row.value);
+ return bytes>limit;
+}
 async function dataUrlBlob(value,signal){
  const comma=value.indexOf(','),prefix=value.slice(0,comma+1),mime=prefix.slice(5).split(';')[0],parts=[];
  // Decode small, base64-aligned slices, never the full image string at once.

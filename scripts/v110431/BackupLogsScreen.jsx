@@ -18,7 +18,7 @@ import {
 } from '../../../../lib/local-db/safetyArchive.js';
 import { prepareBackupFile, sharePreparedBackupFile } from '../../../../lib/local-db/backupFile.js';
 import { decoratePortableArchiveV110429, inspectPortableArchiveV110429, restorePortableArchiveV110429 } from './portableBackupV110429.js';
-import { buildLargeBackup, inspectLargeBackup, restoreLargeBackup } from './largeBackupV110431.js';
+import { buildLargeBackup, inspectLargeBackup, restoreLargeBackup, requiresChunkedBackup } from './largeBackupV110431.js';
 import { assertSafeDeviceImport, hasMeaningfulDeviceData } from '../../../../lib/local-db/deviceInventory.js';
 
 // Legacy release-verifier compatibility markers. Restore remains safety-gated below.
@@ -193,11 +193,11 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
     setStatus('Preparing all records and original documents stored on this device…');
     setSafetyError('');
     try {
-      const inventory=await buildDeviceSafetyInventory(state,readBusinessStore());
-      const binaryBytes=Object.values(inventory.dexieTables||{}).reduce((sum,table)=>sum+(table.binaryBytes||0),0);
+      const businessStore=readBusinessStore();
+      const inventory=await buildDeviceSafetyInventory(state,businessStore);
       setSafetyInventory(inventory);
-      if(format==='zip'||binaryBytes>32*1024*1024){
-        const result=await buildLargeBackup({state,businessStore:readBusinessStore(),inventory,appVersion:CURRENT_APP_VERSION,onProgress:setStatus,signal:controller.signal});
+      if(format==='zip'||requiresChunkedBackup({inventory,state,businessStore})){
+        const result=await buildLargeBackup({state,businessStore,inventory,appVersion:CURRENT_APP_VERSION,onProgress:setStatus,signal:controller.signal});
         const safetyMeta={createdAt:result.archive.createdAt,filename:result.file.name,sha256:result.archive.payloadSha256,bytes:result.file.size,inventory};
         try{localStorage.setItem(PREPARED_SAFETY_META_KEY,JSON.stringify(safetyMeta));}catch{}
         showPreparedExport(result.file,{originals:result.originals,missingOriginals:result.missingOriginals,logDays:result.logDays,loads:result.loads,safetyMeta,createdAt:result.archive.createdAt});
