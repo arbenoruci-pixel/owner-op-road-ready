@@ -105,11 +105,19 @@ function base64ToBytes(base64='') {
   return bytes;
 }
 
-async function deserializeValue(value) {
+async function deserializeValue(value, resolveZipFile) {
   if(Array.isArray(value)){
-    const out=[]; for(const row of value)out.push(await deserializeValue(row)); return out;
+    const out=[]; for(const row of value)out.push(await deserializeValue(row, resolveZipFile)); return out;
   }
   if(value && typeof value==='object'){
+    if(value.__roadReadyZipFile){
+      if(!resolveZipFile)throw new Error('Choose the original ZIP file to restore this backup.');
+      return resolveZipFile(value);
+    }
+    if(Object.hasOwn(value,'__roadReadyJsonString')){
+      if(!resolveZipFile)throw new Error('Choose the original ZIP file to restore this backup.');
+      return JSON.stringify(await deserializeValue(value.__roadReadyJsonString,resolveZipFile));
+    }
     if(value.__roadReadyBinary==='Blob'){
       const bytes=base64ToBytes(value.base64);
       return new Blob([bytes],{type:value.mimeType||'application/octet-stream'});
@@ -118,7 +126,7 @@ async function deserializeValue(value) {
       const bytes=base64ToBytes(value.base64);
       return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
     }
-    const out={}; for(const [key,row] of Object.entries(value))out[key]=await deserializeValue(row); return out;
+    const out={}; for(const [key,row] of Object.entries(value))out[key]=await deserializeValue(row, resolveZipFile); return out;
   }
   return value;
 }
@@ -145,7 +153,7 @@ export async function inspectPortableArchiveV110429(archive){
   };
 }
 
-export async function restorePortableArchiveV110429(archive,{onProgress=()=>{}}={}){
+export async function restorePortableArchiveV110429(archive,{onProgress=()=>{},resolveZipFile}={}){
   const inspection=await inspectPortableArchiveV110429(archive);
   const db=getOwnerOpDb();
   if(!db)throw new Error('IndexedDB is not available on this device.');
@@ -157,14 +165,14 @@ export async function restorePortableArchiveV110429(archive,{onProgress=()=>{}}=
   // Decode and validate everything before replacing any record.
   for(const table of db.tables){
     if(!Array.isArray(archivedTables[table.name]))throw new Error('Backup is missing the '+table.name+' record group.');
-    rowsByTable[table.name]=await deserializeValue(archivedTables[table.name]);
+    rowsByTable[table.name]=await deserializeValue(archivedTables[table.name],resolveZipFile);
   }
-  const state=await deserializeValue(payload.state), businessStore=await deserializeValue(payload.businessStore||{});
+  const state=await deserializeValue(payload.state,resolveZipFile), businessStore=await deserializeValue(payload.businessStore||{},resolveZipFile);
   const currentKey='owner-op-road-ready-state-v1';
   rowsByTable.app_snapshots=rowsByTable.app_snapshots.filter(row=>row.key!==currentKey);
   rowsByTable.app_snapshots.push({key:currentKey,state:{...state,view:'home',sheet:null},updated_at:new Date().toISOString()});
   const beforeStorage=roadReadyLocalStorageKeys().map(key=>({key,value:localStorage.getItem(key)}));
-  const nextStorage=list(payload.localStorage).filter(row=>portableStorageKey(row?.key));
+  const nextStorage=list(await deserializeValue(payload.localStorage,resolveZipFile)).filter(row=>portableStorageKey(row?.key));
   let storageTouched=false;
   try {
     await db.transaction('rw',db.tables,async()=>{

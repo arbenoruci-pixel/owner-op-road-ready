@@ -27,7 +27,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
  files=json.loads(z.read('Documents/Manifest.json'))
  assert len(files)==1 and b'Export original BOL' in z.read(files[0]['path'])
  backup=json.loads(z.read('Road-Ready-Backup.roadready.json'))
- assert backup['portableFormat']=='road_ready_everything_v1'
+ assert backup['kind']=='owner_op_road_ready_zip_backup'
  assert backup['payload']['businessStore']['loads'][0]['loadNo']=='82002'
  assert '2026-09-07' in z.read('Logbook/Logbook.html').decode()
  assert not any('auth' in r['key'] for r in backup['payload']['localStorage'])
