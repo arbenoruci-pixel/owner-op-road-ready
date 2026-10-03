@@ -135,12 +135,12 @@ export default function BackupLogsScreen({state,onBack,onBuildBackup,onImportBac
     <span className="backup-eyebrow">Portable Road Ready file</span>
     <b>Move the whole app to another phone or iPad</b>
     <p>One verified file includes logbooks, duty events, signatures, inspections, loads, business records, saved app state, BOL/POD/Rate Con records and original document files stored on this device.</p>
-    {inventory?<div className="backup-mini-grid">
+    {inventory?<><div className="backup-info-card ready"><b>Local history detected</b><p>{inventory.firstDay||'No dated record'} → {inventory.lastDay||'No dated record'}</p><span>{inventory.inspections||0} inspections · {inventory.routeLegs||0} route legs · {inventory.walletDocuments||0} wallet docs</span></div><div className="backup-mini-grid">
      <div><strong>{inventory.logDays||0}</strong><span>log days</span></div>
      <div><strong>{inventory.events||0}</strong><span>duty events</span></div>
      <div><strong>{inventory.businessLoads||0}</strong><span>loads</span></div>
      <div><strong>{inventory.documentBlobRows||0}</strong><span>original files</span></div>
-    </div>:<p>Reading device inventory…</p>}
+    </div></>:<p>Reading device inventory…</p>}
    </section>
 
    <section className="backup-actions-card">
