@@ -51,7 +51,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
     await sheet.getByRole('button',{name:'Crop & rotate',exact:true}).click();
     const crop=page.locator('[data-road-ready-scanner-review="four-corner-v10931"]');await crop.waitFor();
     await crop.getByRole('button',{name:'Full page',exact:true}).click();
-    const corner=crop.getByRole('button',{name:'Top left corner',exact:true});
+    const corner=crop.getByRole('button',{name:'Top left',exact:true});
     await corner.focus();await corner.press('ArrowRight');await corner.press('ArrowDown');
     await crop.getByRole('button',{name:'Rotate',exact:true}).click();
     await crop.getByRole('button',{name:'Use page',exact:true}).click();
