@@ -55,6 +55,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
     await corner.focus();await corner.press('ArrowRight');await corner.press('ArrowDown');
     await crop.getByRole('button',{name:'Rotate',exact:true}).click();
     await crop.getByRole('button',{name:'Use page',exact:true}).click();
+    await sheet.getByRole('button',{name:'Reorder pages',exact:true}).click();
     await sheet.getByRole('button',{name:'Move page 1 later',exact:true}).click();
     assert.match(await sheet.locator('.scan-page-list-v328 li').first().innerText(),/page-two.png/);
     await page.screenshot({path:`${output}/${name}-${type}-adjusted-pages.png`});
