@@ -60,6 +60,8 @@ jobs:
             sleep 1
           done
           failed=0
+          node scripts/v110431/large-backup.test.mjs
+          node scripts/v110431/browser-large.mjs 2>&1 | tee /tmp/browser-large-v110431.log
           node scripts/v110430/zip.test.mjs
           node scripts/v110430/browser-export.mjs 2>&1 | tee /tmp/browser-export-v110430.log
           node scripts/v110420/browser-bol-filing.mjs 2>&1 | tee /tmp/browser-bol-filing-v110420.log
