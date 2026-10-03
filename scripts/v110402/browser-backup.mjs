@@ -41,7 +41,7 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
     await page.getByRole('button', { name:/^Backup Logs/ }).click();
     const protection = () => page.evaluate(() => localStorage.getItem('owner-op-road-ready-last-device-safety-export-v1'));
     assert.equal(await protection(), null);
-    await page.getByRole('button', { name:/Create VERIFIED Device Safety Backup/ }).click();
+    await page.getByRole('button', { name:/Export Everything/ }).click();
     const ready = page.getByRole('region', { name:'Backup ready to save' });
     await ready.waitFor({ timeout:30000 });
     assert.equal(await page.evaluate(() => window.backupShares.length), 0, 'preparing must not invoke native sharing');
@@ -110,7 +110,7 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
         return put.apply(this, args);
       };
     });
-    await page.getByRole('button', { name:/Export readable all-data JSON/ }).click();
+    await page.getByRole('button', { name:/Export for ChatGPT Review/ }).click();
     await ready.getByText(/road-ready-all-data-/).waitFor();
     await page.evaluate(() => window.restoreBackupTestPut());
     const readableDownload = page.waitForEvent('download');

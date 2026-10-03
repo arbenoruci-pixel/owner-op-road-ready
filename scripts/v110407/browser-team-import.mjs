@@ -47,7 +47,7 @@ for(const[name,engine]of engines){
   try{
     await scenario('fresh-file-import-reload-switch',async page=>{
       await seed(page,empty());await openBackup(page);
-      const button=page.getByRole('button',{name:'Import from another device',exact:true});
+      const button=page.getByRole('button',{name:'Import Everything',exact:true});
       assert.equal(await button.isEnabled(),true);
       page.on('dialog',dialog=>dialog.accept());
       const chooser=page.waitForEvent('filechooser');await button.click();await(await chooser).setFiles(file);
@@ -70,7 +70,7 @@ for(const[name,engine]of engines){
     });
     await scenario('inactive-driver-protected',async page=>{
       await seed(page,{...inactive,testInstructionStore:{}});await openBackup(page);
-      assert.equal(await page.getByRole('button',{name:'Import from another device',exact:true}).isDisabled(),true);
+      assert.equal(await page.getByRole('button',{name:'Import Everything',exact:true}).isDisabled(),true);
       const before=await stored(page);
       await page.locator('input[type=file]').last().setInputFiles(file);
       await page.getByRole('status').filter({hasText:'Create and save a verified Device Safety Backup'}).waitFor();
@@ -97,7 +97,7 @@ for(const[name,engine]of engines){
     });
     await scenario('rescan-catches-late-business-record',async page=>{
       await seed(page,empty());await openBackup(page);
-      assert.equal(await page.getByRole('button',{name:'Import from another device',exact:true}).isEnabled(),true);
+      assert.equal(await page.getByRole('button',{name:'Import Everything',exact:true}).isEnabled(),true);
       await page.evaluate(()=>localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify({fuel:[{id:'late-fuel',amount:12}]})));
       await page.locator('input[type=file]').last().setInputFiles(file);
       await page.getByRole('status').filter({hasText:'Create and save a verified Device Safety Backup'}).waitFor();
@@ -109,7 +109,7 @@ for(const[name,engine]of engines){
       await page.evaluate(()=>{IDBObjectStore.prototype.getAll=function(){throw new DOMException('Synthetic unavailable database','UnknownError');};});
       await page.locator('input[type=file]').last().setInputFiles(file);
       await page.getByRole('status').filter({hasText:'could not be checked'}).waitFor();
-      assert.equal(await page.getByRole('button',{name:'Import from another device',exact:true}).isDisabled(),true);
+      assert.equal(await page.getByRole('button',{name:'Import Everything',exact:true}).isDisabled(),true);
       assert.equal((await stored(page))._restoredBackupMeta,undefined);
     });
   }finally{await browser.close();}
