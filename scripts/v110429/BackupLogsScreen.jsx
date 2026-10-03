@@ -7,6 +7,7 @@ import {prepareBackupFile,sharePreparedBackupFile} from '../../../../lib/local-d
 import {decoratePortableArchiveV110429,inspectPortableArchiveV110429,restorePortableArchiveV110429} from './portableBackupV110429.js';
 
 const DEVICE_SAFETY_META_KEY='owner-op-road-ready-last-device-safety-export-v1';
+function readSafetyMeta(){try{return JSON.parse(localStorage.getItem(DEVICE_SAFETY_META_KEY)||'null');}catch{return null;}}
 
 function formatBytes(bytes=0){
  const value=Number(bytes||0);
@@ -29,7 +30,7 @@ function saveVerifiedMeta({createdAt,filename,sha256,bytes,inventory}){
 export default function BackupLogsScreen({state,onBack,onBuildBackup,onImportBackup}){
  const everythingInputRef=useRef(null),reviewInputRef=useRef(null),preparedRef=useRef(null);
  const [busy,setBusy]=useState(false),[status,setStatus]=useState(''),[error,setError]=useState('');
- const [inventory,setInventory]=useState(null),[prepared,setPrepared]=useState(null),[lastExport,setLastExport]=useState(null);
+ const [inventory,setInventory]=useState(null),[prepared,setPrepared]=useState(null),[lastExport,setLastExport]=useState(null),[lastSafetyExport,setLastSafetyExport]=useState(()=>typeof window==='undefined'?null:readSafetyMeta());
  const summary=useMemo(()=>fullBackupSummaryV105(state,readBusinessStore()),[state]);
 
  async function scan(){
@@ -49,7 +50,7 @@ export default function BackupLogsScreen({state,onBack,onBuildBackup,onImportBac
   try{
    const result=await sharePreparedBackupFile(prepared.file);
    if(result.mode==='shared'){
-    if(prepared.verifiedMeta)saveVerifiedMeta(prepared.verifiedMeta);
+    if(prepared.verifiedMeta){saveVerifiedMeta(prepared.verifiedMeta);setLastSafetyExport(prepared.verifiedMeta);}
     setLastExport({filename:prepared.file.name,createdAt:new Date().toISOString()});
     setStatus('Saved/shared: '+prepared.file.name);
    }else if(result.mode==='cancelled')setStatus('Save cancelled. The file is still ready below.');
@@ -89,10 +90,27 @@ export default function BackupLogsScreen({state,onBack,onBuildBackup,onImportBac
  }
 
  async function importEverything(file){
-  if(!file||busy)return;setBusy(true);setError('');setPrepared(null);
+  if(!file||busy)return;
+  // Backward-compatible readable backups keep the proven safety gate and import path.
+  let parsed;
+  try{parsed=JSON.parse(await file.text());}catch(e){setError('This file is not valid Road Ready JSON.');return;}
+  if(parsed?.kind==='owner_op_road_ready_full_backup'){
+   const safety=lastSafetyExport||readSafetyMeta();
+   if(!safety){setStatus('Create and save a verified Device Safety Backup before importing another device.');return;}
+   setBusy(true);setError('');setPrepared(null);
+   try{
+    setStatus('Reading and validating the readable backup…');
+    await onImportBackup?.(parsed,{filename:file.name,summary:parsed.summary||{},schemaVersion:Number(parsed.schemaVersion||1)});
+    writeBusinessStore(parsed.businessStore||{});
+    setStatus('All data restored from '+file.name+'.');
+   }catch(e){setError(e?.message||'Import from another device failed.');}
+   finally{if(everythingInputRef.current)everythingInputRef.current.value='';setBusy(false);}
+   return;
+  }
+  setBusy(true);setError('');setPrepared(null);
   try{
    setStatus('Checking complete Road Ready backup…');
-   const archive=JSON.parse(await file.text());
+   const archive=parsed;
    const checked=await inspectPortableArchiveV110429(archive);
    const inv=checked.inventory||{};
    const message=[
@@ -152,7 +170,7 @@ export default function BackupLogsScreen({state,onBack,onBuildBackup,onImportBac
    <section className="backup-actions-card">
     <b>Import Everything</b>
     <p>Choose an Export Everything file from Files on a new iPhone or iPad. Road Ready verifies the checksum before restoring the complete local database.</p>
-    <button type="button" className="backup-primary" onClick={()=>everythingInputRef.current?.click()} disabled={busy}>Import Everything</button>\n    <button type="button" className="backup-secondary" onClick={()=>everythingInputRef.current?.click()} disabled={busy} style={{marginTop:10}}>Import from another device</button>
+    <button type="button" className="backup-primary" onClick={()=>everythingInputRef.current?.click()} disabled={busy}>Import Everything</button>\n    <button type="button" className="backup-secondary" onClick={()=>everythingInputRef.current?.click()} disabled={busy || (!lastSafetyExport && Boolean(inventory?.hasAnyData))} style={{marginTop:10}}>Import from another device</button>
     <input ref={everythingInputRef} type="file" accept=".roadready,.json,application/json" hidden onChange={e=>importEverything(e.target.files?.[0])}/>
    </section>
 
