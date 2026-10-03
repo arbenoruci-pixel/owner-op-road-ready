@@ -41,3 +41,4 @@ const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.wr
 const tests=spawnSync(process.execPath,['scripts/v110427/attachment-scanner.test.mjs'],{stdio:'inherit'});
 if(tests.error)throw tests.error;assert.equal(tests.status,0,'Direct scanner regression tests');
 console.log('PASS — direct BOL/POD camera, crop, quality, page order, and capture-only saving installed (110.4.27)');
+await import('./finalize-framed-page-v110428.mjs');
