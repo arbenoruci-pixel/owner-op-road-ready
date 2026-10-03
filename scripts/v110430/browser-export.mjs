@@ -12,6 +12,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
  await setupRoutes(context);const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
   const state=baseState();state.view='logbook';state.testInstructionStore={loads:[{loadNo:'82002',gross:1800}]};
+  state.dotWallet.documents.legacyRegistration={name:'legacy-registration.png',photoDataUrl:'data:image/png;base64,BwgJ'};
   await seed(page,state,[{id:'export-bol',bytes:[...simplePdf('Export original BOL')]}]);
   await page.evaluate(async () => {
    const db=await new Promise((ok,no)=>{const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onsuccess=()=>ok(request.result);request.onerror=()=>no(request.error);});
@@ -29,15 +30,18 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
   await page.getByRole('button',{name:'Documents Vault',exact:true}).click();
   await page.getByRole('button',{name:/Export & Backup/}).click();
   await page.getByRole('button',{name:'Export Docs + Logbook (ZIP)',exact:true}).click();
-  const ready=page.getByRole('region',{name:'Documents ready to download'});await ready.waitFor();await ready.getByText(/1 original files/).waitFor();
+  const ready=page.getByRole('region',{name:'Documents ready to download'});await ready.waitFor();await ready.getByText(/2 original files/).waitFor();
   const downloadPromise=page.waitForEvent('download');await ready.getByRole('link',{name:'Download ZIP',exact:true}).click();const download=await downloadPromise;
   assert.ok(download.suggestedFilename().endsWith('.zip'));const zipFile=path.resolve(output,`${name}-docs-logbook.zip`);await download.saveAs(zipFile);
   const check=spawnSync('python3',['-c',`import zipfile,json,sys,csv,io
 with zipfile.ZipFile(sys.argv[1]) as z:
  assert z.testzip() is None
  files=list(csv.DictReader(io.StringIO(z.read('Documents/Index.csv').decode())))
- assert len(files)==2 and len(set(row['File'] for row in files))==1
- assert b'Export original BOL' in z.read(files[0]['File'])
+ pdfs=[row for row in files if row['File'].endswith('.pdf')]
+ assert len(pdfs)==2 and len(set(row['File'] for row in pdfs))==1
+ assert b'Export original BOL' in z.read(pdfs[0]['File'])
+ legacy=[row for row in files if row['File'].endswith('legacy-registration.png')]
+ assert len(legacy)==1 and z.read(legacy[0]['File'])==bytes([7,8,9])
  assert 'SECOND-LOAD' in [row['Load'] for row in files]
  assert 'Road-Ready-Backup.roadready.json' not in z.namelist()
  assert not any(name.startswith(('Saved-assets/','Records/')) for name in z.namelist())

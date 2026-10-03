@@ -6,8 +6,13 @@ import { ChunkedZip, checkAbort, inspectBlob } from '../v110431/chunkedZip.js';
 const safe = value => String(value || 'document').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^\.+/, '').slice(0, 90) || 'document';
 const suffix = mime => ({ 'application/pdf':'.pdf', 'image/jpeg':'.jpg', 'image/png':'.png', 'image/heic':'.heic', 'image/webp':'.webp', 'text/plain':'.txt' })[mime] || '.bin';
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-const csv = rows => rows.map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
-const attachmentKeys = ['attachmentDataUrl', 'originalDataUrl', 'fileDataUrl', 'documentDataUrl'];
+const csvCell = value => {
+  const text = String(value ?? '');
+  const literal = /^[\s\uFEFF]*[=+\-@]/.test(text) ? "'" + text : text;
+  return '"' + literal.replace(/"/g, '""') + '"';
+};
+const csv = rows => rows.map(row => row.map(csvCell).join(',')).join('\r\n');
+const attachmentKeys = ['attachmentDataUrl', 'photoDataUrl', 'originalDataUrl', 'fileDataUrl', 'documentDataUrl'];
 
 async function decodeAttachment(value, signal) {
   if (value instanceof Blob) return value;
