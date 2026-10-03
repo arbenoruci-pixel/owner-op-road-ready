@@ -52,12 +52,13 @@ with open(sys.argv[2],'r+b') as f:
    await seed(page,empty());await page.getByRole('button',{name:/Export & Backup/}).click();
    const input=page.locator('input[type=file]').last();await input.setInputFiles(badPath);await page.getByRole('status').filter({hasText:'checksum mismatch'}).waitFor({timeout:180000});
    page.once('dialog',d=>d.dismiss());await input.setInputFiles(zipPath);await page.getByRole('status').filter({hasText:'Import cancelled'}).waitFor({timeout:180000});
-   page.once('dialog',d=>d.accept());await input.setInputFiles(zipPath);
-   await Promise.race([page.locator('.adaptive-home-v1038').waitFor({timeout:180000}),page.getByRole('status').filter({hasText:/Import failed|Error preparing|operations failed/}).waitFor({timeout:180000}).then(async()=>{throw new Error(await page.getByRole('status').innerText());})]);
+   page.once('dialog',d=>d.accept());
+   const imported=Promise.race([page.waitForEvent('load',{timeout:180000}),page.getByRole('status').filter({hasText:/Import failed|Error preparing|operations failed/}).waitFor({timeout:180000}).then(async()=>{throw new Error(await page.getByRole('status').innerText());})]);
+   await Promise.all([imported,input.setInputFiles(zipPath)]);await page.locator('.logbook-home-screen-v988').waitFor();
    const restored=await page.evaluate(async()=>{const db=await new Promise(ok=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);});const all=name=>new Promise(ok=>{const r=db.transaction(name).objectStore(name).getAll();r.onsuccess=()=>ok(r.result);});const docs=await all('document_blobs'),assets=await all('capture_asset_blobs'),snapshots=await all('app_snapshots');const state=snapshots.find(s=>s.key==='owner-op-road-ready-state-v1').state;const sample=await docs[0].blob.slice(0,4).text();db.close();return {count:docs.length,bytes:docs.reduce((n,d)=>n+d.blob.size,0),assets:assets.length,sample,events:state.eventsByDay['2026-09-07'],session:!!localStorage.getItem('owner-op-prototype-auth-v1')};});
    assert.equal(restored.count,194);assert.equal(restored.assets,1);assert.ok(restored.bytes>273*1048576);assert.equal(restored.sample,'%PDF');assert.equal(restored.events[0].status,'OFF');assert.equal(restored.session,true);
    const used=spawnSync('du',['-sk',dir],{encoding:'utf8'});assert.equal(used.status,0,used.stderr);assert.ok(Number(used.stdout.split(/\s/)[0])*1024<6*fs.statSync(zipPath).size,'Restore duplicated the whole ZIP per document');
-   await page.reload();await page.locator('.adaptive-home-v1038').waitFor();
+   await page.reload();await page.locator('.logbook-home-screen-v988').waitFor();
   });
   console.log(`PASS ${name}: 194 originals / >273 MB plus scanner assets, <=1 MB binary reads, cancel, real ZIP download, independent CRC validation, damaged-file rejection, cancelled import, fresh-device ZIP restore and reload`);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
