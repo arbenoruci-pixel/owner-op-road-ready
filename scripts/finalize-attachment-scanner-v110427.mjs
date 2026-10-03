@@ -4,9 +4,6 @@ import {spawnSync} from 'node:child_process';
 const read=p=>fs.readFileSync(p,'utf8');
 const scan='source/src/modules/scan/';
 let intake=read(scan+'ScanIntakeV110328.jsx');
-// Temporary preview-build diagnostics of repository code, never customer data.
-console.log('ATTACHMENT_CAPTURE_SOURCE '+JSON.stringify(intake));
-console.log('ATTACHMENT_STORAGE_SOURCE '+JSON.stringify(read(scan+'quotaSafeScanStorageV10963.js')));
 function replace(before,after){assert.equal(intake.split(before).length-1,1,'Direct scanner anchor: '+before.slice(0,100));intake=intake.replace(before,after);}
 function replacePattern(before,after){assert.equal([...intake.matchAll(new RegExp(before.source,'g'))].length,1,'Direct scanner pattern: '+before);intake=intake.replace(before,after);}
 replace('({onReady,onClose,initialDraft})','({onReady,onClose,initialDraft,documentLabel="Document",loadNo=""})');
@@ -32,6 +29,8 @@ const context=scan+'attachmentContextV110426.js';
 fs.writeFileSync(context,read(context).replace('  writeStore(upsertRecord(readStore(), record, state));','  await writeStore(upsertRecord(readStore(), record, state));'));
 const css='source/src/command-center.css',styles=read('scripts/v110427/attachment.css');
 if(!read(css).includes('.attachment-ios-v427{'))fs.appendFileSync(css,'\n'+styles+'\n');
+const browser='scripts/v110404/browser.mjs',browserHook="\nawait import('../v110427/browser.mjs');\n";
+if(!read(browser).includes(browserHook))fs.appendFileSync(browser,browserHook);
 const VERSION='110.4.27',BUILD='v110427-direct-document-scanner';
 for(const p of ['release-version.json','public/app-version.json']){const v=JSON.parse(read(p));Object.assign(v,{version:VERSION,build:BUILD,force:false,label:'v110.4.27 Scan and save BOL/POD',releasedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,notes:['Capture, crop, rotate and improve BOL/POD photos without AI reading.','Save the selected document type directly to its load.','Readable iPhone-style document capture and page review.']});fs.writeFileSync(p,JSON.stringify(v,null,2)+'\n');}
 for(const p of ['package.json','package-lock.json']){const v=JSON.parse(read(p));v.version=VERSION;if(v.packages?.[''])v.packages[''].version=VERSION;fs.writeFileSync(p,JSON.stringify(v,null,2)+'\n');}
