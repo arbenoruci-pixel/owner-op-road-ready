@@ -1,7 +1,7 @@
 'use client';
 
-import { getOwnerOpDb } from '../../../../lib/local-db/dexie.js';
-import { verifyDeviceSafetyArchive } from '../../../../lib/local-db/safetyArchive.js';
+import { getOwnerOpDb } from '../../lib/local-db/dexie.js';
+import { verifyDeviceSafetyArchive } from '../../lib/local-db/safetyArchive.js';
 
 const ROAD_READY_PREFIXES = ['owner-op-', 'road-ready'];
 
