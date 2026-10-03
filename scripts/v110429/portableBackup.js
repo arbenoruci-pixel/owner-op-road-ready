@@ -1,5 +1,6 @@
 'use client';
 
+import Dexie from 'dexie';
 import { driverLogbookEntries } from '../../source/src/core/team/teamLogbook.js';
 import { getOwnerOpDb } from '../../lib/local-db/dexie.js';
 import { verifyDeviceSafetyArchive } from '../../lib/local-db/safetyArchive.js';
@@ -153,7 +154,7 @@ export async function inspectPortableArchiveV110429(archive){
   };
 }
 
-export async function restorePortableArchiveV110429(archive,{onProgress=()=>{},resolveZipFile}={}){
+export async function restorePortableArchiveV110429(archive,{onProgress=()=>{},resolveZipFile,prepareRowForWrite}={}){
   const inspection=await inspectPortableArchiveV110429(archive);
   const db=getOwnerOpDb();
   if(!db)throw new Error('IndexedDB is not available on this device.');
@@ -179,7 +180,15 @@ export async function restorePortableArchiveV110429(archive,{onProgress=()=>{},r
       for(const table of db.tables){
         onProgress('Restoring '+table.name+'…');
         await table.clear();
-        if(rowsByTable[table.name].length)await table.bulkPut(rowsByTable[table.name]);
+        if(resolveZipFile){
+          // Detach each document from the uploaded ZIP before Safari persists it;
+          // storing slices directly can copy the entire ZIP once per document.
+          // waitFor keeps the same atomic transaction alive during short Blob reads.
+          for(const row of rowsByTable[table.name]){
+            const ready=prepareRowForWrite?await Dexie.waitFor(prepareRowForWrite(row)):row;
+            await table.put(ready);
+          }
+        }else if(rowsByTable[table.name].length)await table.bulkPut(rowsByTable[table.name]);
       }
       // Synchronous localStorage writes stay inside the database transaction so a
       // quota error aborts every table. Restore prior localStorage on any failure.

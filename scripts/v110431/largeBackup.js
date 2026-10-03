@@ -111,8 +111,22 @@ export async function inspectLargeBackup(file,{onProgress=()=>{},signal}={}){
  }
  return {archive,verification:{ok:true,sha256:archive.payloadSha256,bytes:file.size},resolveZipFile};
 }
+export async function detachZipBlobs(value){
+ if(value instanceof Blob){
+  // A slice still references the entire uploaded ZIP. New byte-backed chunks
+  // prevent WebKit from persisting a full archive copy for each document.
+  const chunks=[];
+  for(let offset=0;offset<value.size;offset+=CHUNK_BYTES)chunks.push(new Blob([await value.slice(offset,offset+CHUNK_BYTES).arrayBuffer()]));
+  return new Blob(chunks,{type:value.type});
+ }
+ if(Array.isArray(value)){const rows=[];for(const row of value)rows.push(await detachZipBlobs(row));return rows;}
+ if(value&&typeof value==='object'&&!(value instanceof ArrayBuffer)&&!ArrayBuffer.isView(value)){
+  const out={};for(const [key,row] of Object.entries(value))out[key]=await detachZipBlobs(row);return out;
+ }
+ return value;
+}
 export async function restoreLargeBackup(checked,{onProgress=()=>{}}={}){
- // Reuse the proven all-table transaction and rollback, with Blob slices instead
- // of rebuilding a base64 JSON document in memory.
- return restorePortableArchiveV110429({...checked.archive,kind:'owner_op_road_ready_device_safety_archive',schemaVersion:1},{onProgress,resolveZipFile:checked.resolveZipFile});
+ // Verify everything first, then detach and persist one row at a time within
+ // the existing all-table transaction, retaining rollback and session isolation.
+ return restorePortableArchiveV110429({...checked.archive,kind:'owner_op_road_ready_device_safety_archive',schemaVersion:1},{onProgress,resolveZipFile:checked.resolveZipFile,prepareRowForWrite:detachZipBlobs});
 }
