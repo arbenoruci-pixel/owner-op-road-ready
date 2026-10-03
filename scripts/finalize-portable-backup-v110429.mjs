@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 const read=p=>fs.readFileSync(p,'utf8');
-fs.copyFileSync('scripts/v110429/portableBackup.js','source/src/modules/backup/portableBackupV110429.js');
+let portable=read('scripts/v110429/portableBackup.js');
+portable=portable.replace("from '../../lib/local-db/dexie.js'","from '../../../../lib/local-db/dexie.js'")
+  .replace("from '../../lib/local-db/safetyArchive.js'","from '../../../../lib/local-db/safetyArchive.js'");
+fs.writeFileSync('source/src/modules/backup/portableBackupV110429.js',portable);
 fs.copyFileSync('scripts/v110429/BackupLogsScreen.jsx','source/src/modules/backup/BackupLogsScreen.jsx');
 const test=spawnSync(process.execPath,['scripts/v110429/portable-backup.test.mjs'],{stdio:'inherit'});
 if(test.error)throw test.error;assert.equal(test.status,0,'Portable backup review-index test');
