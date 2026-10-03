@@ -424,8 +424,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
                 <b>Local history detected</b>
                 <p>{safetyInventory.firstDay || 'No dated record'} → {safetyInventory.lastDay || 'No dated record'}</p>
                 <span>{safetyInventory.inspections} inspections · {safetyInventory.routeLegs} route legs · {safetyInventory.walletDocuments} wallet docs</span>
-                <span>{safetyInventory.documentBlobRows} local document blob(s) · {formatBytes(safetyInventory.documentBlobBytes)}</span>
-                <span>{safetyInventory.snapshotRows} IndexedDB snapshot(s) · {safetyInventory.localStorageEntries} Road Ready localStorage item(s)</span>
+                <span>{safetyInventory.documentBlobRows} saved document file(s) · {formatBytes(safetyInventory.documentBlobBytes)}</span>
               </div>
             </>
           ) : <p>Reading local database inventory…</p>}
@@ -471,7 +470,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
 
         {lastExport ? (
           <section className="backup-info-card ready">
-            <b>Last readable export this session</b>
+            <b>Last shared export this session</b>
             <p>{lastExport.filename}</p>
             <span>{safeDate(lastExport.createdAt)}</span>
           </section>

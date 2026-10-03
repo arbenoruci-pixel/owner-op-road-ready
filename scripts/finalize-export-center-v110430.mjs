@@ -12,7 +12,7 @@ replace('source/src/modules/home/HomeScreen.jsx','      <AdaptiveHomeV1038',`   
 replace('source/src/modules/owneros/OwnerOperatorOSV102.jsx',"section = 'overview', onBack, onScan, onOpenLog", "section = 'overview', onBack, onScan, onOpenLog, onOpenBackup");
 replace('source/src/modules/owneros/OwnerOperatorOSV102.jsx','<LoadFoldersV10969 loads={loads}','<LoadFoldersV10969 onOpenBackup={onOpenBackup} loads={loads}');
 replace('source/src/modules/owneros/LoadFoldersV10969.jsx','onOpenLog,onContinueBilling})','onOpenLog,onContinueBilling,onOpenBackup})');
-replace('source/src/modules/owneros/LoadFoldersV10969.jsx','    {moreOpen?<section',`    <button type="button" className="rr-export-entry" onClick={onOpenBackup}><span><b>Export & Backup</b><small>All documents + logbooks + loads</small></span><span aria-hidden="true">↗</span></button>
+replace('source/src/modules/owneros/LoadFoldersV10969.jsx','    {moreOpen?<section',`    {!folder && !week ? <button type="button" className="rr-export-entry" onClick={onOpenBackup}><span><b>Export & Backup</b><small>All documents + logbooks + loads</small></span><span aria-hidden="true">↗</span></button> : null}
     {moreOpen?<section`);
 const css='source/src/command-center.css';
 if(!read(css).includes('/* export-center-v110430 */'))fs.appendFileSync(css,`\n/* export-center-v110430 */
