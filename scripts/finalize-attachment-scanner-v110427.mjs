@@ -4,12 +4,15 @@ import {spawnSync} from 'node:child_process';
 const read=p=>fs.readFileSync(p,'utf8');
 const scan='source/src/modules/scan/';
 let intake=read(scan+'ScanIntakeV110328.jsx');
+// Temporary preview-build diagnostics of repository code, never customer data.
+console.log('ATTACHMENT_CAPTURE_SOURCE '+JSON.stringify(intake));
+console.log('ATTACHMENT_STORAGE_SOURCE '+JSON.stringify(read(scan+'quotaSafeScanStorageV10963.js')));
 function replace(before,after){assert.equal(intake.split(before).length-1,1,'Direct scanner anchor: '+before.slice(0,100));intake=intake.replace(before,after);}
+function replacePattern(before,after){assert.equal([...intake.matchAll(new RegExp(before.source,'g'))].length,1,'Direct scanner pattern: '+before);intake=intake.replace(before,after);}
 replace('({onReady,onClose,initialDraft})','({onReady,onClose,initialDraft,documentLabel="Document",loadNo=""})');
-replace('<span>ROAD READY</span><b>Smart Scan</b>','<span>Load {loadNo}</span><b>Add {documentLabel}</b>');
-replace('<h1>A clear scan.<br/>An easier day.</h1>','<h1>Add your {documentLabel}</h1>');
-replace('Capture a document or choose your files.<br/>Check the pages before we read them.','Scan the paper or choose a photo.<br/>Adjust the edges, then save.');
-replace('Keep every corner visible. Include all pages of the same BOL, POD, receipt or rate confirmation.','Keep every corner and signature visible. These pages will be saved to load {loadNo} as {documentLabel}.');
+replacePattern(/(<header className="scan-intake-head-v328">[\s\S]*?<div>)[\s\S]*?(<\/div>)/,'$1<span>Load {loadNo}</span><b>Add {documentLabel}</b>$2');
+replacePattern(/(<div className="scan-intake-title-v328">)[\s\S]*?(<\/div>)/,'$1<h1>Add your {documentLabel}</h1><p>Scan the paper or choose a photo.<br/>Adjust the edges, then save.</p>$2');
+intake=intake.replaceAll('Keep every corner visible. Include all pages of the same BOL, POD, receipt or rate confirmation.','Keep every corner and signature visible. These pages will be saved to load {loadNo} as {documentLabel}.');
 replace('async function readDocument()','async function saveDocument()');
 intake=intake.replaceAll('onClick={readDocument}','onClick={saveDocument}');
 intake=intake.replaceAll('onReady?.(', 'await onReady?.(');
@@ -18,10 +21,9 @@ replace("'Save document'", "'Save ' + documentLabel");
 intake=intake.replaceAll('Choose a file','Choose PDF').replaceAll('PDF, photo, TXT or CSV','Keep the original PDF');
 intake=intake.replaceAll('accept={FILE_ACCEPT}','accept="application/pdf,.pdf"');
 intake=intake.replaceAll('Ready to read','Ready to save').replaceAll('You can still read the original file.','You can still save the original file.');
-intake=intake.replaceAll('Review the details before saving.','Saved as {documentLabel} to load {loadNo}.');
+intake=intake.replaceAll('Review the details before saving.','Save as {documentLabel} to load {loadNo}.');
 intake=intake.replaceAll('function close(){generation.current++;onClose?.();}', 'function close(){if(busyRef.current)return;if(pages.length&&!window.confirm("Discard these unsaved pages?"))return;generation.current++;onClose?.();}');
 replace('if(!selection.length||busyRef.current)return;', 'if(!selection.length||busyRef.current)return;\n    if(selection.some(file=>!(file.type?.startsWith("image/")||file.type==="application/pdf"||/\\.(pdf|heic|heif|jpe?g|png|webp)$/i.test(file.name)))){setError("Choose a photo or PDF.");return;}');
-// This is only the page intake. It never mounts SmartScanSheet or an AI/OCR reader.
 assert.ok(!/readSmartDocument|runOwnedReader|readPdfText\(|getTextContent\(|readImage|fetch\(/.test(intake),'Unexpected interpretation in attachment intake');
 fs.writeFileSync(scan+'AttachmentIntakeV110427.jsx',intake);
 fs.copyFileSync('scripts/v110427/LoadAttachmentSheet.jsx',scan+'LoadAttachmentSheetV110426.jsx');
@@ -37,10 +39,6 @@ for(const[p,name]of[['source/src/core/update/appUpdate.js','FALLBACK_APP'],['pub
 for(const p of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx'])fs.writeFileSync(p,read(p).replace(/App v\d+\.\d+\.\d+/g,'App v'+VERSION).replace(/APP V\d+\.\d+\.\d+/g,'APP V'+VERSION));
 for(const p of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'])fs.writeFileSync(p,read(p).replaceAll("'110.4.26'","'"+VERSION+"'").replaceAll("'v110426-direct-load-attachments'","'"+BUILD+"'"));
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
-// Preview-build review of the existing original-asset storage contract.
-const storage=read(scan+'quotaSafeScanStorageV10963.js');
-const contract=storage.indexOf('export async function saveScannedDocument');
-console.log('ATTACHMENT_STORAGE_CONTRACT',storage.slice(Math.max(0,contract),Math.max(0,contract)+10000));
 const tests=spawnSync(process.execPath,['scripts/v110427/attachment-scanner.test.mjs'],{stdio:'inherit'});
 if(tests.error)throw tests.error;assert.equal(tests.status,0,'Direct scanner regression tests');
 console.log('PASS — direct BOL/POD camera, crop, quality, page order, and capture-only saving installed (110.4.27)');
