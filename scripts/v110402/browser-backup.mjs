@@ -47,14 +47,15 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
     assert.equal(await page.evaluate(() => window.backupShares.length), 0, 'preparing must not invoke native sharing');
     assert.equal(await protection(), null, 'preparing must not mark a file as saved');
     const href = await ready.getByRole('link', { name:'Download backup' }).getAttribute('href');
+    assert.match(await ready.getByRole('link', { name:'Download backup' }).getAttribute('class'),/backup-primary/,'Direct download is the main save action');
     // Let the first user activation expire. Saving requires a second, fresh tap.
     await page.waitForTimeout(6000);
-    await ready.getByRole('button', { name:'Save / Share' }).click();
-    await page.getByRole('status').filter({ hasText:'Save cancelled' }).waitFor();
+    await ready.getByRole('button', { name:'Share backup' }).click();
+    await page.getByRole('status').filter({ hasText:'Sharing closed' }).waitFor();
     assert.equal(await ready.getByRole('link', { name:'Download backup' }).getAttribute('href'), href);
     assert.equal(await protection(), null);
     await page.evaluate(() => { window.backupShareMode = 'blocked'; });
-    await ready.getByRole('button', { name:'Save / Share' }).click();
+    await ready.getByRole('button', { name:'Share backup' }).click();
     await page.getByRole('status').filter({ hasText:'share menu could not open' }).waitFor();
     assert.equal(await protection(), null);
 
@@ -95,7 +96,7 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
     assert.equal(JSON.parse(await protection()).sha256, archive.payloadSha256);
 
     await page.evaluate(() => { window.backupShareMode = 'success'; });
-    await ready.getByRole('button', { name:'Save / Share' }).click();
+    await ready.getByRole('button', { name:'Share backup' }).click();
     await page.getByRole('status').filter({ hasText:'Backup shared:' }).waitFor();
     const shares = await page.evaluate(() => window.backupShares.map(({active,sameFile}) => ({active,sameFile})));
     assert.equal(shares.length, 3);
