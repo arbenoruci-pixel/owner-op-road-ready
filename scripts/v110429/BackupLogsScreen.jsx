@@ -152,7 +152,7 @@ export default function BackupLogsScreen({state,onBack,onBuildBackup,onImportBac
    <section className="backup-actions-card">
     <b>Import Everything</b>
     <p>Choose an Export Everything file from Files on a new iPhone or iPad. Road Ready verifies the checksum before restoring the complete local database.</p>
-    <button type="button" className="backup-primary" onClick={()=>everythingInputRef.current?.click()} disabled={busy}>Import Everything</button>
+    <button type="button" className="backup-primary" onClick={()=>everythingInputRef.current?.click()} disabled={busy}>Import Everything</button>\n    <button type="button" className="backup-secondary" onClick={()=>everythingInputRef.current?.click()} disabled={busy} style={{marginTop:10}}>Import from another device</button>
     <input ref={everythingInputRef} type="file" accept=".roadready,.json,application/json" hidden onChange={e=>importEverything(e.target.files?.[0])}/>
    </section>
 
