@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 const read=p=>fs.readFileSync(p,'utf8');
 let portable=read('scripts/v110429/portableBackup.js');
-portable=portable.replace("from '../../lib/local-db/dexie.js'","from '../../../../lib/local-db/dexie.js'")
+portable=portable.replace("from '../../source/src/core/team/teamLogbook.js'","from '../../core/team/teamLogbook.js'").replace("from '../../lib/local-db/dexie.js'","from '../../../../lib/local-db/dexie.js'")
   .replace("from '../../lib/local-db/safetyArchive.js'","from '../../../../lib/local-db/safetyArchive.js'");
 fs.writeFileSync('source/src/modules/backup/portableBackupV110429.js',portable);
 fs.copyFileSync('scripts/v110429/BackupLogsScreen.jsx','source/src/modules/backup/BackupLogsScreen.jsx');

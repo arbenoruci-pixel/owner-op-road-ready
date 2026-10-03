@@ -26,10 +26,18 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
    await seed(page,state,[{id:'portable',bytes:[...original]}]);expected=await contents(page);await openBackup(page);
    await page.getByRole('button',{name:'Export Everything',exact:true}).click();const ready=page.getByRole('region',{name:'Backup ready to save'});await ready.waitFor();
    archive=await ready.getByRole('link',{name:'Download backup',exact:true}).evaluate(async a=>(await fetch(a.href)).json());
-   assert.equal(archive.portableFormat,'road_ready_everything_v1');assert.equal(archive.payloadSha256,sha(JSON.stringify(archive.payload)));assert.equal(archive.portableReview.loads[0].loadNo,'PORTABLE-1');
+   assert.equal(archive.payload.localStorage.some(row=>/auth|session|token|prepared-device-safety/.test(row.key)),false);assert.equal(archive.portableFormat,'road_ready_everything_v1');assert.equal(archive.payloadSha256,sha(JSON.stringify(archive.payload)));assert.equal(archive.portableReview.loads[0].loadNo,'PORTABLE-1');
    await page.screenshot({path:`${output}/${name}-export.png`,fullPage:true});
   });
   const file=value=>({name:'everything.roadready.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(value))});
+  await device(async page=>{
+   const state=baseState();state.view='logbook';state.testInstructionStore={};await seed(page,state);await openBackup(page);const before=await contents(page);
+   await page.locator('input[type=file]').first().setInputFiles(file(archive));
+   await page.getByRole('status').filter({hasText:'Choose the backup exported from this device'}).waitFor();
+   assert.equal(await page.getByRole('button',{name:'Import Everything',exact:true}).isDisabled(),true);
+   assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-last-device-safety-export-v1')),null);
+   assert.deepEqual(await contents(page),before);
+  });
   await device(async page=>{
    await seed(page,empty());await openBackup(page);const before=await contents(page);
    const corrupted=structuredClone(archive);corrupted.payload.state.customByDay['2026-09-07'].note='tampered';

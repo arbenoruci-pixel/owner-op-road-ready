@@ -1,5 +1,6 @@
 'use client';
 
+import { driverLogbookEntries } from '../../source/src/core/team/teamLogbook.js';
 import { getOwnerOpDb } from '../../lib/local-db/dexie.js';
 import { verifyDeviceSafetyArchive } from '../../lib/local-db/safetyArchive.js';
 
@@ -10,7 +11,8 @@ function portableStorageKey(key) {
   return ROAD_READY_PREFIXES.some(prefix=>lower.startsWith(prefix)) &&
     !/(?:auth|session|token)/.test(lower) &&
     !lower.startsWith('owner-op-cloud-') && !lower.startsWith('owner-op-full-migration-') &&
-    lower!=='owner-op-road-ready-last-device-safety-export-v1';
+    lower!=='owner-op-road-ready-last-device-safety-export-v1' &&
+    lower!=='owner-op-road-ready-prepared-device-safety-v110429';
 }
 
 function list(value){ return Array.isArray(value) ? value.filter(Boolean) : []; }
@@ -73,7 +75,7 @@ export function makePortableReviewV110429(archive = {}) {
     createdAt:String(archive?.createdAt||new Date().toISOString()),
     appVersion:String(archive?.appVersion||''),
     summary:archive?.inventory || {},
-    logbook:logbookReview(state),
+    logbook:driverLogbookEntries(state).flatMap(([driverId,book])=>logbookReview(book).map(day=>({...day,driverId,driverName:String(state.teamDrivers?.find(driver=>driver.id===driverId)?.name||book.driverProfile?.name||'')}))),
     loads:list(business?.loads).map(row=>({
       loadNo:String(row?.loadNo||''),
       status:String(row?.status||''),
@@ -88,12 +90,12 @@ export function makePortableReviewV110429(archive = {}) {
   };
 }
 
-export function decoratePortableArchiveV110429(archive = {}) {
-  return {
-    ...archive,
-    portableFormat:'road_ready_everything_v1',
-    portableReview:makePortableReviewV110429(archive),
-  };
+export async function decoratePortableArchiveV110429(archive = {}) {
+  const payload={...archive.payload,localStorage:list(archive.payload?.localStorage).filter(row=>portableStorageKey(row?.key))};
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload)));
+  const payloadSha256=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+  const portable={...archive,payload,payloadSha256};
+  return {...portable,portableFormat:'road_ready_everything_v1',portableReview:makePortableReviewV110429(portable)};
 }
 
 function base64ToBytes(base64='') {

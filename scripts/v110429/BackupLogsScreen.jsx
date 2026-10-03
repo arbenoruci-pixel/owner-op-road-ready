@@ -23,6 +23,7 @@ import { assertSafeDeviceImport, hasMeaningfulDeviceData } from '../../../../lib
 // Legacy release-verifier compatibility markers. Restore remains safety-gated below.
 const LEGACY_EXPORT_MARKER = 'Export all days';
 const LEGACY_IMPORT_MARKER = 'Import all data';
+const PREPARED_SAFETY_META_KEY = 'owner-op-road-ready-prepared-device-safety-v110429';
 const DEVICE_SAFETY_META_KEY = 'owner-op-road-ready-last-device-safety-export-v1';
 
 function safeDate(value) {
@@ -188,21 +189,26 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
     setStatus('Preparing all records and original documents stored on this device…');
     setSafetyError('');
     try {
-      const { archive, verification } = await buildDeviceSafetyArchive({
+      const { archive } = await buildDeviceSafetyArchive({
         state,
         businessStore: readBusinessStore(),
         appVersion: CURRENT_APP_VERSION,
         onProgress:setStatus,
       });
-      const file = prepareBackupFile(decoratePortableArchiveV110429(archive), safetyArchiveFilename().replace('device-safety', 'everything'), { compact:true });
+      const portable = await decoratePortableArchiveV110429(archive);
+      const file = prepareBackupFile(portable, safetyArchiveFilename().replace('device-safety', 'everything'), { compact:true });
       setSafetyInventory(archive.inventory);
-      showPreparedExport(file, { safetyMeta:{
+      const safetyMeta = {
         createdAt:archive.createdAt,
         filename:file.name,
-        sha256:verification.sha256,
+        sha256:portable.payloadSha256,
         bytes:file.size,
         inventory:archive.inventory,
-      } });
+      };
+      // This receipt proves the selected file was prepared on this device.
+      // It does not unlock import until sharing or saved-file verification succeeds.
+      localStorage.setItem(PREPARED_SAFETY_META_KEY, JSON.stringify(safetyMeta));
+      showPreparedExport(file, { safetyMeta });
     } catch (error) {
       setSafetyError(error?.message || 'Device safety backup failed.');
       setStatus('Could not prepare the complete backup. Your local data is unchanged.');
@@ -225,6 +231,11 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
       if (!verification.ok) throw new Error(`Backup verification failed: ${verification.reason}`);
       const sha = verification.sha256;
       const createdAt = archive.createdAt;
+      const preparedHere = validSafetyMeta(JSON.parse(localStorage.getItem(PREPARED_SAFETY_META_KEY) || 'null'));
+      const savedHere = readStoredSafetyExport();
+      if (![preparedHere, savedHere].some(meta => meta?.sha256 === sha)) {
+        throw new Error('Choose the backup exported from this device. Use Export Everything here first, then save and verify that file.');
+      }
 
       const meta = saveSafetyMeta({
         createdAt,
