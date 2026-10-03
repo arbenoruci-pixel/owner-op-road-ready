@@ -4,6 +4,14 @@ import { getOwnerOpDb } from '../../lib/local-db/dexie.js';
 import { verifyDeviceSafetyArchive } from '../../lib/local-db/safetyArchive.js';
 
 const ROAD_READY_PREFIXES = ['owner-op-', 'road-ready'];
+// A device move keeps the receiving device's login and cloud-upload opt-in.
+function portableStorageKey(key) {
+  const lower=String(key||'').toLowerCase();
+  return ROAD_READY_PREFIXES.some(prefix=>lower.startsWith(prefix)) &&
+    !/(?:auth|session|token)/.test(lower) &&
+    !lower.startsWith('owner-op-cloud-') && !lower.startsWith('owner-op-full-migration-') &&
+    lower!=='owner-op-road-ready-last-device-safety-export-v1';
+}
 
 function list(value){ return Array.isArray(value) ? value.filter(Boolean) : []; }
 
@@ -119,7 +127,7 @@ function roadReadyLocalStorageKeys(){
   for(let i=0;i<localStorage.length;i+=1){
     const key=localStorage.key(i); if(!key)continue;
     const lower=key.toLowerCase();
-    if(ROAD_READY_PREFIXES.some(prefix=>lower.startsWith(prefix)))keys.push(key);
+    if(portableStorageKey(lower))keys.push(key);
   }
   return keys;
 }
@@ -139,36 +147,44 @@ export async function restorePortableArchiveV110429(archive,{onProgress=()=>{}}=
   const inspection=await inspectPortableArchiveV110429(archive);
   const db=getOwnerOpDb();
   if(!db)throw new Error('IndexedDB is not available on this device.');
-  const payload=archive.payload||{};
-  const restoredDexie={};
-  const skippedTables=[];
-  const archivedTables=payload.dexie||{};
-  let completed=0;
+  const payload=archive.payload||{}, archivedTables=payload.dexie||{};
+  if(!payload.state || typeof payload.state!=='object' || Array.isArray(payload.state))throw new Error('Backup app state is missing.');
+  const tableNames=new Set(db.tables.map(table=>table.name));
+  if(Object.keys(archivedTables).some(name=>!tableNames.has(name)))throw new Error('Update Road Ready before importing this newer database backup.');
+  const rowsByTable={};
+  // Decode and validate everything before replacing any record.
   for(const table of db.tables){
-    const encoded=archivedTables[table.name];
-    if(!Array.isArray(encoded)){ skippedTables.push(table.name); continue; }
-    onProgress(`Restoring ${table.name}…`);
-    const rows=await deserializeValue(encoded);
-    await db.transaction('rw',table,async()=>{
-      await table.clear();
-      if(rows.length)await table.bulkPut(rows);
+    if(!Array.isArray(archivedTables[table.name]))throw new Error('Backup is missing the '+table.name+' record group.');
+    rowsByTable[table.name]=await deserializeValue(archivedTables[table.name]);
+  }
+  const state=await deserializeValue(payload.state), businessStore=await deserializeValue(payload.businessStore||{});
+  const currentKey='owner-op-road-ready-state-v1';
+  rowsByTable.app_snapshots=rowsByTable.app_snapshots.filter(row=>row.key!==currentKey);
+  rowsByTable.app_snapshots.push({key:currentKey,state:{...state,view:'home',sheet:null},updated_at:new Date().toISOString()});
+  const beforeStorage=roadReadyLocalStorageKeys().map(key=>({key,value:localStorage.getItem(key)}));
+  const nextStorage=list(payload.localStorage).filter(row=>portableStorageKey(row?.key));
+  let storageTouched=false;
+  try {
+    await db.transaction('rw',db.tables,async()=>{
+      for(const table of db.tables){
+        onProgress('Restoring '+table.name+'…');
+        await table.clear();
+        if(rowsByTable[table.name].length)await table.bulkPut(rowsByTable[table.name]);
+      }
+      // Synchronous localStorage writes stay inside the database transaction so a
+      // quota error aborts every table. Restore prior localStorage on any failure.
+      storageTouched=true;
+      for(const key of roadReadyLocalStorageKeys())localStorage.removeItem(key);
+      for(const row of nextStorage)localStorage.setItem(String(row.key),String(row.value??''));
+      localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify(businessStore));
     });
-    restoredDexie[table.name]=rows.length;
-    completed+=1;
+  } catch(error) {
+    if(storageTouched){
+      for(const key of roadReadyLocalStorageKeys())localStorage.removeItem(key);
+      for(const row of beforeStorage)localStorage.setItem(row.key,row.value);
+    }
+    throw error;
   }
-  for(const key of roadReadyLocalStorageKeys())localStorage.removeItem(key);
-  for(const row of list(payload.localStorage)){
-    if(!row?.key)continue;
-    localStorage.setItem(String(row.key),String(row.value??''));
-  }
-  onProgress('Finalizing restored app state…');
-  return {
-    ok:true,
-    completedTables:completed,
-    restoredDexie,
-    skippedTables,
-    state:await deserializeValue(payload.state||{}),
-    businessStore:await deserializeValue(payload.businessStore||{}),
-    inspection,
-  };
+  onProgress('Import complete. Opening restored Road Ready data…');
+  return {ok:true,completedTables:db.tables.length,restoredDexie:Object.fromEntries(Object.entries(rowsByTable).map(([name,rows])=>[name,rows.length])),skippedTables:[],state,businessStore,inspection};
 }
