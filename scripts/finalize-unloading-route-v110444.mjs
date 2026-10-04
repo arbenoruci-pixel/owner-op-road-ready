@@ -42,3 +42,4 @@ for(const p of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-gr
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS — v110.4.44 delivery-only routes and legacy repair');
 await import('./v110444/unloading.test.mjs');
+await import('./finalize-team-pickup-v110445.mjs');
