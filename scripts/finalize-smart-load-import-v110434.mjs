@@ -13,7 +13,10 @@ patch(folders,'      <details className="rr-docs-options"><summary>Load details<
 patch(folders,'>+ Add document</button>',">{folder?'+ Add document':'Smart Scan'}</button>");
 const backup='source/src/modules/backup/BackupLogsScreen.jsx';
 patch(backup,"import React", "import ImportLibraryPanel from '../owneros/ImportLibraryPanelV110434.jsx';\nimport React");
-patch(backup,'        <section className="backup-status-card">','        <ImportLibraryPanel/>\n        <section className="backup-status-card">');
+// Keep document intake between safety verification and full-device restore.
+// Their existing file inputs retain their established order.
+fs.writeFileSync(backup,read(backup).replace('        <ImportLibraryPanel/>\n',''));
+patch(backup,'        <section className="backup-actions-card">\n          <b>ChatGPT review — smaller file</b>','        <ImportLibraryPanel/>\n        <section className="backup-actions-card">\n          <b>ChatGPT review — smaller file</b>');
 const store='source/src/modules/business/businessStore.js';
 patch(store,'    evidenceRecoveryHistory:list(value.evidenceRecoveryHistory),','    evidenceRecoveryHistory:list(value.evidenceRecoveryHistory),\n    documentLibraryHistory:list(value.documentLibraryHistory),\n    documentLibraryCases:list(value.documentLibraryCases),\n    documentLibraryLinks:list(value.documentLibraryLinks),');
 const rec='source/src/modules/owneros/loadFolderReconciliationV10974.js';
