@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {buildLoadFoldersV10969} from '../../source/src/modules/owneros/loadFolderEngineV10969.js';
+import {loadView} from '../../source/src/modules/owneros/driverDocumentsV110415.js';
+import {billingEvidencePages} from '../../source/src/modules/owneros/evidenceCoreV110413.js';
+import {billingReadinessV102} from '../../source/src/modules/owneros/ownerOpsStoreV102.js';
+import {planInvoiceSubmission} from '../../source/src/modules/owneros/invoiceSubmissionV110320.js';
+const load={loadNo:'TEST100',broker:'Test Broker',origin:'A, OH',destination:'B, IL',documentWorkflowStage:'delivered'};
+const state={routeLegsByDay:{'2026-09-29':[{loadNo:'SHORT',fromCity:'A',fromState:'OH',toCity:'B',toState:'IL'}]},eventsByDay:{'2026-09-29':[{loadNo:'SHORT',status:'ON',startMin:600,endMin:615}]},signaturesByDay:{'2026-09-29':'unchanged'}};
+const before=structuredClone(state);
+assert.deepEqual(buildLoadFoldersV10969({state}),[],'a route reference is not a saved business load');
+assert.deepEqual(state,before,'signed duty records are read-only');
+assert.equal(buildLoadFoldersV10969({loads:[load],state}).length,1,'explicit loads still show missing files');
+assert.equal(buildLoadFoldersV10969({documents:[{client_document_id:'source',type:'bol',load_no:'SHORT'}],state}).length,1,'original documents can establish folders');
+const fields={loadNo:load.loadNo,date:'2026-09-11',reference:'REF',merchant:'Test Broker',origin:'A, OH',destination:'B, IL',pickupDate:'2026-09-11',deliveryDate:'2026-09-11',total:100,currency:'USD'};
+const hash='c'.repeat(64),doc={client_document_id:'packet',type:'supporting_packet',load_no:load.loadNo,sha256:hash,extracted:{evidenceFactsV1:{version:1,source:'source_recovery',sourceSha256:hash,reviewedAt:'2026-10-04',fields,components:['rate_confirmation','bol','invoice','delivery_evidence'].map((kind,i)=>({kind,pages:[i+1],reviewed:true,fields:{...fields,deliveryAuthorization:'Broker instruction on source page 4',notes:'Drop photos and broker acknowledgement reviewed.'}}))}}};
+let v=loadView(load,[doc],{loads:[load]},'2026-10-04');assert.equal(v.status.label,'Ready');assert.equal(v.rows.find(r=>r.kind==='pod').label,'Authorized delivery proof');assert.equal(doc.extracted.evidenceFactsV1.fields.podSigned,undefined);
+const billingLoad={...load,gross:100,billingEmail:'billing@example.com'},profile={carrierName:'Test Carrier'};
+assert.equal(billingReadinessV102(billingLoad,[doc]).ready,true);
+assert.deepEqual(billingEvidencePages(doc,load.loadNo),[1,2,4]);
+assert.deepEqual(planInvoiceSubmission({load:billingLoad,documents:[doc],profile}).documents[0].billingEvidencePagesV110413,[1,2,4]);
+const mixed=structuredClone(doc);mixed.extracted.evidenceFactsV1.components.unshift({kind:'pod',pages:[5],reviewed:true,fields:{...fields,podSigned:false,deliveryDate:'2099-01-01'}});
+v=loadView(load,[mixed],{loads:[load]},'2026-10-04');assert.equal(v.status.label,'Ready');assert.equal(v.rows.find(r=>r.kind==='pod').label,'Authorized delivery proof');assert.deepEqual(v.rows.find(r=>r.kind==='pod').sources[0].pages,[4]);assert.doesNotMatch(v.service,/2099/);assert.deepEqual(billingEvidencePages(mixed,load.loadNo),[1,2,4]);
+mixed.extracted.evidenceFactsV1.components[0].fields.podSigned=true;
+v=loadView(load,[mixed],{loads:[load]},'2026-10-04');assert.equal(v.rows.find(r=>r.kind==='pod').label,'Signed POD');assert.deepEqual(v.rows.find(r=>r.kind==='pod').sources[0].pages,[5]);
+for(const change of ['authorization','review','notes','hash']){
+ const d=structuredClone(doc),part=d.extracted.evidenceFactsV1.components[3];
+ if(change==='authorization')delete part.fields.deliveryAuthorization;
+ if(change==='review')part.reviewed=false;
+ if(change==='notes')part.fields.notes='';
+ if(change==='hash')d.sha256='d'.repeat(64);
+ assert.notEqual(loadView(load,[d],{loads:[load]},'2026-10-04').status.label,'Ready',change+' must block readiness');
+ assert.equal(billingReadinessV102(billingLoad,[d]).ready,false,change+' must block billing');
+ assert.ok(!billingEvidencePages(d,load.loadNo).includes(4));
+ assert.throws(()=>planInvoiceSubmission({load:billingLoad,documents:[d],profile}));
+}
+const cancelled={...load,documentWorkflowStage:'cancelled'};v=loadView(cancelled,[],{loads:[cancelled]},'2026-10-04');assert.deepEqual(v.rows.map(r=>r.kind),['rate_confirmation']);
+const tonu={...load,documentWorkflowStage:'tonu'};v=loadView(tonu,[],{loads:[tonu]},'2026-10-04');assert.deepEqual(v.rows.map(r=>r.kind),['rate_confirmation','invoice']);
+console.log('PASS — route-only references, explicit missing loads, source-backed authorized delivery proof, rejection of incomplete proof, cancelled and TONU requirements, immutable signed logs');
