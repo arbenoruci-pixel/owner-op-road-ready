@@ -37,3 +37,5 @@ for(const p of ['source/src/shared/ui/ToolsSheet.jsx'])fs.writeFileSync(p,read(p
 for(const p of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'])fs.writeFileSync(p,read(p).replaceAll("'110.4.34'","'"+VERSION+"'").replaceAll("'v110434-smart-load-library'","'"+BUILD+"'"));
 const locks=JSON.parse(read('module-locks.v1.json'));if(![dayBaseline,dayReviewed].includes(locks.files[day]))throw Error('Unexpected day-screen lock');locks.files[day]=dayReviewed;locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS — v110.4.35 compact phone home and direct import navigation');
+
+await import('./finalize-import-broker-review-v110436.mjs');

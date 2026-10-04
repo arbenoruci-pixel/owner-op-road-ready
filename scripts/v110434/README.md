@@ -13,3 +13,5 @@ Imported closed loads clear matching live-guide pointers and open route state th
 Documents + Logbook exports include Imported-Logbooks with readable source copies, source metadata, load links and DOT cases. Source copies remain distinct from current signed logs. Internal audit snapshots and sync queues are excluded from this shareable collection. Export Everything still carries the complete database.
 
 Smart Scan includes imported closed folders in its own candidate list, without exposing them as active dispatch work. Exact printed load/BOL/PO references may select a folder; broker conflicts or repeated references retain the existing confirmation guard. Short secondary aliases cannot establish an automatic match.
+
+Broker mismatches open a saved/incoming comparison during preview. Each mismatched load needs its own explicit same-job confirmation in addition to accepting changed details. Apply rechecks the current snapshot and the confirmation list before any write, then saves the old load and broker decision in the audit. Re-import preserves newer local details without requesting an obsolete broker correction.

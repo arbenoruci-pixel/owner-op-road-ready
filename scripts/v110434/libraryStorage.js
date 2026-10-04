@@ -3,7 +3,7 @@ import Dexie from 'dexie';
 import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../business/businessStore.js';
 import {sha256} from '../backup/chunkedZipV110431.js';
-import {canonical,copy,list,makeImportReview,mergeLibraryLoads,validateManifest} from './libraryCoreV110434.js';
+import {canonical,copy,list,makeImportReview,mergeLibraryLoads,validateManifest,requireBrokerReview} from './libraryCoreV110434.js';
 
 function readBusiness(storage){const raw=storage.getItem(BUSINESS_STORE_KEY);const value=raw?JSON.parse(raw):{};if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Saved load records could not be read.');return {raw,value};}
 async function savedRows(db,onProgress=()=>{}){
@@ -26,7 +26,7 @@ function documentRecord(d,p,old){
   extracted:{...old?.extracted,type:d.type,loadNo:d.loadNo||'',canonicalLoadNo:d.loadNo||'',date:d.date||'',evidenceFactsV1:{version:1,source:'imported_archive',sourceSha256:d.sha256,reviewedAt:null,fields,components:copy(d.components)}}};
 }
 function mirror(row){return {id:row.local_id,localDocumentId:row.local_id,clientDocumentId:row.client_document_id,type:row.type,loadNo:row.load_no,canonicalLoadNo:row.load_no,title:row.original_file_name,fileName:row.original_file_name,mimeType:row.mime_type,documentDate:row.document_date,sha256:row.sha256,fileSizeBytes:row.file_size_bytes,reviewStatus:row.reviewStatus,status:row.status,extracted:row.extracted,librarySource:row.librarySource,originalPreserved:true,evidenceOnlyV110413:true,linkToLogbook:false,updatedAt:Date.now()};}
-export async function applyLibrary(bundle,review,{acceptDifferences=false,db=getOwnerOpDb(),storage=window.localStorage,onProgress=()=>{}}={}){
+export async function applyLibrary(bundle,review,{acceptDifferences=false,confirmedBrokerLoads=[],db=getOwnerOpDb(),storage=window.localStorage,onProgress=()=>{}}={}){
  const p=validateManifest(bundle.manifest);if(!db)throw Error('Device storage is unavailable.');
  const manifestHash=await sha256(new TextEncoder().encode(canonical(p)));
  const run=async()=>{
@@ -35,9 +35,10 @@ export async function applyLibrary(bundle,review,{acceptDifferences=false,db=get
    const rows=await savedRows(db,onProgress),fresh=makeImportReview(before.value,rows,p);
    if(!review||fresh.manifestToken!==review.manifestToken||fresh.snapshotToken!==review.snapshotToken)throw Error('Saved records changed after the preview. Choose the file again to review the latest values.');
    if(fresh.differences.length&&!acceptDifferences)throw Error('Review the changed details before importing.');
+   requireBrokerReview(fresh.brokerConflicts,confirmedBrokerLoads);
    const history=list(before.value.documentLibraryHistory).find(h=>h.id===p.id);
    if(history&&history.manifestHash!==manifestHash)throw Error('This package ID was already used for different contents.');
-   const {next,audit}=history?{next:copy(before.value),audit:[]}:mergeLibraryLoads(before.value,p);next.documents=list(next.documents);
+   const {next,audit}=history?{next:copy(before.value),audit:[]}:mergeLibraryLoads(before.value,p,{confirmedBrokerLoads});next.documents=list(next.documents);
    result={loads:p.loads.length,newLoads:fresh.newLoads,newDocuments:0,keptDocuments:0,restoredOriginals:0,already:!!history};const documentIds={};
    const beforeDocuments=[];
    for(let i=0;i<p.documents.length;i++){
@@ -59,7 +60,7 @@ export async function applyLibrary(bundle,review,{acceptDifferences=false,db=get
     next.documentLibraryCases=[...list(next.documentLibraryCases).filter(c=>!p.cases.some(incoming=>incoming.id===c.id)),...p.cases.map(c=>({...copy(c),packageId:p.id,documentIds:c.documentIds.map(id=>documentIds[id])}))];
     next.documentLibraryLinks=[...list(next.documentLibraryLinks).filter(l=>l.packageId!==p.id),...p.logbookLinks.map(l=>({...l,packageId:p.id}))];
     next.documentLibraryHistory=[...list(next.documentLibraryHistory),{id:p.id,manifestHash,at:new Date().toISOString(),loads:p.loads.length,files:p.documents.length,logDays:p.logbook.length}];
-    await db.sync_meta.put({key:'document-library:'+p.id,value:{id:p.id,manifestHash,logbook:p.logbook,logbookLinks:p.logbookLinks,cases:next.documentLibraryCases.filter(c=>c.packageId===p.id),sourceNote:p.coverageNote||'',audit:{loads:audit,documents:beforeDocuments,differences:fresh.differences}},updated_at:new Date().toISOString()});
+    await db.sync_meta.put({key:'document-library:'+p.id,value:{id:p.id,manifestHash,logbook:p.logbook,logbookLinks:p.logbookLinks,cases:next.documentLibraryCases.filter(c=>c.packageId===p.id),sourceNote:p.coverageNote||'',audit:{loads:audit,documents:beforeDocuments,differences:fresh.differences,brokerConfirmations:fresh.brokerConflicts.map(c=>({loadNo:c.loadNo,savedBroker:c.saved.broker,incomingBroker:c.incoming.broker,confirmedAt:new Date().toISOString()}))}},updated_at:new Date().toISOString()});
    }
    if(storage.getItem(BUSINESS_STORE_KEY)!==before.raw)throw Error('Another window changed the load records. Import stopped; try again.');
    written=JSON.stringify({...next,updatedAt:Date.now()});storage.setItem(BUSINESS_STORE_KEY,written);
