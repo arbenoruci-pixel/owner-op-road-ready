@@ -1,12 +1,16 @@
 // Only historical app-owned recovery copies can move out of localStorage.
 // Their exact bytes are committed and read back before the old copy is removed.
+import {withRecoveryStorageLock} from '../../../../lib/local-db/recoveryStorage.js';
 import {sha256} from '../backup/chunkedZipV110431.js';
 export const RECOVERY_KEYS=[
  'owner-op-road-ready-pre-update-snapshot-v1',
  'owner-op-road-ready-pre-cloud-raw-v1',
  'owner-op-road-ready-emergency-export-copy-v1',
 ];
-export async function archiveRecoveryCopies(db,storage){
+export function archiveRecoveryCopies(db,storage){
+ return withRecoveryStorageLock(()=>archiveRecoveryCopiesLocked(db,storage),{requireLock:true});
+}
+async function archiveRecoveryCopiesLocked(db,storage){
  let released=0;
  for(const key of RECOVERY_KEYS){
   const raw=storage.getItem(key);if(!raw)continue;
