@@ -3,6 +3,7 @@ export const WALLET_FORMAT='road-ready-wallet-documents';
 export const MAX_WALLET_BYTES=30*1024*1024;
 const fields=new Set(['number','state','unit','plate','vin','trailer','carrier','policyNo','mcNumber','usdotNumber','year','quarter','loadNo','bolNo','inspectionDate','expiresOn','expiresMonth','notes']);
 const clone=x=>JSON.parse(JSON.stringify(x));
+export const walletOriginalDataUrl=doc=>doc?.attachmentDataUrl||doc?.photoDataUrl||'';
 export const walletFingerprint=wallet=>JSON.stringify(normalizeWallet(wallet));
 function date(v){return /^\d{4}-\d{2}-\d{2}$/.test(v)&&new Date(v+'T12:00:00Z').toISOString().slice(0,10)===v;}
 export async function validateWalletImport(raw){
@@ -15,7 +16,7 @@ export async function validateWalletImport(raw){
   const bytes=Uint8Array.from(atob(o.base64),c=>c.charCodeAt(0));total+=bytes.length;if(!bytes.length||bytes.length!==o.size||total>MAX_WALLET_BYTES)throw Error('Wallet originals are incomplete or too large.');
   const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');if(hash!==o.sha256)throw Error('A wallet original is damaged. Download the file again.');
   const header=String.fromCharCode(...bytes.slice(0,5));if(o.type==='application/pdf'&&header!=='%PDF-'||o.type==='image/jpeg'&&(bytes[0]!==255||bytes[1]!==216)||o.type==='image/png'&&!(bytes[0]===137&&header.slice(1,4)==='PNG'))throw Error('The original does not match its file type.');
-  documents.push({id:row.id,title:req.title,doc:{...clean,present:true,attachmentDataUrl:`data:${o.type};base64,${o.base64}`,attachmentName:o.name,attachmentType:o.type,attachmentSize:o.size,sourceSha256:hash}});
+  documents.push({id:row.id,title:req.title,doc:{...clean,present:true,...(req.required==='conditional'?{enabled:true}:{}),attachmentDataUrl:`data:${o.type};base64,${o.base64}`,attachmentName:o.name,attachmentType:o.type,attachmentSize:o.size,sourceSha256:hash}});
  }
  const identity={};for(const k of ['driverName','carrier','unit','vin'])identity[k]=String(raw.identity?.[k]||'').slice(0,160);
  return {identity,documents,notes:Array.isArray(raw.notes)?raw.notes.filter(x=>typeof x==='string').map(x=>x.slice(0,2000)).slice(0,8):[]};
@@ -25,7 +26,7 @@ export function mergeWalletImport(wallet,review,expected,token){
  const next=normalizeWallet(clone(wallet||{})),now=Date.now();
  for(const {id,doc}of review.documents){
   const old=next.documents[id];let previous=old?.previousVersions||[];
-  if(old?.attachmentDataUrl&&old.attachmentDataUrl!==doc.attachmentDataUrl){const {previousVersions,...saved}=old;if(!previous.some(x=>x.attachmentDataUrl===saved.attachmentDataUrl))previous=[...previous,saved];}
+  if(walletOriginalDataUrl(old)&&walletOriginalDataUrl(old)!==walletOriginalDataUrl(doc)){const {previousVersions,...saved}=old;if(!previous.some(x=>walletOriginalDataUrl(x)===walletOriginalDataUrl(saved)))previous=[...previous,saved];}
   next.documents[id]={...doc,previousVersions:previous,updatedAt:now,attachedAt:now};
  }
  next.lastReviewedAt=now;next.lastImport={token,count:review.documents.length,at:now};return next;

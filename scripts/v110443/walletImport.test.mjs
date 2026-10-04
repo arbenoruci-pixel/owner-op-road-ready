@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {validateWalletImport,mergeWalletImport,walletFingerprint} from '../../source/src/modules/wallet/walletImportV110443.js';
-import {derivedExpiresOn,requirementById} from '../../source/src/core/wallet/dotWallet.js';
+import {derivedExpiresOn,requirementById,isRequirementActive} from '../../source/src/core/wallet/dotWallet.js';
 const bytes=new TextEncoder().encode('%PDF-1.4\nSynthetic wallet original'),hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const payload={format:'road-ready-wallet-documents',version:1,identity:{driverName:'Test Driver',unit:'TEST'},documents:[{id:'insurance_card',fields:{policyNo:'SYNTHETIC',expiresOn:'2027-09-22'},original:{base64:btoa(String.fromCharCode(...bytes)),sha256:hash,type:'application/pdf',size:bytes.length,name:'test.pdf'}}]};
 const review=await validateWalletImport(payload),old={settings:{includeTrailerDocs:false},documents:{insurance_card:{present:true,attachmentDataUrl:'data:application/pdf;base64,T0xE',notes:'Keep old source'},ifta_license:{present:true,notes:'Keep unrelated'}}};
@@ -10,3 +10,8 @@ assert.throws(()=>mergeWalletImport({...old,lastReviewedAt:1},review,walletFinge
 for(const mutate of [p=>p.documents[0].original.sha256='0'.repeat(64),p=>p.documents[0].fields.expiresOn='2026-02-30',p=>p.documents[0].fields.signatureByDay='forbidden',p=>p.documents.push(p.documents[0]),p=>p.documents[0].id='unknown',p=>p.documents[0].original.type='text/html']){const p=structuredClone(payload);mutate(p);await assert.rejects(()=>validateWalletImport(p));}
 assert.equal(derivedExpiresOn(requirementById('trailer_registration'),{expiresMonth:'2030-03'}),'2030-03-31');assert.equal(derivedExpiresOn(requirementById('trailer_registration'),{expiresMonth:'2028-02'}),'2028-02-29');
 console.log('PASS — source bytes, invalid dates/types/fields, duplicates, stale preview, kept originals, repeated import, untouched settings/documents and month precision');
+
+const legacy={documents:{insurance_card:{present:true,photoDataUrl:'data:image/png;base64,T0xE',notes:'Legacy original'}}};
+const restored=mergeWalletImport(legacy,review,walletFingerprint(legacy),'legacy');assert.equal(restored.documents.insurance_card.previousVersions[0].photoDataUrl,legacy.documents.insurance_card.photoDataUrl);assert.equal(mergeWalletImport(restored,review,walletFingerprint(restored),'repeat').documents.insurance_card.previousVersions.length,1);
+for(const id of ['medical_waiver_spe','lease_agreement']){const p=structuredClone(payload);p.documents[0].id=id;const r=await validateWalletImport(p),w=mergeWalletImport({},r,walletFingerprint({}),'conditional');assert.equal(isRequirementActive(requirementById(id),w),true);}
+console.log('PASS — legacy photo originals preserved and conditional imports visible');
