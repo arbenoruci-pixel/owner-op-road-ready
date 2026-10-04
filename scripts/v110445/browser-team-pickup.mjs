@@ -25,7 +25,7 @@ for(const [name,engine] of process.env.CHROMIUM_ONLY ? [['chromium',chromium]] :
  const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',ignoreHTTPSErrors:true}),page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));await setupRoutes(context);await page.clock.setFixedTime(new Date('2026-10-04T16:00:00Z'));
  try{
-  if(process.env.EXPECT_SHA){const version=await(await page.request.get(origin+'/app-version.json?team='+Date.now())).json();assert.equal(version.version,'110.4.46');assert.equal(version.sourceCommit,process.env.EXPECT_SHA);}
+  if(process.env.EXPECT_SHA){const version=await(await page.request.get(origin+'/app-version.json?team='+Date.now())).json();assert.equal(version.version,'110.4.47');assert.equal(version.sourceCommit,process.env.EXPECT_SHA);}
   await seed(page,structuredClone(state));await form(page);
   const route=page.getByRole('button',{name:/Harvey, IL.*East Haven, CT/}).first();await route.waitFor();
   assert.match(await route.innerText(),/In transit.*Pickup by Beta Driver/);assert.doesNotMatch(await route.innerText(),/no pickup recorded/);await unchanged(page);

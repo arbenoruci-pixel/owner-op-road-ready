@@ -11,9 +11,13 @@ const destination = event => event.destinationCity
   : text(event.destination).includes(',') ? place(text(event.destination).split(',').slice(0,-1).join(','),text(event.destination).split(',').at(-1)) : '';
 
 export function freightReferenceCatalog(store = {}) {
-  const reviewed=Object.fromEntries(Object.entries(reviewedLoadAliases(store)).map(([from,to])=>[ref(from),ref(to)]));
+  const choices=new Map();
+  for(const [from,to] of Object.entries(reviewedLoadAliases(store))){
+    const key=ref(from);if(!choices.has(key))choices.set(key,new Set());choices.get(key).add(ref(to));
+  }
+  const reviewed=Object.fromEntries([...choices].filter(([,targets])=>targets.size===1).map(([from,targets])=>[from,[...targets][0]]));
   const canonical=value=>reviewed[ref(value)]||ref(value);
-  const unresolved=new Set(list(store.evidenceAliases).map(a=>ref(a.from)).filter(from=>!reviewed[from]));
+  const unresolved=new Set([...list(store.evidenceAliases).map(a=>ref(a.from)).filter(from=>!reviewed[from]),...[...choices].filter(([,targets])=>targets.size>1).map(([from])=>from)]);
   const blocked=new Set(list(store.loads).filter(load=>load.identityReviewV110326||load.brokerIdentityConflict).map(load=>canonical(load.canonicalLoadNo||load.loadNo||load.load_no)));
   const rows=list(store.loads).filter(load => !load.identityReviewV110326 && !load.brokerIdentityConflict)
     .map(load => ({loadNo:canonical(load.canonicalLoadNo || load.loadNo || load.load_no),
@@ -75,7 +79,10 @@ export function distinctRecordedRoutes(legs, index, windowFor) {
       ? [window.pickupDriverId,window.pickup.id,place(leg.toCity,leg.toState),ref(leg.toFacility),leg.stopSequence || 1].join(':')
       : 'route:' + leg.id;
     const previous = out.get(key);
-    const score = row => Number(!!row.deliveryEventId)*4 + Number(!!row.pickupEventId)*2;
+    const score = row => {
+      const evidence=windowFor(row,index);
+      return Number(!!row.deliveryEventId&&evidence.endReason==='delivery')*4 + Number(!!row.pickupEventId&&evidence.recordedPickup)*2;
+    };
     if (!previous || score(leg) > score(previous)) out.set(key,leg);
   }
   return [...out.values()];
