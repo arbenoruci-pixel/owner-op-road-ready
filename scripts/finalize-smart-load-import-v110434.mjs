@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 function patch(p,b,a){const s=read(p);if(s.includes(a))return;if(s.split(b).length!==2)throw Error('Library import anchor changed: '+p+' / '+b.slice(0,80));fs.writeFileSync(p,s.replace(b,a));}
-for(const name of ['libraryCore','libraryZip','libraryStorage','libraryExport','libraryScan','libraryIndex'])fs.copyFileSync('scripts/v110434/'+name+'.js','source/src/modules/owneros/'+name+'V110434.js');
+for(const name of ['libraryCore','libraryZip','libraryStorage','libraryExport','libraryScan','libraryIndex','libraryHeadroom'])fs.copyFileSync('scripts/v110434/'+name+'.js','source/src/modules/owneros/'+name+'V110434.js');
 for(const name of ['ImportLibraryPanel','LibraryHistory'])fs.copyFileSync('scripts/v110434/'+name+'.jsx','source/src/modules/owneros/'+name+'V110434.jsx');
 fs.copyFileSync('scripts/v110434/library.css','source/src/modules/owneros/libraryV110434.css');
 const folders='source/src/modules/owneros/LoadFoldersV10969.jsx';
