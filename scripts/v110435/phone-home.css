@@ -1,0 +1,59 @@
+/* Phone home: native system type, one icon per destination, no floating dock. */
+.screen.command-home-screen.phone-home-v435{box-sizing:border-box;max-width:680px;width:100%;min-height:100dvh;margin:0 auto;padding:0 0 max(24px,env(safe-area-inset-bottom));background:#f5f5f7;color:#1d1d1f;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:visible}
+.phone-home-v435 *, .phone-import-screen *{box-sizing:border-box}
+.phone-home-v435 .command-home-head{display:flex;align-items:center;justify-content:space-between;padding:20px 22px 14px;background:transparent;border:0;box-shadow:none}
+.phone-home-v435 .command-brand{gap:0;min-width:0}
+.phone-home-v435 .command-brand-mark{display:none}
+.phone-home-v435 .command-brand b{font-size:28px!important;font-weight:700!important;letter-spacing:-1px;line-height:1.2;color:#1d1d1f}
+.phone-home-v435 .command-brand em{display:block;font-size:13px!important;font-weight:400!important;letter-spacing:0!important;line-height:1.4;color:#6e6e73;margin-top:3px;text-transform:none!important}
+.phone-home-v435 .phone-settings{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border:1px solid #e5e5ea;border-radius:50%;background:#fff;color:#52525b;padding:11px}
+.phone-settings svg{width:22px;height:22px}
+.phone-home-v435 .phone-home-main{gap:18px;padding:0 20px 14px;background:transparent}
+.phone-home-v435 .adaptive-status-v1038{display:flex;flex-direction:column;gap:0;background:#fff;border:1px solid #e5e5ea;border-radius:20px;box-shadow:none;padding:0 14px;min-width:0}
+.phone-home-v435 .adaptive-status-v1038>button:first-child{gap:10px;min-height:66px;width:100%;padding:10px 0;max-width:100%;min-width:0}
+.phone-home-v435 .adaptive-status-v1038>button:first-child b{font-size:15px!important;font-weight:600!important;line-height:1.3;text-transform:none}
+.phone-home-v435 .adaptive-status-v1038>button:first-child em{font-size:13px!important;font-weight:400!important;line-height:1.3;margin-top:2px}
+.phone-home-v435 .adaptive-duty-v1038{width:38px;height:38px;flex:0 0 38px;border-radius:12px;font-size:13px!important;font-weight:650!important;background:#697386}
+.phone-home-v435 .adaptive-duty-v1038.D{background:#198754}.phone-home-v435 .adaptive-duty-v1038.ON{background:#007aff}
+.phone-home-v435 .adaptive-status-v1038>button:last-child{width:100%;max-width:100%;min-height:44px;border-radius:0;background:transparent;border-top:1px solid #f0f0f2;padding:10px 0;text-align:left;font-size:13px!important;font-weight:500!important;overflow-wrap:anywhere;color:#6e6e73}
+.phone-app-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 8px;padding:8px 0 6px}
+.phone-app-grid>button{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;min-width:0;min-height:90px;border:0;background:transparent;color:#1d1d1f;padding:0 2px;font-family:inherit;cursor:pointer;touch-action:manipulation}
+.phone-app-grid .phone-app-icon{display:grid;place-items:center;width:62px;height:62px;border-radius:17px;color:#fff;box-shadow:0 3px 7px #0000000c;background:#007aff}
+.phone-app-icon svg{width:32px;height:32px}
+.phone-app-grid .phone-app-label{font-size:13px!important;font-weight:500!important;letter-spacing:-.1px!important;line-height:1.25;text-align:center;overflow-wrap:normal;max-width:100%}
+.phone-app-grid .icon-scan{background:linear-gradient(150deg,#2b93ff,#0067e6)}
+.phone-app-grid .icon-documents{background:linear-gradient(150deg,#65b8fb,#2385df)}
+.phone-app-grid .icon-loads{background:linear-gradient(150deg,#ffa738,#ed810c)}
+.phone-app-grid .icon-logbook{background:linear-gradient(150deg,#48cc82,#23a862)}
+.phone-app-grid .icon-dot{background:linear-gradient(150deg,#ad83ed,#8055ce)}
+.phone-app-grid .icon-wallet{background:linear-gradient(150deg,#677285,#374151)}
+.phone-app-grid .icon-billing{background:linear-gradient(150deg,#f9ad35,#e88c0a)}
+.phone-app-grid .icon-import{background:linear-gradient(150deg,#3fc5cf,#179da9)}
+.phone-app-grid .icon-backup{background:linear-gradient(150deg,#818bfa,#5b65d9)}
+.phone-more-tools{padding:14px;background:white;border:1px solid #e5e5ea;border-radius:18px}.phone-more-tools header{display:flex;align-items:center;justify-content:space-between}.phone-more-tools h2{margin:0;font-size:17px}.phone-more-tools button{min-height:44px;background:transparent;border:0;color:#007aff;font:inherit}.phone-more-tools>button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 0;border-top:1px solid #eee;font-size:15px}.phone-more-tools header button{width:44px;font-size:24px}
+.phone-app-grid>button:focus-visible,.phone-settings:focus-visible{outline:3px solid #007aff;outline-offset:5px;border-radius:12px}
+.phone-home-v435 button:active .phone-app-icon{filter:brightness(.9)}
+.phone-home-v435 .phone-home-footer{display:block;padding:8px 20px 18px;text-align:center;color:#8e8e93;font-size:12px;font-weight:400}
+.phone-device-note,.phone-saved-scan{background:#fff;border:1px solid #e5e5ea;border-radius:18px;padding:16px;color:#1d1d1f}
+.phone-device-note strong,.phone-saved-scan strong{font-size:14px!important;font-weight:600!important;line-height:1.4}
+.phone-device-note p,.phone-saved-scan p{font-size:13px!important;font-weight:400!important;line-height:1.5;color:#6e6e73;margin:6px 0 0}
+.phone-saved-scan button{min-height:44px;margin-top:12px;border:0;border-radius:11px;padding:10px 15px;background:#007aff;color:white;font-size:14px;font-weight:600}
+.phone-home-v435 .adaptive-mission-v1038{box-shadow:none;border:1px solid #e5e5ea;border-radius:20px}
+.phone-route-action>button{width:100%;min-height:56px;background:#edf5ff!important;color:#007aff!important;border:1px solid #d6e7fe;border-radius:16px;padding:12px 16px}.phone-route-action>button b{font-size:16px;font-weight:600}.phone-route-action>button em{color:#535b6a!important;font-size:13px;font-weight:400}
+.phone-home-v435 .adaptive-mission-v1038>header h1{font-size:25px;font-weight:650}.phone-home-v435 .adaptive-current-step-v1038{background:#eef5ff;color:#1d1d1f;border-radius:14px}.phone-home-v435 .adaptive-current-step-v1038 p{color:#535b6a}.phone-home-v435 .adaptive-current-step-v1038 h2{font-size:20px}.phone-home-v435 .adaptive-instructions-v1038 p b{font-weight:600}
+.phone-import-screen{max-width:680px;margin:auto;padding:18px 20px 36px;min-height:100dvh;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1d1d1f}
+.phone-import-screen>header{display:flex;gap:20px;align-items:center;margin-bottom:16px}.phone-import-screen h1{font-size:26px;font-weight:700;letter-spacing:-.6px;margin:0}.phone-import-screen>header button{background:transparent;border:0;color:#007aff;min-height:44px;padding:5px 0;font:inherit;font-size:16px}
+.phone-import-help{margin-top:18px;background:white;padding:18px;border-radius:18px;border:1px solid #e5e5ea}.phone-import-help h2{font-size:17px;margin:0}.phone-import-help p{font-size:14px;line-height:1.5;color:#6e6e73}.phone-import-help button{background:#edf5ff;border:0;color:#0066cc;border-radius:12px;min-height:46px;padding:12px;font:inherit;font-size:15px}
+/* Day view: compact chrome only. Graph, events and editor data are unchanged. */
+.graph-first-screen.logbook-ui-v110.phone-day-v435{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f7;min-height:100dvh;padding-bottom:28px}
+.phone-day-v435 .road-topbar{background:#fff!important;padding:10px 14px!important;min-height:64px!important;border:0!important;box-shadow:none!important}
+.phone-day-v435 .road-topbar-btn{width:42px!important;height:42px!important;min-height:42px!important;border:1px solid #e5e5ea!important;border-radius:13px!important;box-shadow:none!important;font-size:25px!important;color:#007aff!important;background:#fff!important}
+.phone-day-v435 .road-topbar-title b{font-size:18px!important;font-weight:650!important;letter-spacing:0!important}.phone-day-v435 .road-topbar-title span{font-size:10px!important;font-weight:500!important;letter-spacing:1px!important}
+.phone-day-v435 .logbook-day-nav-v988{padding:8px 14px!important;gap:8px!important;background:#f5f5f7!important}.phone-day-v435 .logbook-day-nav-v988 button{min-height:42px!important;padding:8px!important;border:1px solid #e5e5ea!important;border-radius:12px!important;background:#fff!important;font-size:14px!important;font-weight:550!important;box-shadow:none!important}.phone-day-v435 .logbook-day-nav-v988 button.home{color:#007aff!important;background:#edf5ff!important;border-color:#d6e7fe!important}
+.phone-day-v435 .log-timezone-note{margin:0!important;padding:2px 14px 10px!important;font-size:11px!important;font-weight:400!important;white-space:normal!important;line-height:1.4!important;text-align:center;background:#f5f5f7!important;color:#6e6e73!important;border:0!important;border-radius:0!important}
+.phone-day-v435 .road-tabs{padding:4px!important;margin:0 14px 10px!important;background:#e9e9ee!important;border:0!important;border-radius:12px!important;gap:3px!important}.phone-day-v435 .road-tabs button{min-height:36px!important;font-size:14px!important;font-weight:550!important;border-radius:9px!important;color:#6e6e73!important;background:transparent!important}.phone-day-v435 .road-tabs button.active{background:#fff!important;color:#1d1d1f!important;box-shadow:0 1px 4px #00000012!important}
+.phone-day-v435 .graph-action-rail.clean-edit-flow-rail{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:7px!important;padding:12px 14px!important;background:#f5f5f7!important;border:0!important}.phone-day-v435 .graph-action-rail button{min-width:0!important;min-height:44px!important;padding:8px 2px!important;border-radius:12px!important;font-size:14px!important;font-weight:550!important;border:1px solid #e5e5ea!important;background:#fff!important;color:#1d1d1f!important}.phone-day-v435 .graph-action-rail button:first-child{background:#007aff!important;color:#fff!important;border-color:#007aff!important}
+.phone-day-v435 .empty-events-card{margin:0 14px!important;padding:22px 16px!important;border:1px solid #e5e5ea!important;border-radius:16px!important;background:#fff!important}.phone-day-v435 .empty-events-card b{font-size:18px!important;font-weight:600!important}.phone-day-v435 .empty-events-card span{font-size:13px!important;font-weight:400!important;line-height:1.5!important;color:#6e6e73!important}
+.phone-day-v435 .cert-line-status-only{min-height:0!important;height:auto!important;flex:0 0 auto!important;padding:16px!important;margin:0 14px 12px!important;border:1px solid #e5e5ea!important;border-radius:14px!important;background:#fff!important;align-items:center!important}.phone-day-v435 .cert-line span{font-size:11px!important;font-weight:500!important}.phone-day-v435 .cert-line b{font-size:13px!important;font-weight:600!important}
+.phone-day-v435 .day-transfer-inline{position:static!important;padding:0 14px 18px!important;margin:0!important;min-height:0!important;background:transparent!important;border:0!important}.phone-day-v435 .day-transfer-inline button{min-height:46px!important;font-size:14px!important;font-weight:550!important;border-radius:13px!important;background:#edf5ff!important;color:#007aff!important;border:1px solid #d6e7fe!important}.phone-day-v435 .day-transfer-inline span{font-size:11px!important;font-weight:400!important;line-height:1.5!important;padding-top:6px!important}
+@media(min-width:600px){.phone-home-v435 .phone-home-main{padding:0 32px 20px}.phone-app-grid{gap:26px 18px}.phone-home-v435 .command-home-head{padding:24px 34px 18px}}

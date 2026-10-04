@@ -51,4 +51,4 @@ function simplePdf(text){
  let pdf='%PDF-1.4\n',offsets=[0];objects.forEach((obj,i)=>{offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${obj}\nendobj\n`;});const start=pdf.length;pdf+='xref\n0 6\n0000000000 65535 f \n'+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;return Buffer.from(pdf);
 }
 
-export {origin,baseState,seed,setupRoutes,simplePdf};
+export {origin,baseState,seed,setupRoutes,simplePdf,snapshot,protectedData};
