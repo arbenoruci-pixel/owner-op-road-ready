@@ -30,6 +30,7 @@
 .phone-app-grid .icon-billing{background:linear-gradient(150deg,#f9ad35,#e88c0a)}
 .phone-app-grid .icon-import{background:linear-gradient(150deg,#3fc5cf,#179da9)}
 .phone-app-grid .icon-backup{background:linear-gradient(150deg,#818bfa,#5b65d9)}
+.phone-more-tools{padding:14px;background:white;border:1px solid #e5e5ea;border-radius:18px}.phone-more-tools header{display:flex;align-items:center;justify-content:space-between}.phone-more-tools h2{margin:0;font-size:17px}.phone-more-tools button{min-height:44px;background:transparent;border:0;color:#007aff;font:inherit}.phone-more-tools>button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 0;border-top:1px solid #eee;font-size:15px}.phone-more-tools header button{width:44px;font-size:24px}
 .phone-app-grid>button:focus-visible,.phone-settings:focus-visible{outline:3px solid #007aff;outline-offset:5px;border-radius:12px}
 .phone-home-v435 button:active .phone-app-icon{filter:brightness(.9)}
 .phone-home-v435 .phone-home-footer{display:block;padding:8px 20px 18px;text-align:center;color:#8e8e93;font-size:12px;font-weight:400}

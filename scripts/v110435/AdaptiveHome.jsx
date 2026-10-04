@@ -67,7 +67,7 @@ function NoLoad(props) {
   </main>;
 }
 
-function ActiveLoad({ state, summary, activeLoad, currentLoad, snapshot, logbookEnabled, onStatus, onTrailer, onLog, onScan, onGuide, onSection, onDot, onWallet, onBackup }) {
+function ActiveLoad({ state, summary, activeLoad, currentLoad, snapshot, logbookEnabled, onStatus, onTrailer, onLog, onScan, onGuide, onSection, onDot, onWallet, onBackup, onDrive, operatorProfile }) {
   const guide = snapshot.guide;
   const step = snapshot.currentStep;
   const stop = snapshot.currentStop;
@@ -96,7 +96,7 @@ function ActiveLoad({ state, summary, activeLoad, currentLoad, snapshot, logbook
       </section>
       {!(snapshot.bolPresent || activeLoad?.documentSummary?.bolPresent) ? <button type="button" className="adaptive-alert-v1038" onClick={() => onScan?.('bol')}><strong>!</strong><span><b>Pickup BOL missing</b><em>Scan it before billing or roadside review.</em></span><i>›</i></button> : null}
       {logbookEnabled ? <Hos state={state} onLog={onLog}/> : null}
-      <PhoneHomeTools onScan={onScan} onSection={onSection} onLog={onLog} onDot={onDot} onWallet={onWallet} onBackup={onBackup}/>
+      <PhoneHomeTools operatorProfile={operatorProfile} onScan={onScan} onSection={onSection} onLog={onLog} onDot={onDot} onWallet={onWallet} onBackup={onBackup} onDrive={onDrive}/>
 
     </main>
   );
@@ -113,7 +113,7 @@ export default function AdaptiveHomeV1038(props) {
   const mode = homeModeV1038(guide, scopedLoad);
   const shared = {
     savedScan:props.savedScan,onContinueSavedScan:props.onContinueSavedScan,savedScanBusy:props.savedScanBusy,savedScanMessage:props.savedScanMessage,
-    state:props.state, summary:props.summary, activeLoad:scopedLoad, currentLoad, business:props.business, walletCard:props.walletCard,
+    state:props.state, summary:props.summary, activeLoad:scopedLoad, currentLoad, business:props.business, walletCard:props.walletCard, operatorProfile:props.operatorProfile, onDrive:props.onOpenDrive,
     logbookEnabled:props.logbookEnabled, onStatus:props.onOpenStatus, onTrailer:props.onOpenTrailer, onLog:props.onOpenDay,
     onDot:props.onOpenDot, onWallet:props.onOpenWallet, onBackup:props.onOpenBackup, onScan:props.onOpenScan, onGuide:props.onOpenGuide, onSection:props.onOpenSection,
   };

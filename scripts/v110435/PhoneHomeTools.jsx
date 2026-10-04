@@ -1,4 +1,5 @@
-import React from 'react';
+import React,{useState} from 'react';
+import {moduleEnabled,MODULE_CATALOG} from '../setup/operatorProfile.js';
 
 export function AppIcon({name}) {
   const paths={
@@ -16,19 +17,24 @@ export function AppIcon({name}) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]||paths.documents}</svg>;
 }
 
-export function PhoneHomeTools({onScan,onSection,onLog,onDot,onWallet,onBackup}) {
+export function PhoneHomeTools({operatorProfile,onScan,onSection,onLog,onDot,onWallet,onBackup,onDrive}) {
+  const [more,setMore]=useState(false);
+  const enabled=id=>moduleEnabled(operatorProfile,id);
+  const extra=MODULE_CATALOG.filter(m=>['settlements','money','fuel','maintenance','expenses','performance'].includes(m.id)&&enabled(m.id));
   const items=[
     ['scan','Smart Scan',()=>onScan?.('auto')],
-    ['documents','Documents',()=>onSection('documents')],
-    ['loads','Loads',()=>onSection('loads')],
-    ['logbook','Logbook',onLog],
-    ['dot','DOT Mode',onDot],
-    ['wallet','Wallet',onWallet],
-    ['billing','Billing',()=>onSection('billing')],
+    ...(enabled('documents')?[['documents','Documents',()=>onSection('documents')]]:[]),
+    ...(enabled('loads')?[['loads','Loads',()=>onSection('loads')]]:[]),
+    ...(enabled('logbook')?[['logbook','Logbook',onLog]]:[]),
+    ...(enabled('dot')?[['dot','DOT Mode',onDot]]:[]),
+    ...(enabled('wallet')?[['wallet','Wallet',onWallet]]:[]),
+    ...(enabled('loads')?[['billing','Billing',()=>onSection('billing')]]:[]),
+    ...(enabled('drive')?[['loads','Drive',onDrive]]:[]),
+    ...(extra.length?[['settings','More tools',()=>setMore(v=>!v)]]:[]),
     ['import','Import',()=>onSection('import_documents')],
     ['backup','Export & Backup',onBackup],
   ];
-  return <nav className="phone-app-grid" aria-label="Apps">{items.map(([name,title,onClick])=><button type="button" key={name} onClick={onClick} aria-label={title}><span className={'phone-app-icon icon-'+name}><AppIcon name={name}/></span><span className="phone-app-label">{title}</span></button>)}</nav>;
+  return <><nav className="phone-app-grid" aria-label="Apps">{items.map(([name,title,onClick])=><button type="button" key={title} onClick={onClick} aria-label={title}><span className={'phone-app-icon icon-'+name}><AppIcon name={name}/></span><span className="phone-app-label">{title}</span></button>)}</nav>{more?<section className="phone-more-tools" aria-label="More tools"><header><h2>More tools</h2><button type="button" onClick={()=>setMore(false)} aria-label="Close more tools">×</button></header>{extra.map(m=><button type="button" key={m.id} onClick={()=>onSection(m.id)}>{m.label}<span aria-hidden="true">›</span></button>)}</section>:null}</>;
 }
 
 export function DeviceHistoryNote({state}) {

@@ -13,7 +13,7 @@ patch(home,"{modeLabel(operatorProfile.mode)} · App v110.4.34", "{operatorProfi
 patch(home,'<button type="button" className="command-scan-btn" onClick={() => { setScanPreferredType(\'auto\'); setScanOpen(true); }}><Icon name="scan" size={19} /><span>Scan</span></button>','<button type="button" className="phone-settings" onClick={()=>setSetupOpen(true)} aria-label="Settings"><AppIcon name="settings"/></button>');
 const exportEntry='      <button type="button" className="rr-export-entry" onClick={onOpenBackup}><span><b>Export & Backup</b><small>Documents · Logbook · Loads · Everything</small></span><span aria-hidden="true">↗</span></button>\n';
 fs.writeFileSync(home,read(home).replace(exportEntry,''));
-patch(home,'        onOpenSection={setBusinessSection}','        onOpenBackup={onOpenBackup}\n        onOpenSection={setBusinessSection}');
+patch(home,'        onOpenSection={setBusinessSection}','        onOpenBackup={onOpenBackup}\n        onOpenDrive={()=>onOpenDrive?onOpenDrive():onOpenStatus?.()}\n        onOpenSection={setBusinessSection}');
 let h=read(home);const start=h.indexOf('      {logbookEnabled ? (\n        <nav className="command-bottom-nav"');
 if(start!==-1){const end=h.indexOf('\n    </section>',start);if(end===-1)throw Error('Missing home footer boundary');h=h.slice(0,start)+'      <footer className="phone-home-footer">v110.4.35</footer>'+h.slice(end);fs.writeFileSync(home,h);}
 else if(!h.includes('phone-home-footer'))throw Error('Missing old navigation boundary');
