@@ -39,3 +39,4 @@ for(const path of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 execFileSync(process.execPath,['scripts/v110448/form-team.test.mjs'],{stdio:'inherit'});
 console.log('PASS — Form membership controls driver switching');
+await import('./finalize-load-history-v110449.mjs');
