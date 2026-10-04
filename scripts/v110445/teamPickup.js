@@ -1,4 +1,5 @@
 // Read-only freight evidence. A co-driver's event remains in that driver's log.
+import {reviewedLoadAliases} from '../../modules/owneros/loadAliasesV110416.js';
 const text = v => String(v ?? '').trim();
 const ref = v => text(v).toUpperCase().replace(/[^A-Z0-9]/g, '');
 const list = v => Array.isArray(v) ? v : [];
@@ -10,11 +11,23 @@ const destination = event => event.destinationCity
   : text(event.destination).includes(',') ? place(text(event.destination).split(',').slice(0,-1).join(','),text(event.destination).split(',').at(-1)) : '';
 
 export function freightReferenceCatalog(store = {}) {
-  return list(store.loads).filter(load => !load.identityReviewV110326 && !load.brokerIdentityConflict)
-    .map(load => ({loadNo:ref(load.canonicalLoadNo || load.loadNo),
+  const reviewed=Object.fromEntries(Object.entries(reviewedLoadAliases(store)).map(([from,to])=>[ref(from),ref(to)]));
+  const canonical=value=>reviewed[ref(value)]||ref(value);
+  const unresolved=new Set(list(store.evidenceAliases).map(a=>ref(a.from)).filter(from=>!reviewed[from]));
+  const blocked=new Set(list(store.loads).filter(load=>load.identityReviewV110326||load.brokerIdentityConflict).map(load=>canonical(load.canonicalLoadNo||load.loadNo||load.load_no)));
+  const rows=list(store.loads).filter(load => !load.identityReviewV110326 && !load.brokerIdentityConflict)
+    .map(load => ({loadNo:canonical(load.canonicalLoadNo || load.loadNo || load.load_no),
       aliases:[...new Set(list(load.aliases).map(a => ref(typeof a === 'string' ? a : a?.value)).filter(Boolean))].sort(),
-      pickupDay:text(load.pickupDate).slice(0,10)}))
-    .filter(load => load.loadNo).sort((a,b) => a.loadNo.localeCompare(b.loadNo));
+      pickupDay:text(load.pickupDate).slice(0,10)})).filter(load => load.loadNo&&!blocked.has(load.loadNo)&&!unresolved.has(load.loadNo));
+  for(const row of rows)row.aliases=row.aliases.filter(alias=>!unresolved.has(alias)&&(!reviewed[alias]||reviewed[alias]===row.loadNo));
+  for(const [from,to] of Object.entries(reviewed)){
+    const target=ref(to),alias=ref(from);if(blocked.has(target))continue;
+    let row=rows.find(load=>load.loadNo===target);
+    if(!row){row={loadNo:target,aliases:[],pickupDay:''};rows.push(row);}
+    if(!row.aliases.includes(alias))row.aliases.push(alias);
+    for(const other of rows)if(other!==row)other.aliases=other.aliases.filter(value=>value!==alias);
+  }
+  return rows.map(row=>({...row,aliases:row.aliases.sort()})).sort((a,b)=>a.loadNo.localeCompare(b.loadNo));
 }
 
 function owners(value, catalog, day, suffix = false) {
@@ -59,10 +72,10 @@ export function distinctRecordedRoutes(legs, index, windowFor) {
   for (const leg of legs) {
     const window = windowFor(leg,index);
     const key = window.recordedPickup
-      ? [window.pickupDriverId,window.pickup.id,place(leg.toCity,leg.toState),leg.stopSequence || 1].join(':')
+      ? [window.pickupDriverId,window.pickup.id,place(leg.toCity,leg.toState),ref(leg.toFacility),leg.stopSequence || 1].join(':')
       : 'route:' + leg.id;
     const previous = out.get(key);
-    const score = row => Number(!!row.pickupEventId)*2 + Number(!!row.deliveryEventId);
+    const score = row => Number(!!row.deliveryEventId)*4 + Number(!!row.pickupEventId)*2;
     if (!previous || score(leg) > score(previous)) out.set(key,leg);
   }
   return [...out.values()];

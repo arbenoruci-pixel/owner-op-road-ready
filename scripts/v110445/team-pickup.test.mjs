@@ -30,6 +30,24 @@ const ambiguous=structuredClone(state);ambiguous.teamLogbooksByDriverId.beta.eve
 const sharedSuffix=structuredClone(state);sharedSuffix.freightReferencesV110445.push({loadNo:'LOAD-OTHER',aliases:['99999803'],pickupDay:day});assert.equal(window(sharedSuffix).recordedPickup,false);
 const duplicate=structuredClone(state);duplicate.routeLegsByDay[day].push({...leg,id:'actual',pickupEventId:pickup.id,source:'pickup_event',shippingDocs:pickup.shippingDocs});assert.equal(routeLegsForDayCanonical(duplicate,day).length,1);assert.equal(routeLegsForDayCanonical(duplicate,day)[0].id,'actual');
 duplicate.routeLegsByDay[day][1].status='cancelled';assert.equal(routeLegsForDayCanonical(duplicate,day)[0].id,'plan');
+const deliveredCopy=structuredClone(state);
+deliveredCopy.eventsByDay[delDay][0].shippingDocs='EDITED-REFERENCE';
+deliveredCopy.routeLegsByDay[day]=[
+ {...leg,id:'pickup-only',pickupEventId:pickup.id,shippingDocs:pickup.shippingDocs},
+ {...leg,id:'delivery-linked',deliveryEventId:delivery.id,deliveryDay:delDay,status:'delivered'}
+];
+assert.equal(routeLegsForDayCanonical(deliveredCopy,delDay)[0].id,'delivery-linked');
+assert.equal(routeStatusForLogDay(routeLegsForDayCanonical(deliveredCopy,delDay)[0],delDay,deliveredCopy),'Done');
+assert.equal(routeLegsForDayCanonical(deliveredCopy,after).length,0,'retain authoritative delivery before day membership filtering');
+const distinctStops=structuredClone(deliveredCopy);distinctStops.routeLegsByDay[day][0].toFacility='First warehouse';distinctStops.routeLegsByDay[day][1].toFacility='Second warehouse';assert.equal(routeLegsForDayCanonical(distinctStops,day).length,2);
+for(const store of [
+ {loads:[{loadNo:pickup.shippingDocs}],evidenceAliases:[{from:'81835803',to:pickup.shippingDocs}]},
+ {loads:[],evidenceRecoveryHistory:[{aliases:[{from:'81835803',to:pickup.shippingDocs}]}]},
+ {loads:[{loadNo:pickup.shippingDocs,documentTransferAliases:[{from:'81835803',to:pickup.shippingDocs}]}]},
+ {loads:[{loadNo:'81835803'},{loadNo:pickup.shippingDocs}],evidenceAliases:[{from:'81835803',to:pickup.shippingDocs}]},
+])assert.equal(window({...state,freightReferencesV110445:freightReferenceCatalog(store)}).recordedPickup,true);
+const conflictCatalog=freightReferenceCatalog({loads:[],evidenceAliases:[{from:'81835803',to:pickup.shippingDocs},{from:'81835803',to:'OTHER'}]});assert.equal(window({...state,freightReferencesV110445:conflictCatalog}).recordedPickup,false);
+const conflictingSaved=freightReferenceCatalog({loads:[{loadNo:pickup.shippingDocs,aliases:['81835803']}],evidenceAliases:[{from:'81835803',to:pickup.shippingDocs},{from:'81835803',to:'OTHER'}]});assert.equal(window({...state,freightReferencesV110445:conflictingSaved}).recordedPickup,false);
 const switched=switchTeamDriver(state,'beta',day);assert.equal(window(switched).pickupDriverName,'Beta');assert.equal(routeStatusForLogDay(leg,delDay,switched),'Done');
 const annotated=shipmentContextForEvents(state,day,[{id:'drive',status:'D',startMin:1100}],[leg]);assert.equal(annotated[0].shipmentContextV110367[0].shippingDocs,'803');
 assert.deepEqual(state,before,'projection must not change either driver records or signatures');

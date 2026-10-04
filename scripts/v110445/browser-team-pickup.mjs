@@ -9,7 +9,7 @@ const state={...baseState(),activeDay:day,activeDriverId:'alpha',driverProfile:{
  eventsByDay:{[day]:[{id:'alpha-rest',status:'SB',startMin:0,endMin:1440,city:'Harvey',state:'IL',note:'Sleeper berth',source:'manual'}],[delDay]:[delivery]},manualMilesByDay:{[day]:100},
  teamLogbooksByDriverId:{beta:{activeDay:day,eventsByDay:{[day]:[pickup]},manualMilesByDay:{[day]:250},signatureByDay:{},formByDay:{},inspectionByDay:{},certifyStatus:{}}},
  routeLegsByDay:{[day]:[{id:'manual-plan',day,pickupDay:day,fromCity:'Harvey',fromState:'IL',toCity:'East Haven',toState:'CT',shippingDocs:'803',kind:'loaded',source:'manual_form',status:'open'}]},
- testInstructionStore:{loads:[{id:'test-load',loadNo:'LOAD-987654',aliases:['81835803'],pickupDate:day,broker:'Example Broker',origin:'Harvey, IL',destination:'East Haven, CT'}],documents:[]}};
+ testInstructionStore:{loads:[{id:'test-load',loadNo:'LOAD-987654',pickupDate:day,broker:'Example Broker',origin:'Harvey, IL',destination:'East Haven, CT'}],evidenceAliases:[{from:'81835803',to:'LOAD-987654'}],documents:[]}};
 async function form(page,selected=day){
  if(await page.getByRole('button',{name:'Open logbook',exact:true}).count())await page.getByRole('button',{name:'Open logbook',exact:true}).click();
  for(let n=0;n<10;n++){
@@ -25,7 +25,7 @@ for(const [name,engine] of process.env.CHROMIUM_ONLY ? [['chromium',chromium]] :
  const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',ignoreHTTPSErrors:true}),page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));await setupRoutes(context);await page.clock.setFixedTime(new Date('2026-10-04T16:00:00Z'));
  try{
-  if(process.env.EXPECT_SHA){const version=await(await page.request.get(origin+'/app-version.json?team='+Date.now())).json();assert.equal(version.version,'110.4.45');assert.equal(version.sourceCommit,process.env.EXPECT_SHA);}
+  if(process.env.EXPECT_SHA){const version=await(await page.request.get(origin+'/app-version.json?team='+Date.now())).json();assert.equal(version.version,'110.4.46');assert.equal(version.sourceCommit,process.env.EXPECT_SHA);}
   await seed(page,structuredClone(state));await form(page);
   const route=page.getByRole('button',{name:/Harvey, IL.*East Haven, CT/}).first();await route.waitFor();
   assert.match(await route.innerText(),/In transit.*Pickup by Beta Driver/);assert.doesNotMatch(await route.innerText(),/no pickup recorded/);await unchanged(page);
