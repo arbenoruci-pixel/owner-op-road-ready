@@ -14,9 +14,28 @@ patch(evidence,"if((tonu||cancelled)&&['bol','pod'].includes(rule.id))continue;"
 // Authorization and explanation are required for alternative evidence. Merely
 // uploading a trailer photograph cannot satisfy delivery proof.
 patch(evidence,".filter(k=>k!=='notes').every(k=>usable(fields[k],k))", ".filter(k=>k!=='notes'||kind==='delivery_evidence').every(k=>usable(fields[k],k))");
+patch(evidence,"export function billingEvidencePages(doc,loadNo) {",`export function reviewedEvidenceComponents(doc,kinds,loadNo,businessStore={}) {
+  const resolve=evidenceLoadResolver(businessStore),ref=resolve(loadNo);
+  return componentsOf(doc).filter(component=>{
+    const fields={...documentFacts(doc),...component.fields},kind=component.kind;
+    return isReviewed(doc)&&component.reviewed===true&&kinds.includes(kind)&&resolve(fields.loadNo)===ref&&(CATALOG[kind]?.fields||[]).filter(k=>k!=='notes'||kind==='delivery_evidence').every(k=>usable(fields[k],k));
+  });
+}
+export function billingEvidencePages(doc,loadNo) {`);
+patch(evidence,"componentsOf(doc).filter(c=>c.reviewed===true&&['rate_confirmation','tonu','bol','pod'].includes(c.kind)&&text(c.fields?.loadNo).toUpperCase()===text(loadNo).toUpperCase()&&(CATALOG[c.kind]?.fields||[]).filter(k=>k!=='notes').every(k=>usable(({...documentFacts(doc),...c.fields})[k],k)))","reviewedEvidenceComponents(doc,['rate_confirmation','tonu','bol','pod','delivery_evidence'],loadNo)");
+const billing=base+'ownerOpsStoreV102.js',submission=base+'invoiceSubmissionV110320.js';
+patch(billing,"hasReviewedEvidence(d,['pod'],loadNo,businessStore)","hasReviewedEvidence(d,['pod','delivery_evidence'],loadNo,businessStore)");
+patch(billing,"label:'Final signed POD'","label:'Final delivery proof'");
+patch(submission,"'proof_of_delivery', 'delivery_receipt', 'lumper_receipt'","'proof_of_delivery', 'delivery_receipt', 'delivery_evidence', 'lumper_receipt'");
+patch(submission,"hasReviewedEvidence(doc,['pod'],load.loadNo)","hasReviewedEvidence(doc,['pod','delivery_evidence'],load.loadNo)");
+patch(submission,"confirm the receiver signature or RECEIVED stamp.","confirm the receiver signature, RECEIVED stamp, or broker-authorized alternative proof.");
 const view=base+'driverDocumentsV110415.js';
-patch(view,"label:row.kind==='pod'?'Signed POD':row.label","label:row.kind==='pod'?(candidates.some(s=>s.verified&&componentsOf(s.doc).some(c=>c.kind==='delivery_evidence'&&c.reviewed))?'Authorized delivery proof':'Signed POD'):row.label");
-patch(view,"c.kind==='pod'&&c.reviewed&&resolve", "['pod','delivery_evidence'].includes(c.kind)&&c.reviewed&&resolve");
+patch(view,"label:row.kind==='pod'?'Signed POD':row.label","label:row.kind==='pod'?(candidates.find(s=>s.verified)?.proofKind==='delivery_evidence'?'Authorized delivery proof':'Signed POD'):row.label");
+patch(view,"componentsOf,hasReviewedEvidence,","componentsOf,hasReviewedEvidence,reviewedEvidenceComponents,");
+patch(view,"const preferred=kinds.find(kind=>parts.some(c=>c.kind===kind));","const reviewedParts=reviewedEvidenceComponents(doc,kinds,ref,businessStore);\n      const preferred=kinds.find(kind=>reviewedParts.some(c=>c.kind===kind))||kinds.find(kind=>parts.some(c=>c.kind===kind));");
+patch(view,"parts.filter(c=>c.kind===preferred)","(reviewedParts.length?reviewedParts:parts).filter(c=>c.kind===preferred)");
+patch(view,"return [{doc,pages,verified:hasReviewedEvidence(doc,kinds,ref,businessStore)}];","return [{doc,pages,proofKind:preferred,verified:reviewedParts.length>0}];");
+patch(view,"componentsOf(s.doc).filter(c=>c.kind==='pod'&&c.reviewed&&resolve(c.fields?.loadNo||loadOf(s.doc))===ref)","reviewedEvidenceComponents(s.doc,['pod','delivery_evidence'],ref,businessStore).filter(c=>c.kind===s.proofKind)");
 // Source dates and service dates remain separate; the UI uses only an explicit
 // reviewed deliveryDate for either form of delivery proof.
 const VERSION='110.4.42',BUILD='v110442-load-evidence';
