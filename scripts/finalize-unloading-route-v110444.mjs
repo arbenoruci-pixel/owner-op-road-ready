@@ -9,6 +9,12 @@ for(const p of ['source/src/app/App.jsx','source/src/core/routes/shippingDocsRep
 }
 // The newly reachable ordinary delivery branch must use its own matched route.
 const app='source/src/app/App.jsx';
+patch(app,"import { normalizeLoadInfoFromRouteLegs","import {repairUnloadingPickups} from '../core/routes/unloadingRepairV110444.js';\nimport { normalizeLoadInfoFromRouteLegs");
+patch(app,'const before = applyRouteRemovals(upgradeVerifiedLegacyCertifications(s));',`const recordedBefore = applyRouteRemovals(upgradeVerifiedLegacyCertifications(s));
+  // Narrow migration of the demonstrated unsigned delivery-link bug, before
+  // historical preservation. All event/clock/signature buckets stay protected.
+  const before = {...recordedBefore,routeLegsByDay:repairUnloadingPickups(recordedBefore.routeLegsByDay||{},recordedBefore)};`);
+
 let a=read(app),start=a.indexOf('  function updateRouteLegsForStatus('),end=a.indexOf('  function buildLoadPatchForStatusPayload(',start);
 if(start<0||end<0)throw Error('Delivery branch missing');
 a=a.slice(0,start)+a.slice(start,end).replaceAll('guideExistingV1034 &&','existing.loadGroupId &&')+a.slice(end);fs.writeFileSync(app,a);
