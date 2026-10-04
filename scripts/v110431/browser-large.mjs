@@ -28,9 +28,9 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
     const native=Blob.prototype.arrayBuffer;window.biggestBinaryRead=0;Blob.prototype.arrayBuffer=function(){window.biggestBinaryRead=Math.max(window.biggestBinaryRead,this.size);if(this.size>1048576)throw new Error('Full binary read exceeds 1 MB');return native.call(this);};
    },[...simplePdf('Large collection original')]);
    await page.evaluate(()=>{window.nativeShareCalls=0;Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});Object.defineProperty(navigator,'share',{configurable:true,value:()=>{window.nativeShareCalls++;throw new DOMException('Native share reader failed','AbortError');}});});
-   await page.getByRole('button',{name:/Export & Backup/}).click();await page.getByRole('button',{name:'Export Docs + Logbook (ZIP)',exact:true}).click();
+   await page.getByRole('button',{name:/Export & Backup/}).click();await page.getByRole('button',{name:'Export Everything',exact:true}).click();
    await page.getByRole('button',{name:'Cancel preparation',exact:true}).click();await page.getByRole('status').filter({hasText:'Export cancelled'}).waitFor();
-   await page.getByRole('button',{name:'Export Docs + Logbook (ZIP)',exact:true}).click();const ready=page.getByRole('region',{name:'Backup ready to save'});await ready.waitFor({timeout:180000});await ready.getByText(/194 original files/).waitFor();
+   await page.getByRole('button',{name:'Export Everything',exact:true}).click();const ready=page.getByRole('region',{name:'Backup ready to save'});await ready.waitFor({timeout:180000});await ready.getByText(/194 original files/).waitFor();
    assert.equal(await ready.getByRole('button',{name:/Share/}).count(),0,'Large backups use download without entering native sharing');
    assert.match(await ready.getByRole('link',{name:'Download backup',exact:true}).getAttribute('class'),/backup-primary/);
    const downloadPromise=page.waitForEvent('download');await ready.getByRole('link',{name:'Download backup',exact:true}).click();await (await downloadPromise).saveAs(zipPath);

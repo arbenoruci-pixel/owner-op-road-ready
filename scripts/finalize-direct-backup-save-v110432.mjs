@@ -11,3 +11,5 @@ for(const p of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/T
 for(const p of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'])fs.writeFileSync(p,read(p).replaceAll("'110.4.31'","'"+VERSION+"'").replaceAll("'v110431-large-device-export'","'"+BUILD+"'"));
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS — v110.4.32 direct backup download and bounded native sharing');
+
+await import('./finalize-lean-documents-export-v110433.mjs');
