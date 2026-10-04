@@ -41,9 +41,16 @@ export function validateManifest(p){
  return p;
 }
 export function loadPatch(l){const out={};for(const k of LOAD_FIELDS)if(l[k]!==undefined)out[k]=copy(l[k]);return out;}
+export function brokerConflicts(current,p){
+ return p.loads.flatMap(l=>{const saved=list(current.loads).find(x=>loadRef(x)===l.loadNo);const a=ref(saved?.broker),b=ref(l.broker);return a&&b&&a!==b&&!a.includes(b)&&!b.includes(a)?[{loadNo:l.loadNo,saved:copy(saved),incoming:copy(l)}]:[];});
+}
+export function requireBrokerReview(conflicts,confirmedLoadNos=[]){
+ const confirmed=new Set(list(confirmedLoadNos));const pending=conflicts.find(c=>!confirmed.has(c.loadNo));
+ if(pending)throw Error('Confirm whether Load '+pending.loadNo+' is the same load before importing.');
+}
 export function makeImportReview(current,rows,p){
  validateManifest(p);const differences=[];const matches={};const rowOwners=new Map();
- for(const l of p.loads){const found=list(current.loads).filter(x=>loadRef(x)===l.loadNo);if(found.length>1)throw Error('Load '+l.loadNo+' has duplicate saved identities. Resolve those before import.');const saved=found[0];if(saved?.broker&&l.broker&&ref(saved.broker)!==ref(l.broker)&&!ref(saved.broker).includes(ref(l.broker))&&!ref(l.broker).includes(ref(saved.broker)))throw Error('Load '+l.loadNo+' belongs to a different saved broker. Review its identity first.');if(saved)for(const [field,value] of Object.entries(loadPatch(l)))if(canonical(saved[field])!==canonical(value))differences.push({key:'load:'+l.loadNo+':'+field,label:'Load '+l.loadNo,field,saved:saved[field]??null,incoming:value});}
+ for(const l of p.loads){const found=list(current.loads).filter(x=>loadRef(x)===l.loadNo);if(found.length>1)throw Error('Load '+l.loadNo+' has duplicate saved identities. Resolve those before import.');const saved=found[0];if(saved)for(const [field,value] of Object.entries(loadPatch(l)))if(canonical(saved[field])!==canonical(value))differences.push({key:'load:'+l.loadNo+':'+field,label:'Load '+l.loadNo,field,saved:saved[field]??null,incoming:value});}
  for(const d of p.documents){
   const exact=rows.filter(r=>r.sha256===d.sha256||d.sourceClientIds.includes(r.client_document_id)||r.client_document_id===d.id);
   if(exact.some(r=>r.sha256&&r.sha256!==d.sha256))throw Error('A saved document identity has a different original.');
@@ -52,9 +59,10 @@ export function makeImportReview(current,rows,p){
   for(const r of exact){const values={loadNo:loadRef(r),type:r.document_type||r.type||'other'};for(const field of ['loadNo','type'])if(values[field]!==d[field])differences.push({key:d.id+':'+r.local_id+':'+field,label:d.name,field,saved:values[field],incoming:d[field]});}
  }
  const already=list(current.documentLibraryHistory).some(h=>h.id===p.id);
- return {id:p.id,manifestToken:canonical(p),snapshotToken:canonical({current,rows}),matches,differences:already?[]:differences,already,newLoads:p.loads.filter(l=>!list(current.loads).some(s=>loadRef(s)===l.loadNo)).length,newDocuments:p.documents.filter(d=>!matches[d.id].length).length};
+ return {id:p.id,manifestToken:canonical(p),snapshotToken:canonical({current,rows}),matches,differences:already?[]:differences,brokerConflicts:already?[]:brokerConflicts(current,p),already,newLoads:p.loads.filter(l=>!list(current.loads).some(s=>loadRef(s)===l.loadNo)).length,newDocuments:p.documents.filter(d=>!matches[d.id].length).length};
 }
-export function mergeLibraryLoads(current,p){
+export function mergeLibraryLoads(current,p,{confirmedBrokerLoads=[]}={}){
+ requireBrokerReview(brokerConflicts(current,p),confirmedBrokerLoads);
  const next=copy(current);next.loads=list(next.loads);const audit=[];
  for(const l of p.loads){const old=next.loads.find(x=>loadRef(x)===l.loadNo);const patch={...loadPatch(l),documentLibrarySource:p.id,closureAuthority:l.closureAuthority,sourceDateNote:l.sourceDateNote||'',updatedAt:Date.now()};
   if(old){audit.push({loadNo:l.loadNo,before:copy(old),after:patch});Object.assign(old,patch);if(!['paid','submitted','invoiced'].includes(old.status))old.status='archived';old.active=false;}
