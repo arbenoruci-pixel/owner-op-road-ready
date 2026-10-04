@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 function patch(p,b,a){const s=read(p);if(s.includes(a))return;if(s.split(b).length!==2)throw Error('Library import anchor changed: '+p+' / '+b.slice(0,80));fs.writeFileSync(p,s.replace(b,a));}
-for(const name of ['libraryCore','libraryZip','libraryStorage'])fs.copyFileSync('scripts/v110434/'+name+'.js','source/src/modules/owneros/'+name+'V110434.js');
+for(const name of ['libraryCore','libraryZip','libraryStorage','libraryExport'])fs.copyFileSync('scripts/v110434/'+name+'.js','source/src/modules/owneros/'+name+'V110434.js');
 for(const name of ['ImportLibraryPanel','LibraryHistory'])fs.copyFileSync('scripts/v110434/'+name+'.jsx','source/src/modules/owneros/'+name+'V110434.jsx');
 fs.copyFileSync('scripts/v110434/library.css','source/src/modules/owneros/libraryV110434.css');
 const folders='source/src/modules/owneros/LoadFoldersV10969.jsx';
@@ -29,6 +29,11 @@ patch(app,'  const [offlineHydrated, setOfflineHydrated] = useState(false);',`  
     closeHistory();window.addEventListener('road-ready-library-imported',closeHistory);
     return()=>window.removeEventListener('road-ready-library-imported',closeHistory);
   },[offlineHydrated,state.loadGuidesById]);`);
+const exporter='source/src/modules/backup/documentsExportV110433.js';
+patch(exporter,"import { getOwnerOpDb }","import { exportLibrarySources } from '../owneros/libraryExportV110434.js';\nimport { getOwnerOpDb }");
+patch(exporter,"  checkAbort(signal);\n  const createdAt","  const importedLogDays=await exportLibrarySources(zip,db,signal);\n  checkAbort(signal);\n  const createdAt");
+patch(exporter,"Review/: small file for ChatGPT review, including load records.","Review/: small file for ChatGPT review, including load records. Imported-Logbooks/: ${importedLogDays} preserved driver-day source copies with load links and inspection metadata, separate from current logbooks.");
+patch(exporter,"missingOriginals:missing.length, logDays:","missingOriginals:missing.length, importedLogDays, logDays:");
 const VERSION='110.4.34',BUILD='v110434-smart-load-library';
 for(const p of ['release-version.json','public/app-version.json']){const v=JSON.parse(read(p));Object.assign(v,{version:VERSION,build:BUILD,force:false,label:'v110.4.34 Load library import',releasedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sourceCommit:process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null,notes:['Import load folders, original documents and linked driver logbook sources from one ZIP.','Preview saved differences, verify original checksums and avoid duplicate files.','Closed historical work stays closed; driving hours, signatures and payment records are preserved.']});fs.writeFileSync(p,JSON.stringify(v,null,2)+'\n');}
 for(const p of ['package.json','package-lock.json']){const v=JSON.parse(read(p));v.version=VERSION;if(v.packages?.[''])v.packages[''].version=VERSION;fs.writeFileSync(p,JSON.stringify(v,null,2)+'\n');}

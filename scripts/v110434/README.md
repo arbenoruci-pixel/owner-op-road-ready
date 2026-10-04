@@ -9,3 +9,5 @@ Preview exposes saved/incoming load and document differences. Apply checks the f
 Imported closed loads clear matching live-guide pointers and open route state through an idempotent application update. Duty events, daily forms, signatures and driver profiles are untouched. Source date links are explicitly distinguished from exact load references; imported logbook copies never become certified live records.
 
 `core.test.mjs` covers identity, broker conflicts, payment preservation, separate driver links and protected duty data. `browser-import.mjs` checks Chromium and WebKit preview/apply, quota rollback, original deduplication, reload, repeat import, linked source days and narrow layouts. Personal packages and email contents must never enter this public repository.
+
+Documents + Logbook exports include Imported-Logbooks with readable source copies, source metadata, load links and DOT cases. Source copies remain distinct from current signed logs. Internal audit snapshots and sync queues are excluded from this shareable collection. Export Everything still carries the complete database.
