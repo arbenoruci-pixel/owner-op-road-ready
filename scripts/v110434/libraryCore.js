@@ -13,7 +13,7 @@ export const LOAD_FIELDS=['broker','origin','destination','gross','pickupDate','
 export function validateManifest(p){
  if(p?.format!==FORMAT||p.version!==1||!str(p.id,100)||!/^[a-zA-Z0-9._-]+$/.test(p.id))throw Error('Choose a Road Ready load library ZIP.');
  for(const [name,max] of [['loads',2000],['documents',5000],['logbook',5000],['logbookLinks',20000],['cases',1000]])if(!Array.isArray(p[name])||p[name].length>max)throw Error('Invalid '+name+' list.');
- const loads=new Set(),ids=new Set(),paths=new Set();let bytes=0;
+ const loads=new Set(),ids=new Set(),paths=new Set(),sourceIds=new Set();let bytes=0;
  for(const l of p.loads){
   if(!safeRef(l.loadNo)||loads.has(l.loadNo))throw Error('Duplicate or invalid load identity.');loads.add(l.loadNo);
   for(const k of ['broker','origin','destination','notes'])if(l[k]!==undefined&&!str(l[k],4000))throw Error('Invalid load details.');
@@ -28,7 +28,8 @@ export function validateManifest(p){
   if(!/^[a-f0-9]{64}$/.test(d.sha256||'')||d.id!=='library-'+d.sha256||ids.has(d.id))throw Error('Invalid or duplicate original identity.');ids.add(d.id);
   if(!str(d.path,500)||!d.path||d.path.startsWith('/')||d.path.includes('\\')||d.path.split('/').some(v=>!v||v==='.'||v==='..')||paths.has(d.path))throw Error('Invalid original path.');paths.add(d.path);
   if(!Number.isSafeInteger(d.bytes)||d.bytes<1||d.bytes>80*1024*1024)throw Error('An original exceeds the supported file size.');bytes+=d.bytes;
-  if(!str(d.name,500)||!str(d.type,80)||!/^[a-z][a-z0-9_]*$/.test(d.type)||!str(d.mime,100)||!/^(application\/(pdf|octet-stream)|text\/(plain|csv)|image\/(png|jpeg|webp|gif|tiff|bmp|heic|heif|avif))$/.test(d.mime)||!Array.isArray(d.sourceClientIds)||d.sourceClientIds.some(id=>!str(id,200)))throw Error('Invalid original details.');
+  if(!str(d.name,500)||!str(d.type,80)||!/^[a-z][a-z0-9_]*$/.test(d.type)||!str(d.mime,100)||!/^(application\/(pdf|octet-stream)|text\/(plain|csv)|image\/(png|jpeg|webp|gif|tiff|bmp|heic|heif|avif))$/.test(d.mime)||!Array.isArray(d.sourceClientIds)||d.sourceClientIds.some(id=>!str(id,200)||!id))throw Error('Invalid original details.');
+  for(const id of new Set(d.sourceClientIds)){if(sourceIds.has(id))throw Error('A saved source identity refers to multiple originals.');sourceIds.add(id);}
   if(d.loadNo&&!loads.has(d.loadNo))throw Error('A document names an unknown load.');
   if(d.date&&!day(d.date))throw Error('Invalid document date.');
   if(!Array.isArray(d.components)||d.components.length>200||d.components.some(c=>!str(c.kind,80)||!Array.isArray(c.pages)||c.pages.some(n=>!Number.isInteger(n)||n<1||n>10000)||!c.fields||typeof c.fields!=='object'))throw Error('Invalid document page roles.');
@@ -41,11 +42,12 @@ export function validateManifest(p){
 }
 export function loadPatch(l){const out={};for(const k of LOAD_FIELDS)if(l[k]!==undefined)out[k]=copy(l[k]);return out;}
 export function makeImportReview(current,rows,p){
- validateManifest(p);const differences=[];const matches={};
+ validateManifest(p);const differences=[];const matches={};const rowOwners=new Map();
  for(const l of p.loads){const found=list(current.loads).filter(x=>loadRef(x)===l.loadNo);if(found.length>1)throw Error('Load '+l.loadNo+' has duplicate saved identities. Resolve those before import.');const saved=found[0];if(saved?.broker&&l.broker&&ref(saved.broker)!==ref(l.broker)&&!ref(saved.broker).includes(ref(l.broker))&&!ref(l.broker).includes(ref(saved.broker)))throw Error('Load '+l.loadNo+' belongs to a different saved broker. Review its identity first.');if(saved)for(const [field,value] of Object.entries(loadPatch(l)))if(canonical(saved[field])!==canonical(value))differences.push({key:'load:'+l.loadNo+':'+field,label:'Load '+l.loadNo,field,saved:saved[field]??null,incoming:value});}
  for(const d of p.documents){
   const exact=rows.filter(r=>r.sha256===d.sha256||d.sourceClientIds.includes(r.client_document_id)||r.client_document_id===d.id);
   if(exact.some(r=>r.sha256&&r.sha256!==d.sha256))throw Error('A saved document identity has a different original.');
+  for(const r of exact){if(rowOwners.has(r.local_id)&&rowOwners.get(r.local_id)!==d.id)throw Error('A saved document matches multiple originals.');rowOwners.set(r.local_id,d.id);}
   matches[d.id]=exact.map(r=>r.local_id);
   for(const r of exact){const values={loadNo:loadRef(r),type:r.document_type||r.type||'other'};for(const field of ['loadNo','type'])if(values[field]!==d[field])differences.push({key:d.id+':'+r.local_id+':'+field,label:d.name,field,saved:values[field],incoming:d[field]});}
  }

@@ -19,3 +19,7 @@ assert.equal(sourceDays,1);const source=JSON.parse(output.get('Imported-Logbooks
 const {libraryScanCandidates}=await import('./libraryScan.js');
 const scanStore={loads:[{loadNo:'00123',id:'stable',broker:'Example Broker',status:'archived',operationalStatus:'closed',documentLibrarySource:'fixture',aliases:['BOL-5500','1234']}]};
 const scanBefore=copy(scanStore);let candidates=libraryScanCandidates([],scanStore,{broker:'Other Broker'});assert.equal(candidates[0].status,'completed');assert.equal(candidates[0].brokerIdentityConflict,true);assert.deepEqual(candidates[0].aliases.map(a=>a.value),['00123','BOL-5500']);assert.deepEqual(scanStore,scanBefore);assert.equal(libraryScanCandidates([], {loads:[{loadNo:'999',status:'archived'}]}).length,0);console.log('PASS — imported closed folders remain scanner candidates, broker conflicts and short aliases stay guarded');
+
+const original=hash=>({id:'library-'+hash,sha256:hash,path:hash+'.pdf',name:'original.pdf',bytes:1,mime:'application/pdf',type:'pod',loadNo:'00123',sourceClientIds:['legacy-id'],components:[]});bad=copy(p);bad.documents=[original('a'.repeat(64)),original('b'.repeat(64))];assert.throws(()=>validateManifest(bad),/multiple originals/);console.log('PASS — a legacy source ID cannot attach two different originals');
+
+bad.documents[0].sourceClientIds=[bad.documents[1].id];bad.documents[1].sourceClientIds=[];assert.throws(()=>makeImportReview(current,[{local_id:'legacy',client_document_id:bad.documents[1].id}],bad),/matches multiple originals/);
