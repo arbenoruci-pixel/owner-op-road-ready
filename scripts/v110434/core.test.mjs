@@ -30,3 +30,9 @@ const scanBefore=copy(scanStore);let candidates=libraryScanCandidates([],scanSto
 const original=hash=>({id:'library-'+hash,sha256:hash,path:hash+'.pdf',name:'original.pdf',bytes:1,mime:'application/pdf',type:'pod',loadNo:'00123',sourceClientIds:['legacy-id'],components:[]});bad=copy(p);bad.documents=[original('a'.repeat(64)),original('b'.repeat(64))];assert.throws(()=>validateManifest(bad),/multiple originals/);console.log('PASS — a legacy source ID cannot attach two different originals');
 
 bad.documents[0].sourceClientIds=[bad.documents[1].id];bad.documents[1].sourceClientIds=[];assert.throws(()=>makeImportReview(current,[{local_id:'legacy',client_document_id:bad.documents[1].id}],bad),/matches multiple originals/);
+
+const {libraryIndexRecord,isQuotaError}=await import('./libraryIndex.js');
+const oldIndex={id:'a',photoDataUrl:'data:image/png;base64,YQ==',notes:'Preserve notes',extracted:{rawText:'large OCR',bolNo:'BOL-55',total:12,stops:[{company:'Receiver',sequence:1}]}};
+const compacted=libraryIndexRecord(oldIndex,{librarySource:{packageId:'p',provenance:[{message:'source'}]}});
+assert.equal(compacted.full.photoDataUrl,oldIndex.photoDataUrl);assert.equal(compacted.next.photoDataUrl,undefined);assert.equal(compacted.next.extracted.rawText,undefined);assert.equal(compacted.next.notes,'Preserve notes');assert.deepEqual(compacted.next.extracted.stops,oldIndex.extracted.stops);assert.equal(compacted.next.extracted.bolNo,'BOL-55');assert.equal(compacted.next.extracted.total,12);assert.deepEqual(compacted.next.librarySource,{packageId:'p'});assert.equal(oldIndex.extracted.rawText,'large OCR');assert.ok(isQuotaError({name:'QuotaExceededError'}));assert.equal(isQuotaError({message:'Network error'}),false);
+console.log('PASS — small document index preserves filing fields, full input metadata and original caller values');
