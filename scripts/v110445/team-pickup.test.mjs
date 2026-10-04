@@ -39,6 +39,9 @@ deliveredCopy.routeLegsByDay[day]=[
 assert.equal(routeLegsForDayCanonical(deliveredCopy,delDay)[0].id,'delivery-linked');
 assert.equal(routeStatusForLogDay(routeLegsForDayCanonical(deliveredCopy,delDay)[0],delDay,deliveredCopy),'Done');
 assert.equal(routeLegsForDayCanonical(deliveredCopy,after).length,0,'retain authoritative delivery before day membership filtering');
+const staleDelivery=structuredClone(deliveredCopy);staleDelivery.eventsByDay[delDay]=[];
+assert.equal(routeLegsForDayCanonical(staleDelivery,delDay)[0].id,'pickup-only');
+assert.equal(routeStatusForLogDay(routeLegsForDayCanonical(staleDelivery,delDay)[0],delDay,staleDelivery),'In transit','missing delivery cannot hide active pickup');
 const distinctStops=structuredClone(deliveredCopy);distinctStops.routeLegsByDay[day][0].toFacility='First warehouse';distinctStops.routeLegsByDay[day][1].toFacility='Second warehouse';assert.equal(routeLegsForDayCanonical(distinctStops,day).length,2);
 for(const store of [
  {loads:[{loadNo:pickup.shippingDocs}],evidenceAliases:[{from:'81835803',to:pickup.shippingDocs}]},
@@ -48,6 +51,11 @@ for(const store of [
 ])assert.equal(window({...state,freightReferencesV110445:freightReferenceCatalog(store)}).recordedPickup,true);
 const conflictCatalog=freightReferenceCatalog({loads:[],evidenceAliases:[{from:'81835803',to:pickup.shippingDocs},{from:'81835803',to:'OTHER'}]});assert.equal(window({...state,freightReferencesV110445:conflictCatalog}).recordedPickup,false);
 const conflictingSaved=freightReferenceCatalog({loads:[{loadNo:pickup.shippingDocs,aliases:['81835803']}],evidenceAliases:[{from:'81835803',to:pickup.shippingDocs},{from:'81835803',to:'OTHER'}]});assert.equal(window({...state,freightReferencesV110445:conflictingSaved}).recordedPickup,false);
+const punctuationAliases=[{from:'818-35803',to:pickup.shippingDocs},{from:'81835803',to:'OTHER'}];
+for(const aliases of [punctuationAliases,[...punctuationAliases].reverse()]){
+ const catalog=freightReferenceCatalog({loads:[{loadNo:pickup.shippingDocs,aliases:['81835803']}],evidenceAliases:aliases});
+ assert.equal(window({...state,freightReferencesV110445:catalog}).recordedPickup,false,'normalized collisions remain ambiguous regardless of input order');
+}
 const switched=switchTeamDriver(state,'beta',day);assert.equal(window(switched).pickupDriverName,'Beta');assert.equal(routeStatusForLogDay(leg,delDay,switched),'Done');
 const annotated=shipmentContextForEvents(state,day,[{id:'drive',status:'D',startMin:1100}],[leg]);assert.equal(annotated[0].shipmentContextV110367[0].shippingDocs,'803');
 assert.deepEqual(state,before,'projection must not change either driver records or signatures');
