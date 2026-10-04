@@ -42,12 +42,15 @@ export async function applyLibrary(bundle,review,{acceptDifferences=false,db=get
    const beforeDocuments=[];
    for(let i=0;i<p.documents.length;i++){
     const d=p.documents[i],entry=bundle.entries.get(d.path);onProgress({phase:'Saving originals',done:i,total:p.documents.length});
-    if(!entry||entry.blob.size!==d.bytes||await Dexie.waitFor(entry.blob.arrayBuffer().then(sha256))!==d.sha256)throw Error('Original missing or damaged: '+d.name);
+    if(!entry||entry.blob.size!==d.bytes)throw Error('Original missing or damaged: '+d.name);
+    const originalBytes=await Dexie.waitFor(entry.blob.arrayBuffer());if(await Dexie.waitFor(sha256(originalBytes))!==d.sha256)throw Error('Original missing or damaged: '+d.name);
+    // Materialize one original at a time: WebKit must not persist a slice backed by the complete ZIP.
+    const original=new Blob([originalBytes],{type:d.mime});
     const existing=fresh.matches[d.id].map(id=>rows.find(r=>r.local_id===id));const targets=existing.length?existing:[null];
     for(const old of targets){
      const row=history&&old?old:documentRecord(d,p,old);documentIds[d.id]??=row.client_document_id;
      const saved=await db.document_blobs.where('client_document_id').equals(row.client_document_id).first();
-     if(!saved?.blob?.size){await db.document_blobs.put({local_blob_id:saved?.local_blob_id||'library-blob-'+row.client_document_id,client_document_id:row.client_document_id,blob:entry.blob.slice(0,entry.blob.size,d.mime),created_at:new Date().toISOString()});if(old)result.restoredOriginals++;}
+     if(!saved?.blob?.size){await db.document_blobs.put({local_blob_id:saved?.local_blob_id||'library-blob-'+row.client_document_id,client_document_id:row.client_document_id,blob:original,created_at:new Date().toISOString()});if(old)result.restoredOriginals++;}
      if(!history||!old){if(old)beforeDocuments.push(copy(old));await db.documents_local.put(row);const m=mirror(row),idx=next.documents.findIndex(x=>x.clientDocumentId===row.client_document_id||x.localDocumentId===row.local_id);if(idx>=0)next.documents[idx]={...next.documents[idx],...m};else next.documents.push(m);}
      if(old)result.keptDocuments++;else result.newDocuments++;
     }
