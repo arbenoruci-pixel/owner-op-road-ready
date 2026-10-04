@@ -4,9 +4,11 @@ const read=p=>fs.readFileSync(p,'utf8');
 const hash=s=>createHash('sha256').update(s).digest('hex');
 function patch(p,b,a){const s=read(p);if(s.includes(a))return;if(s.split(b).length!==2)throw Error('Unloading anchor changed: '+p);fs.writeFileSync(p,s.replace(b,a));}
 const timeline='source/src/core/timeline/timelineEngine.js',beforeTimeline=read(timeline);
-for(const p of ['source/src/app/App.jsx','source/src/core/routes/shippingDocsRepair.js','source/src/core/timeline/timelineEngine.js','source/src/modules/home/HomeScreen.jsx','source/src/modules/loads/multiStopDeliveryV1034.js','source/src/modules/status/StatusWorkflowSheet.jsx']) {
+for(const p of ['source/src/app/App.jsx','source/src/core/routes/shippingDocsRepair.js','source/src/core/timeline/timelineEngine.js','source/src/modules/home/HomeScreen.jsx','source/src/modules/loads/multiStopDeliveryV1034.js','source/src/modules/status/StatusWorkflowSheet.jsx','source/src/modules/editor/EditEventSheet.jsx','source/src/modules/loads/loadGuideV103.js']) {
  const s=read(p);fs.writeFileSync(p,s.replaceAll('/pickup|loading/', '/\\b(?:pickup|pick\\s+up|loading)\\b/').replaceAll('/pickup|pick up|loading/', '/\\b(?:pickup|pick\\s+up|loading)\\b/'));
 }
+const guide='source/src/modules/loads/loadGuideV103.js';
+fs.writeFileSync(guide,read(guide).replaceAll('/pickup|pick\\s*up|loading|hook(?:ed)?|drop\\s*&?\\s*hook|pickup\\s+trailer/', '/\\b(?:pickup|pick\\s*up|loading|hook(?:ed)?|drop\\s*&?\\s*hook|pickup\\s+trailer)\\b/'));
 // The newly reachable ordinary delivery branch must use its own matched route.
 const app='source/src/app/App.jsx';
 patch(app,"import { normalizeLoadInfoFromRouteLegs","import {repairUnloadingPickups} from '../core/routes/unloadingRepairV110444.js';\nimport { normalizeLoadInfoFromRouteLegs");
@@ -39,3 +41,4 @@ for(const p of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/T
 for(const p of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'])fs.writeFileSync(p,read(p).replaceAll("'110.4.43'","'"+VERSION+"'").replaceAll("'v110443-wallet-documents'","'"+BUILD+"'"));
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS — v110.4.44 delivery-only routes and legacy repair');
+await import('./v110444/unloading.test.mjs');

@@ -14,10 +14,12 @@ const signed={...state,signatureByDay:{[day]:{signed:true}}};assert.equal(normal
 const mixed={...state,eventsByDay:{[day]:[{...event,note:'Delivery and Pickup / Loading'}]}};assert.equal(normalizeRouteLegs(mixed).routeLegsByDay[day][0].pickupEventId,event.id);
 const app=fs.readFileSync('source/src/app/App.jsx','utf8');
 const start=app.indexOf('  function updateRouteLegsForStatus('),end=app.indexOf('  function buildLoadPatchForStatusPayload(',start);
-const build=new Function('routeLegArray','parseCityStateInput','normalizeRouteLeg','upsertRouteLeg',`function isPickupReason(r){return /\\b(?:pickup|pick\\s+up|loading)\\b/i.test(r)} function isDeliveryReason(r){return /delivery|unloading/i.test(r)} ${app.slice(start,end)}; return updateRouteLegsForStatus;`);
-const update=build(map=>Object.values(map).flat(),v=>({city:v,state:''}),x=>x,(map,d,row)=>({...map,[d]:[row]}));
+const build=new Function('routeLegArray','parseCityStateInput','normalizeRouteLeg','upsertRouteLeg','findOpenRouteLeg',`function isPickupReason(r){return /\\b(?:pickup|pick\\s+up|loading)\\b/i.test(r)} function isDeliveryReason(r){return /delivery|unloading/i.test(r)} ${app.slice(start,end)}; return updateRouteLegsForStatus;`);
+const update=build(map=>Object.values(map).flat(),v=>({city:v,state:''}),x=>x,(map,d,row)=>({...map,[d]:[row]}),(map,d,docs)=>Object.values(map).flat().find(x=>x.status!=='delivered'&&x.status!=='cancelled'&&x.loadNo===docs)||null);
 const payload={reason:'Delivery / Unloading',shippingDocs:'TEST-1',city:'Destination',state:'IN'};
 assert.equal(update({},day,payload,'new',573)[day][0].pickupEventId,'');
 const prior={...leg,id:'real',pickupEventId:'pickup',deliveryEventId:'',status:'open',fromCity:'Origin'};
 const closed=update({[day]:[prior]},day,payload,'new',573)[day][0];assert.equal(closed.pickupEventId,'pickup');assert.equal(closed.deliveryEventId,'new');assert.equal(closed.status,'delivered');
 console.log('PASS unloading classification, legacy recovery, source retention, idempotence, signed-day protection, mixed activity, new delivery and closing existing load');
+
+const editor=fs.readFileSync('source/src/modules/editor/EditEventSheet.jsx','utf8'),part=editor.slice(editor.indexOf('function loadActivityKind('),editor.indexOf('function formStateFromEvent('));const kind=new Function(part+';return loadActivityKind;')();assert.equal(kind('ON','Delivery / Unloading',''),'delivery');assert.equal(kind('ON','Pickup / Loading',''),'pickup');console.log('PASS editor pickup/delivery labels');
