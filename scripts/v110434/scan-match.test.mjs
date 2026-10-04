@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {matchScanDocumentToLoadV11037 as match} from '../../source/src/modules/scan/scanLoadAssignmentV11037.js';
+const load={id:'historical-stable',loadNo:'00123',broker:'Example Broker',status:'archived',operationalStatus:'closed',documentLibrarySource:'example',aliases:['BOL-5500']};
+const options={state:{},businessStore:{loads:[load],documents:[]},typeId:'pod',fields:{bolNo:'BOL-5500',broker:'Example Broker'},analysis:{text:'SIGNED POD\nBOL BOL-5500'}};
+const before=JSON.stringify(options.businessStore);
+let r=match(options);assert.equal(r.loadNo,'00123');assert.equal(r.automatic,true);assert.equal(r.canonicalLoadId,'historical-stable');assert.equal(r.candidates.find(c=>c.loadNo==='00123').status,'completed');
+r=match({...options,fields:{...options.fields,broker:'Different Broker'}});assert.equal(r.automatic,false);assert.equal(r.loadNo,'');
+r=match({...options,analysis:{text:'Unrelated POD'}});assert.equal(r.automatic,false);assert.equal(r.loadNo,'');
+r=match({...options,businessStore:{loads:[load,{...load,id:'second',loadNo:'00456'}],documents:[]}});assert.equal(r.automatic,false);assert.match(r.reason,/multiple loads/);
+r=match({...options,businessStore:{loads:[{...load,documentLibrarySource:''}],documents:[]}});assert.equal(r.automatic,false);
+r=match({...options,fields:{loadNo:'00123'},analysis:{text:'Load 00123'}});assert.equal(r.loadNo,'00123');assert.equal(r.automatic,true);
+assert.equal(JSON.stringify(options.businessStore),before);console.log('PASS — Smart Scan matches a unique printed reference to a closed imported folder; broker conflicts, absent text and ambiguous references require review without reopening work');

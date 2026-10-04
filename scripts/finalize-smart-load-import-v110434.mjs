@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 function patch(p,b,a){const s=read(p);if(s.includes(a))return;if(s.split(b).length!==2)throw Error('Library import anchor changed: '+p+' / '+b.slice(0,80));fs.writeFileSync(p,s.replace(b,a));}
-for(const name of ['libraryCore','libraryZip','libraryStorage','libraryExport'])fs.copyFileSync('scripts/v110434/'+name+'.js','source/src/modules/owneros/'+name+'V110434.js');
+for(const name of ['libraryCore','libraryZip','libraryStorage','libraryExport','libraryScan'])fs.copyFileSync('scripts/v110434/'+name+'.js','source/src/modules/owneros/'+name+'V110434.js');
 for(const name of ['ImportLibraryPanel','LibraryHistory'])fs.copyFileSync('scripts/v110434/'+name+'.jsx','source/src/modules/owneros/'+name+'V110434.jsx');
 fs.copyFileSync('scripts/v110434/library.css','source/src/modules/owneros/libraryV110434.css');
 const folders='source/src/modules/owneros/LoadFoldersV10969.jsx';
@@ -32,6 +32,13 @@ patch(app,'  const [offlineHydrated, setOfflineHydrated] = useState(false);',`  
     closeHistory();window.addEventListener('road-ready-library-imported',closeHistory);
     return()=>window.removeEventListener('road-ready-library-imported',closeHistory);
   },[offlineHydrated,state.loadGuidesById]);`);
+const scan='source/src/modules/scan/SmartScanSheetV105.jsx';
+patch(scan,'  collectLoadCandidatesV105,','  collectLoadCandidatesV105 as collectBaseCandidatesV110434,');
+patch(scan,'export default function SmartScanSheetV105',"import {libraryScanCandidates} from '../owneros/libraryScanV110434.js';\nconst collectLoadCandidatesV105=(state,store)=>libraryScanCandidates(collectBaseCandidatesV110434(state,store),store);\nexport default function SmartScanSheetV105");
+const match='source/src/modules/scan/scanLoadAssignmentV11037.js';
+patch(match,'collectLoadCandidatesV105, matchDocumentToLoadV105','collectLoadCandidatesV105 as collectBaseCandidatesV110434, matchDocumentToLoadV105');
+patch(match,'const shippingKinds =',"import {libraryScanCandidates} from '../owneros/libraryScanV110434.js';\nconst collectLoadCandidatesV105=(state,store)=>libraryScanCandidates(collectBaseCandidatesV110434(state,store),store);\nconst shippingKinds =");
+patch(match,'  const base = matchDocumentToLoadV105({...options,candidateLimit:Infinity});','  const base = matchDocumentToLoadV105({...options,candidateLimit:Infinity});\n  base.candidates=libraryScanCandidates(base.candidates,options.businessStore,options.fields);');
 const exporter='source/src/modules/backup/documentsExportV110433.js';
 patch(exporter,"import { getOwnerOpDb }","import { exportLibrarySources } from '../owneros/libraryExportV110434.js';\nimport { getOwnerOpDb }");
 patch(exporter,"  checkAbort(signal);\n  const createdAt","  const importedLogDays=await exportLibrarySources(zip,db,signal);\n  checkAbort(signal);\n  const createdAt");

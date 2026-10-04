@@ -11,3 +11,5 @@ Imported closed loads clear matching live-guide pointers and open route state th
 `core.test.mjs` covers identity, broker conflicts, payment preservation, separate driver links and protected duty data. `browser-import.mjs` checks Chromium and WebKit preview/apply, quota rollback, original deduplication, reload, repeat import, linked source days and narrow layouts. Personal packages and email contents must never enter this public repository.
 
 Documents + Logbook exports include Imported-Logbooks with readable source copies, source metadata, load links and DOT cases. Source copies remain distinct from current signed logs. Internal audit snapshots and sync queues are excluded from this shareable collection. Export Everything still carries the complete database.
+
+Smart Scan includes imported closed folders in its own candidate list, without exposing them as active dispatch work. Exact printed load/BOL/PO references may select a folder; broker conflicts or repeated references retain the existing confirmation guard. Short secondary aliases cannot establish an automatic match.

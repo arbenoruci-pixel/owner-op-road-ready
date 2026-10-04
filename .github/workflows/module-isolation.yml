@@ -62,6 +62,7 @@ jobs:
           failed=0
           node scripts/v110433/documents-export.test.mjs
           node scripts/v110434/core.test.mjs
+          node scripts/v110434/scan-match.test.mjs
           node scripts/v110434/browser-import.mjs
           node scripts/v110431/large-backup.test.mjs
           node scripts/v110431/browser-large.mjs 2>&1 | tee /tmp/browser-large-v110431.log
