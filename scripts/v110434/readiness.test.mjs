@@ -18,6 +18,7 @@ view=loadView(load,[partial,extra],{loads:[load]},'2026-10-04');assert.ok(view.a
 const conflict=structuredClone(doc);conflict.client_document_id='conflict';conflict.extracted.evidenceFactsV1.fields.total=2000;view=loadView(load,[conflict,doc],{loads:[load]},'2026-10-04');assert.ok(view.review>0,'filing conflicts still block Ready');
 view=loadView(load,[],{loads:[load]},'2026-10-04');assert.equal(view.missing,4);
 const incoming={sha256:hash,loadNo:'L100',type:'supporting_packet',date:''};assert.deepEqual(retainedLibraryReview(doc,incoming),doc.extracted.evidenceFactsV1);
+assert.deepEqual(retainedLibraryReview({...doc,contentHash:hash.toUpperCase()},incoming),doc.extracted.evidenceFactsV1,'a legacy uppercase checksum is the same original');
 for(const change of [{sha256:'b'.repeat(64)},{loadNo:'OTHER'},{type:'pod'},{date:'2026-09-02'}])assert.equal(retainedLibraryReview(doc,{...incoming,...change}),null);
 assert.equal(retainedLibraryReview({...doc,content_hash:'b'.repeat(64)},incoming),null);
 const plan={format:'road-ready-evidence-recovery',version:1,id:'partial-test',summary:[],coverageNote:'',transfer:{documents:[{record:{client_document_id:'packet'},original:{sha256:hash}}]},documentCorrections:[{clientId:'packet',sha256:hash,before:{kind:'supporting_packet'},after:{kind:'supporting_packet',fields,components:partial.extracted.evidenceFactsV1.components},proofs:[{sha256:hash,page:1,note:'Test source'}]}],loadCorrections:[],aliases:[]};
