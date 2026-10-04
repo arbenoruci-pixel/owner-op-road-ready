@@ -10,8 +10,13 @@ const state={...baseState(),activeDay:day,activeDriverId:'alpha',driverProfile:{
  teamLogbooksByDriverId:{beta:{activeDay:day,eventsByDay:{[day]:[pickup]},manualMilesByDay:{[day]:250},signatureByDay:{},formByDay:{},inspectionByDay:{},certifyStatus:{}}},
  routeLegsByDay:{[day]:[{id:'manual-plan',day,pickupDay:day,fromCity:'Harvey',fromState:'IL',toCity:'East Haven',toState:'CT',shippingDocs:'803',kind:'loaded',source:'manual_form',status:'open'}]},
  testInstructionStore:{loads:[{id:'test-load',loadNo:'LOAD-987654',aliases:['81835803'],pickupDate:day,broker:'Example Broker',origin:'Harvey, IL',destination:'East Haven, CT'}],documents:[]}};
-async function form(page){
+async function form(page,selected=day){
  if(await page.getByRole('button',{name:'Open logbook',exact:true}).count())await page.getByRole('button',{name:'Open logbook',exact:true}).click();
+ for(let n=0;n<10;n++){
+  const saved=await snapshot(page);if(saved.activeDay===selected)break;
+  await page.getByRole('button',{name:saved.activeDay>selected?'‹ Day':'Day ›',exact:true}).click();
+  for(let i=0;i<60;i++){if((await snapshot(page)).activeDay!==saved.activeDay)break;await page.waitForTimeout(50);}
+ }
  await page.getByRole('button',{name:'Form',exact:true}).click();await page.locator('.road-paper-form').waitFor();
 }
 async function unchanged(page){const s=await snapshot(page);assert.equal(s.manualMilesByDay[day],100);assert.equal(s.teamLogbooksByDriverId.beta.manualMilesByDay[day],250);assert.ok(!Object.values(s.eventsByDay).flat().some(e=>e.id===pickup.id));const p=s.teamLogbooksByDriverId.beta.eventsByDay[day].find(e=>e.id===pickup.id);for(const key of ['startMin','endMin','status'])assert.equal(p[key],pickup[key]);return s;}
@@ -27,8 +32,8 @@ for(const [name,engine] of process.env.CHROMIUM_ONLY ? [['chromium',chromium]] :
   await page.reload();await page.locator('.team-driver-shell').waitFor();await form(page);assert.match(await route.innerText(),/Pickup by Beta Driver/);await unchanged(page);
   await page.getByRole('button',{name:'Open team drivers',exact:true}).click();await page.locator('.team-driver-list').getByRole('button',{name:/Beta Driver/}).click();await form(page);assert.match(await route.innerText(),/In transit/);assert.doesNotMatch(await route.innerText(),/no pickup recorded/);
   await page.getByRole('button',{name:'Open team drivers',exact:true}).click();await page.locator('.team-driver-list').getByRole('button',{name:/Alpha Driver/}).click();await form(page);
-  await page.getByRole('button',{name:'Day ›',exact:true}).click();await form(page);assert.match(await route.innerText(),/Done.*Pickup by Beta Driver/);
-  await page.getByRole('button',{name:'Day ›',exact:true}).click();await form(page);assert.equal(await page.getByRole('button',{name:/Harvey, IL.*East Haven, CT/}).count(),0);
+  await form(page,delDay);assert.match(await route.innerText(),/Done.*Pickup by Beta Driver/);
+  await form(page,'2026-10-02');assert.equal(await page.getByRole('button',{name:/Harvey, IL.*East Haven, CT/}).count(),0);
   await unchanged(page);assert.deepEqual(errors,[]);fs.mkdirSync('browser-test-results/team-pickup-v110445',{recursive:true});await page.screenshot({path:'browser-test-results/team-pickup-v110445/'+name+'.png',fullPage:true});
   console.log('PASS '+name+': Form recognizes co-driver pickup, reload and driver switch retain it, delivery closes it, following day hides it, original duty and mileage stay separate');
  }catch(e){console.error((await page.locator('body').innerText()).slice(-9000));throw e;}finally{await browser.close();}
