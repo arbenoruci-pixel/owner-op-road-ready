@@ -4,6 +4,7 @@ import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../business/businessStore.js';
 import {sha256} from '../backup/chunkedZipV110431.js';
 import {canonical,copy,list,makeImportReview,mergeLibraryLoads,validateManifest,requireBrokerReview} from './libraryCoreV110434.js';
+import {archiveRecoveryCopies} from './libraryHeadroomV110434.js';
 import {libraryIndexRecord,isQuotaError} from './libraryIndexV110434.js';
 
 function readBusiness(storage){const raw=storage.getItem(BUSINESS_STORE_KEY);const value=raw?JSON.parse(raw):{};if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Saved load records could not be read.');return {raw,value};}
@@ -86,9 +87,20 @@ export async function applyLibrary(bundle,review,{acceptDifferences=false,confir
    }
    if(storage.getItem(BUSINESS_STORE_KEY)!==before.raw)throw Error('Another window changed the load records. Import stopped; try again.');
    phase='index';written=JSON.stringify({...next,updatedAt:Date.now()});storage.setItem(BUSINESS_STORE_KEY,written);phase='database';
-  });}catch(error){if(written!==null&&storage.getItem(BUSINESS_STORE_KEY)===written){if(before.raw===null)storage.removeItem(BUSINESS_STORE_KEY);else storage.setItem(BUSINESS_STORE_KEY,before.raw);}if(isQuotaError(error))throw Error(phase==='index'?'The document list could not fit in device storage. Import was rolled back; your saved files are unchanged.':'There is not enough device storage for the originals. Import was rolled back; your saved files are unchanged. Free some device space, then try again.');throw error;}
+  });}catch(error){if(written!==null&&storage.getItem(BUSINESS_STORE_KEY)===written){if(before.raw===null)storage.removeItem(BUSINESS_STORE_KEY);else storage.setItem(BUSINESS_STORE_KEY,before.raw);}if(isQuotaError(error)){const failure=Error(phase==='index'?'The document list could not fit in device storage. Import was rolled back; your saved files are unchanged.':'There is not enough device storage for the originals. Import was rolled back; your saved files are unchanged. Free some device space, then try again.');failure.libraryIndexQuotaV110438=phase==='index';throw failure;}throw error;}
   window.dispatchEvent(new CustomEvent(BUSINESS_STORE_EVENT));window.dispatchEvent(new Event('road-ready-repair-applied'));window.dispatchEvent(new Event('road-ready-library-imported'));return result;
  };
- return navigator.locks?.request?navigator.locks.request('road-ready-document-transfer',run):run();
+ const withHeadroom=async()=>{
+  try{return await run();}catch(error){
+   if(!error.libraryIndexQuotaV110438)throw error;
+   onProgress({phase:'Preserving recovery copies',done:0,total:1});
+   // The failed import has already rolled back. Archive outside its transaction
+   // so a later failure cannot remove the only durable recovery copy.
+   const released=await archiveRecoveryCopies(db,storage);
+   if(!released)throw error;
+   return run();
+  }
+ };
+ return navigator.locks?.request?navigator.locks.request('road-ready-document-transfer',withHeadroom):withHeadroom();
 }
 export async function libraryHistory(){const db=getOwnerOpDb();if(!db)return [];return (await db.sync_meta.toArray()).filter(r=>r.key.startsWith('document-library:')).map(r=>r.value);}
