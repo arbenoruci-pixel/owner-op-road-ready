@@ -57,3 +57,4 @@ for(const p of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-gr
 // Run the regression in a fresh process so it verifies the materialized files.
 execFileSync(process.execPath,['scripts/v110445/team-pickup.test.mjs'],{stdio:'inherit'});
 console.log('PASS — team pickup reference recognition installed');
+await import('./finalize-form-team-v110448.mjs');
