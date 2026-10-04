@@ -50,7 +50,7 @@ function Status({ summary, onStatus, onTrailer }) {
 }
 
 function Hos({ state, onLog }) {
-  return <section className="adaptive-hos-v1038"><header><b>Hours of service</b><button type="button" onClick={onLog}>Open logbook</button></header><HosCompactClocks state={state}/></section>;
+  return <section className="adaptive-hos-v1038"><header><b>Hours of service</b><button type="button" onClick={onLog}>View day</button></header><HosCompactClocks state={state}/></section>;
 }
 
 function Quick({ title, detail, onClick, primary = false }) {

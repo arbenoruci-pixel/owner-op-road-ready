@@ -34,7 +34,7 @@ export function PhoneHomeTools({operatorProfile,onScan,onSection,onLog,onDot,onW
     ['import','Import',()=>onSection('import_documents')],
     ['backup','Export & Backup',onBackup],
   ];
-  return <><nav className="phone-app-grid" aria-label="Apps">{items.map(([name,title,onClick])=><button type="button" key={title} onClick={onClick} aria-label={title}><span className={'phone-app-icon icon-'+name}><AppIcon name={name}/></span><span className="phone-app-label">{title}</span></button>)}</nav>{more?<section className="phone-more-tools" aria-label="More tools"><header><h2>More tools</h2><button type="button" onClick={()=>setMore(false)} aria-label="Close more tools">×</button></header>{extra.map(m=><button type="button" key={m.id} onClick={()=>onSection(m.id)}>{m.label}<span aria-hidden="true">›</span></button>)}</section>:null}</>;
+  return <><nav className="phone-app-grid" aria-label="Apps">{items.map(([name,title,onClick])=><button type="button" key={title} onClick={onClick} aria-label={name==='logbook'?'Open logbook':title}><span className={'phone-app-icon icon-'+name}><AppIcon name={name}/></span><span className="phone-app-label">{title}</span></button>)}</nav>{more?<section className="phone-more-tools" aria-label="More tools"><header><h2>More tools</h2><button type="button" onClick={()=>setMore(false)} aria-label="Close more tools">×</button></header>{extra.map(m=><button type="button" key={m.id} onClick={()=>onSection(m.id)}>{m.label}<span aria-hidden="true">›</span></button>)}</section>:null}</>;
 }
 
 export function DeviceHistoryNote({state}) {
