@@ -51,3 +51,4 @@ for(const path of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 execFileSync(process.execPath,['scripts/v110449/load-history.test.mjs'],{stdio:'inherit'});
 console.log('PASS — saved load history and grouped original-file checks');
+await import('./finalize-cloud-mirror-v110450.mjs');

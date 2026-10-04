@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {verifiedPiece,uploadEntries,downloadEntries,knownPieces,objectPath,hashBytes,bounded} from './mirrorCore.js';
+const uid='00000000-0000-4000-8000-000000000029',objects=new Map();let writes=0,reads=0,corrupt=false;
+const storage={upload:async(path,bytes)=>{writes++;if(objects.has(path))return {error:{message:'The resource already exists'}};objects.set(path,new Uint8Array(bytes));return {};},download:async path=>{reads++;return {data:new Blob([corrupt?'damaged':objects.get(path)])};}};
+const blob=new Blob(['the exact original']),known=new Set();
+const piece=await verifiedPiece(storage,uid,blob,known);assert.equal(writes,1);assert.equal(reads,1);
+await verifiedPiece(storage,uid,blob,known);assert.equal(writes,1);assert.equal(reads,1);
+await verifiedPiece(storage,uid,blob,new Set());assert.equal(writes,2);assert.equal(reads,2);
+corrupt=true;await assert.rejects(verifiedPiece(storage,uid,new Blob(['new file']),new Set()),/did not match/);corrupt=false;
+const large=new Blob([new Uint8Array(1024*1024+19).fill(42)]),entries=new Map([['doc.pdf',{blob:large,size:large.size,crc:12}]]);
+const files=await uploadEntries(entries,storage,uid);assert.deepEqual(files[0].chunks.map(c=>c.bytes),[1048576,19]);
+const manifest={format:'road_ready_cloud_mirror_v1',files};assert.equal(knownPieces(manifest).size,2);
+const restored=await downloadEntries(manifest,storage,uid);assert.equal(await hashBytes(await restored[0].blob.arrayBuffer()),await hashBytes(await large.arrayBuffer()));
+const first=files[0].chunks[0];objects.set(objectPath(uid,first.sha256),new Uint8Array(first.bytes).fill(2));await assert.rejects(downloadEntries(manifest,storage,uid),/verification/);
+assert.throws(()=>objectPath(uid,'../other-user'),/Invalid/);
+await assert.rejects(bounded(new Promise(()=>{}),5),/timed out/);
+console.log('PASS: corrupt uploads/downloads rejected, existing pieces rechecked, chunked restore byte-identical, immutable deduplication');
