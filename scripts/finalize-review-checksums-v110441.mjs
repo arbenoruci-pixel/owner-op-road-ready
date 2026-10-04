@@ -11,3 +11,4 @@ for(const p of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-gr
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS — v110.4.41 retained reviews with normalized legacy checksums');
 
+await import('./finalize-load-evidence-v110442.mjs');
