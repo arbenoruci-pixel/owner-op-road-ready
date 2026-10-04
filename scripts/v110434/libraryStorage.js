@@ -65,6 +65,16 @@ export async function applyLibrary(bundle,review,{acceptDifferences=false,confir
       if(previous)businessIndexDocuments.push(copy(previous));
       if(idx>=0)next.documents[idx]=index;else next.documents.push(index);
      }
+     if(history&&old){
+      const idx=next.documents.findIndex(x=>x.clientDocumentId===row.client_document_id||x.client_document_id===row.client_document_id||x.localDocumentId===row.local_id||x.id===row.local_id);
+      if(idx>=0){
+       const previous=next.documents[idx],{next:index}=libraryIndexRecord(previous,{});
+       if(JSON.stringify(previous)!==JSON.stringify(index)){
+        await db.sync_meta.put({key:'document-library-index:'+p.id+':'+row.local_id+':'+await Dexie.waitFor(sha256(new TextEncoder().encode(canonical(previous)))),value:copy(previous),updated_at:new Date().toISOString()});
+        next.documents[idx]=index;
+       }
+      }
+     }
      if(old)result.keptDocuments++;else result.newDocuments++;
     }
    }
