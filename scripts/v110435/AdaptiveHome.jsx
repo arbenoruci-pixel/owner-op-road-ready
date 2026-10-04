@@ -94,6 +94,7 @@ function ActiveLoad({ state, summary, activeLoad, currentLoad, snapshot, logbook
         {snapshot.nextSteps.length ? <section className="adaptive-upcoming-v1038"><b>Coming next</b>{snapshot.nextSteps.map((item, index) => <div key={item.id}><span>{index + 1}</span><p><b>{item.title}</b><em>{[item.location, item.day, item.time].filter(Boolean).join(' · ')}</em></p></div>)}</section> : null}
         </>:<div className="adaptive-mission-actions-v1038"><button type="button" className="primary" onClick={()=>onSection('loads')}>Open load</button></div>}
       </section>
+      {location?<div className="phone-route-action"><Quick title="Navigate" detail={location} primary onClick={()=>runStep(guide,navigateStep,onScan)}/></div>:null}
       {!(snapshot.bolPresent || activeLoad?.documentSummary?.bolPresent) ? <button type="button" className="adaptive-alert-v1038" onClick={() => onScan?.('bol')}><strong>!</strong><span><b>Pickup BOL missing</b><em>Scan it before billing or roadside review.</em></span><i>›</i></button> : null}
       {logbookEnabled ? <Hos state={state} onLog={onLog}/> : null}
       <PhoneHomeTools operatorProfile={operatorProfile} onScan={onScan} onSection={onSection} onLog={onLog} onDot={onDot} onWallet={onWallet} onBackup={onBackup} onDrive={onDrive}/>
