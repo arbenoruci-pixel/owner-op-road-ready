@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/v110451/**'
+      - 'scripts/v110453/**'
+      - 'scripts/finalize-evidence-workspace-v110453.mjs'
       - 'scripts/finalize-record-sync-v110451.mjs'
       - 'scripts/finalize-cloud-mirror-v110450.mjs'
       - '.github/workflows/record-sync.yml'
@@ -24,8 +26,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/v110451/test-records.mjs
+      - run: node scripts/v110453/test-core.mjs
       - name: Exact production build
         run: node scripts/build-v110.mjs > /tmp/record-build.log 2>&1 || { tail -n 100 /tmp/record-build.log; exit 1; }
+      - run: node scripts/v110453/test-packet.mjs
       - name: Install isolated browser test
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
@@ -40,6 +44,7 @@ jobs:
             sleep 1
           done
           node scripts/v110451/browser-records.mjs
+          node scripts/v110453/browser-workspace.mjs
           node scripts/v110450/browser-mirror.mjs
       - uses: actions/upload-artifact@v4
         if: always()
@@ -47,6 +52,7 @@ jobs:
           name: record-sync-v110451-evidence
           path: |
             browser-test-results/cloud-records-v110451.png
+            browser-test-results/evidence-workspace-v110453.png
             /tmp/record-build.log
             /tmp/record-server.log
           retention-days: 7

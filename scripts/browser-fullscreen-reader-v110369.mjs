@@ -114,7 +114,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await dialog.waitFor({state:'hidden'});
   const check=page.locator('.scan-driver-check-v105 input');if(await check.count())await check.check();
   await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();await page.locator('.scan-saved-v105').waitFor();
-  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();
+  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
   const recent=page.getByRole('region',{name:'Recent documents'});await recent.locator('.saved-document-row-v344').first().click();
   await recent.getByRole('button',{name:'Read again',exact:true}).click();
   const reread=recent.getByRole('region',{name:'Read saved document again'});

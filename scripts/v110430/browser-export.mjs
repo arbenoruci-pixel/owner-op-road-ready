@@ -27,7 +27,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
   });
   await page.getByRole('button',{name:/Export & Backup/}).click();await page.getByRole('button',{name:'Export Docs + Logbook (ZIP)',exact:true}).waitFor();
   await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('button',{name:'Home',exact:true}).first().click();
-  await page.getByRole('button',{name:'Documents',exact:true}).click();
+  await page.getByRole('button',{name:'Documents',exact:true}).click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
   await page.getByRole('button',{name:/Export & Backup/}).click();
   await page.getByRole('button',{name:'Export Docs + Logbook (ZIP)',exact:true}).click();
   const ready=page.getByRole('region',{name:'Documents ready to download'});await ready.waitFor();await ready.getByText(/2 original files/).waitFor();

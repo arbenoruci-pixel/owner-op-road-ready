@@ -116,7 +116,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     const check=page.locator('.scan-driver-check-v105 input');if(await check.count())await check.check();
     await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();await page.locator('.scan-saved-v105').waitFor();
     const beforeRecords=await savedRecords(page);assert.equal(beforeRecords.length,1);const beforeWeights=beforeRecords[0];
-    await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();
+    await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
     const recent=page.getByRole('region',{name:'Recent documents'});await recent.locator('.saved-document-row-v344').first().click();
     await recent.getByRole('button',{name:'Read again',exact:true}).click();
     const reread=recent.getByRole('region',{name:'Read saved document again'}),savedReview=reread.locator('.owned-reader-preview');
@@ -161,7 +161,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     for(const key of ['netWeight','tareWeight','weight'])assert.equal(saved.documents[0].fields[key].value,confirmedGroup.fields[key].value);
     assert.equal(records[0].load_no,beforeWeights.load_no,'unit confirmation preserves the original load assignment');
     assert.equal(records[0].sha256,beforeWeights.sha256,'unit confirmation preserves the original file');
-    await page.getByRole('button',{name:/^Documents/}).first().click();await recent.locator('.saved-document-row-v344').first().click();
+    await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();await recent.locator('.saved-document-row-v344').first().click();
     await recent.getByRole('button',{name:'Read again',exact:true}).click();
     await reread.getByText('3 saved confirmations kept. Review a saved value to change it.',{exact:true}).waitFor();
     assert.equal(await savedReview.getByRole('button',{name:'Fix next reading',exact:true}).isDisabled(),true);

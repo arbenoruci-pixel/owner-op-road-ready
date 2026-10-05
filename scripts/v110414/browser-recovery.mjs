@@ -38,7 +38,7 @@ async function chooseRecovery(page,payload=recovery){
  await chooser.setFiles({name:'reviewed-recovery.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(payload))});
  await panel.getByLabel('Review recovery',{exact:true}).waitFor();
 }
-async function openEvidence(page){await page.getByRole('button',{name:/^Documents/}).first().click();await page.locator('.rr-docs-browser').waitFor();await page.getByRole('button',{name:'More document options',exact:true}).click();const panel=page.getByRole('region',{name:'More document options',exact:true});await panel.getByLabel('Document evidence checklist',{exact:true}).locator('summary').first().click();return panel;}
+async function openEvidence(page){await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();await page.locator('.rr-docs-browser').waitFor();await page.getByRole('button',{name:'More document options',exact:true}).click();const panel=page.getByRole('region',{name:'More document options',exact:true});await panel.getByLabel('Document evidence checklist',{exact:true}).locator('summary').first().click();return panel;}
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
  if(process.env.TEST_BROWSERS&&!process.env.TEST_BROWSERS.split(',').includes(name))continue;
  const context=await browser.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(),'rr-conflicts-')),{headless:true,viewport:{width:390,height:844},hasTouch:true,acceptDownloads:true,serviceWorkers:'block'});

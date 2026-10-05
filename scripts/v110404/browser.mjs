@@ -53,7 +53,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     }),documents);
     await page.reload();await page.locator('.adaptive-home-v1038').waitFor();
     const before=await records(page),businessBefore=await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1')),protectedBefore=protectedData(await snapshot(page));
-    await page.getByRole('button',{name:/^Documents/}).first().click();
+    await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
     const docs=page.getByRole('region',{name:'Documents',exact:true});
     await docs.getByRole('heading',{name:'Documents',exact:true}).waitFor();
     await docs.getByRole('button',{name:/Sep 14.*Sep 20, 2026/}).waitFor();

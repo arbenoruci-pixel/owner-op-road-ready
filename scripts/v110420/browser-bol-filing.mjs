@@ -38,7 +38,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
    await setupRoutes(context);page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-09-27T15:00:00Z'));
    const state=baseState();state.view='logbook';state.testInstructionStore={...transfer.records,documents:[]};await seed(page,state);
    await page.evaluate(async items=>{const db=await new Promise(ok=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);});await new Promise((ok,no)=>{const tx=db.transaction(['documents_local','document_blobs'],'readwrite');for(const item of items){const doc=item.record;tx.objectStore('documents_local').put(doc);tx.objectStore('document_blobs').put({local_blob_id:'blob-'+doc.client_document_id,client_document_id:doc.client_document_id,blob:new Blob([Uint8Array.from(atob(item.original.base64),c=>c.charCodeAt(0))],{type:item.original.type})});}tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});db.close();},transfer.documents);
-   await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();
+   await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
    const docs=page.getByRole('region',{name:'Documents',exact:true});await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).waitFor();
    const before=await stored(page),weeks=await docs.locator('.rr-docs-card').allTextContents();
    await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).click();await docs.locator('.rr-docs-card').filter({hasText:'Load '+previous}).click();
@@ -66,7 +66,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
    assert.equal(changed.load_no,target);assert.equal(changed.sha256,correction.sha256);assert.equal(changed.extracted.evidenceFactsV1.fields.origin,correction.after.fields.origin);
    assert.equal(after.docs.length,before.docs.length);assert.deepEqual(after.blobs,before.blobs);assert.deepEqual(after.logs,before.logs);assert.deepEqual(after.business.loads,before.business.loads);
    for(const d of before.docs.filter(d=>d.client_document_id!==correction.clientId))assert.deepEqual(after.docs.find(x=>x.local_id===d.local_id),d,'unrelated and previously reviewed originals stay unchanged');
-   await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).waitFor();
+   await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).waitFor();
    assert.equal((await docs.locator('.rr-docs-card').allTextContents()).length,weeks.length,'filing keeps the same service weeks');
    await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).click();await docs.locator('.rr-docs-card').filter({hasText:'Load '+previous}).click();
    if(await docs.locator('.rr-driver-check-toggle').count())await docs.locator('.rr-driver-check-toggle').click();

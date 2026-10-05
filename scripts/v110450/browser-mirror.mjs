@@ -34,7 +34,7 @@ try{
  const original=simplePdf('Synthetic original\nLoad 82002');await seed(page,state,[{id:'original',bytes:[...original]}]);
  await page.evaluate(()=>localStorage.setItem('owner-op-cloud-mirror-v1:paused','true'));
  const before=await snapshot(page);
- await page.getByRole('button',{name:'Documents',exact:true}).click();
+ await page.getByRole('button',{name:'Documents',exact:true}).click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
  const docs=page.getByRole('region',{name:'Documents',exact:true});
  await docs.locator('.rr-docs-card').filter({hasText:'Sep 7'}).click();await docs.locator('.rr-docs-card').filter({hasText:'Load 82002'}).click();
  await docs.getByText('View originals ›',{exact:true}).click();await docs.getByRole('button',{name:/Open .*original.pdf/}).click();

@@ -35,7 +35,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
     state.routeLegsByDay['2026-09-25']=names.map(n=>({id:'legacy-'+n,loadNo:'BOL'+n,shippingDocs:'BOL'+n,date:'2026-09-25',fromCity:'Alpha',fromState:'IL',toCity:'Beta',toState:'IN',kind:'loaded',status:'closed'}));
     await seed(page,state,documents.map(d=>({id:d.local_id.replace('-local',''),bytes:[...bytes]})));
     await page.evaluate(async docs=>{const db=await new Promise(ok=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);});await new Promise((ok,no)=>{const tx=db.transaction('documents_local','readwrite');for(const doc of docs)tx.objectStore('documents_local').put(doc);tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});db.close();},documents);
-    await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();
+    await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
     let docs=page.getByRole('region',{name:'Documents',exact:true});await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).waitFor();
     const before=await persisted(page);
     for(let attempt=0;attempt<2;attempt++){
@@ -55,7 +55,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
       assert.equal(await docs.locator('.rr-docs-card').count(),1);await docs.locator('.rr-docs-card').filter({hasText:'Load PRIOR100'}).waitFor();
       await docs.getByRole('button',{name:'Next saved week',exact:true}).click();assert.equal(await docs.locator('.rr-docs-card').count(),5);
       await docs.getByRole('button',{name:'Back to weeks',exact:true}).click();
-      if(!attempt){await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();docs=page.getByRole('region',{name:'Documents',exact:true});await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).waitFor();}
+      if(!attempt){await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();docs=page.getByRole('region',{name:'Documents',exact:true});await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).waitFor();}
     }
     assert.deepEqual(await persisted(page),before,'filing and navigation never change originals or business rows');
     assert.deepEqual(errors,[]);
