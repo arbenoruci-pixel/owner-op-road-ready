@@ -87,12 +87,12 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     await docs.getByRole('button',{name:/Load 38324346/}).click();
     await docs.getByText('View originals ›',{exact:true}).click();
     await page.evaluate(()=>{const create=URL.createObjectURL.bind(URL);URL.createObjectURL=blob=>{const url=create(blob);window.__lastDocumentUrl=url;return url;};});
-    const opening=page.waitForEvent('popup');
-    await docs.getByRole('button',{name:/^Open POD · Stop 2/}).click();const opened=await opening;
+    await docs.getByRole('button',{name:/^Open POD · Stop 2/}).click();const opened=page.getByRole('dialog',{name:'Original document'});
+    await opened.getByRole('link',{name:'Download',exact:true}).waitFor();
     await page.waitForFunction(()=>Boolean(window.__lastDocumentUrl));
     const openedBytes=await page.evaluate(async()=>Array.from(new Uint8Array(await(await fetch(window.__lastDocumentUrl)).arrayBuffer())));
     assert.deepEqual(Buffer.from(openedBytes),original['delivery-two'],'one tap opens the selected stop’s exact original');
-    await opened.close();
+    await opened.getByRole('button',{name:'Close',exact:true}).click();
     await docs.getByRole('button',{name:/^Open File .*unavailable-original/}).click();
     await docs.getByRole('alert').filter({hasText:'This original could not be opened'}).waitFor();
     await docs.getByRole('button',{name:'Back to loads',exact:true}).click();await docs.getByRole('button',{name:'Back to weeks',exact:true}).click();
