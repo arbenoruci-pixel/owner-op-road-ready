@@ -12,8 +12,9 @@ async function client(){
   const json=(value,status=200)=>route.fulfill({json:value,status,headers:cors});if(req.method()==='OPTIONS')return json({});
   const row=value=>json(headers.accept?.includes('vnd.pgrst.object')?value:value?[value]:[]);
   if(path.endsWith('/road_ready_backup_settings'))return row({enabled:true,record_sync_enabled:true});
-  if(path.endsWith('/road_ready_account_workspaces'))return row(workspace);
-  if(path.endsWith('/road_ready_account_history'))return row({payload:history.get(Number(url.searchParams.get('revision')?.replace('eq.','')))});
+  if(path.endsWith('/road_ready_account_workspaces'))return row(workspace&&url.searchParams.get('select')!=='*'?{revision:workspace.revision,device_id:workspace.device_id}:workspace);
+  if(path.endsWith('/road_ready_account_history')){const filters=url.searchParams.getAll('revision'),eq=filters.find(x=>x.startsWith('eq.'));if(eq)return row({payload:history.get(Number(eq.slice(3)))});const after=Number(filters.find(x=>x.startsWith('gt.'))?.slice(3)||0),before=Number(filters.find(x=>x.startsWith('lte.'))?.slice(4)||Infinity);return json([...history].filter(([r])=>r>after&&r<=before).map(([revision,payload])=>({revision,payload})));}
+  if(path.endsWith('/road_ready_account_patch_v1')){const p=req.postDataJSON();if(workspace?.revision!==p.p_expected)return json({conflict:true});const records={...workspace.payload.records,...p.p_patch};for(const k of p.p_deleted)delete records[k];workspace={...workspace,revision:workspace.revision+1,payload:{...workspace.payload,records},device_id:p.p_device};history.set(workspace.revision,{format:'road_ready_account_delta_v1',meta:{format:'road_ready_account_v1'},set:p.p_patch,remove:p.p_deleted});commits++;return json({revision:workspace.revision});}
   if(path.endsWith('/road_ready_account_commit_v1')){const p=req.postDataJSON();if((workspace?.revision||0)!==p.p_expected)return json({conflict:true,revision:workspace?.revision||0});workspace={revision:(workspace?.revision||0)+1,payload:p.p_payload,device_id:p.p_device};history.set(workspace.revision,p.p_payload);commits++;return json({revision:workspace.revision});}
   if(path.endsWith('/road_ready_backup_snapshots'))return row(null);
   if(path.endsWith('/road_ready_commit_backup_v1')||path.endsWith('/road_ready_backup_devices')){fullBackups++;return json({});}

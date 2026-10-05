@@ -70,6 +70,20 @@ async function install(records,local,base,uid,check){
  window.dispatchEvent(new CustomEvent(BUSINESS_STORE_EVENT));window.dispatchEvent(new CustomEvent('road-ready-owner-ops-updated-v102'));
  for(const [key,value] of Object.entries(records)){const raw=decoded[key],parts=JSON.parse(key);encodeCache.set(key,{sig:canonical(rawShape(raw)),value,epoch:tableEpoch.get(parts[1])||0});}
 }
+async function remoteWorkspace(uid,cached){
+ const client=cloudClient(),info=await checked(client.from('road_ready_account_workspaces').select('revision,device_id,updated_at').eq('user_id',uid).maybeSingle());
+ if(!info)return null;
+ if(cached?.uid===uid){
+  let payload={...(cached.meta||{}),format:FORMAT,records:cached.records},revision=cached.revision;
+  if(revision===info.revision)return {...info,payload};
+  if(revision<info.revision){
+   const history=await checked(client.from('road_ready_account_history').select('revision,payload').eq('user_id',uid).gt('revision',revision).lte('revision',info.revision).order('revision').limit(100));
+   for(const row of history||[]){if(row.revision!==revision+1)break;const change=row.payload;if(change.format==='road_ready_account_delta_v1'){const records={...payload.records,...change.set};for(const k of change.remove||[])delete records[k];payload={...payload,...change.meta,records};}else payload=validatePayload(change);revision=row.revision;}
+   if(revision===info.revision)return {...info,payload};
+  }
+ }
+ return checked(client.from('road_ready_account_workspaces').select('*').eq('user_id',uid).single());
+}
 export function syncAccount({initial=false,choices=null}={}){
  if(active)return active;
  const run=async()=>{
@@ -86,7 +100,8 @@ export function syncAccount({initial=false,choices=null}={}){
    await check();show({phase:'syncing',message:initial?'Opening your account data…':'Syncing changes…',conflicts:[]});
    const setting=await checked(cloudClient().from('road_ready_backup_settings').select('record_sync_enabled').eq('user_id',uid).maybeSingle());
    if(!setting?.record_sync_enabled){show({phase:'disabled',message:'Account synchronization is disabled.'});return {disabled:true};}
-   let remote=await checked(cloudClient().from('road_ready_account_workspaces').select('*').eq('user_id',uid).maybeSingle());
+   const cached=(await db.sync_meta.get(BASE_KEY))?.value;
+   let remote=await remoteWorkspace(uid,cached);
    let seed=null;
    if(!remote){
     const candidates=await checked(cloudClient().from('road_ready_backup_snapshots').select('id,device_id,created_at,summary:review->summary').eq('user_id',uid).eq('missing_originals',0).order('created_at',{ascending:false}).limit(50));
@@ -117,11 +132,13 @@ export function syncAccount({initial=false,choices=null}={}){
    const payload={...(remote?.payload||{}),format:FORMAT,records:merge.records};let revision=remote?.revision||0;
    await check();
    if(!same(payload.records,remote?.payload?.records)){
-    const receipt=await checked(cloudClient().rpc('road_ready_account_commit_v1',{p_device:device(),p_expected:revision,p_payload:payload}));if(receipt.conflict)throw Error('Another device saved changes. Retrying shortly.');revision=receipt.revision;
+    const patch=Object.fromEntries(Object.entries(payload.records).filter(([k,v])=>!same(v,remote?.payload?.records[k]))),removed=Object.keys(remote?.payload?.records||{}).filter(k=>!(k in payload.records));
+    const receipt=await checked(revision?cloudClient().rpc('road_ready_account_patch_v1',{p_device:device(),p_expected:revision,p_patch:patch,p_deleted:removed}):cloudClient().rpc('road_ready_account_commit_v1',{p_device:device(),p_expected:revision,p_payload:payload}));if(receipt.conflict)throw Error('Another device saved changes. Retrying shortly.');revision=receipt.revision;
    }
    const changed=!same(local.encoded,merge.records);
-   if(changed)await install(merge.records,local,{revision},uid,check);
-   else{await db.sync_meta.put({key:BASE_KEY,value:{uid,revision,records:merge.records},updated_at:new Date().toISOString()});localStorage.setItem(OWNER_KEY,uid);}
+   const meta=Object.fromEntries(Object.entries(payload).filter(([k])=>k!=='records'));
+   if(changed)await install(merge.records,local,{revision,meta},uid,check);
+   else{if(saved?.revision!==revision)await db.sync_meta.put({key:BASE_KEY,value:{uid,revision,meta,records:merge.records},updated_at:new Date().toISOString()});localStorage.setItem(OWNER_KEY,uid);}
    const resolved=await db.sync_meta.get('account-sync-v110455:conflicts');if(resolved)await db.sync_meta.put({...resolved,key:'account-sync-v110455:resolved:'+Date.now()});
    await db.sync_meta.delete('account-sync-v110455:conflicts');conflictReview=null;
    show({phase:'current',message:'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed};
