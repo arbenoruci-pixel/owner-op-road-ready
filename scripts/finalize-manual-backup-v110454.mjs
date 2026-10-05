@@ -8,3 +8,4 @@ for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/u
 for(const path of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'])fs.writeFileSync(path,read(path).replaceAll("'110.4.53'","'"+VERSION+"'").replaceAll("'v110453-evidence-workspace'","'"+BUILD+"'"));
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS — full cloud backups run only on request');
+await import('./finalize-account-sync-v110455.mjs');
