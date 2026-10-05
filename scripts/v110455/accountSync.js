@@ -144,5 +144,5 @@ export function syncAccount({initial=false,choices=null}={}){
    show({phase:'current',message:'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed};
   }catch(e){const message=e?.message||String(e);show({phase:localStorage.getItem('owner-op-record-sync-v1:paused')==='true'?'paused':navigator.onLine?'error':'offline',message});return {error:message};}
  };
- active=(navigator.locks?.request?navigator.locks.request('road-ready-account-sync-v110455',{ifAvailable:true},lock=>lock?run():{busy:true}):run()).finally(()=>{active=null;});return active;
+ active=(navigator.locks?.request?navigator.locks.request('road-ready-account-sync-v110455',initial?{}:{ifAvailable:true},lock=>lock?run():{busy:true}):run()).finally(()=>{active=null;});return active;
 }

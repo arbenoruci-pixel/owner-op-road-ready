@@ -44,6 +44,10 @@ try{
  await phone.evaluate(()=>window.dispatchEvent(new Event('online')));await waitFor(()=>expense(phone,'tablet-offline'));
  // No redundant full archives on open, reconnect or refresh.
  await tablet.reload();await tablet.locator('.adaptive-home-v1038').waitFor();assert.ok(await expense(tablet,'phone-online'));assert.ok(await expense(tablet,'tablet-offline'));assert.equal(fullBackups,0);
+ // A second tab must wait for the first tab's hydration lock before mounting App.
+ const lockPage=await tabletContext.newPage();await lockPage.goto(origin+'/_not-found');await lockPage.evaluate(()=>{navigator.locks.request('road-ready-account-sync-v110455',async()=>{window.__held=true;await new Promise(r=>window.__release=r);});});await lockPage.waitForFunction(()=>window.__held);
+ const secondTab=await tabletContext.newPage();await secondTab.goto(origin);await secondTab.getByText('Opening your records',{exact:true}).waitFor();await new Promise(r=>setTimeout(r,1200));assert.equal(await secondTab.locator('.adaptive-home-v1038').count(),0,'App must not mount while initial synchronization is locked');
+ await lockPage.evaluate(()=>window.__release());await secondTab.locator('.adaptive-home-v1038').waitFor();assert.ok(await expense(secondTab,'phone-online'));assert.ok(await expense(secondTab,'tablet-offline'));await secondTab.close();await lockPage.close();
  // Divergent edits of one signed day must retain both versions and require review.
  await phoneContext.setOffline(true);await tabletContext.setOffline(true);
  for(const [page,note] of [[phone,'phone-edit'],[tablet,'tablet-edit']])await page.evaluate(note=>{const s=structuredClone(window.__rrAccountState());s.teamLogbooksByDriverId.beta.eventsByDay['2026-10-02'][0].note=note;window.dispatchEvent(new CustomEvent('road-ready-account-apply',{detail:s}));},note);
@@ -52,5 +56,5 @@ try{
  await tablet.getByRole('button',{name:/Review changes/}).click();await tablet.getByRole('radio',{name:/Saved account copy/}).check();await tablet.getByRole('button',{name:'Save selected versions'}).click();await waitFor(async()=>(await snapshot(tablet)).teamLogbooksByDriverId.beta.eventsByDay[day][0].note==='phone-edit');
  // A new device cannot accept corrupt document bytes.
  corrupt=true;const {page:third}=await client();await seed(third,{testInstructionStore:{}});await third.getByText('A document failed verification. Local data was kept.',{exact:true}).waitFor();assert.equal((await snapshot(third)).teamLogbooksByDriverId?.beta,undefined);corrupt=false;
- assert.equal(fullBackups,0);assert.deepEqual(errors,[]);console.log('PASS two-device account flow: login hydration, exact original PDF, separate drivers/signatures, offline edits both directions, reload, same-day conflicts, corrupt-file rollback, no automatic full backup; commits='+commits);
+ assert.equal(fullBackups,0);assert.deepEqual(errors,[]);console.log('PASS two-device account flow: login hydration, exact original PDF, separate drivers/signatures, offline edits both directions, reload, concurrent-tab hydration, same-day conflicts, corrupt-file rollback, no automatic full backup; commits='+commits);
 }catch(e){for(let i=0;i<pages.length;i++)console.error('PAGE '+i+' '+(await pages[i].locator('body').innerText()).slice(-5000));throw e;}finally{await browser.close();}
