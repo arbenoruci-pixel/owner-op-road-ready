@@ -23,6 +23,11 @@ assert.throws(()=>prepareCorrection(bundle,find('event/arben/'+day+'/same-event'
 assert.throws(()=>prepareCorrection(bundle,find('signatures/arben/'+day),{patch:{signature:'changed'}}),/original app workflow/);
 const fragments=projectRecords({state:{},business:{loads:[{id:'large',notes:'x'.repeat(900000)}]}}).filter(r=>r.record_key.startsWith('business/loads/large'));
 assert(fragments.length>3);assert(fragments.every(r=>r.locator.fragment&&allowedFields(r).length===0));
-assert.throws(()=>projectRecords({business:{loads:[{id:'same'},{id:'same'}]}}),/Duplicate saved record/);
+const duplicateBundle={business:{loads:[{id:'load_424590-1',loadNo:'424590-1',broker:'Red Lightning',gross:2700},{id:'load_424590-1',loadNo:'424590-1',broker:'Select Transport',gross:1000},{id:'load_424590-1',loadNo:'424590-1',broker:'Third retained copy',gross:1000}]}},saved=canonical(duplicateBundle);
+const duplicates=projectRecords(duplicateBundle).filter(r=>r.kind==='business_loads');
+assert.equal(duplicates.length,3);assert.equal(new Set(duplicates.map(r=>r.record_key)).size,3);assert(duplicates.every(r=>r.locator.duplicate&&allowedFields(r).length===0));assert.deepEqual(duplicates.map(r=>r.data.gross),[2700,1000,1000]);assert.equal(canonical(duplicateBundle),saved);assert.equal(canonical(projectRecords(duplicateBundle)),canonical(projectRecords(duplicateBundle)));
+const staleRecord={...duplicates[0],locator:{...duplicates[0].locator,duplicate:false}};
+assert.throws(()=>prepareCorrection(duplicateBundle,staleRecord,{before_data:duplicates[0].data,patch:{broker:'Do not overwrite both'}}),/Conflict: multiple/);
+const collision=projectRecords({business:{loads:[{id:'same'},{id:'same'},{id:'same/duplicate/2'}]}});assert.equal(new Set(collision.map(r=>r.record_key)).size,collision.length);
 assert.equal(canonical({z:1,a:2}),canonical({a:2,z:1}));
 console.log('PASS records: driver isolation, active source, file/credential redaction, large records, exact conflicts, idempotence, protected fields and original preservation');

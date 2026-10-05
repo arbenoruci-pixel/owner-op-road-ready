@@ -37,7 +37,7 @@ export function syncRecords({force=false}={}){
    show({phase:'running',message:'Reading saved records…'});
    const bundle=await capture(),records=projectRecords(bundle),hashes={},items=[],summary={};
    for(const record of records){const payload_hash=await sha256(new TextEncoder().encode(canonical(record)));hashes[record.record_key]=payload_hash;summary[record.kind]=(summary[record.kind]||0)+1;items.push(cache.hashes?.[record.record_key]===payload_hash?{record_key:record.record_key,payload_hash}:{...record,payload_hash});}
-   runId=crypto.randomUUID();const rpc=(action,args={})=>checked(cloudClient().rpc('road_ready_record_sync_v1',{p_device:recordDeviceId(),p_run:runId,p_action:action,p_version:'110.4.51',...args}));
+   runId=crypto.randomUUID();const rpc=(action,args={})=>checked(cloudClient().rpc('road_ready_record_sync_v1',{p_device:recordDeviceId(),p_run:runId,p_action:action,p_version:'110.4.52',...args}));
    const begin=await rpc('begin');if(begin?.busy){show({phase:'waiting',message:'Another record sync is finishing. This device will retry.'});return;}started=true;
    let batch=[],bytes=0,done=0;
    const send=async()=>{if(!batch.length)return;if(recordSyncPaused())throw Error('Record synchronization paused.');if(await account()!==uid)throw Error('Account changed. Synchronization stopped.');await rpc('batch',{p_records:batch});done+=batch.length;show({message:`Synchronizing records · ${done} / ${records.length}`});batch=[];bytes=0;};
