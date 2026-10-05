@@ -1,0 +1,51 @@
+name: Device record synchronization
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/v110451/**'
+      - 'scripts/finalize-record-sync-v110451.mjs'
+      - 'scripts/finalize-cloud-mirror-v110450.mjs'
+      - '.github/workflows/record-sync.yml'
+permissions:
+  contents: read
+concurrency:
+  group: record-sync-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  records:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/v110451/test-records.mjs
+      - name: Exact production build
+        run: node scripts/build-v110.mjs > /tmp/record-build.log 2>&1 || { tail -n 100 /tmp/record-build.log; exit 1; }
+      - name: Install isolated browser test
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Record sync and correction flow
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/record-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/v110451/browser-records.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: record-sync-v110451-evidence
+          path: |
+            browser-test-results/cloud-records-v110451.png
+            /tmp/record-build.log
+            /tmp/record-server.log
+          retention-days: 7
