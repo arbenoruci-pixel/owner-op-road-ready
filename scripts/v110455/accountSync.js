@@ -9,6 +9,7 @@ import {encode,decode,piecesOf,snapshotBundle} from './accountFilesV110455.js';
 export const ACCOUNT_EVENT='road-ready-account-sync',APPLY_EVENT='road-ready-account-apply';
 const OWNER_KEY='owner-op-account-data-owner-v1',BASE_KEY='account-sync-v110455:base';
 let mutationEpoch=0;const tableEpoch=new Map();
+let tabBase; // Keep this tab's last observed revision; another tab may advance shared IndexedDB.
 let active=null,status={phase:'idle',message:'Checking account data…'},conflictReview=null;
 export const accountStatus=()=>status;
 function show(v){status={...status,...v};window.dispatchEvent(new CustomEvent(ACCOUNT_EVENT,{detail:status}));}
@@ -91,6 +92,7 @@ export function syncAccount({initial=false,choices=null}={}){
    const session=await cloudSession();if(!session)return {signedOut:true};const uid=session.user.id,db=getOwnerOpDb();if(!db)throw Error('Device storage is unavailable.');
    const priorOwners=(await db.sync_meta.toArray()).map(r=>r.key?.match(/^owner-op-record-sync-v1:([a-f0-9-]{36}):/i)?.[1]).filter(Boolean);
    const bound=localStorage.getItem(OWNER_KEY)||priorOwners[0];if((bound&&bound!==uid)||priorOwners.some(id=>id!==uid)){show({phase:'account_mismatch',message:'This device has another account’s offline data. Sign in with that account to open it.'});return {blocked:true};}
+   if(tabBase===undefined)tabBase=(await db.sync_meta.get(BASE_KEY))?.value||null;
    installHooks(db);
    const pending=await db.sync_meta.get('account-sync-v110455:pending');
    if(pending?.value?.uid===uid){const p=pending.value;localStorage.setItem(BUSINESS_STORE_KEY,JSON.stringify(p.oldBusiness));for(const k of LOCAL_KEYS){const v=p.oldLocals[k];if(v===undefined)localStorage.removeItem(k);else localStorage.setItem(k,typeof v==='string'?v:JSON.stringify(v));}await db.sync_meta.delete('account-sync-v110455:pending');}
@@ -100,7 +102,7 @@ export function syncAccount({initial=false,choices=null}={}){
    await check();show({phase:'syncing',message:initial?'Opening your account data…':'Syncing changes…',conflicts:[]});
    const setting=await checked(cloudClient().from('road_ready_backup_settings').select('record_sync_enabled').eq('user_id',uid).maybeSingle());
    if(!setting?.record_sync_enabled){show({phase:'disabled',message:'Account synchronization is disabled.'});return {disabled:true};}
-   const cached=(await db.sync_meta.get(BASE_KEY))?.value;
+   const cached=tabBase;
    let remote=await remoteWorkspace(uid,cached);
    let seed=null;
    if(!remote){
@@ -113,7 +115,7 @@ export function syncAccount({initial=false,choices=null}={}){
     }
    }
    if(remote)validatePayload(remote.payload);
-   const local=await capture(),saved=(await db.sync_meta.get(BASE_KEY))?.value;
+   const local=await capture(),saved=tabBase;
    if(saved&&saved.uid!==uid)throw Error('Offline synchronization belongs to another account.');
    const meaningful=hasData(local),opts={storage:cloudClient().storage.from('owner-op-private'),uid,known:piecesOf(remote?.payload?.records||{}),check,onProgress:message=>show({message})};
    if(!remote&&!meaningful){localStorage.setItem(OWNER_KEY,uid);show({phase:'current',message:'Ready for your first records.'});return {empty:true};}
@@ -139,6 +141,7 @@ export function syncAccount({initial=false,choices=null}={}){
    const meta=Object.fromEntries(Object.entries(payload).filter(([k])=>k!=='records'));
    if(changed)await install(merge.records,local,{revision,meta},uid,check);
    else{if(saved?.revision!==revision)await db.sync_meta.put({key:BASE_KEY,value:{uid,revision,meta,records:merge.records},updated_at:new Date().toISOString()});localStorage.setItem(OWNER_KEY,uid);}
+   tabBase={uid,revision,meta,records:merge.records};
    const resolved=await db.sync_meta.get('account-sync-v110455:conflicts');if(resolved)await db.sync_meta.put({...resolved,key:'account-sync-v110455:resolved:'+Date.now()});
    await db.sync_meta.delete('account-sync-v110455:conflicts');conflictReview=null;
    show({phase:'current',message:'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed};
