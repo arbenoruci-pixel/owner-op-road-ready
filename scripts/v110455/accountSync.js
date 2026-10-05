@@ -45,6 +45,7 @@ async function install(records,local,base,uid,check){
   unchanged();
   for(const [key,value] of [[BUSINESS_STORE_KEY,next.business],...Object.entries(next.locals)]){previousLocals.set(key,localStorage.getItem(key));const serialized=typeof value==='string'?value:JSON.stringify(value);localStorage.setItem(key,serialized);installedLocals.set(key,serialized);}
   await db.transaction('rw',[db.app_snapshots,db.sync_meta,...Object.keys(TABLE_KEYS).map(k=>db.table(k))],async()=>{
+   if([...installedLocals].some(([k,v])=>localStorage.getItem(k)!==v))throw Error('Another tab changed records. Retry sync.');
    const row=await db.app_snapshots.get(APP_STATE_KEY);if(mutationEpoch!==local.epoch||!same(window.__rrAccountState?.()||local.state,local.live||local.state)||!same(row?.state,local.savedState))throw Error('Records changed during sync. Retrying shortly.');
    if(!await db.sync_meta.get('account-sync-v110455:first-join'))await db.sync_meta.put({key:'account-sync-v110455:first-join',value:{uid,state:local.state,business:local.business,locals:local.locals},updated_at:now});
    const checkpoint=await db.app_snapshots.get('account-sync-before-first-join');if(!checkpoint)await db.app_snapshots.put({key:'account-sync-before-first-join',state:local.state,updated_at:now});
@@ -65,6 +66,7 @@ async function install(records,local,base,uid,check){
  // Startup's legacy fallback must never outrank the newly verified IndexedDB state.
  for(const k of [APP_STATE_KEY,'owner-op-road-ready-local-fallback-v1:'+APP_STATE_KEY])localStorage.removeItem(k);
  window.dispatchEvent(new CustomEvent(APPLY_EVENT,{detail:next.state}));
+ window.dispatchEvent(new CustomEvent('owner-op-operator-profile-updated'));
  window.dispatchEvent(new CustomEvent(BUSINESS_STORE_EVENT));window.dispatchEvent(new CustomEvent('road-ready-owner-ops-updated-v102'));
  for(const [key,value] of Object.entries(records)){const raw=decoded[key],parts=JSON.parse(key);encodeCache.set(key,{sig:canonical(rawShape(raw)),value,epoch:tableEpoch.get(parts[1])||0});}
 }
@@ -73,7 +75,8 @@ export function syncAccount({initial=false,choices=null}={}){
  const run=async()=>{
   try{
    const session=await cloudSession();if(!session)return {signedOut:true};const uid=session.user.id,db=getOwnerOpDb();if(!db)throw Error('Device storage is unavailable.');
-   const bound=localStorage.getItem(OWNER_KEY);if(bound&&bound!==uid){show({phase:'account_mismatch',message:'This device has another account’s offline data. Sign in with that account to open it.'});return {blocked:true};}
+   const priorOwners=(await db.sync_meta.toArray()).map(r=>r.key?.match(/^owner-op-record-sync-v1:([a-f0-9-]{36}):/i)?.[1]).filter(Boolean);
+   const bound=localStorage.getItem(OWNER_KEY)||priorOwners[0];if((bound&&bound!==uid)||priorOwners.some(id=>id!==uid)){show({phase:'account_mismatch',message:'This device has another account’s offline data. Sign in with that account to open it.'});return {blocked:true};}
    installHooks(db);
    const pending=await db.sync_meta.get('account-sync-v110455:pending');
    if(pending?.value?.uid===uid){const p=pending.value;localStorage.setItem(BUSINESS_STORE_KEY,JSON.stringify(p.oldBusiness));for(const k of LOCAL_KEYS){const v=p.oldLocals[k];if(v===undefined)localStorage.removeItem(k);else localStorage.setItem(k,typeof v==='string'?v:JSON.stringify(v));}await db.sync_meta.delete('account-sync-v110455:pending');}
@@ -85,7 +88,9 @@ export function syncAccount({initial=false,choices=null}={}){
    let remote=await checked(cloudClient().from('road_ready_account_workspaces').select('*').eq('user_id',uid).maybeSingle());
    let seed=null;
    if(!remote){
-    seed=await checked(cloudClient().from('road_ready_backup_snapshots').select('*').eq('user_id',uid).eq('missing_originals',0).order('created_at',{ascending:false}).limit(1).maybeSingle());
+    const candidates=await checked(cloudClient().from('road_ready_backup_snapshots').select('id,device_id,created_at,summary:review->summary').eq('user_id',uid).eq('missing_originals',0).order('created_at',{ascending:false}).limit(50));
+    const selected=candidates?.find(r=>Number(r.summary?.events||0)>0||Number(r.summary?.businessLoads||0)>0||Number(r.summary?.walletDocuments||0)>0)||candidates?.[0];
+    if(selected)seed=await checked(cloudClient().from('road_ready_backup_snapshots').select('*').eq('user_id',uid).eq('id',selected.id).single());
     if(seed){show({message:'Opening saved phone records…'});const source=await snapshotBundle(seed,{storage:cloudClient().storage.from('owner-op-private'),uid,check});const payload={format:FORMAT,records:recordsFrom(source),seed_snapshot:seed.id,seed_device:seed.device_id};
      const receipt=await checked(cloudClient().rpc('road_ready_account_commit_v1',{p_device:device(),p_expected:0,p_payload:payload}));
      remote=receipt.conflict?await checked(cloudClient().from('road_ready_account_workspaces').select('*').eq('user_id',uid).single()):{revision:receipt.revision,payload};
@@ -116,6 +121,7 @@ export function syncAccount({initial=false,choices=null}={}){
    const changed=!same(local.encoded,merge.records);
    if(changed)await install(merge.records,local,{revision},uid,check);
    else{await db.sync_meta.put({key:BASE_KEY,value:{uid,revision,records:merge.records},updated_at:new Date().toISOString()});localStorage.setItem(OWNER_KEY,uid);}
+   const resolved=await db.sync_meta.get('account-sync-v110455:conflicts');if(resolved)await db.sync_meta.put({...resolved,key:'account-sync-v110455:resolved:'+Date.now()});
    await db.sync_meta.delete('account-sync-v110455:conflicts');conflictReview=null;
    show({phase:'current',message:'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed};
   }catch(e){const message=e?.message||String(e);show({phase:navigator.onLine?'error':'offline',message});return {error:message};}
