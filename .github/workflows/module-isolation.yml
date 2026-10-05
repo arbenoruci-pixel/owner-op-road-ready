@@ -61,6 +61,8 @@ jobs:
           done
           failed=0
           node scripts/v110433/documents-export.test.mjs
+          node scripts/v110450/mirror.test.mjs
+          node scripts/v110450/browser-mirror.mjs
           node scripts/v110434/core.test.mjs
           node scripts/v110434/scan-match.test.mjs
           node scripts/v110434/browser-import.mjs

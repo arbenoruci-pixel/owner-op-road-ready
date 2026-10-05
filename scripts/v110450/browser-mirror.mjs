@@ -54,6 +54,6 @@ try{
  // Corrupt downloads are reported, without replacing any local records.
  corrupt=true;await panel.getByRole('button',{name:'Prepare cloud download'}).click();await panel.getByText('A cloud backup file failed verification.',{exact:true}).waitFor();corrupt=false;
  await panel.getByRole('checkbox').uncheck();assert.ok(await panel.getByRole('button',{name:'Back up everything now'}).isDisabled());assert.deepEqual(errors,[]);
- await page.screenshot({path:'/workspace/scratch/0d34385c2638/cloud-mirror-phone.png',fullPage:true});
+ fs.mkdirSync('browser-test-results',{recursive:true});await page.screenshot({path:'browser-test-results/cloud-mirror-v110450.png',fullPage:true});
  console.log('PASS browser: inline PDF original, complete two-driver copy, byte-identical downloadable ZIP, auth excluded, missing originals remain partial, corrupt restore blocked, local logs unchanged, pause works');
 }catch(e){console.error((await page.locator('body').innerText()).slice(0,7000));console.error(errors);throw e;}finally{await browser.close();}
