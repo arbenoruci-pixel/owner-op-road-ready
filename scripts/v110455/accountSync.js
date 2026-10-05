@@ -80,7 +80,8 @@ export function syncAccount({initial=false,choices=null}={}){
    installHooks(db);
    const pending=await db.sync_meta.get('account-sync-v110455:pending');
    if(pending?.value?.uid===uid){const p=pending.value;localStorage.setItem(BUSINESS_STORE_KEY,JSON.stringify(p.oldBusiness));for(const k of LOCAL_KEYS){const v=p.oldLocals[k];if(v===undefined)localStorage.removeItem(k);else localStorage.setItem(k,typeof v==='string'?v:JSON.stringify(v));}await db.sync_meta.delete('account-sync-v110455:pending');}
-   const check=async()=>{if((await cloudSession())?.user?.id!==uid)throw Error('Account changed. Synchronization stopped.');if(!navigator.onLine)throw Error('Offline · changes stay on this device until connected.');};
+   const check=async()=>{if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true')throw Error('Cloud work is paused on this device.');if((await cloudSession())?.user?.id!==uid)throw Error('Account changed. Synchronization stopped.');if(!navigator.onLine)throw Error('Offline · changes stay on this device until connected.');};
+   if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true'){show({phase:'paused',message:'Cloud work is paused on this device.'});return {paused:true};}
    if(!navigator.onLine){show({phase:'offline',message:'Offline · changes saved on this device.'});return {offline:true};}
    await check();show({phase:'syncing',message:initial?'Opening your account data…':'Syncing changes…',conflicts:[]});
    const setting=await checked(cloudClient().from('road_ready_backup_settings').select('record_sync_enabled').eq('user_id',uid).maybeSingle());
@@ -124,7 +125,7 @@ export function syncAccount({initial=false,choices=null}={}){
    const resolved=await db.sync_meta.get('account-sync-v110455:conflicts');if(resolved)await db.sync_meta.put({...resolved,key:'account-sync-v110455:resolved:'+Date.now()});
    await db.sync_meta.delete('account-sync-v110455:conflicts');conflictReview=null;
    show({phase:'current',message:'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed};
-  }catch(e){const message=e?.message||String(e);show({phase:navigator.onLine?'error':'offline',message});return {error:message};}
+  }catch(e){const message=e?.message||String(e);show({phase:localStorage.getItem('owner-op-record-sync-v1:paused')==='true'?'paused':navigator.onLine?'error':'offline',message});return {error:message};}
  };
  active=(navigator.locks?.request?navigator.locks.request('road-ready-account-sync-v110455',{ifAvailable:true},lock=>lock?run():{busy:true}):run()).finally(()=>{active=null;});return active;
 }
