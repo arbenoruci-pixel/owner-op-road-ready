@@ -52,7 +52,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await docs.locator('.rr-docs-card').filter({hasText:'Load LOAD300'}).getByText('Pickup Sep 25 · Delivery Sep 28',{exact:true}).waitFor();
   await page.screenshot({path:`${output}/${name}-week.png`,fullPage:true});
   await ag.click();await docs.getByText('Delivered Sep 24',{exact:true}).waitFor();
-  const checks=docs.getByRole('region',{name:'Load checks',exact:true});const toggle=checks.getByRole('button',{name:'! 2 items to check View ›',exact:true});await toggle.waitFor();
+  const checks=docs.getByRole('region',{name:'Load checks',exact:true});const toggle=checks.getByRole('button',{name:'! 1 item to check View ›',exact:true});await toggle.waitFor();
   assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert.equal(await checks.getByText(note,{exact:true}).count(),0);
   const rows=docs.getByRole('list',{name:'Load documents',exact:true});assert.equal(await rows.locator('li').count(),4);
   for(const width of [320,390,820]){
@@ -62,7 +62,8 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
    await page.screenshot({path:`${output}/${name}-load-${width}.png`,fullPage:true});
   }
   await page.setViewportSize({width:390,height:844});await toggle.click();await checks.getByText(note,{exact:true}).waitFor();
-  await checks.getByRole('button',{name:'Review source',exact:true}).click();const review=checks.getByRole('region',{name:'Review document evidence',exact:true});await review.waitFor();await review.getByRole('button',{name:'Close review',exact:true}).click();
+  const supporting=docs.locator('details').filter({has:page.getByText('Supporting files to review (1)',{exact:true})});await supporting.locator('summary').click();
+  await supporting.getByRole('button',{name:'Review source',exact:true}).click();const review=supporting.getByRole('region',{name:'Review document evidence',exact:true});await review.waitFor();await review.getByRole('button',{name:'Close review',exact:true}).click();
   await checks.locator('.rr-driver-check-toggle').click();assert.equal(await checks.getByText(note,{exact:true}).count(),0);
   await checks.locator('.rr-driver-check-toggle').click();await docs.getByRole('button',{name:'Back to loads',exact:true}).click();await docs.locator('.rr-docs-card').filter({hasText:'Load LOAD100'}).click();
   assert.equal(await docs.locator('.rr-driver-check-toggle').getAttribute('aria-expanded'),'false','checks reset when opening a load');

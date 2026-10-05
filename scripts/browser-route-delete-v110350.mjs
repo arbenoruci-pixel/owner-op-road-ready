@@ -21,6 +21,7 @@ state.loadInfo={loadNo:'324',shippingDocs:'324',routeLegsByDay:{'2026-09-13':[ta
 const rows=s=>Object.values(s.routeLegsByDay || {}).flat();
 fs.mkdirSync('browser-test-results',{recursive:true});
 for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
+ if(process.env.TEST_BROWSERS&&!process.env.TEST_BROWSERS.split(',').includes(name))continue;
  const browser=await type.launch({headless:true});
  const context=await browser.newContext({viewport:{width:390,height:844},timezoneId:'America/Chicago',isMobile:true,hasTouch:true,serviceWorkers:'block'});
  const page=await context.newPage(),errors=[],dialogs=[];
@@ -35,6 +36,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   if(route.request().method()==='OPTIONS')return route.fulfill({body:'',status:200,headers});
   if(url.pathname.endsWith('/rpc/owner_op_access_v1'))return route.fulfill({json:{approved:true},headers});
   if(url.pathname.endsWith('/rpc/owner_op_migration_status_v1'))return route.fulfill({body:'null',contentType:'application/json',headers});
+  if(url.pathname==='/rest/v1/road_ready_backup_settings')return route.fulfill({json:{enabled:false},headers});
   if(url.pathname==='/auth/v1/user')return route.fulfill({json:user,headers});
   return route.fulfill({status:403,json:{error:'External requests disabled in synthetic browser test'},headers});
  });
