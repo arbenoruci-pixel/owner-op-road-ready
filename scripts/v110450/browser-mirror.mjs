@@ -4,7 +4,7 @@ import {chromium} from 'playwright';
 import {baseState,seed,setupRoutes,snapshot,origin,simplePdf} from '../v110434/browserFixture.mjs';
 import {readStoredZip} from '../../source/src/modules/backup/chunkedZipV110431.js';
 const browser=await chromium.launch({headless:true,...(origin.startsWith('https')&&process.env.HTTPS_PROXY?{proxy:{server:process.env.HTTPS_PROXY}}:{})}),context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',ignoreHTTPSErrors:true,acceptDownloads:true}),page=await context.newPage();
-const objects=new Map(),snapshots=[],heartbeats=[],errors=[];let corrupt=false,popups=0;
+const objects=new Map(),snapshots=[],heartbeats=[],errors=[];let corrupt=false,popups=0,denySettings=true;
 page.on('pageerror',e=>errors.push(e.message));page.on('popup',()=>popups++);
 await setupRoutes(context);
 await context.route('https://ghwkcgczuwctzxsxmqzx.supabase.co/**',async route=>{
@@ -15,7 +15,7 @@ await context.route('https://ghwkcgczuwctzxsxmqzx.supabase.co/**',async route=>{
  if(method==='OPTIONS')return route.fulfill({body:'',headers:cors});
  if(path.endsWith('/owner_op_access_v1'))return json({approved:true});
  if(path.endsWith('/owner_op_migration_status_v1'))return json(null);
- if(path==='/rest/v1/road_ready_backup_settings')return rows([{enabled:true}]);
+ if(path==='/rest/v1/road_ready_backup_settings')return denySettings?json({message:'Synthetic settings unavailable'},403):rows([{enabled:true}]);
  if(path==='/rest/v1/road_ready_backup_devices'){heartbeats.push(request.postDataJSON());return json(null,201);}
  if(path==='/rest/v1/road_ready_backup_snapshots'){
   const id=url.searchParams.get('id')?.replace(/^eq\./,''),device=url.searchParams.get('device_id')?.replace(/^eq\./,'');
@@ -40,7 +40,8 @@ try{
  await docs.getByText('View originals ›',{exact:true}).click();await docs.getByRole('button',{name:/Open .*original.pdf/}).click();
  const viewer=page.getByRole('dialog',{name:'Original document'});await viewer.getByRole('link',{name:'Download',exact:true}).waitFor();assert.equal(await viewer.locator('iframe').count(),1);assert.equal(popups,0);await viewer.getByRole('button',{name:'Close',exact:true}).click();
  await page.goto(origin+'/cloud');const panel=page.getByRole('region',{name:'Complete device backup'});
- await panel.getByRole('checkbox').check();await panel.getByText('Complete device copy saved and verified.',{exact:true}).waitFor({timeout:60000});
+ await panel.getByRole('checkbox').check();await panel.getByText('Synthetic settings unavailable',{exact:true}).waitFor();assert.equal(heartbeats.length,0,'A failed settings read must not initiate a backup write');denySettings=false;
+ await panel.getByRole('button',{name:'Back up everything now'}).click();await panel.getByText('Complete device copy saved and verified.',{exact:true}).waitFor({timeout:60000});
  assert.equal(snapshots.length,1);assert.equal(snapshots[0].missing_originals,0);assert.ok(snapshots[0].review.logbook.some(d=>d.driverId==='beta'&&d.events.some(e=>e.status==='ON')));assert.ok(heartbeats.some(h=>h.status==='verified'));
  await panel.getByRole('button',{name:'Prepare cloud download'}).click();const link=panel.getByRole('link',{name:'Download verified backup'});await link.waitFor({timeout:60000});
  const [downloaded]=await Promise.all([page.waitForEvent('download'),link.click()]);const bytes=fs.readFileSync(await downloaded.path()),entries=await readStoredZip(new Blob([bytes]));
