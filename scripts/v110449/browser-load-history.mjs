@@ -8,7 +8,7 @@ const browser=await chromium.launch({headless:true,...(origin.startsWith('https'
 await setupRoutes(context);page.on('pageerror',error=>errors.push(error.message));await page.clock.setFixedTime(new Date('2026-10-04T23:00:00Z'));
 let popups=0;page.on('popup',()=>popups++);
 const panel=page.getByRole('region',{name:'Documents',exact:true});
-async function folder(){await page.getByRole('button',{name:'Documents',exact:true}).click();await panel.locator('.rr-docs-card').filter({hasText:'May 25'}).click();await panel.locator('.rr-docs-card').filter({hasText:'Load '+loadNo}).click();await panel.getByText('Load details',{exact:true}).click();}
+async function folder(){await page.getByRole('button',{name:'Documents',exact:true}).click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();await panel.locator('.rr-docs-card').filter({hasText:'May 25'}).click();await panel.locator('.rr-docs-card').filter({hasText:'Load '+loadNo}).click();await panel.getByText('Load details',{exact:true}).click();}
 try{
  if(process.env.EXPECT_SHA){const v=await(await page.request.get(origin+'/app-version.json?history='+Date.now())).json();assert.equal(v.version,'110.4.49');assert.equal(v.sourceCommit,process.env.EXPECT_SHA);}
  await seed(page,state);const before=await snapshot(page);await folder();

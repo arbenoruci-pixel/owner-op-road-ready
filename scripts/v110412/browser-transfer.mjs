@@ -37,7 +37,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]) {
    const db=await new Promise(ok=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);});
    await new Promise((ok,no)=>{const tx=db.transaction('documents_local','readwrite');for(const id of ['a','a-second','b','loose','loose-old'])tx.objectStore('documents_local').put({local_id:id+'-local',client_document_id:id+'-client',load_no:id.startsWith('loose')?'':id==='b'?'83003':'82002',original_file_name:id+'.pdf',mime_type:'application/pdf',type:id==='b'?'pod':'bol',document_type:id==='b'?'pod':'bol',document_date:id==='loose-old'?'2026-09-16':'2026-09-23',status:'active',metadata:{testOriginal:true}});tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});db.close();
   });
-  await page.getByRole('button',{name:/^Documents/}).first().click();await page.locator('.rr-docs-browser').waitFor();
+  await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();await page.locator('.rr-docs-browser').waitFor();
   return page;
  }
  try {

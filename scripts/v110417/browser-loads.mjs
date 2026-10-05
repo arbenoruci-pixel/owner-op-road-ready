@@ -41,7 +41,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   state.routeLegsByDay['2026-09-25']=[{id:'trip-a-later',loadNo:'LOAD100',date:'2026-09-25',kind:'loaded',status:'closed'}];
   await seed(page,state,[{id:'packet',bytes:[...bytes]},{id:'photo',bytes:[...extra]}]);
   await page.evaluate(async documents=>{const db=await new Promise(ok=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);});await new Promise((ok,no)=>{const tx=db.transaction('documents_local','readwrite');for(const doc of documents)tx.objectStore('documents_local').put(doc);tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});db.close();},[packet,photograph]);
-  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();
+  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
   const docs=page.getByRole('region',{name:'Documents',exact:true});await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).waitFor();const before=await stored(page);
   assert.equal(await docs.locator('.rr-docs-card').filter({hasText:'Sep 28'}).count(),0);
   assert.equal(await docs.locator('.rr-docs-card').filter({hasText:'Date not set'}).count(),0,'saved pickup dates prevent undated loads');
@@ -68,7 +68,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await checks.locator('.rr-driver-check-toggle').click();await docs.getByRole('button',{name:'Back to loads',exact:true}).click();await docs.locator('.rr-docs-card').filter({hasText:'Load LOAD100'}).click();
   assert.equal(await docs.locator('.rr-driver-check-toggle').getAttribute('aria-expanded'),'false','checks reset when opening a load');
   await docs.getByRole('button',{name:'Back to loads',exact:true}).click();await docs.getByRole('button',{name:'Back to weeks',exact:true}).click();
-  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).click();assert.deepEqual(await docs.locator('.rr-driver-load-id>span').allTextContents(),['Load LOAD300','Load LOAD400','Load LOAD200','Load LOAD100']);
+  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).click();assert.deepEqual(await docs.locator('.rr-driver-load-id>span').allTextContents(),['Load LOAD300','Load LOAD400','Load LOAD200','Load LOAD100']);
   assert.deepEqual(await stored(page),before);assert.deepEqual(errors,[]);
   console.log(`PASS ${name} — service dates, chronological load identities, weekly navigation, one collapsed check, working source review, 320/390/820px, reload and unchanged originals/logs`);
  }catch(error){if(page){await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});fs.writeFileSync(`${output}/${name}-failure.txt`,await page.locator('body').innerText().catch(()=>''));}throw error;}

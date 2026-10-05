@@ -31,7 +31,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await setupRoutes(context);page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-09-27T15:00:00Z'));
   const state=baseState();state.view='logbook';state.testInstructionStore={loads:loads.map(load=>({...load,documentTransferDays:['2026-09-25']})),documents:[],fuel:[],expenses:[]};await seed(page,state,[{id:'packet',bytes:[...bytes]}]);
   await page.evaluate(async doc=>{const db=await new Promise(ok=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);});await new Promise((ok,no)=>{const tx=db.transaction('documents_local','readwrite');tx.objectStore('documents_local').put(doc);tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});db.close();},packet);
-  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();const docs=page.getByRole('region',{name:'Documents',exact:true});await docs.waitFor();
+  await page.reload();await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();const docs=page.getByRole('region',{name:'Documents',exact:true});await docs.waitFor();
   const before=await stored(page);await docs.locator('.rr-docs-card').filter({hasText:'Sep 21'}).click();
   assert.equal(await docs.locator('.rr-docs-card').count(),4);
   assert.equal(await docs.locator('.rr-docs-card').filter({hasText:'Load TEST10'}).locator('strong').innerText(),'Alpha, IL → Beta, IN');

@@ -490,7 +490,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.equal(storedReview.documents[0].fields.bolNumber.value,'MANUAL-345');
     assert.deepEqual(storedReview.documents[0].pages,[1]);
     assert.equal(storedReview.trainingEligible,false);assert.ok(storedReview.remaining>0);
-    await page.getByRole('button',{name:/^Documents/}).first().click();
+    await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
     await page.getByRole('heading',{name:'Recent documents',exact:true}).waitFor();
     const recentReview=page.getByRole('region',{name:'Recent documents'});
     await recentReview.locator('.saved-document-row-v344').first().click();

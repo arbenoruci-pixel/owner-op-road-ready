@@ -39,7 +39,7 @@ async function seedMetadata(page) {
   }));
 }
 async function openDocuments(page) {
-  await page.getByRole('button',{name:/^Documents/}).first().click();
+  await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
   await page.getByRole('heading',{name:'Recent documents',exact:true}).waitFor();
 }
 async function fit(page, locator) {
