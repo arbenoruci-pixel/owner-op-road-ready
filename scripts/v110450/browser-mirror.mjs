@@ -4,7 +4,7 @@ import {chromium} from 'playwright';
 import {baseState,seed,setupRoutes,snapshot,origin,simplePdf} from '../v110434/browserFixture.mjs';
 import {readStoredZip} from '../../source/src/modules/backup/chunkedZipV110431.js';
 const browser=await chromium.launch({headless:true,...(origin.startsWith('https')&&process.env.HTTPS_PROXY?{proxy:{server:process.env.HTTPS_PROXY}}:{})}),context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',ignoreHTTPSErrors:true,acceptDownloads:true}),page=await context.newPage();
-const objects=new Map(),snapshots=[],heartbeats=[],errors=[];let corrupt=false,popups=0,denySettings=true;
+const objects=new Map(),snapshots=[],heartbeats=[],errors=[];let corrupt=false,popups=0,denySettings=false,backupSettingsReads=0;
 page.on('pageerror',e=>errors.push(e.message));page.on('popup',()=>popups++);
 await setupRoutes(context);
 await context.route('https://ghwkcgczuwctzxsxmqzx.supabase.co/**',async route=>{
@@ -15,7 +15,7 @@ await context.route('https://ghwkcgczuwctzxsxmqzx.supabase.co/**',async route=>{
  if(method==='OPTIONS')return route.fulfill({body:'',headers:cors});
  if(path.endsWith('/owner_op_access_v1'))return json({approved:true});
  if(path.endsWith('/owner_op_migration_status_v1'))return json(null);
- if(path==='/rest/v1/road_ready_backup_settings')return denySettings?json({message:'Synthetic settings unavailable'},403):rows([{enabled:true}]);
+ if(path==='/rest/v1/road_ready_backup_settings'){if(url.searchParams.get('select')==='enabled')backupSettingsReads++;return denySettings?json({message:'Synthetic settings unavailable'},403):rows([{enabled:true,record_sync_enabled:false}]);}
  if(path==='/rest/v1/road_ready_backup_devices'){heartbeats.push(request.postDataJSON());return json(null,201);}
  if(path==='/rest/v1/road_ready_backup_snapshots'){
   const id=url.searchParams.get('id')?.replace(/^eq\./,''),device=url.searchParams.get('device_id')?.replace(/^eq\./,'');
@@ -29,10 +29,10 @@ await context.route('https://ghwkcgczuwctzxsxmqzx.supabase.co/**',async route=>{
  return route.fallback();
 });
 try{
- if(process.env.EXPECT_SHA){const meta=await(await page.request.get(origin+'/app-version.json?mirror='+Date.now())).json();assert.equal(meta.version,'110.4.50');assert.equal(meta.sourceCommit,process.env.EXPECT_SHA);}
+ if(process.env.EXPECT_SHA){const meta=await(await page.request.get(origin+'/app-version.json?mirror='+Date.now())).json();assert.equal(meta.version,'110.4.54');assert.equal(meta.sourceCommit,process.env.EXPECT_SHA);}
  const day='2026-10-02',state={...baseState(),activeDriverId:'alpha',teamDrivers:[{id:'alpha',name:'Synthetic Driver'},{id:'beta',name:'Saved Beta'}],teamLogbooksByDriverId:{beta:{eventsByDay:{[day]:[{id:'beta-event',status:'ON',startMin:600,endMin:620}]},signatureByDay:{[day]:{signed:true,signatureDataUrl:'data:image/png;base64,YmV0YS1zaWduYXR1cmU='}},formByDay:{[day]:{coDrivers:'Synthetic Driver'}}}},testInstructionStore:{loads:[{id:'load-82002',loadNo:'82002',origin:'Test city, IL',destination:'Example city, OH',pickupDate:'2026-09-07',deliveryDate:'2026-09-07'}],documents:[{id:'original-local',clientDocumentId:'original-client',loadNo:'82002',type:'bol',original_file_name:'original.pdf'}]}};
  const original=simplePdf('Synthetic original\nLoad 82002');await seed(page,state,[{id:'original',bytes:[...original]}]);
- await page.evaluate(()=>localStorage.setItem('owner-op-cloud-mirror-v1:paused','true'));
+ await page.evaluate(()=>localStorage.setItem('owner-op-cloud-mirror-v1:paused','false'));
  const before=await snapshot(page);
  await page.getByRole('button',{name:'Documents',exact:true}).click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
  const docs=page.getByRole('region',{name:'Documents',exact:true});
@@ -40,7 +40,12 @@ try{
  await docs.getByText('View originals ›',{exact:true}).click();await docs.getByRole('button',{name:/Open .*original.pdf/}).click();
  const viewer=page.getByRole('dialog',{name:'Original document'});await viewer.getByRole('link',{name:'Download',exact:true}).waitFor();assert.equal(await viewer.locator('iframe').count(),1);assert.equal(popups,0);await viewer.getByRole('button',{name:'Close',exact:true}).click();
  await page.goto(origin+'/cloud');const panel=page.getByRole('region',{name:'Complete device backup'});
- await panel.getByRole('checkbox').check();await panel.getByText('Synthetic settings unavailable',{exact:true}).waitFor();assert.equal(heartbeats.length,0,'A failed settings read must not initiate a backup write');denySettings=false;
+ await page.clock.install();await page.clock.fastForward(121000);
+ await page.evaluate(()=>{window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'));});
+ assert.equal(heartbeats.length,0,'Opening the app, timers and reconnecting must not start a full backup');assert.equal(objects.size,0);assert.equal(snapshots.length,0);
+ assert.equal(await panel.getByRole('checkbox').count(),0);assert.equal(backupSettingsReads,0,'Background activity must not enter the backup workflow');
+ denySettings=true;await page.evaluate(()=>localStorage.setItem('owner-op-cloud-mirror-v1:paused','true'));
+ await panel.getByRole('button',{name:'Back up everything now'}).click();await panel.getByText('Synthetic settings unavailable',{exact:true}).waitFor();assert.equal(heartbeats.length,0,'A failed settings read must not initiate a backup write');denySettings=false;
  await panel.getByRole('button',{name:'Back up everything now'}).click();await panel.getByText('Complete device copy saved and verified.',{exact:true}).waitFor({timeout:60000});
  assert.equal(snapshots.length,1);assert.equal(snapshots[0].missing_originals,0);assert.ok(snapshots[0].review.logbook.some(d=>d.driverId==='beta'&&d.events.some(e=>e.status==='ON')));assert.ok(heartbeats.some(h=>h.status==='verified'));
  await panel.getByRole('button',{name:'Prepare cloud download'}).click();const link=panel.getByRole('link',{name:'Download verified backup'});await link.waitFor({timeout:60000});
@@ -54,7 +59,10 @@ try{
  await panel.getByRole('button',{name:'Back up everything now'}).click();await panel.getByText('Copy saved · 1 originals are unavailable on this device.',{exact:true}).waitFor({timeout:60000});assert.equal(snapshots.at(-1).missing_originals,1);
  // Corrupt downloads are reported, without replacing any local records.
  corrupt=true;await panel.getByRole('button',{name:'Prepare cloud download'}).click();await panel.getByText('A cloud backup file failed verification.',{exact:true}).waitFor();corrupt=false;
- await panel.getByRole('checkbox').uncheck();assert.ok(await panel.getByRole('button',{name:'Back up everything now'}).isDisabled());assert.deepEqual(errors,[]);
+ const savedCount=snapshots.length;await page.reload();await page.getByRole('region',{name:'Complete device backup'}).getByText(/Last copy:/).waitFor();
+ await page.clock.fastForward(121000);await page.evaluate(()=>window.dispatchEvent(new Event('online')));
+ assert.equal(snapshots.length,savedCount,'Reload and reconnect must not create another full copy');
+ assert.ok(await page.getByRole('region',{name:'Complete device backup'}).getByRole('button',{name:'Back up everything now'}).isEnabled());assert.deepEqual(errors,[]);
  fs.mkdirSync('browser-test-results',{recursive:true});await page.screenshot({path:'browser-test-results/cloud-mirror-v110450.png',fullPage:true});
- console.log('PASS browser: inline PDF original, complete two-driver copy, byte-identical downloadable ZIP, auth excluded, missing originals remain partial, corrupt restore blocked, local logs unchanged, pause works');
+ console.log('PASS browser: inline PDF original, complete two-driver copy, byte-identical downloadable ZIP, auth excluded, missing originals remain partial, corrupt restore blocked, local logs unchanged, manual button works after a previous pause, opening/reloading/reconnecting and timers never start a backup');
 }catch(e){console.error((await page.locator('body').innerText()).slice(0,7000));console.error(errors);throw e;}finally{await browser.close();}

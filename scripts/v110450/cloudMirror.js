@@ -8,13 +8,13 @@ import {recordedDeviceInventory} from '../local-db/deviceInventory.js';
 import {knownPieces,uploadEntries,downloadEntries,hashBytes,bounded} from './mirrorCoreV110450.js';
 
 const PREFIX='owner-op-cloud-mirror-v1:',BUCKET='owner-op-private',EVENT='road-ready-cloud-mirror';
-let active=null,current={phase:'idle',message:'Checking backup status…'};
+let active=null,current={phase:'idle',message:'Manual backup · starts only when you tap Back up everything now.'};
 export const mirrorStatus=()=>current;
 function show(value){current={...current,...value};window.dispatchEvent(new CustomEvent(EVENT,{detail:current}));}
 export const mirrorEvent=EVENT;
 function deviceId(){let id=localStorage.getItem(PREFIX+'device');if(!id){id=crypto.randomUUID();localStorage.setItem(PREFIX+'device',id);}return id;}
 export function mirrorPaused(){return localStorage.getItem(PREFIX+'paused')==='true';}
-export function pauseMirror(paused){localStorage.setItem(PREFIX+'paused',String(paused));show({phase:paused?'paused':'idle',message:paused?'Cloud backup paused on this device.':'Cloud backup enabled.'});}
+export function pauseMirror(paused){localStorage.setItem(PREFIX+'paused',String(paused));show({phase:paused?'paused':'idle',message:paused?'Cloud backup paused on this device.':'Manual backup ready.'});}
 async function checked(query){const {data,error}=await bounded(query);if(error)throw error;return data;}
 async function enabled(uid){const row=await checked(cloudClient().from('road_ready_backup_settings').select('enabled').eq('user_id',uid).maybeSingle());return row?.enabled===true;}
 export async function latestMirror(){const session=await cloudSession();if(!session)return null;return checked(cloudClient().from('road_ready_backup_snapshots').select('*').eq('device_id',deviceId()).order('created_at',{ascending:false}).limit(1).maybeSingle());}
@@ -24,7 +24,7 @@ async function capture(){
  const db=getOwnerOpDb();if(!db)throw Error('Device storage is unavailable.');
  const before=localStorage.getItem(BUSINESS_STORE_KEY),rows=rawLocalRows(),tables={};
  await db.transaction('r',db.tables,async()=>{for(const table of db.tables)tables[table.name]=await table.toArray();});
- if(before!==localStorage.getItem(BUSINESS_STORE_KEY))throw Error('Records changed while preparing the copy. Backup will retry.');
+ if(before!==localStorage.getItem(BUSINESS_STORE_KEY))throw Error('Records changed while preparing the copy. Try the backup again.');
  tables.sync_meta=(tables.sync_meta||[]).filter(r=>!/^cloud-mirror:/.test(r.key||'')&&!/(auth|session|token|password|secret)/i.test(r.key||''));
  const state=tables.app_snapshots?.find(r=>r.key==='owner-op-road-ready-state-v1')?.state;
  if(!state)throw Error('No saved app records were found on this device.');
@@ -36,12 +36,14 @@ async function capture(){
  return {state,businessStore:business,db:frozenDb,localRows:rows,inventory};
 }
 export function runMirror({force=false}={}){
+ // Full archives are expensive to prepare. Background callers must never start one.
+ if(!force)return Promise.resolve(null);
  if(active)return active;
  const work=async()=>{
   let uid='',started=false;
   try{
    if(mirrorPaused()){show({phase:'paused',message:'Cloud backup paused on this device.'});return;}
-   if(navigator.onLine===false){show({phase:'offline',message:'Offline · backup will retry when connected.'});return;}
+   if(navigator.onLine===false){show({phase:'offline',message:'Offline · reconnect, then tap Back up everything now.'});return;}
    const session=await cloudSession();if(!session){show({phase:'signed_out',message:'Sign in to save a private cloud copy.'});return;}
    uid=session.user.id;if(!await enabled(uid)){show({phase:'disabled',message:'Temporary cloud backup is not enabled for this account.'});return;}
    const latest=await latestMirror();
@@ -50,7 +52,7 @@ export function runMirror({force=false}={}){
    const frozen=await capture();
    const result=await buildLargeBackup({...frozen,appVersion:'110.4.50',onProgress:message=>show({message})});
    const entries=await readStoredZip(result.file),review=JSON.parse(await entries.get('Review/ChatGPT-Review.json').blob.text());
-   const check=()=>{if(mirrorPaused())throw Error('Backup paused. Previous verified copies are retained.');if(navigator.onLine===false)throw Error('Connection lost. Backup will retry.');};
+   const check=()=>{if(mirrorPaused())throw Error('Backup paused. Previous verified copies are retained.');if(navigator.onLine===false)throw Error('Connection lost. Tap Back up everything now to retry.');};
    const progress=message=>show({message});
    await heartbeat(uid,'uploading',{originals:result.originals,missingOriginals:result.missingOriginals,logDays:result.logDays,loads:result.loads});
    const files=await uploadEntries(entries,cloudClient().storage.from(BUCKET),uid,knownPieces(latest?.manifest),progress,check);
