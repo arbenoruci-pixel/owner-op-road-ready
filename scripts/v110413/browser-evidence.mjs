@@ -70,9 +70,14 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await review.getByRole('button',{name:'Save and use in books',exact:true}).click();assert.equal((await stored(page)).business.fuel.length,1,'re-saving the source cannot duplicate an expense');
   await review.getByRole('button',{name:'Close review',exact:true}).click();await panel.getByRole('button',{name:'Track a load',exact:true}).click();
   const expected=page.getByRole('form',{name:'Track expected load',exact:true});await expected.getByLabel('Broker load number',{exact:true}).fill('FUTURE200');await expected.getByLabel('Pickup date',{exact:true}).fill('2026-09-27');await expected.getByLabel('Delivery date',{exact:true}).fill('2026-09-28');await expected.getByRole('button',{name:'Save expectation'}).click();
-  await panel.locator('li').filter({hasText:'Load FUTURE200 · Signed delivery proof'}).getByText('Not due yet',{exact:true}).waitFor();
+  // Load requirements live in the load folder; More options shows supporting records.
+  await panel.getByRole('button',{name:'Close',exact:true}).first().click();
+  const documents=page.getByRole('region',{name:'Documents',exact:true});
+  await documents.locator('.rr-docs-card').filter({hasText:'Sep 21'}).click();
+  await documents.locator('.rr-docs-card').filter({hasText:'Load FUTURE200'}).click();
+  await documents.getByRole('button',{name:'Add Signed POD',exact:true}).getByText('Due 2026-09-28',{exact:true}).waitFor();
   // Weekly add routes preserve the intended load through scanner review.
-  const rateRow=panel.locator('li').filter({hasText:'Load FUTURE200 · Rate confirmation'});await rateRow.getByRole('button',{name:'Add document',exact:true}).click();await page.getByRole('button',{name:'Choose a file',exact:false}).waitFor();
+  await documents.getByRole('button',{name:'Add Rate confirmation',exact:true}).click();await page.getByRole('button',{name:'Choose a file',exact:false}).waitFor();
   await page.reload();panel=await openEvidence(page);
   await chooseRecovery(page);await page.getByRole('button',{name:'Apply reviewed recovery',exact:true}).click();await page.getByRole('status').filter({hasText:'already applied'}).waitFor();after=await stored(page);assert.equal(after.business.fuel.length,1);assert.equal(after.business.loads.length,2);assert.equal(after.docs.find(d=>d.client_document_id==='fuel-client').extracted.evidenceFactsV1.source,'driver_review');assert.equal(logs(after.state),logs(before.state));
   for(const width of [320,390,820]){await page.setViewportSize({width,height:1000});assert.ok(await panel.evaluate(el=>el.getBoundingClientRect().right<=innerWidth+1),'checklist fits mobile viewport');}

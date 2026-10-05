@@ -38,7 +38,7 @@ async function capture(){
 export function runMirror({force=false}={}){
  if(active)return active;
  const work=async()=>{
-  let uid='';
+  let uid='',started=false;
   try{
    if(mirrorPaused()){show({phase:'paused',message:'Cloud backup paused on this device.'});return;}
    if(navigator.onLine===false){show({phase:'offline',message:'Offline · backup will retry when connected.'});return;}
@@ -46,7 +46,7 @@ export function runMirror({force=false}={}){
    uid=session.user.id;if(!await enabled(uid)){show({phase:'disabled',message:'Temporary cloud backup is not enabled for this account.'});return;}
    const latest=await latestMirror();
    if(!force&&latest&&Date.now()-Date.parse(latest.created_at)<10*60*1000){show({phase:latest.missing_originals?'partial':'verified',message:latest.missing_originals?`${latest.missing_originals} originals need attention.`:'Latest complete device copy verified.',latest});return latest;}
-   await heartbeat(uid,'preparing');show({phase:'running',message:'Preparing all records and original files…'});
+   await heartbeat(uid,'preparing');started=true;show({phase:'running',message:'Preparing all records and original files…'});
    const frozen=await capture();
    const result=await buildLargeBackup({...frozen,appVersion:'110.4.50',onProgress:message=>show({message})});
    const entries=await readStoredZip(result.file),review=JSON.parse(await entries.get('Review/ChatGPT-Review.json').blob.text());
@@ -62,7 +62,7 @@ export function runMirror({force=false}={}){
    if(await hashBytes(new TextEncoder().encode(canonical(receipt.manifest)))!==manifestSha)throw Error('Cloud backup receipt did not match the file index.');
    await heartbeat(uid,result.missingOriginals?'partial':'verified',{snapshotId:receipt.id,originals:result.originals,missingOriginals:result.missingOriginals,logDays:result.logDays,loads:result.loads});
    show({phase:result.missingOriginals?'partial':'verified',latest:receipt,message:result.missingOriginals?`Copy saved · ${result.missingOriginals} originals are unavailable on this device.`:'Complete device copy saved and verified.'});return receipt;
-  }catch(error){const message=error?.message||String(error),paused=mirrorPaused();show({phase:paused?'paused':'error',message});if(uid)await heartbeat(uid,'error',{message:message.slice(0,700),paused}).catch(()=>{});return {error:message};}
+  }catch(error){const message=error?.message||String(error),paused=mirrorPaused();show({phase:paused?'paused':'error',message});if(uid&&started)await heartbeat(uid,'error',{message:message.slice(0,700),paused}).catch(()=>{});return {error:message};}
  };
  active=(navigator.locks?.request?navigator.locks.request('road-ready-cloud-mirror',{ifAvailable:true},lock=>lock?work():null):work()).finally(()=>{active=null;});return active;
 }
