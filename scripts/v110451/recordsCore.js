@@ -23,7 +23,7 @@ const editable={
  routes:['loadNo','shippingDocs','fromCity','fromState','toCity','toState','pickupDay','deliveryDay','pickupDate','deliveryDate','status','notes'],
  wallet:['title','expiresOn','issuedOn','documentNumber','notes'],
 };
-export function allowedFields(record){return record?.origin==='device'&&!record.locator?.fragment?(editable[record.kind]||[]):[];}
+export function allowedFields(record){return record?.origin==='device'&&!record.locator?.fragment&&!record.locator?.duplicate?(editable[record.kind]||[]):[];}
 export function validatePatch(record,patch,unset=[]){
  if(!patch||Array.isArray(patch)||typeof patch!=='object'||!Array.isArray(unset))throw Error('Invalid correction.');
  const fields=allowedFields(record),keys=[...Object.keys(patch),...unset];
@@ -37,14 +37,20 @@ const loadOf=v=>String(v?.loadNo||v?.load_no||v?.shippingDocs||v?.extracted?.loa
 const dayOf=v=>String(v?.log_date||v?.document_date||v?.date||v?.pickupDate||'').slice(0,10);
 export function idOf(v){return v?.id||v?.local_id||v?.local_asset_id||v?.client_document_id||v?.local_blob_id||v?.client_mutation_id||v?.source_id||v?.key;}
 export function projectRecords({state={},business={},tables={},localRows=[]}){
- const out=[],used=new Set();
+ const out=[],used=new Map();
  function add(key,kind,data,locator={},extra={}){
   const clean=visible(data),serialized=JSON.stringify(clean);
   if(serialized.length>400000){
    const parts=typeof clean==='string'?Array.from({length:Math.ceil(clean.length/100000)},(_,i)=>[String(i),clean.slice(i*100000,(i+1)*100000)]):Object.entries(clean);
    for(const [field,part] of parts)add(key+'/part/'+field,kind,part,{...locator,fragment:true},extra);return;
   }
-  if(used.has(key))throw Error('Duplicate saved record identity: '+key);used.add(key);out.push({record_key:key,kind,origin:'device',locator,data:clean,load_no:loadOf(data),day:dayOf(data),driver_id:'',...extra});
+  if(used.has(key)){
+   const first=used.get(key);first.locator={...first.locator,duplicate:true,duplicateOf:key};
+   locator={...locator,duplicate:true,duplicateOf:key};let occurrence=2;
+   while(used.has(key+'/duplicate/'+occurrence))occurrence++;
+   key+='/duplicate/'+occurrence;
+  }
+  const record={record_key:key,kind,origin:'device',locator,data:clean,load_no:loadOf(data),day:dayOf(data),driver_id:'',...extra};used.set(key,record);out.push(record);
  }
  for(const [bucket,value] of Object.entries(business)){
   if(Array.isArray(value))value.forEach((r,i)=>add('business/'+bucket+'/'+(idOf(r)||'row-'+i),'business_'+bucket,r,{store:'business',bucket,id:String(idOf(r)||''),index:i}));
@@ -80,9 +86,10 @@ export function projectRecords({state={},business={},tables={},localRows=[]}){
 }
 export function sourceRecord(bundle,record){
  const l=record.locator||{};
- if(l.store==='business')return bundle.business?.[l.bucket]?.find(r=>String(idOf(r)||'')===l.id&&l.id);
+ const unique=rows=>{if(rows.length>1)throw Error('Conflict: multiple saved records share this identity. Review them separately.');return rows[0];};
+ if(l.store==='business')return unique((bundle.business?.[l.bucket]||[]).filter(r=>String(idOf(r)||'')===l.id&&l.id));
  if(l.store==='db'&&l.table==='documents_local')return bundle.tables.documents_local?.find(r=>String(r.local_id)===l.id);
- if(l.store==='state-route')return bundle.state.routeLegsByDay?.[l.day]?.find(r=>String(r.id||'')===l.id&&l.id);
+ if(l.store==='state-route')return unique((bundle.state.routeLegsByDay?.[l.day]||[]).filter(r=>String(r.id||'')===l.id&&l.id));
  if(l.store==='wallet')return bundle.state.dotWallet?.documents?.[l.key];
  return undefined;
 }

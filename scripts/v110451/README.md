@@ -45,3 +45,7 @@ After the stabilization period, export a full verified ZIP, test its restore on 
 - `test-database.sql`: run as admin after replacing owner/claims placeholders for an approved test owner. Entire test is rolled back. Covers authenticated RLS, wrong-owner isolation, revision history, leases, stale hashes/runs/counts, administrative queue and immutable correction payloads.
 - `node scripts/v110451/browser-records.mjs`: production browser path with fully mocked external requests and synthetic account. Covers incremental index, read UI, editing lock, durable correction and ack retry, metadata writes, conflicts, offline/pause/reload, original bytes and both drivers' logs/signatures.
 - No test should write synthetic data into a real user's persistent cloud records.
+
+## Duplicate source identities (v110.4.52)
+
+Legacy rows may share a saved ID. The index retains every occurrence with a distinct record key and marks its locator as duplicate. These rows remain read-only for remote corrections until the source identity is reviewed. A correction queued before the duplicate was discovered also rechecks the complete source collection and stops on ambiguity. No local IDs, load fields, originals or duty records are merged or deleted during indexing.
