@@ -12,7 +12,7 @@ export default function EvidenceWorkspace({state,documents=[],onBack,loadsView,o
  const picker=useRef(),controller=useRef();
  useEffect(()=>{let live=true;const refresh=()=>readDocuments().then(rows=>{if(live)setDocs(rows);}).catch(e=>{if(live)setError(e.message);});refresh();window.addEventListener('road-ready-evidence-filed',refresh);return()=>{live=false;window.removeEventListener('road-ready-evidence-filed',refresh);controller.current?.abort();};},[]);
  useEffect(()=>{setDocs(documents);},[documents]);
- useEffect(()=>{setReady(null);},[docs,state,filters]);
+ useEffect(()=>{setReady(null);},[docs,filters]);
  useEffect(()=>{if(!ready)return;return()=>URL.revokeObjectURL(ready.url);},[ready]);
  const rows=useMemo(()=>catalog(docs,state),[docs,state]);
  const visible=useMemo(()=>filterRows(rows,{query,category,review}),[rows,query,category,review]);
