@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';import {pathToFileURL} from 'node:url';
+const code=fs.readFileSync('scripts/v110455/accountFiles.js','utf8').replace("'./mirrorCoreV110450.js'",JSON.stringify(pathToFileURL(process.cwd()+'/scripts/v110450/mirrorCore.js').href));
+const {encode,decode,snapshotBundle}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const {hashBytes}=await import('../v110450/mirrorCore.js');
+const uid='00000000-0000-4000-8000-000000000055',store=new Map();let uploads=0,corrupt=false;
+const storage={upload:async(k,v)=>{uploads++;store.set(k,new Blob([v]));return {};},download:async k=>({data:corrupt?new Blob(['damaged']):store.get(k)})};
+const opts={uid,storage,known:new Set()},raw={pdf:new Blob(['original bytes'],{type:'application/pdf'}),signature:'data:image/png;base64,c2lnbmF0dXJl',text:'x'.repeat(70000)};
+const packed=await encode(raw,opts),restored=await decode(packed,opts);assert.equal(await restored.pdf.text(),'original bytes');assert.equal(restored.signature,raw.signature);assert.equal(restored.text,raw.text);await encode(raw,opts);assert.equal(uploads,3);
+corrupt=true;await assert.rejects(decode(packed,opts),/verification/);corrupt=false;
+const payload={state:{activeDriverId:'alpha',signatureByDay:{'2026-10-05':{signatureDataUrl:{__roadReadyZipFile:'DataURL',path:'sig',size:9,mimeType:'image/png',prefix:'data:image/png;base64,'}}}},businessStore:{loads:[{id:'one'}]},dexie:{},localStorage:[]};
+const archive={payload,payloadSha256:await hashBytes(new TextEncoder().encode(JSON.stringify(payload)))},index=await encode(new Blob([JSON.stringify(archive)]),opts);
+const snap={manifest:{files:[{name:'Road-Ready-Backup.roadready.json',size:index.size,chunks:index.chunks},{name:'sig',size:9,chunks:packed.signature.chunks}]}};
+const seeded=await snapshotBundle(snap,opts),resolved=await decode(seeded,opts);assert.equal(resolved.state.signatureByDay['2026-10-05'].signatureDataUrl,raw.signature);assert.equal(resolved.business.loads[0].id,'one');
+console.log('PASS files: original bytes, signatures, large text, deduplication, corrupt-file rejection, verified legacy snapshot bootstrap');
