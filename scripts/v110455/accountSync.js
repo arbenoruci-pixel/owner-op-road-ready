@@ -1,4 +1,5 @@
 'use client';
+import Dexie from 'dexie';
 import {cloudClient,cloudSession} from './client.js';
 import {getOwnerOpDb} from '../local-db/dexie.js';
 import {APP_STATE_KEY,flushAppSnapshots} from '../local-db/appState.js';
@@ -26,7 +27,14 @@ async function capture(){
 }
 function rawShape(v){if(v instanceof Blob)return {blob:v.size,mime:v.type};if(v instanceof ArrayBuffer)return {bytes:v.byteLength};if(Array.isArray(v))return v.map(rawShape);if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,rawShape(x)]));return v;}
 const encodeCache=new Map(),dirty=new Set();let hooks=false;
-function installHooks(db){if(hooks)return;hooks=true;for(const name of Object.keys(TABLE_KEYS)){const mark=()=>{mutationEpoch++;tableEpoch.set(name,mutationEpoch);dirty.add(name);};for(const hook of ['creating','updating','deleting'])db.table(name).hook(hook,mark);}}
+function installHooks(db){
+ if(hooks)return;hooks=true;
+ const mark=name=>{mutationEpoch++;tableEpoch.set(name,mutationEpoch);dirty.add(name);};
+ for(const name of Object.keys(TABLE_KEYS))for(const hook of ['creating','updating','deleting'])db.table(name).hook(hook,()=>mark(name));
+ // Dexie forwards committed mutations from other tabs as well. A cached file
+ // must not hide replacement bytes written by another window on this device.
+ Dexie.on('storagemutated',parts=>{const keys=Object.keys(parts);for(const name of Object.keys(TABLE_KEYS))if(parts.all||keys.some(k=>k.startsWith('idb://'+db.name+'/'+name+'/')))mark(name);});
+}
 async function encodedRecords(bundle,opts){
  const out={};
  async function add(key,value){const parts=JSON.parse(key),sig=canonical(rawShape(value)),cached=encodeCache.get(key),changedTable=parts[0]==='table'&&cached?.epoch!==(tableEpoch.get(parts[1])||0);
