@@ -18,15 +18,16 @@ export default function AccountSyncGate({children}){
  useEffect(()=>{
   let cancelled=false,timer,retry;
   const update=e=>setStatus(e.detail);
-  const run=()=>{if(document.visibilityState!=='visible'||document.activeElement?.matches('input,textarea,select,[contenteditable=true]')||window.__rrAccountState?.()?.sheet)return;syncAccount();};
+  const finish=result=>{if(!cancelled)setReady(!result?.error||result.canOpenLocal===true);};
+  const run=()=>{if(document.visibilityState!=='visible'||document.activeElement?.matches('input,textarea,select,[contenteditable=true]')||window.__rrAccountState?.()?.sheet)return;syncAccount().then(finish);};
   window.addEventListener(ACCOUNT_EVENT,update);
-  syncAccount({initial:true}).finally(()=>{if(!cancelled)setReady(true);});
+  syncAccount({initial:true}).then(finish);
   timer=setInterval(run,30000);
   const saved=()=>{clearTimeout(retry);retry=setTimeout(run,2500);};
   window.addEventListener('online',run);window.addEventListener('owner-op-business-updated',saved);window.addEventListener('road-ready-local-saved',saved);document.addEventListener('visibilitychange',run);
   return()=>{cancelled=true;clearInterval(timer);clearTimeout(retry);window.removeEventListener(ACCOUNT_EVENT,update);window.removeEventListener('online',run);window.removeEventListener('owner-op-business-updated',saved);window.removeEventListener('road-ready-local-saved',saved);document.removeEventListener('visibilitychange',run);};
  },[]);
- if(!ready||status.phase==='account_mismatch')return <main style={{padding:28,fontFamily:'system-ui',maxWidth:520,margin:'auto'}}><h2>{status.phase==='account_mismatch'?'Account data protected':'Opening your records'}</h2><p role="status">{status.message}</p></main>;
+ if(!ready||status.phase==='account_mismatch')return <main style={{padding:28,fontFamily:'system-ui',maxWidth:520,margin:'auto'}}><h2>{status.phase==='account_mismatch'?'Account data protected':'Opening your records'}</h2><p role="status">{status.message}</p>{status.phase==='error'?<><p>Your saved account copy is safe. Received files are kept for the next attempt.</p><button onClick={()=>syncAccount({initial:true}).then(result=>setReady(!result?.error||result.canOpenLocal===true))}>Continue transfer</button></>:null}</main>;
  const attention=['error','offline','conflict','paused'].includes(status.phase);
  return <>{children}{attention?<aside aria-label="Account synchronization" style={{position:'fixed',bottom:64,left:12,right:12,zIndex:999,padding:12,borderRadius:16,background:'#fff5dc',color:'#172b46',boxShadow:'0 3px 14px #0002',fontSize:14}}><span role="status">{status.message}</span>{status.phase==='paused'?<a href="/cloud">Resume in cloud settings</a>:null}{status.phase==='conflict'?<button onClick={()=>setReview(true)}>Review changes ({status.conflicts.length})</button>:status.phase==='error'?<button onClick={()=>syncAccount()}>Retry sync</button>:null}</aside>:null}{review&&status.conflicts?.length?<section role="dialog" aria-modal="true" aria-label="Review changes from your devices" style={{position:'fixed',inset:12,overflow:'auto',zIndex:3000,background:'white',padding:20,borderRadius:20,color:'#172b46'}}>
   <header style={{position:'sticky',top:-20,background:'white',padding:'16px 0',zIndex:1}}><button onClick={()=>setReview(false)}>Back to app</button><h2>Review device changes</h2></header>

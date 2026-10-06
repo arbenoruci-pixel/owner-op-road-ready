@@ -3,7 +3,7 @@ import {cloudClient,cloudSession} from './client.js';
 import {getOwnerOpDb} from '../local-db/dexie.js';
 import {APP_STATE_KEY,flushAppSnapshots} from '../local-db/appState.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../../source/src/modules/business/businessStore.js';
-import {bounded} from './mirrorCoreV110450.js';
+import {bounded,hashBytes} from './mirrorCoreV110450.js';
 import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical,equivalentRecords,resolveConflict,repairChecklistState} from './accountCoreV110455.js';
 import {encode,decode,piecesOf,snapshotBundle} from './accountFilesV110455.js';
 export const ACCOUNT_EVENT='road-ready-account-sync',APPLY_EVENT='road-ready-account-apply';
@@ -34,9 +34,26 @@ async function encodedRecords(bundle,opts){
 }
 async function install(records,local,base,uid,check){
  show({message:'Saving account data for offline use…'});
- const opts={storage:cloudClient().storage.from('owner-op-private'),uid,check},decoded={},cache=new Map(),rawRecords=recordsFrom(local);let done=0;
- for(const [k,v] of Object.entries(records)){decoded[k]=same(v,local.encoded?.[k])?rawRecords[k]:await decode(v,opts,cache);if(++done%20===0)show({message:`Receiving saved records · ${done} / ${Object.keys(records).length}`});}
- const next=bundleFrom(decoded,local.state),db=getOwnerOpDb();await check();await flushAppSnapshots();
+ const opts={storage:cloudClient().storage.from('owner-op-private'),uid,check},decoded={},rawRecords=recordsFrom(local),db=getOwnerOpDb(),staged=new Map(),signatures=new Map();let done=0;
+ // Persist each verified table row before receiving the next. Never retain the
+ // entire archive in RAM; interrupted transfers reuse their verified rows.
+ for(const [k,v] of Object.entries(records)){
+  const parts=JSON.parse(k),unchanged=same(v,local.encoded?.[k]);
+  if(parts[0]==='table'){
+   if(!unchanged){
+    const stageKey=uid+':'+await hashBytes(new TextEncoder().encode(k+canonical(v)));
+    let row=await db.account_receive_staging.get(stageKey);
+    if(!row||!same(row.encoded,v)){
+     await check();const value=await decode(v,opts,new Map());
+     row={key:stageKey,user_id:uid,encoded:v,decoded:value,updated_at:new Date().toISOString()};
+     await db.account_receive_staging.put(row);
+    }
+    signatures.set(k,canonical(rawShape(row.decoded)));staged.set(k,stageKey);
+   }
+  }else decoded[k]=unchanged?rawRecords[k]:await decode(v,opts,new Map());
+  if(++done%5===0)show({message:`Receiving saved records · ${done} / ${Object.keys(records).length}`});
+ }
+ const next=bundleFrom(decoded,local.state);await check();await flushAppSnapshots();
  const unchanged=()=>{if(mutationEpoch!==local.epoch||!same(window.__rrAccountState?.()||local.state,local.live||local.state)||!same(readLocal(BUSINESS_STORE_KEY)||{},local.business)||LOCAL_KEYS.some(k=>!same(readLocal(k),local.locals[k])))throw Error('Records changed during sync. Retrying shortly.');if(window.__rrAccountState?.()?.sheet||document.activeElement?.matches('input,textarea,select,[contenteditable=true]'))throw Error('Finish your open edit to receive the latest changes.');};
  unchanged();
  const previousLocals=new Map(),installedLocals=new Map(),now=new Date().toISOString();
@@ -45,16 +62,22 @@ async function install(records,local,base,uid,check){
   await db.sync_meta.put({key:'account-sync-v110455:pending',value:{uid,base,oldState:local.state,oldBusiness:local.business,oldLocals:local.locals},updated_at:now});
   unchanged();
   for(const [key,value] of [[BUSINESS_STORE_KEY,next.business],...Object.entries(next.locals)]){previousLocals.set(key,localStorage.getItem(key));const serialized=typeof value==='string'?value:JSON.stringify(value);localStorage.setItem(key,serialized);installedLocals.set(key,serialized);}
-  await db.transaction('rw',[db.app_snapshots,db.sync_meta,...Object.keys(TABLE_KEYS).map(k=>db.table(k))],async()=>{
+  await db.transaction('rw',[db.app_snapshots,db.sync_meta,db.account_receive_staging,...Object.keys(TABLE_KEYS).map(k=>db.table(k))],async()=>{
    if([...installedLocals].some(([k,v])=>localStorage.getItem(k)!==v))throw Error('Another tab changed records. Retry sync.');
    const row=await db.app_snapshots.get(APP_STATE_KEY);if(mutationEpoch!==local.epoch||!same(window.__rrAccountState?.()||local.state,local.live||local.state)||!same(row?.state,local.savedState))throw Error('Records changed during sync. Retrying shortly.');
    if(!await db.sync_meta.get('account-sync-v110455:first-join'))await db.sync_meta.put({key:'account-sync-v110455:first-join',value:{uid,state:local.state,business:local.business,locals:local.locals},updated_at:now});
    const checkpoint=await db.app_snapshots.get('account-sync-before-first-join');if(!checkpoint)await db.app_snapshots.put({key:'account-sync-before-first-join',state:local.state,updated_at:now});
    // Retain raw document rows for recovery; delete only identities removed relative to our common baseline.
    for(const [name,pk] of Object.entries(TABLE_KEYS)){
-    const changes=next.tables[name].filter(row=>{const k=JSON.stringify(['table',name,String(row[pk])]);return !same(local.encoded?.[k],records[k]);});
-    if(changes.length)await db.table(name).bulkPut(changes);
-    const incoming=new Set(next.tables[name].map(r=>String(r[pk])));
+    const incoming=new Set();
+    for(const [k,v] of Object.entries(records)){
+     const parts=JSON.parse(k);if(parts[0]!=='table'||parts[1]!==name)continue;
+     incoming.add(parts[2]);const stageKey=staged.get(k);if(!stageKey)continue;
+     const row=await db.account_receive_staging.get(stageKey);
+     if(!row||!same(row.encoded,v))throw Error('Received file checkpoint is missing. Retry sync.');
+     await db.table(name).put(row.decoded);
+     await db.account_receive_staging.delete(stageKey);
+    }
     const removed=(local.tables[name]||[]).filter(r=>!incoming.has(String(r[pk])));
     for(const row of removed){await db.sync_meta.put({key:'account-sync-retained:'+name+':'+row[pk],value:row,updated_at:now});await db.table(name).delete(row[pk]);}
    }
@@ -69,7 +92,7 @@ async function install(records,local,base,uid,check){
  window.dispatchEvent(new CustomEvent(APPLY_EVENT,{detail:next.state}));
  window.dispatchEvent(new CustomEvent('owner-op-operator-profile-updated'));
  window.dispatchEvent(new CustomEvent(BUSINESS_STORE_EVENT));window.dispatchEvent(new CustomEvent('road-ready-owner-ops-updated-v102'));
- for(const [key,value] of Object.entries(records)){const raw=decoded[key],parts=JSON.parse(key);encodeCache.set(key,{sig:canonical(rawShape(raw)),value,epoch:tableEpoch.get(parts[1])||0});}
+ for(const [key,value] of Object.entries(records)){const parts=JSON.parse(key),sig=signatures.get(key)||(parts[0]==='table'?encodeCache.get(key)?.sig:canonical(rawShape(decoded[key])));if(sig)encodeCache.set(key,{sig,value,epoch:tableEpoch.get(parts[1])||0});}
 }
 async function remoteWorkspace(uid,cached){
  const client=cloudClient(),info=await checked(client.from('road_ready_account_workspaces').select('revision,device_id,updated_at').eq('user_id',uid).maybeSingle());
@@ -88,6 +111,7 @@ async function remoteWorkspace(uid,cached){
 export function syncAccount({initial=false,choices=null}={}){
  if(active)return active;
  const run=async()=>{
+  let canOpenLocal=false;
   try{
    const session=await cloudSession();if(!session)return {signedOut:true};const uid=session.user.id,db=getOwnerOpDb();if(!db)throw Error('Device storage is unavailable.');
    const priorOwners=(await db.sync_meta.toArray()).map(r=>r.key?.match(/^owner-op-record-sync-v1:([a-f0-9-]{36}):/i)?.[1]).filter(Boolean);
@@ -117,7 +141,7 @@ export function syncAccount({initial=false,choices=null}={}){
    if(remote)validatePayload(remote.payload);
    const local=await capture(),saved=tabBase;
    if(saved&&saved.uid!==uid)throw Error('Offline synchronization belongs to another account.');
-   const meaningful=hasData(local),opts={storage:cloudClient().storage.from('owner-op-private'),uid,known:piecesOf(remote?.payload?.records||{}),check,onProgress:message=>show({message})};
+   const meaningful=hasData(local);canOpenLocal=meaningful;const opts={storage:cloudClient().storage.from('owner-op-private'),uid,known:piecesOf(remote?.payload?.records||{}),check,onProgress:message=>show({message})};
    if(!remote&&!meaningful){localStorage.setItem(OWNER_KEY,uid);show({phase:'current',message:'Ready for your first records.'});return {empty:true};}
    local.encoded=await encodedRecords(local,opts);
    let base=saved?.records;
@@ -145,7 +169,7 @@ export function syncAccount({initial=false,choices=null}={}){
    const resolved=await db.sync_meta.get('account-sync-v110455:conflicts');if(resolved)await db.sync_meta.put({...resolved,key:'account-sync-v110455:resolved:'+Date.now()});
    await db.sync_meta.delete('account-sync-v110455:conflicts');conflictReview=null;
    show({phase:'current',message:'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed};
-  }catch(e){const message=e?.message||String(e);show({phase:localStorage.getItem('owner-op-record-sync-v1:paused')==='true'?'paused':navigator.onLine?'error':'offline',message});return {error:message};}
+  }catch(e){const message=e?.message||String(e);show({phase:localStorage.getItem('owner-op-record-sync-v1:paused')==='true'?'paused':navigator.onLine?'error':'offline',message});return {error:message,canOpenLocal};}
  };
  active=(navigator.locks?.request?navigator.locks.request('road-ready-account-sync-v110455',initial?{}:{ifAvailable:true},lock=>lock?run():{busy:true}):run()).finally(()=>{active=null;});return active;
 }
