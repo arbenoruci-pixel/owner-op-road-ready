@@ -35,3 +35,4 @@ await import('./v110455/account-regression.test.mjs');
 // Incomplete receive checkpoints are transport data, never a user backup/index.
 for(const path of ['lib/owner-op-cloud/cloudMirrorV110450.js','lib/owner-op-cloud/recordSyncV110451.js'])patch(path,'for(const table of db.tables)tables[table.name]=await table.toArray();',"for(const table of db.tables)if(table.name!=='account_receive_staging')tables[table.name]=await table.toArray();");
 patch('source/src/modules/backup/largeBackupV110431.js','const tables=[...db.tables].sort(',"const tables=[...db.tables].filter(table=>table.name!=='account_receive_staging').sort(");
+await import('./finalize-binary-storage-v110458.mjs');

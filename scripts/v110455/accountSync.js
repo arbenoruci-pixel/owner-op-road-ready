@@ -7,6 +7,7 @@ import {bounded,hashBytes} from './mirrorCoreV110450.js';
 import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical,equivalentRecords,resolveConflict,repairChecklistState} from './accountCoreV110455.js';
 import {encode,decode,piecesOf,snapshotBundle} from './accountFilesV110455.js';
 export const ACCOUNT_EVENT='road-ready-account-sync',APPLY_EVENT='road-ready-account-apply';
+const FILE_TABLES=new Set(['document_blobs','capture_asset_blobs']);
 const OWNER_KEY='owner-op-account-data-owner-v1',BASE_KEY='account-sync-v110455:base';
 let mutationEpoch=0;const tableEpoch=new Map();
 let tabBase; // Keep this tab's last observed revision; another tab may advance shared IndexedDB.
@@ -19,7 +20,7 @@ const readLocal=k=>{const s=localStorage.getItem(k);if(s===null)return undefined
 async function capture(){
  await flushAppSnapshots();const epoch=mutationEpoch,db=getOwnerOpDb(),tables={},row=await db.app_snapshots.get(APP_STATE_KEY),live=window.__rrAccountState?.();
  if(window.__OWNER_OP_BUSINESS_STORE_VOLATILE_V10963__)throw Error('Save pending load changes before syncing.');
- await db.transaction('r',Object.keys(TABLE_KEYS).map(k=>db.table(k)),async()=>{for(const k of Object.keys(TABLE_KEYS))tables[k]=await db.table(k).toArray();});
+ await db.transaction('r',Object.keys(TABLE_KEYS).map(k=>db.table(k)),async()=>{for(const k of Object.keys(TABLE_KEYS))tables[k]=FILE_TABLES.has(k)?(await db.table(k).toCollection().primaryKeys()).map(id=>({[TABLE_KEYS[k]]:id})):await db.table(k).toArray();});
  if(epoch!==mutationEpoch)throw Error('Documents changed during sync. Retrying shortly.');
  return {epoch,state:live||row?.state||{},business:readLocal(BUSINESS_STORE_KEY)||{},tables,locals:Object.fromEntries(LOCAL_KEYS.map(k=>[k,readLocal(k)]).filter(([,v])=>v!==undefined)),savedState:row?.state,live};
 }
@@ -27,10 +28,22 @@ function rawShape(v){if(v instanceof Blob)return {blob:v.size,mime:v.type};if(v 
 const encodeCache=new Map(),dirty=new Set();let hooks=false;
 function installHooks(db){if(hooks)return;hooks=true;for(const name of Object.keys(TABLE_KEYS)){const mark=()=>{mutationEpoch++;tableEpoch.set(name,mutationEpoch);dirty.add(name);};for(const hook of ['creating','updating','deleting'])db.table(name).hook(hook,mark);}}
 async function encodedRecords(bundle,opts){
- const out={};for(const [key,value] of Object.entries(recordsFrom(bundle))){const parts=JSON.parse(key),sig=canonical(rawShape(value)),cached=encodeCache.get(key),changedTable=parts[0]==='table'&&cached?.epoch!==(tableEpoch.get(parts[1])||0);
+ const out={};
+ async function add(key,value){const parts=JSON.parse(key),sig=canonical(rawShape(value)),cached=encodeCache.get(key),changedTable=parts[0]==='table'&&cached?.epoch!==(tableEpoch.get(parts[1])||0);
   if(cached&&cached.sig===sig&&!changedTable)out[key]=cached.value;
   else{out[key]=await encode(value,opts);encodeCache.set(key,{sig,value:out[key],epoch:tableEpoch.get(parts[1])||0});}
- }dirty.clear();return out;
+ }
+ for(const [key,value] of Object.entries(recordsFrom(bundle))){const parts=JSON.parse(key);if(parts[0]==='table'&&FILE_TABLES.has(parts[1]))continue;await add(key,value);}
+ // Read one original at a time. ArrayBuffer-backed rows must never be loaded
+ // together with getAll() during background synchronization.
+ const db=getOwnerOpDb();
+ for(const name of FILE_TABLES)for(const stub of bundle.tables[name]||[]){
+  const id=stub[TABLE_KEYS[name]],key=JSON.stringify(['table',name,String(id)]),cached=encodeCache.get(key);
+  if(cached&&cached.epoch===(tableEpoch.get(name)||0)){out[key]=cached.value;continue;}
+  const row=await db.table(name).get(id);if(!row)throw Error('A saved document changed during sync. Retrying shortly.');await add(key,row);
+ }
+ if(bundle.epoch!==mutationEpoch)throw Error('Documents changed during sync. Retrying shortly.');
+ dirty.clear();return out;
 }
 async function install(records,local,base,uid,check){
  show({message:'Saving account data for offline use…'});
@@ -79,7 +92,7 @@ async function install(records,local,base,uid,check){
      await db.account_receive_staging.delete(stageKey);
     }
     const removed=(local.tables[name]||[]).filter(r=>!incoming.has(String(r[pk])));
-    for(const row of removed){await db.sync_meta.put({key:'account-sync-retained:'+name+':'+row[pk],value:row,updated_at:now});await db.table(name).delete(row[pk]);}
+    for(const row of removed){const original=FILE_TABLES.has(name)?await db.table(name).get(row[pk]):row;await db.sync_meta.put({key:'account-sync-retained:'+name+':'+row[pk],value:original,updated_at:now});await db.table(name).delete(row[pk]);}
    }
    await db.app_snapshots.put({key:APP_STATE_KEY,state:next.state,updated_at:now});
    await db.sync_meta.put({key:BASE_KEY,value:{...base,uid,records},updated_at:now});
