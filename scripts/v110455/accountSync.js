@@ -4,7 +4,7 @@ import {getOwnerOpDb} from '../local-db/dexie.js';
 import {APP_STATE_KEY,flushAppSnapshots} from '../local-db/appState.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../../source/src/modules/business/businessStore.js';
 import {bounded} from './mirrorCoreV110450.js';
-import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical} from './accountCoreV110455.js';
+import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical,equivalentRecords,resolveConflict,repairChecklistState} from './accountCoreV110455.js';
 import {encode,decode,piecesOf,snapshotBundle} from './accountFilesV110455.js';
 export const ACCOUNT_EVENT='road-ready-account-sync',APPLY_EVENT='road-ready-account-apply';
 const OWNER_KEY='owner-op-account-data-owner-v1',BASE_KEY='account-sync-v110455:base';
@@ -127,7 +127,7 @@ export function syncAccount({initial=false,choices=null}={}){
    }
    let merge=base?mergeRecords(base,local.encoded,remote?.payload?.records||{}):!meaningful&&remote?{records:remote.payload.records,conflicts:[]}:mergeRecords({},local.encoded,remote?.payload?.records||{});
    if(choices&&conflictReview&&same(conflictReview.local,local.encoded)&&same(conflictReview.remote,remote?.payload?.records)){
-    merge.records={...merge.records};merge.conflicts=merge.conflicts.filter(c=>{if(!['local','remote'].includes(choices[c.key]))return true;const v=c[choices[c.key]];if(v===undefined)delete merge.records[c.key];else merge.records[c.key]=v;return false;});
+    merge.records={...merge.records};merge.conflicts=merge.conflicts.filter(c=>{if(!['local','remote'].includes(choices[c.key]))return true;resolveConflict(merge.records,c,choices[c.key]);return false;});
    }
    if(merge.conflicts.length){conflictReview={local:local.encoded,remote:remote?.payload?.records};await db.sync_meta.put({key:'account-sync-v110455:conflicts',value:{uid,revision:remote?.revision,conflicts:merge.conflicts},updated_at:new Date().toISOString()});show({phase:'conflict',message:'Changes on two devices need review. Both versions are kept.',conflicts:merge.conflicts});return {conflicts:merge.conflicts};}
    if(local.epoch!==mutationEpoch||!same(window.__rrAccountState?.()||local.state,local.live||local.state)||!same(readLocal(BUSINESS_STORE_KEY)||{},local.business))throw Error('Records changed during sync. Retrying shortly.');
@@ -137,7 +137,7 @@ export function syncAccount({initial=false,choices=null}={}){
     const patch=Object.fromEntries(Object.entries(payload.records).filter(([k,v])=>!same(v,remote?.payload?.records[k]))),removed=Object.keys(remote?.payload?.records||{}).filter(k=>!(k in payload.records));
     const receipt=await checked(revision?cloudClient().rpc('road_ready_account_patch_v1',{p_device:device(),p_expected:revision,p_patch:patch,p_deleted:removed}):cloudClient().rpc('road_ready_account_commit_v1',{p_device:device(),p_expected:revision,p_payload:payload}));if(receipt.conflict)throw Error('Another device saved changes. Retrying shortly.');revision=receipt.revision;
    }
-   const changed=!same(local.encoded,merge.records);
+   const changed=!equivalentRecords(local.encoded,merge.records)||repairChecklistState(local.state)!==local.state;
    const meta=Object.fromEntries(Object.entries(payload).filter(([k])=>k!=='records'));
    if(changed)await install(merge.records,local,{revision,meta},uid,check);
    else{if(saved?.revision!==revision)await db.sync_meta.put({key:BASE_KEY,value:{uid,revision,meta,records:merge.records},updated_at:new Date().toISOString()});localStorage.setItem(OWNER_KEY,uid);}
