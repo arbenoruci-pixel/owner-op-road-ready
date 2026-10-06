@@ -19,7 +19,7 @@ if(process.env.INCIDENT_DIR){
 }
 console.log('PASS stable account comparison: repair metadata, checklist recovery, per-load merge, real conflicts, deletes, retained local reports');
 
-const {repairRoadReadyStateV107}=await import('../../source/src/core/integrity/logbookIntegrityV107.js');
+const {repairRoadReadyStateV107}=await import('../../source/src/core/integrity/logbookIntegrityV107.js?account-sync-v110456');
 const cloned=repairRoadReadyStateV107({loadGuidesById:{x:{...guide('X',1),status:'closed'}},eventsByDay:{},inspectionByDay:{'2026-10-05':{complete:true,source:'auto_on_duty',sourceEventId:'orphan'}}});
 assert.equal(cloned.loadGuidesById.x.steps[0].checklist[0],'Pickup # 7HR','Legacy normalizer must preserve strings when performing a repair');
 console.log('PASS runtime normalization keeps checklist text intact');
