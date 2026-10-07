@@ -15,3 +15,4 @@ console.log('PASS iPad binary document storage installed');
 
 patch('lib/owner-op-cloud/recordSyncV110451.js','import {canonical,projectRecords,','import {visible,canonical,projectRecords,');
 patch('lib/owner-op-cloud/recordSyncV110451.js',"for(const table of db.tables)if(table.name!=='account_receive_staging')tables[table.name]=await table.toArray();", "for(const table of db.tables)if(table.name!=='account_receive_staging'){if(['document_blobs','capture_asset_blobs'].includes(table.name)){tables[table.name]=[];await table.each(row=>tables[table.name].push(visible(row)));}else tables[table.name]=await table.toArray();}");
+await import('./finalize-device-sync-v110459.mjs');

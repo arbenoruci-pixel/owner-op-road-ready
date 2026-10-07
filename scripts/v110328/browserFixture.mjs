@@ -32,12 +32,14 @@ async function seed(page,state,originalFiles=[]){
  }
  await adaptiveHome.waitFor({timeout:30000});
 }
+// Local-only feature fixtures opt out of account sync. Account tests override
+// this settings route with their own fully synthetic workspace and file service.
 async function setupRoutes(context){
  await context.route('**/*',async route=>{const url=new URL(route.request().url());if(url.hostname==='cdn.jsdelivr.net'&&url.pathname.startsWith('/npm/pdfjs-dist@4.10.38/'))return route.continue();if(url.origin===origin){if(url.pathname.startsWith('/api/'))return route.fulfill({json:{},status:200});return route.continue();}// Mirror the browser's requested headers, including new Supabase client headers.
  // WebKit enforces preflight on fulfilled routes; no real cloud call is allowed here.
  const requestHeaders=await route.request().allHeaders();
  const allowedHeaders=requestHeaders['access-control-request-headers']||Object.keys(requestHeaders).join(',');
- const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':allowedHeaders,'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Credentials':'true'};if(route.request().method()==='OPTIONS')return route.fulfill({body:'',headers});if(url.pathname.endsWith('/rpc/owner_op_access_v1'))return route.fulfill({json:{approved:true},headers});if(url.pathname.endsWith('/rpc/owner_op_migration_status_v1'))return route.fulfill({body:'null',contentType:'application/json',headers});if(url.pathname==='/auth/v1/user')return route.fulfill({json:user,headers});return route.fulfill({status:403,json:{error:'Synthetic Rate Con boundary: external access blocked'},headers});});
+ const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':allowedHeaders,'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Credentials':'true'};if(route.request().method()==='OPTIONS')return route.fulfill({body:'',headers});if(url.pathname.endsWith('/rpc/owner_op_access_v1'))return route.fulfill({json:{approved:true},headers});if(url.pathname.endsWith('/rpc/owner_op_migration_status_v1'))return route.fulfill({body:'null',contentType:'application/json',headers});if(url.pathname==='/auth/v1/user')return route.fulfill({json:user,headers});if(url.pathname.endsWith('/road_ready_backup_settings'))return route.fulfill({json:{record_sync_enabled:false},headers});return route.fulfill({status:403,json:{error:'Synthetic Rate Con boundary: external access blocked'},headers});});
 }
 async function snapshot(page){return page.evaluate(async()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction('app_snapshots','readonly'),q=tx.objectStore('app_snapshots').get('owner-op-road-ready-state-v1');q.onsuccess=()=>{resolve(q.result?.state);db.close();};};}));}
 const protectedFields=['eventsByDay','signatureByDay','certifyStatus','inspectionByDay','formByDay'];

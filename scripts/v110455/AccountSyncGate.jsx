@@ -16,16 +16,27 @@ function title(c){const[kind,a,b]=JSON.parse(c.key);if(kind==='guide')return 'Lo
 export default function AccountSyncGate({children}){
  const [ready,setReady]=useState(false),[status,setStatus]=useState(accountStatus),[review,setReview]=useState(false),[choices,setChoices]=useState({});
  useEffect(()=>{
-  let cancelled=false,timer,retry;
+  let cancelled=false,timer,retry,running=false,pendingSave=false;
   const update=e=>setStatus(e.detail);
   const finish=result=>{if(!cancelled)setReady(!result?.error||result.canOpenLocal===true);};
-  const run=()=>{if(document.visibilityState!=='visible'||document.activeElement?.matches('input,textarea,select,[contenteditable=true]')||window.__rrAccountState?.()?.sheet)return;syncAccount().then(finish);};
+  const run=async({initial=false}={})=>{
+   if(cancelled||running)return;
+   if(!initial&&((document.visibilityState!=='visible'&&!pendingSave)||document.activeElement?.matches('input,textarea,select,[contenteditable=true]')||window.__rrAccountState?.()?.sheet))return;
+   pendingSave=false;running=true;
+   try{finish(await syncAccount({initial}));}
+   finally{
+    running=false;
+    // A save during a receive/read needs a fresh capture after that run settles.
+    if(pendingSave&&!cancelled){clearTimeout(retry);retry=setTimeout(run,0);}
+   }
+  };
   window.addEventListener(ACCOUNT_EVENT,update);
-  syncAccount({initial:true}).then(finish);
+  run({initial:true});
   timer=setInterval(run,30000);
-  const saved=()=>{clearTimeout(retry);retry=setTimeout(run,2500);};
-  window.addEventListener('online',run);window.addEventListener('owner-op-business-updated',saved);window.addEventListener('road-ready-local-saved',saved);document.addEventListener('visibilitychange',run);
-  return()=>{cancelled=true;clearInterval(timer);clearTimeout(retry);window.removeEventListener(ACCOUNT_EVENT,update);window.removeEventListener('online',run);window.removeEventListener('owner-op-business-updated',saved);window.removeEventListener('road-ready-local-saved',saved);document.removeEventListener('visibilitychange',run);};
+  // Start after the durable local save, before iOS can suspend a hidden page.
+  const saved=()=>{pendingSave=true;run();};
+  window.addEventListener('online',run);window.addEventListener('pageshow',run);window.addEventListener('pagehide',run);window.addEventListener('owner-op-business-updated',saved);window.addEventListener('road-ready-local-saved',saved);document.addEventListener('visibilitychange',run);
+  return()=>{cancelled=true;clearInterval(timer);clearTimeout(retry);window.removeEventListener(ACCOUNT_EVENT,update);window.removeEventListener('online',run);window.removeEventListener('pageshow',run);window.removeEventListener('pagehide',run);window.removeEventListener('owner-op-business-updated',saved);window.removeEventListener('road-ready-local-saved',saved);document.removeEventListener('visibilitychange',run);};
  },[]);
  if(!ready||status.phase==='account_mismatch')return <main style={{padding:28,fontFamily:'system-ui',maxWidth:520,margin:'auto'}}><h2>{status.phase==='account_mismatch'?'Account data protected':'Opening your records'}</h2><p role="status">{status.message}</p>{status.phase==='error'?<><p>Your saved account copy is safe. Received files are kept for the next attempt.</p><button onClick={()=>syncAccount({initial:true}).then(result=>setReady(!result?.error||result.canOpenLocal===true))}>Continue transfer</button></>:null}</main>;
  const attention=['error','offline','conflict','paused'].includes(status.phase);
