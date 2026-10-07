@@ -65,7 +65,7 @@ export async function buildLargeBackup({state={},businessStore={},inventory={},a
  }
  const payload={dexie:{},state:null,businessStore:null,localStorage:[]};
  // Read only a few rows at a time; original Blob handles remain file-backed.
- const tables=[...db.tables].sort((a,b)=>(a.name==='document_blobs'?-1:0)-(b.name==='document_blobs'?-1:0));
+ const tables=[...db.tables].filter(table=>table.name!=='account_receive_staging').sort((a,b)=>(a.name==='document_blobs'?-1:0)-(b.name==='document_blobs'?-1:0));
  for(const table of tables){
   payload.dexie[table.name]=[];onProgress(`Reading saved ${table.name==='document_blobs'?'documents':'records'}…`);
   for(let offset=0;;offset+=8){checkAbort(signal);const rows=await table.toCollection().offset(offset).limit(8).toArray();if(!rows.length)break;

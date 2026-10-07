@@ -5,6 +5,14 @@ on:
     paths:
       - 'scripts/v110451/**'
       - 'scripts/v110453/**'
+      - 'scripts/v110455/**'
+      - 'scripts/v110458/**'
+      - 'scripts/v110431/**'
+      - 'scripts/v110429/**'
+      - 'lib/local-db/safetyArchive.js'
+      - 'scripts/finalize-device-sync-v110459.mjs'
+      - 'scripts/v110328/browserFixture.mjs'
+      - 'scripts/v110434/browserFixture.mjs'
       - 'scripts/finalize-evidence-workspace-v110453.mjs'
       - 'scripts/finalize-record-sync-v110451.mjs'
       - 'scripts/finalize-cloud-mirror-v110450.mjs'
@@ -30,10 +38,20 @@ jobs:
       - name: Exact production build
         run: node scripts/build-v110.mjs > /tmp/record-build.log 2>&1 || { tail -n 100 /tmp/record-build.log; exit 1; }
       - run: node scripts/v110453/test-packet.mjs
+      - name: Account sync and binary storage unit regressions
+        run: |
+          node scripts/v110455/account-core.test.mjs
+          node scripts/v110455/account-files.test.mjs
+          node scripts/v110455/account-regression.test.mjs
+          node scripts/v110458/binary-storage.test.mjs
       - name: Install isolated browser test
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium
+      - name: Receive safety and Blob/File storage regressions
+        run: |
+          node scripts/v110455/browser-receive-safety.mjs
+          node scripts/v110458/browser-binary-storage.mjs
       - name: Record sync and correction flow
         run: |
           npx next start --hostname 127.0.0.1 --port 3000 > /tmp/record-server.log 2>&1 &
@@ -46,6 +64,7 @@ jobs:
           node scripts/v110451/browser-records.mjs
           node scripts/v110453/browser-workspace.mjs
           node scripts/v110450/browser-mirror.mjs
+          node scripts/v110455/browser-account.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
