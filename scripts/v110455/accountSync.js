@@ -102,6 +102,9 @@ async function install(records,local,base,uid,check){
     const removed=(local.tables[name]||[]).filter(r=>!incoming.has(String(r[pk])));
     for(const row of removed){const original=FILE_TABLES.has(name)?await db.table(name).get(row[pk]):row;await db.sync_meta.put({key:'account-sync-retained:'+name+':'+row[pk],value:original,updated_at:now});await db.table(name).delete(row[pk]);}
    }
+   // The install and cleanup commit together. An aborted receive keeps every
+   // checkpoint; success also releases old hashes/rows absent from this manifest.
+   await db.account_receive_staging.where('user_id').equals(uid).delete();
    await db.app_snapshots.put({key:APP_STATE_KEY,state:next.state,updated_at:now});
    await db.sync_meta.put({key:BASE_KEY,value:{...base,uid,records},updated_at:now});
    await db.sync_meta.delete('account-sync-v110455:pending');
@@ -144,6 +147,11 @@ export function syncAccount({initial=false,choices=null}={}){
    const check=async()=>{if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true')throw Error('Cloud work is paused on this device.');if((await cloudSession())?.user?.id!==uid)throw Error('Account changed. Synchronization stopped.');if(!navigator.onLine)throw Error('Offline · changes stay on this device until connected.');};
    if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true'){show({phase:'paused',message:'Cloud work is paused on this device.'});return {paused:true};}
    if(!navigator.onLine){show({phase:'offline',message:'Offline · changes saved on this device.'});return {offline:true};}
+   // Establish the owned offline copy before settings/workspace/snapshot reads
+   // (or a session recheck) can fail and leave the startup gate closed.
+   const local=await capture(),saved=tabBase;
+   if(saved&&saved.uid!==uid)throw Error('Offline synchronization belongs to another account.');
+   const meaningful=hasData(local);canOpenLocal=meaningful;
    await check();show({phase:'syncing',message:initial?'Opening your account data…':'Syncing changes…',conflicts:[]});
    const setting=await checked(cloudClient().from('road_ready_backup_settings').select('record_sync_enabled').eq('user_id',uid).maybeSingle());
    if(!setting?.record_sync_enabled){show({phase:'disabled',message:'Account synchronization is disabled.'});return {disabled:true};}
@@ -160,9 +168,7 @@ export function syncAccount({initial=false,choices=null}={}){
     }
    }
    if(remote)validatePayload(remote.payload);
-   const local=await capture(),saved=tabBase;
-   if(saved&&saved.uid!==uid)throw Error('Offline synchronization belongs to another account.');
-   const meaningful=hasData(local);canOpenLocal=meaningful;const opts={storage:cloudClient().storage.from('owner-op-private'),uid,known:piecesOf(remote?.payload?.records||{}),check,onProgress:message=>show({message})};
+   const opts={storage:cloudClient().storage.from('owner-op-private'),uid,known:piecesOf(remote?.payload?.records||{}),check,onProgress:message=>show({message})};
    if(!remote&&!meaningful){localStorage.setItem(OWNER_KEY,uid);show({phase:'current',message:'Ready for your first records.'});return {empty:true};}
    local.encoded=await encodedRecords(local,opts);
    let base=saved?.records;
