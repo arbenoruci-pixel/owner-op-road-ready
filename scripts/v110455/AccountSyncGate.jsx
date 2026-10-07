@@ -22,12 +22,18 @@ export default function AccountSyncGate({children}){
   const run=async({initial=false}={})=>{
    if(cancelled||running)return;
    if(!initial&&((document.visibilityState!=='visible'&&!pendingSave)||document.activeElement?.matches('input,textarea,select,[contenteditable=true]')||window.__rrAccountState?.()?.sheet))return;
+   const saved=pendingSave;let retryDelay=0;
    pendingSave=false;running=true;
-   try{finish(await syncAccount({initial}));}
+   try{
+    const result=await syncAccount({initial});
+    // A different tab may own the receive lock. No capture ran in that case.
+    if(result?.busy&&saved){pendingSave=true;retryDelay=250;}
+    finish(result);
+   }
    finally{
     running=false;
     // A save during a receive/read needs a fresh capture after that run settles.
-    if(pendingSave&&!cancelled){clearTimeout(retry);retry=setTimeout(run,0);}
+    if(pendingSave&&!cancelled){clearTimeout(retry);retry=setTimeout(run,retryDelay);}
    }
   };
   window.addEventListener(ACCOUNT_EVENT,update);

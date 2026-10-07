@@ -139,8 +139,8 @@ try{
    await f.db.document_blobs.put({local_blob_id:'saved',blob:new Blob(['saved original'],{type:'application/pdf'})});
    await f.db.account_receive_staging.put({key:'transport-only',user_id:f.uid,decoded:{blob:new Blob(['staging secret'])}});
    const {buildDeviceSafetyArchive,buildDeviceSafetyInventory}=await import('/lib/local-db/safetyArchive.js');
-   const {buildLargeBackup,inspectLargeBackup}=await import('/scripts/v110431/largeBackup.js');
-   const {decoratePortableArchiveV110429}=await import('/scripts/v110429/portableBackup.js');
+   const {buildLargeBackup,inspectLargeBackup,restoreLargeBackup}=await import('/scripts/v110431/largeBackup.js');
+   const {decoratePortableArchiveV110429,restorePortableArchiveV110429}=await import('/scripts/v110429/portableBackup.js');
    // Exporting must never materialize the staging blobs, even for inventory.
    const nativeGetAll=IDBObjectStore.prototype.getAll,nativeCursor=IDBObjectStore.prototype.openCursor;
    for(const [method,native] of [['getAll',nativeGetAll],['openCursor',nativeCursor]])IDBObjectStore.prototype[method]=function(...args){if(this.name==='account_receive_staging')throw Error('Export read transport staging');return native.apply(this,args);};
@@ -149,10 +149,27 @@ try{
    const portable=await decoratePortableArchiveV110429(safety.archive);
    const zip=await buildLargeBackup({state:f.state,inventory});
    const checked=await inspectLargeBackup(zip.file);
-   return {inventory,safety:safety.archive.payload.dexie,portable:portable.payload.dexie,zip:checked.archive.payload.dexie,valid:safety.verification.ok,remaining:await f.db.account_receive_staging.count()};
+   // Restore both formats without requiring the excluded transport table.
+   await f.db.document_blobs.clear();
+   await restorePortableArchiveV110429(portable);
+   const jsonOriginal=await (await f.db.document_blobs.get('saved')).blob.text();
+   await f.db.document_blobs.clear();
+   await restoreLargeBackup(checked);
+   const zipOriginal=await (await f.db.document_blobs.get('saved')).blob.text();
+   // Accept older backups, but do not restore their foreign checkpoints.
+   const legacy=structuredClone(portable);
+   legacy.payload.dexie.account_receive_staging=[{key:'foreign-checkpoint',user_id:'another-user'}];
+   const rehash=async archive=>{archive.payloadSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(archive.payload)))),n=>n.toString(16).padStart(2,'0')).join('');};
+   await rehash(legacy);await restorePortableArchiveV110429(legacy);
+   // All persistent tables are still mandatory and validation precedes writes.
+   const broken=structuredClone(portable);delete broken.payload.dexie.document_blobs;await rehash(broken);
+   let missingError;try{await restorePortableArchiveV110429(broken);}catch(error){missingError=error.message;}
+   return {inventory,safety:safety.archive.payload.dexie,portable:portable.payload.dexie,zip:checked.archive.payload.dexie,valid:safety.verification.ok,remaining:await f.db.account_receive_staging.count(),foreign:!!await f.db.account_receive_staging.get('foreign-checkpoint'),jsonOriginal,zipOriginal,missingError,afterRejected:await (await f.db.document_blobs.get('saved')).blob.text()};
   });
   for(const tables of [result.inventory.dexieTables,result.safety,result.portable,result.zip])assert.equal('account_receive_staging' in tables,false);
   assert.equal(result.valid,true);assert.equal(result.remaining,1);assert.equal(result.safety.document_blobs.length,1);assert.equal(result.zip.document_blobs.length,1);
+  assert.equal(result.jsonOriginal,'saved original');assert.equal(result.zipOriginal,'saved original');assert.equal(result.foreign,false);
+  assert.match(result.missingError,/missing the document_blobs record group/);assert.equal(result.afterRejected,'saved original');
  });
  assert.deepEqual(failures,[]);
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

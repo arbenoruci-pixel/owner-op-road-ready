@@ -162,9 +162,12 @@ export async function restorePortableArchiveV110429(archive,{onProgress=()=>{},r
   if(!payload.state || typeof payload.state!=='object' || Array.isArray(payload.state))throw new Error('Backup app state is missing.');
   const tableNames=new Set(db.tables.map(table=>table.name));
   if(Object.keys(archivedTables).some(name=>!tableNames.has(name)))throw new Error('Update Road Ready before importing this newer database backup.');
+  // Transfer checkpoints belong to this device. Older archives may include them;
+  // never import them or require them in a full backup of the user's records.
+  const tables=db.tables.filter(table=>table.name!=='account_receive_staging');
   const rowsByTable={};
   // Decode and validate everything before replacing any record.
-  for(const table of db.tables){
+  for(const table of tables){
     if(!Array.isArray(archivedTables[table.name]))throw new Error('Backup is missing the '+table.name+' record group.');
     rowsByTable[table.name]=await deserializeValue(archivedTables[table.name],resolveZipFile);
   }
@@ -176,8 +179,8 @@ export async function restorePortableArchiveV110429(archive,{onProgress=()=>{},r
   const nextStorage=list(await deserializeValue(payload.localStorage,resolveZipFile)).filter(row=>portableStorageKey(row?.key));
   let storageTouched=false;
   try {
-    await db.transaction('rw',db.tables,async()=>{
-      for(const table of db.tables){
+    await db.transaction('rw',tables,async()=>{
+      for(const table of tables){
         onProgress('Restoring '+table.name+'…');
         await table.clear();
         if(resolveZipFile){
@@ -205,5 +208,5 @@ export async function restorePortableArchiveV110429(archive,{onProgress=()=>{},r
     throw error;
   }
   onProgress('Import complete. Opening restored Road Ready data…');
-  return {ok:true,completedTables:db.tables.length,restoredDexie:Object.fromEntries(Object.entries(rowsByTable).map(([name,rows])=>[name,rows.length])),skippedTables:[],state,businessStore,inspection};
+  return {ok:true,completedTables:tables.length,restoredDexie:Object.fromEntries(Object.entries(rowsByTable).map(([name,rows])=>[name,rows.length])),skippedTables:[],state,businessStore,inspection};
 }

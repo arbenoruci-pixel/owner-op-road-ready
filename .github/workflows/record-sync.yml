@@ -8,6 +8,7 @@ on:
       - 'scripts/v110455/**'
       - 'scripts/v110458/**'
       - 'scripts/v110431/**'
+      - 'scripts/v110429/**'
       - 'lib/local-db/safetyArchive.js'
       - 'scripts/finalize-device-sync-v110459.mjs'
       - 'scripts/v110328/browserFixture.mjs'

@@ -82,6 +82,19 @@ try{
  await tablet.evaluate(()=>{delete document.visibilityState;document.dispatchEvent(new Event('visibilitychange'));});
  for(const page of [phone,tablet])await page.getByRole('button',{name:/Home/i}).first().click();
  console.log('PASS saved Sleeper in Buffalo reaches the reopened phone after the tablet is hidden; other driver signatures remain exact');
+ // A busy cross-tab receive lock must not consume a durable save notification.
+ const saveLock=await tabletContext.newPage();await saveLock.goto(origin+'/_not-found');
+ await saveLock.evaluate(()=>{navigator.locks.request('road-ready-account-sync-v110455',async()=>{window.__held=true;await new Promise(resolve=>window.__release=resolve);});});
+ await saveLock.waitForFunction(()=>window.__held);
+ await changeBusiness(tablet,'saved-while-lock-busy');
+ await tablet.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});document.dispatchEvent(new Event('visibilitychange'));window.dispatchEvent(new Event('pagehide'));});
+ await new Promise(resolve=>setTimeout(resolve,600));
+ assert.ok(!Object.values(workspace.payload.records).some(v=>v?.id==='saved-while-lock-busy'),'Another tab still owns the lock');
+ await saveLock.evaluate(()=>window.__release());
+ await waitFor(()=>Object.values(workspace.payload.records).some(v=>v?.id==='saved-while-lock-busy'));
+ await phone.reload();await phone.locator('.adaptive-home-v1038').waitFor();assert.ok(await expense(phone,'saved-while-lock-busy'));
+ await tablet.evaluate(()=>{delete document.visibilityState;document.dispatchEvent(new Event('visibilitychange'));});await saveLock.close();
+ console.log('PASS a hidden tablet retries its saved change after another tab releases the receive lock');
  // Offline edits on separate records merge in both directions.
  await tabletContext.setOffline(true);await changeBusiness(tablet,'tablet-offline');await new Promise(r=>setTimeout(r,3000));assert.ok(await expense(tablet,'tablet-offline'));assert.ok(!await expense(phone,'tablet-offline'));
  await changeBusiness(phone,'phone-online');await waitFor(()=>Object.values(workspace.payload.records).some(v=>v?.id==='phone-online'));
