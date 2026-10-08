@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-for(const file of ['browser-insert-interaction-v110316.mjs','browser-midnight-prefix-v110319.mjs','browser-modern-editor-v11027.mjs','browser-motive-override-v11023.mjs']){
+for(const file of ['browser-editor-grips-v110355.mjs','browser-insert-interaction-v110316.mjs','browser-midnight-prefix-v110319.mjs','browser-modern-editor-v11027.mjs','browser-motive-override-v11023.mjs']){
  const path='scripts/'+file;
  let source=fs.readFileSync(path,'utf8');
  const imported="import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from './test-support/cloud-fixture.mjs';\n";

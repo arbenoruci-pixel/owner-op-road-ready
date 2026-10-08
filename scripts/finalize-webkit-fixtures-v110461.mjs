@@ -14,6 +14,6 @@ for(const path of ['source/src/core/update/appUpdate.js','public/sw.js','source/
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS WebKit document layout release installed');
 
-// Historical materializers validate these four test baselines by checksum.
+// Historical materializers validate these test baselines by checksum.
 // Install the fixture only after those verified UI migrations have completed.
 await import('./test-support/install-legacy-cloud-fixtures.mjs');
