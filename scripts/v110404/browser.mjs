@@ -114,7 +114,13 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
     await editor.getByLabel('Load',{exact:true}).selectOption('38324346');
     await editor.getByLabel('Document type',{exact:true}).selectOption('pod');
     await editor.getByLabel('Stop number (optional)',{exact:true}).fill('2');
-    await fits(page,editor);
+    for(const width of [320,390,430,820]){
+      await page.setViewportSize({width,height:844});
+      await fits(page,editor);await fits(page,editor.locator('label'));
+      assert.equal(await editor.getByLabel('Load',{exact:true}).inputValue(),'38324346');
+      assert.equal(await editor.getByLabel('Document type',{exact:true}).inputValue(),'pod');
+      await page.screenshot({path:`${output}/${name}-organize-${width}.png`});
+    }
     await editor.getByRole('button',{name:'Save document details',exact:true}).click();
     await docs.getByRole('status').filter({hasText:'Document saved under Load 38324346.'}).waitFor();
     await docs.getByRole('button',{name:/Sep 14.*Sep 20, 2026/}).click();

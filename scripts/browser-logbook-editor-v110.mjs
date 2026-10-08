@@ -1,3 +1,4 @@
+import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from './test-support/cloud-fixture.mjs';
 // Real browser interaction with isolated, synthetic IndexedDB and network stubs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -31,7 +32,8 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]])for(const zon
  const browser=await type.launch({headless:true});const context=await browser.newContext({viewport:{width:390,height:844},timezoneId:zone,colorScheme:'dark',isMobile:true,hasTouch:true,deviceScaleFactor:2,serviceWorkers:'block'});
  const page=await context.newPage(),errors=[],consoleErrors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});page.on('dialog',d=>d.accept());
  await page.clock.setFixedTime(new Date(at));
- await context.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===origin){if(url.pathname.startsWith('/api/'))return route.fulfill({json:{},status:200});return route.continue();}const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};if(route.request().method()==='OPTIONS')return route.fulfill({body:'',headers});if(url.pathname.endsWith('/rpc/owner_op_access_v1'))return route.fulfill({json:{approved:true},headers});if(url.pathname.endsWith('/rpc/owner_op_migration_status_v1'))return route.fulfill({body:'null',contentType:'application/json',headers});if(url.pathname==='/auth/v1/user')return route.fulfill({json:user,headers});return route.fulfill({status:403,json:{error:'Synthetic browser: external access disabled'},headers});});
+ await installLocalAccountSettings(context,user);
+ await context.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===origin){if(url.pathname.startsWith('/api/'))return route.fulfill({json:{},status:200});return route.continue();}if(await fulfillLocalAccountSettings(route,origin,user))return;const headers=await fixtureCorsHeaders(route.request(),origin);if(route.request().method()==='OPTIONS')return route.fulfill({body:'',headers});if(url.pathname.endsWith('/rpc/owner_op_access_v1'))return route.fulfill({json:{approved:true},headers});if(url.pathname.endsWith('/rpc/owner_op_migration_status_v1'))return route.fulfill({body:'null',contentType:'application/json',headers});if(url.pathname==='/auth/v1/user')return route.fulfill({json:user,headers});return route.fulfill({status:403,json:{error:'Synthetic browser: external access disabled'},headers});});
  const prefix=`${name}-${zone.replaceAll('/','-')}`;
  try{
   console.log('START — '+prefix+' closed editor');

@@ -14,7 +14,7 @@ const empty=()=>({...baseState(),view:'logbook',eventsByDay:{},signatureByDay:{}
 async function contents(page){return page.evaluate(async()=>{
  const db=await new Promise((ok,no)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});
  const rows={};for(const name of ['app_snapshots','document_blobs'])rows[name]=await new Promise((ok,no)=>{const r=db.transaction(name).objectStore(name).getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});db.close();
- return {state:rows.app_snapshots.find(row=>row.key==='owner-op-road-ready-state-v1')?.state,originals:await Promise.all(rows.document_blobs.map(async row=>({id:row.local_blob_id,bytes:Array.from(new Uint8Array(await row.blob.arrayBuffer()))}))),business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')||'{}')};
+ return {state:rows.app_snapshots.find(row=>row.key==='owner-op-road-ready-state-v1')?.state,originals:await Promise.all(rows.document_blobs.map(async row=>({id:row.local_blob_id,bytes:Array.from(new Uint8Array(await window.__rrFixtureBlob(row.blob).arrayBuffer()))}))),business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')||'{}')};
 });}
 for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
  const profiles=[];

@@ -1,3 +1,4 @@
+import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from './test-support/cloud-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -14,6 +15,7 @@ const row=(id,startMin,endMin)=>({id,status:'OFF',startMin,endMin,city:'Willowbr
 function fixture(){const days=['2026-09-07','2026-09-06','2026-09-05','2026-09-04','2026-09-03','2026-09-02','2026-09-01','2026-08-31'];return {view:'dot',activeDay:'2026-09-07',sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/New_York',driver:{truck:'12',trailer:'TEST',email:user.email},driverProfile:{name:'Synthetic Driver',email:user.email},carrierName:'Narta Express LLC',mainOfficeAddress:'92 201 Lake Drive, Willowbrook, IL 60527',dotNumber:'2513324',currentTrailer:'TEST',currentStatus:'OFF',currentReason:'Off Duty',currentLocation:{city:'Willowbrook',state:'IL'},eventsByDay:Object.fromEntries(days.map((d,i)=>[d,[row('off-'+i,0,1440)]])),certifyStatus:Object.fromEntries(days.map(d=>[d,d==='2026-09-07'?'Active day / Not certified yet':'Certified'])),signatureByDay:Object.fromEntries(days.slice(1).map(d=>[d,{signed:true,signedAt:Date.now(),driverName:'Synthetic Driver'}])),inspectionByDay:{},routeLegsByDay:{},formByDay:{},loadGuidesById:{},dotWallet:{documents:{}}};}
 
 async function setup(page,context,state){
+ await installLocalAccountSettings(context,user);
  await context.route('**/*',async route=>{
   const url=new URL(route.request().url());
   if(url.origin===origin){
@@ -21,7 +23,7 @@ async function setup(page,context,state){
    assert.equal(route.request().method(),'GET','DOT browser fixture cannot write to app origin');
    return route.continue();
   }
-  const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
+  if(await fulfillLocalAccountSettings(route,origin,user))return;const headers=await fixtureCorsHeaders(route.request(),origin);
   if(route.request().method()==='OPTIONS') return route.fulfill({body:'',headers});
   if(url.pathname.endsWith('/rpc/owner_op_access_v1')) return route.fulfill({json:{approved:true},headers});
   if(url.pathname.endsWith('/rpc/owner_op_migration_status_v1')) return route.fulfill({body:'null',contentType:'application/json',headers});

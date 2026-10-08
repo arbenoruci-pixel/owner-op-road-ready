@@ -14,7 +14,7 @@ async function stored(page) {return page.evaluate(()=>new Promise((resolve,rejec
  tx.oncomplete=async()=>{db.close();try{
   let topInk=0,bottomInk=0;
   const blob=blobs.result[0]?.blob||blobs.result[0]?.processed_blob||blobs.result[0]?.original_blob;
-  if(blob){const url=URL.createObjectURL(blob),image=new Image();try{await new Promise((ok,no)=>{image.onload=ok;image.onerror=no;image.src=url;});const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const c=canvas.getContext('2d');c.drawImage(image,0,0);const {data}=c.getImageData(0,0,canvas.width,canvas.height);
+  if(blob){const url=URL.createObjectURL(window.__rrFixtureBlob(blob)),image=new Image();try{await new Promise((ok,no)=>{image.onload=ok;image.onerror=no;image.src=url;});const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const c=canvas.getContext('2d');c.drawImage(image,0,0);const {data}=c.getImageData(0,0,canvas.width,canvas.height);
    for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++){const i=(y*canvas.width+x)*4,r=data[i],g=data[i+1],b=data[i+2];if(y<canvas.height*.14&&r>g*1.6&&r>b*1.6)topInk++;if(y>canvas.height*.86&&b>r*1.5&&b>g*1.3)bottomInk++;}
   }finally{URL.revokeObjectURL(url);}}
   resolve({docs:docs.result,state:state.result?.state,topInk,bottomInk});
