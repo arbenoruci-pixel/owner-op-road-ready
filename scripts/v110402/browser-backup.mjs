@@ -78,7 +78,9 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => { const db=request.result; resolve([...db.objectStoreNames]); db.close(); };
     }));
-    assert.deepEqual(Object.keys(archive.payload.dexie).sort(), storedTables.sort(), 'every actual database table is captured');
+    assert.ok(storedTables.includes('account_receive_staging'),'current transport staging store exists');
+    assert.equal('account_receive_staging' in archive.payload.dexie,false,'uncommitted account receive data must stay out of backups');
+    assert.deepEqual(Object.keys(archive.payload.dexie).sort(), storedTables.filter(table=>table!=='account_receive_staging').sort(), 'every durable record table is captured');
     assert.ok(archive.payload.dexie.app_snapshots.length > 0);
     assert.ok(archive.payload.localStorage.some(row => row.key === 'owner-op-road-ready-business-v1'));
     assert.equal(archive.payload.businessStore.expenses[0].amount, 42);

@@ -6,7 +6,7 @@ import {readStoredZip} from '../../source/src/modules/backup/chunkedZipV110431.j
 const browser=await chromium.launch({headless:true,...(origin.startsWith('https')&&process.env.HTTPS_PROXY?{proxy:{server:process.env.HTTPS_PROXY}}:{})}),context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',ignoreHTTPSErrors:true,acceptDownloads:true}),page=await context.newPage();
 const objects=new Map(),snapshots=[],heartbeats=[],errors=[];let corrupt=false,popups=0,denySettings=false,backupSettingsReads=0;
 page.on('pageerror',e=>errors.push(e.message));page.on('popup',()=>popups++);
-await setupRoutes(context);
+await setupRoutes(context,{cloudSettings:true});
 await context.route('https://ghwkcgczuwctzxsxmqzx.supabase.co/**',async route=>{
  const request=route.request(),url=new URL(request.url()),path=url.pathname,method=request.method(),headers=await request.allHeaders();
  const cors={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':headers['access-control-request-headers']||Object.keys(headers).join(','),'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Credentials':'true'};

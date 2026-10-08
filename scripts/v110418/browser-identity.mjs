@@ -26,7 +26,7 @@ async function stored(page){return page.evaluate(async()=>{
  const get=name=>new Promise(ok=>{const r=db.transaction(name).objectStore(name).getAll();r.onsuccess=()=>ok(r.result);});
  const docs=await get('documents_local'),blobs=await get('document_blobs'),snapshots=await get('app_snapshots');db.close();
  const state=snapshots.find(s=>s.key==='owner-op-road-ready-state-v1')?.state||{};
- return {business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')),docs,logs:Object.fromEntries(['eventsByDay','routeLegsByDay','signatureByDay','formByDay'].map(k=>[k,state[k]])),blobs:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await b.blob.arrayBuffer())]})))};
+ return {business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')),docs,logs:Object.fromEntries(['eventsByDay','routeLegsByDay','signatureByDay','formByDay'].map(k=>[k,state[k]])),blobs:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await window.__rrFixtureBlob(b.blob).arrayBuffer())]})))};
 });}
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
  if(process.env.TEST_BROWSERS&&!process.env.TEST_BROWSERS.split(',').includes(name))continue;

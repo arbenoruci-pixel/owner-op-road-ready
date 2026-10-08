@@ -50,7 +50,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
   assert.equal(saved.extracted.broker,'EXAMPLE LOGISTICS, INC.');assert.equal(saved.extracted.carrierName,'EXAMPLE CARRIER LLC');
   const original=await page.evaluate(async clientId=>{
     const blob=await new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,t=db.transaction('document_blobs','readonly'),q=t.objectStore('document_blobs').index('client_document_id').get(clientId);t.oncomplete=()=>{resolve(q.result?.blob);db.close();};t.onabort=()=>reject(t.error);};});
-    return blob?Array.from(new Uint8Array(await blob.arrayBuffer())):null;
+    return blob?Array.from(new Uint8Array(await window.__rrFixtureBlob(blob).arrayBuffer())):null;
   },saved.client_document_id);
   assert.deepEqual(Buffer.from(original||[]),buffer,'Reloaded original must be byte-for-byte identical to the imported PDF');
   assert.deepEqual(saved.extracted.readerReviewV110345.documents[0].pages,[1,2]);assert.deepEqual(errors,[]);

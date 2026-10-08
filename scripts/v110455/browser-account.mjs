@@ -6,7 +6,7 @@ const browser=await chromium.launch({headless:true,...(origin.startsWith('https'
 const objects=new Map(),history=new Map(),downloads=new Map();let workspace=null,commits=0,fullBackups=0,corrupt=false;
 const pages=[],contexts=[],errors=[];let settingsBarrier=null;const secondOriginal=simplePdf('Second original checkpoint test');
 async function client(rejectNativeBlobs=false){
- const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',ignoreHTTPSErrors:true}),page=await context.newPage();contexts.push(context);pages.push(page);page.on('pageerror',e=>errors.push(e.message));await setupRoutes(context);
+ const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',ignoreHTTPSErrors:true}),page=await context.newPage();contexts.push(context);pages.push(page);page.on('pageerror',e=>errors.push(e.message));await setupRoutes(context,{cloudSettings:true});
  await page.clock.setFixedTime(new Date('2026-10-07T15:00:00Z'));
  if(rejectNativeBlobs)await context.addInitScript(()=>{
   const hasBlob=v=>v instanceof Blob||Array.isArray(v)&&v.some(hasBlob)||v&&Object.getPrototypeOf(v)===Object.prototype&&Object.values(v).some(hasBlob);

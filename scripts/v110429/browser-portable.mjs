@@ -14,7 +14,7 @@ const empty=()=>({...baseState(),view:'logbook',eventsByDay:{},signatureByDay:{}
 async function contents(page){return page.evaluate(async()=>{
  const db=await new Promise((ok,no)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});
  const rows={};for(const name of ['app_snapshots','document_blobs'])rows[name]=await new Promise((ok,no)=>{const r=db.transaction(name).objectStore(name).getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});db.close();
- return {state:rows.app_snapshots.find(row=>row.key==='owner-op-road-ready-state-v1')?.state,originals:await Promise.all(rows.document_blobs.map(async row=>({id:row.local_blob_id,bytes:Array.from(new Uint8Array(await row.blob.arrayBuffer()))}))),business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')||'{}')};
+ return {state:rows.app_snapshots.find(row=>row.key==='owner-op-road-ready-state-v1')?.state,originals:await Promise.all(rows.document_blobs.map(async row=>({id:row.local_blob_id,bytes:Array.from(new Uint8Array(await window.__rrFixtureBlob(row.blob).arrayBuffer()))}))),business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')||'{}')};
 });}
 for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
  const profiles=[];
@@ -47,10 +47,10 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
    await page.evaluate(()=>{const put=IDBObjectStore.prototype.put;window.restorePut=()=>{IDBObjectStore.prototype.put=put;};IDBObjectStore.prototype.put=function(...args){if(this.name==='document_blobs')throw new DOMException('Synthetic full device','QuotaExceededError');return put.apply(this,args);};});
    page.once('dialog',dialog=>dialog.accept());await page.locator('input[type=file]').last().setInputFiles(file(archive));await page.getByRole('status').filter({hasText:/Synthetic full device|QuotaExceeded/}).waitFor();assert.deepEqual(await contents(page),before);await page.evaluate(()=>window.restorePut());
    const auth=await page.evaluate(()=>localStorage.getItem('owner-op-prototype-auth-v1'));
-   page.once('dialog',dialog=>dialog.accept());await Promise.all([page.waitForEvent('load'),page.locator('input[type=file]').last().setInputFiles(file(archive))]);await page.locator('.adaptive-home-v1038').waitFor();
+   page.once('dialog',dialog=>dialog.accept());await Promise.all([page.waitForEvent('load'),page.locator('input[type=file]').last().setInputFiles(file(archive))]);await page.getByRole('button',{name:'Insert',exact:true}).waitFor();
    const restored=await contents(page);for(const key of ['eventsByDay','signatureByDay','inspectionByDay','customByDay'])assert.deepEqual(restored.state[key],expected.state[key]);
    assert.deepEqual(restored.originals,expected.originals);assert.equal(sha(Buffer.from(restored.originals[0].bytes)),sha(original));assert.deepEqual(restored.business.loads,archive.payload.businessStore.loads);assert.equal(restored.business.expenses[0].amount,42);assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-prototype-auth-v1')),auth);
-   await page.reload();await page.locator('.adaptive-home-v1038').waitFor();assert.deepEqual((await contents(page)).originals,expected.originals);
+   await page.reload();await page.getByRole('button',{name:'Insert',exact:true}).waitFor();assert.deepEqual((await contents(page)).originals,expected.originals);
    await page.screenshot({path:`${output}/${name}-restored.png`,fullPage:true});
   });
   console.log(`PASS ${name}: portable export, checksum rejection, cancel, atomic rollback, fresh-device import, original bytes, session preservation and reload`);

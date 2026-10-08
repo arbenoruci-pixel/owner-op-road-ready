@@ -1,3 +1,4 @@
+import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from './test-support/cloud-fixture.mjs';
 // Synthetic data only. Every external request is intercepted; no real account is used.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -21,10 +22,11 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
  const page=await context.newPage(),errors=[],dialogs=[];
  page.on('pageerror',e=>errors.push(e.message));
  page.on('dialog',async d=>{dialogs.push(d.message());await d.accept();});
+ await installLocalAccountSettings(context,user);
  await context.route('**/*',async route=>{
   const url=new URL(route.request().url());
   if(url.origin===origin){if(url.pathname.startsWith('/api/'))return route.fulfill({json:{},status:200});return route.continue();}
-  const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
+  if(await fulfillLocalAccountSettings(route,origin,user))return;const headers=await fixtureCorsHeaders(route.request(),origin);
   if(route.request().method()==='OPTIONS')return route.fulfill({body:'',status:200,headers});
   if(url.pathname.endsWith('/rpc/owner_op_access_v1'))return route.fulfill({json:{approved:true},headers});
   if(url.pathname.endsWith('/rpc/owner_op_migration_status_v1'))return route.fulfill({body:'null',contentType:'application/json',headers});

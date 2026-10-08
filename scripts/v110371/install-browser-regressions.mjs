@@ -23,7 +23,7 @@ patch("    assert.deepEqual(await localRows(page),before,'view/share/download le
           tx.oncomplete=()=>{db.close();resolve(get.result.filter(row=>row.client_document_id==='example-39-client'));};
           tx.onerror=()=>reject(tx.error);};
       });
-      return Promise.all(blobs.map(async row=>Array.from(new Uint8Array(await row.blob.arrayBuffer()))));
+      return Promise.all(blobs.map(async row=>Array.from(new Uint8Array(await window.__rrFixtureBlob(row.blob).arrayBuffer()))));
     });
     assert.equal(cachedBytes.length,1,'retrieval stores one offline original');
     assert.deepEqual(Buffer.from(cachedBytes[0]),original,'offline bytes exactly match the authenticated cloud original');

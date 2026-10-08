@@ -29,7 +29,7 @@ async function stored(page){return page.evaluate(async()=>{
  const db=await new Promise((ok,no)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});
  const get=name=>new Promise((ok,no)=>{const r=db.transaction(name).objectStore(name).getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});
  const docs=await get('documents_local'),blobs=await get('document_blobs'),states=await get('app_snapshots');db.close();
- return {docs,blobs:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await b.blob.arrayBuffer())]}))),state:states.find(s=>s.key==='owner-op-road-ready-state-v1')?.state,business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1'))};
+ return {docs,blobs:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await window.__rrFixtureBlob(b.blob).arrayBuffer())]}))),state:states.find(s=>s.key==='owner-op-road-ready-state-v1')?.state,business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1'))};
 });}
 const logs=s=>JSON.stringify({events:s.eventsByDay,team:s.teamLogbooksByDriverId,signature:s.signatureByDay,forms:s.formByDay,inspection:s.inspectionByDay,loadInfo:s.loadInfo});
 async function chooseRecovery(page,payload=recovery){

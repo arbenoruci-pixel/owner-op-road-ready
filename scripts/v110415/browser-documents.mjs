@@ -19,7 +19,7 @@ async function stored(page){return page.evaluate(async()=>{
  const get=name=>new Promise((ok,no)=>{const r=db.transaction(name).objectStore(name).getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});
  const docs=await get('documents_local'),blobs=await get('document_blobs'),states=await get('app_snapshots');db.close();
  const s=states.find(s=>s.key==='owner-op-road-ready-state-v1')?.state;
- return {docs,blobs:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await b.blob.arrayBuffer())]}))),logs:JSON.stringify({events:s.eventsByDay,team:s.teamLogbooksByDriverId,signature:s.signatureByDay,forms:s.formByDay,inspection:s.inspectionByDay,loadInfo:s.loadInfo}),business:localStorage.getItem('owner-op-road-ready-business-v1')};
+ return {docs,blobs:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await window.__rrFixtureBlob(b.blob).arrayBuffer())]}))),logs:JSON.stringify({events:s.eventsByDay,team:s.teamLogbooksByDriverId,signature:s.signatureByDay,forms:s.formByDay,inspection:s.inspectionByDay,loadInfo:s.loadInfo}),business:localStorage.getItem('owner-op-road-ready-business-v1')};
 });}
 async function fits(page,locator){for(const b of await locator.evaluateAll(nodes=>nodes.map(el=>({w:el.clientWidth,scroll:el.scrollWidth,left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right,screen:innerWidth}))))assert.ok(b.scroll<=b.w+1&&b.left>=-1&&b.right<=b.screen+1,JSON.stringify(b));}
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){

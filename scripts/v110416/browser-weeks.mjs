@@ -21,7 +21,7 @@ async function persisted(page){return page.evaluate(async()=>{
   const docs=await get('documents_local'),blobs=await get('document_blobs'),states=await get('app_snapshots');db.close();
   const state=states.find(s=>s.key==='owner-op-road-ready-state-v1')?.state||{};
   const logs=Object.fromEntries(['eventsByDay','signatureByDay','certifyStatus','inspectionByDay','formByDay','routeLegsByDay'].map(k=>[k,state[k]]));
-  return {business:localStorage.getItem('owner-op-road-ready-business-v1'),docs,logs,originals:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await b.blob.arrayBuffer())]})))};
+  return {business:localStorage.getItem('owner-op-road-ready-business-v1'),docs,logs,originals:await Promise.all(blobs.map(async b=>({id:b.client_document_id,bytes:[...new Uint8Array(await window.__rrFixtureBlob(b.blob).arrayBuffer())]})))};
 });}
 for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   if(process.env.TEST_BROWSERS&&!process.env.TEST_BROWSERS.split(',').includes(name))continue;

@@ -1,3 +1,4 @@
+import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from './test-support/cloud-fixture.mjs';
 // Real compiled UI; synthetic records and intercepted Microsoft requests only.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -35,7 +36,8 @@ async function openBilling(page){await page.locator('.logbook-home-screen-v988, 
 const reports=[];
 for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){for(const scenario of ['accepted','connect-then-send','rejected','uncertain','missing-file','setup-required']){const profileDirectory=fs.mkdtempSync(path.join(os.tmpdir(),'road-ready-invoice-test-'));const context=await type.launchPersistentContext(profileDirectory,{headless:true,viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'}),page=await context.newPage(),errors=[],sent=[];let challenge='',phase='working';page.on('pageerror',e=>errors.push({message:e.message,stack:e.stack,phase}));try{
  await page.addInitScript(()=>{const create=URL.createObjectURL;URL.createObjectURL=function(blob){const url=create.call(URL,blob);try{const traces=JSON.parse(sessionStorage.getItem('invoice-test-blob-traces')||'[]');traces.push({url,type:blob?.type,stack:new Error().stack});sessionStorage.setItem('invoice-test-blob-traces',JSON.stringify(traces));}catch{}return url;};});
- await context.route('**/*',async route=>{const url=new URL(route.request().url()),headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization,content-type,apikey,x-client-info','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
+ await installLocalAccountSettings(context,user);
+ await context.route('**/*',async route=>{const url=new URL(route.request().url());if(await fulfillLocalAccountSettings(route,origin,user))return;const headers=await fixtureCorsHeaders(route.request(),origin);
   if(!['http:','https:'].includes(url.protocol))return route.continue();
   if(route.request().method()==='OPTIONS')return route.fulfill({body:'',headers});
   if(url.hostname==='login.microsoftonline.com'&&url.pathname.endsWith('/authorize')){challenge=url.searchParams.get('code_challenge');assert.equal(url.searchParams.get('code_challenge_method'),'S256');assert.ok(url.searchParams.get('scope').includes('Mail.Send'));const callback=new URL(url.searchParams.get('redirect_uri'));callback.searchParams.set('state',url.searchParams.get('state'));callback.searchParams.set('code','synthetic-code');return route.fulfill({contentType:'text/html',body:'<!doctype html><script>location.replace('+JSON.stringify(callback.href)+')</script>'});}
