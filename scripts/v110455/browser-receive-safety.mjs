@@ -69,6 +69,29 @@ async function scenario(name,run){
  finally{await context.close();}
 }
 try{
+ await scenario('receive reuses verified bytes across duplicate records and metadata changes',async page=>{
+  const result=await page.evaluate(async()=>{
+   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
+   const records=f.core.recordsFrom({state:f.state}),key=id=>JSON.stringify(['table','document_blobs',id]);
+   f.cloud.rpc=async(name,p)=>{
+    if(name!=='road_ready_account_patch_v1'||p.p_expected!==f.workspace.revision)throw Error('Unexpected account commit');
+    const next={...f.workspace.payload.records,...p.p_patch};for(const k of p.p_deleted)delete next[k];
+    f.workspace={revision:f.workspace.revision+1,payload:{format:f.core.FORMAT,records:next}};return {data:{revision:f.workspace.revision}};
+   };
+   const opts={storage:f.storage,uid:f.uid,known:new Set()};
+   for(const id of ['original','copy'])records[key(id)]=await encode({local_blob_id:id,blob:new Blob(['shared original'],{type:'application/pdf'}),label:id},opts);
+   f.downloads.clear();f.workspace={revision:1,payload:{format:f.core.FORMAT,records}};
+   const first=await f.sync.syncAccount({initial:true}),firstReads=[...f.downloads.values()].reduce((a,b)=>a+b,0);
+   const nextRecords={...f.workspace.payload.records,[key('original')]:{...f.workspace.payload.records[key('original')],label:'Updated filing only'}};
+   f.workspace={revision:f.workspace.revision+1,payload:{format:f.core.FORMAT,records:nextRecords}};
+   const second=await f.sync.syncAccount(),totalReads=[...f.downloads.values()].reduce((a,b)=>a+b,0);
+   return {first,second,firstReads,totalReads,texts:await Promise.all(['original','copy'].map(async id=>await (await f.db.document_blobs.get(id)).blob.text())),label:(await f.db.document_blobs.get('original')).label,staging:await f.db.account_receive_staging.count()};
+  });
+  assert.equal(result.first.error,undefined);assert.equal(result.second.error,undefined);
+  assert.equal(result.firstReads,1,'Duplicate document rows must share one download');
+  assert.equal(result.totalReads,1,'Changing filing metadata must reuse the saved original');
+  assert.deepEqual(result.texts,['shared original','shared original']);assert.equal(result.label,'Updated filing only');assert.equal(result.staging,0);
+ });
  for(const step of [
   'road_ready_backup_settings:record_sync_enabled',
   'road_ready_account_workspaces:revision,device_id,updated_at',

@@ -6,7 +6,7 @@ import {APP_STATE_KEY,flushAppSnapshots} from '../local-db/appState.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../../source/src/modules/business/businessStore.js';
 import {bounded,hashBytes} from './mirrorCoreV110450.js';
 import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical,equivalentRecords,resolveConflict,repairChecklistState} from './accountCoreV110455.js';
-import {encode,decode,piecesOf,snapshotBundle} from './accountFilesV110455.js';
+import {encode,decode,piecesOf,snapshotBundle,localPieceSource} from './accountFilesV110455.js';
 export const ACCOUNT_EVENT='road-ready-account-sync',APPLY_EVENT='road-ready-account-apply';
 const FILE_TABLES=new Set(['document_blobs','capture_asset_blobs']);
 const OWNER_KEY='owner-op-account-data-owner-v1',BASE_KEY='account-sync-v110455:base';
@@ -55,7 +55,13 @@ async function encodedRecords(bundle,opts){
 }
 async function install(records,local,base,uid,check){
  show({message:'Saving account data for offline use…'});
- const opts={storage:cloudClient().storage.from('owner-op-private'),uid,check},decoded={},rawRecords=recordsFrom(local),db=getOwnerOpDb(),staged=new Map(),signatures=new Map();let done=0;
+ const source=localPieceSource(),opts={storage:cloudClient().storage.from('owner-op-private'),uid,check,localPiece:source.read},decoded={},rawRecords=recordsFrom(local),db=getOwnerOpDb(),staged=new Map(),signatures=new Map();let done=0;
+ // Metadata-only changes and duplicate document/capture rows can reuse saved
+ // bytes. Read at most one source row at a time and verify every reused chunk.
+ for(const [name,pk] of Object.entries(TABLE_KEYS))for(const row of local.tables[name]||[]){
+  const id=row[pk],key=JSON.stringify(['table',name,String(id)]),encoded=local.encoded?.[key];
+  if(encoded)source.remember(encoded,()=>db.table(name).get(id));
+ }
  // Persist each verified table row before receiving the next. Never retain the
  // entire archive in RAM; interrupted transfers reuse their verified rows.
  for(const [k,v] of Object.entries(records)){
@@ -69,6 +75,7 @@ async function install(records,local,base,uid,check){
      row={key:stageKey,user_id:uid,encoded:v,decoded:value,updated_at:new Date().toISOString()};
      await db.account_receive_staging.put(row);
     }
+    source.remember(v,async()=>(await db.account_receive_staging.get(stageKey))?.decoded);
     signatures.set(k,canonical(rawShape(row.decoded)));staged.set(k,stageKey);
    }
   }else decoded[k]=unchanged?rawRecords[k]:await decode(v,opts,new Map());

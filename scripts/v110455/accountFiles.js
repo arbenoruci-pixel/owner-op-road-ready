@@ -1,6 +1,33 @@
 import {hashBytes,verifiedPiece,objectPath,PART_BYTES,bounded} from './mirrorCoreV110450.js';
 const fileRef=v=>v&&typeof v==='object'&&v.__rrAccountFile===1;
 export function piecesOf(value,set=new Set()){if(fileRef(value)){for(const c of value.chunks)set.add(c.sha256);}else if(value&&typeof value==='object')for(const v of Object.values(value))piecesOf(v,set);return set;}
+// Keep only row locators and chunk offsets. Original bytes remain in IndexedDB,
+// including already verified receive checkpoints, instead of a large RAM cache.
+// Each install owns a fresh index; no source can leak into another account/run.
+export function localPieceSource(){
+ const sources=new Map();
+ function remember(encoded,loadRow){
+  function visit(v,path=[]){
+   if(fileRef(v)){
+    if(!['Blob','ArrayBuffer'].includes(v.kind))return;
+    let offset=0;for(const c of v.chunks){sources.set(c.sha256+':'+c.bytes,{loadRow,path,offset});offset+=c.bytes;}
+   }else if(v&&typeof v==='object')for(const [k,x] of Object.entries(v))visit(x,[...path,k]);
+  }
+  visit(encoded);
+ }
+ async function read(chunk){
+  const source=sources.get(chunk.sha256+':'+chunk.bytes);if(!source)return null;
+  try{
+   let value=await source.loadRow();
+   for(const key of source.path){if(!value||!Object.hasOwn(value,key))return null;value=value[key];}
+   if(value instanceof Blob)return value.slice(source.offset,source.offset+chunk.bytes).arrayBuffer();
+   if(value instanceof ArrayBuffer)return value.slice(source.offset,source.offset+chunk.bytes);
+   if(ArrayBuffer.isView(value))return value.buffer.slice(value.byteOffset+source.offset,value.byteOffset+source.offset+chunk.bytes);
+  }catch{/* A removed/unreadable local source falls back to the verified cloud copy. */}
+  return null;
+ }
+ return {remember,read};
+}
 export async function encode(value,{storage,uid,known,onProgress=()=>{},check=()=>{}}){
  async function file(blob,kind,prefix=''){
   const chunks=[];for(let at=0;at<blob.size;at+=PART_BYTES){await check();chunks.push(await verifiedPiece(storage,uid,blob.slice(at,at+PART_BYTES),known));onProgress('Syncing document files…');}
@@ -17,10 +44,18 @@ export async function encode(value,{storage,uid,known,onProgress=()=>{},check=()
  }
  return visit(value);
 }
-export async function readFile(ref,{storage,uid,check=()=>{}}){
+export async function readFile(ref,{storage,uid,check=()=>{},localPiece}){
  if(!fileRef(ref)||!Array.isArray(ref.chunks)||!['Blob','ArrayBuffer','DataURL','Text'].includes(ref.kind))throw Error('Invalid account file.');
  const parts=[];let size=0;
- for(const c of ref.chunks){await check();const r=await bounded(storage.download(objectPath(uid,c.sha256)));if(r.error)throw r.error;const bytes=await r.data.arrayBuffer();if(bytes.byteLength!==c.bytes||await hashBytes(bytes)!==c.sha256)throw Error('A document failed verification. Local data was kept.');parts.push(bytes);size+=bytes.byteLength;}
+ for(const c of ref.chunks){
+  await check();let bytes=localPiece?await localPiece(c):null;
+  // Rehash reused bytes too: metadata, checkpoints and another tab may be stale.
+  if(!bytes||bytes.byteLength!==c.bytes||await hashBytes(bytes)!==c.sha256){
+   const r=await bounded(storage.download(objectPath(uid,c.sha256)));if(r.error)throw r.error;bytes=await r.data.arrayBuffer();
+   if(bytes.byteLength!==c.bytes||await hashBytes(bytes)!==c.sha256)throw Error('A document failed verification. Local data was kept.');
+  }
+  parts.push(bytes);size+=bytes.byteLength;
+ }
  if(size!==ref.size)throw Error('A document is incomplete. Local data was kept.');
  return new Blob(parts,{type:ref.mime||'application/octet-stream'});
 }
