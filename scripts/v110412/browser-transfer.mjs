@@ -71,7 +71,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]) {
   await target.getByRole('button',{name:'Import week now',exact:true}).click();await target.getByRole('status').filter({hasText:'Imported 4 documents'}).waitFor();
   let after=await stored(target);assert.equal(after.docs.length,4);assert.equal(after.business.loads.length,3);assert.equal(after.business.expenses.length,2);assert.equal(logs(after.state),logs(before.state));
   assert.deepEqual(after.blobs.find(b=>b.id==='a-client').bytes,bytes);assert.deepEqual(after.docs[0].metadata,{testOriginal:true});
-  await target.reload();await target.getByRole('button',{name:/^Documents/}).first().click();
+  await target.reload();await target.getByRole('button',{name:/^Documents/}).first().click();await target.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
   await target.locator('.rr-docs-card').filter({hasText:'Sep 21'}).waitFor();
   await target.evaluate(async()=>{
    const db=await new Promise(ok=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>ok(r.result);});
