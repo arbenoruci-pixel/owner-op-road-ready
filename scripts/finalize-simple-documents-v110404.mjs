@@ -33,7 +33,14 @@ function patch(path,before,after,count=1){
 }
 for(const path of ['scripts/browser-owned-reader.mjs','scripts/browser-fullscreen-reader-v110369.mjs','scripts/v110384/browser-rows.mjs']){
   const before="await page.getByRole('button',{name:/^Documents/}).first().click();";
-  patch(path,before,before+"\n    await page.getByRole('button',{name:'Browse all saved files',exact:true}).click();",path.includes('owned-reader')?1:2);
+  const loads="await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();";
+  const after=before+loads+"\n    await page.getByRole('button',{name:'Browse all saved files',exact:true}).click();";
+  const source=fs.readFileSync(path,'utf8');
+  if(source.includes(after))continue;
+  // Documents now opens Files. Enter Loads before its saved-file browser.
+  const normalized=source.replaceAll(before+loads,before);
+  if(normalized.split(before).length!==(path.includes('owned-reader')?2:3))throw new Error('Saved-file navigation anchor changed: '+path);
+  fs.writeFileSync(path,normalized.replaceAll(before,after));
 }
 patch('scripts/browser-saved-documents-v110344.mjs',
   "await page.getByRole('heading',{name:'Recent documents',exact:true}).waitFor();",

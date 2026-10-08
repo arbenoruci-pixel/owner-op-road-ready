@@ -118,6 +118,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
       await page.setViewportSize({width,height:844});
       await fits(page,editor);await fits(page,editor.locator('label'));
       assert.equal(await editor.getByLabel('Load',{exact:true}).inputValue(),'38324346');
+      assert.match(await editor.getByLabel('Load',{exact:true}).evaluate(el=>getComputedStyle(el).backgroundImage),/svg/,'Load picker retains a visible dropdown indicator');
       assert.equal(await editor.getByLabel('Document type',{exact:true}).inputValue(),'pod');
       await page.screenshot({path:`${output}/${name}-organize-${width}.png`});
     }
