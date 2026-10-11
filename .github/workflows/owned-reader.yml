@@ -70,6 +70,7 @@ jobs:
           node scripts/reader-ai/browser.mjs
           node scripts/v110411/browser-filing.mjs
           node scripts/v110411/browser-rate.mjs
+          node scripts/v110466/browser-rate.mjs
           node scripts/v110464/browser-rate.mjs
           node scripts/v110410/browser-bol-columns.mjs
           node scripts/v110394/browser-bol-form.mjs
@@ -103,6 +104,7 @@ jobs:
             browser-test-results/bol-columns-v110410/
             browser-test-results/document-filing-v110411/
             browser-test-results/smart-rate-v110464/
+            browser-test-results/signed-rate-v110466/
             browser-test-results/ai-reader/
             browser-test-results/ratecon-structure-v110388/
             browser-test-results/scanner-capture-v110329/

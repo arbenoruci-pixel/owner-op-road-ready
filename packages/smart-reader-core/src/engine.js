@@ -2,7 +2,7 @@ import {normalizeInput,evidenceFor} from './input.js';
 import {PROFILES,normalizeValue} from './profiles.js';
 import {validateInvoice,validateUnloadingReceipt} from './validation.js';
 import {pageFieldMatches} from './identifierChecks.js';
-import {profileEvidence} from './classification.js';
+import {profileEvidence,hasRateConfirmationHeading} from './classification.js';
 import {partyKey} from './partyEvidence.js';
 import {rateDateContext,expandShortYear,linkedCertificateContext} from './dateContext.js';
 import {validateBol} from './bolChecks.js';
@@ -82,8 +82,7 @@ function classifyPage(page) {
   }
   // Same-heading refinements remain local to an observation. A generic
   // receipt may also refine across reads when its receipt number agrees.
-  const rateHeading=PROFILES.find(p=>p.id==='rate_confirmation').heading;
-  const ratePage=pooled.some(line=>rateHeading.test(line.text));
+  const ratePage=hasRateConfirmationHeading(pooled);
   const refined=votes.filter(vote=>!(ratePage&&vote.kind==='signing_certificate'&&vote.method==='sertifi_signature')&&!votes.some(other=>other!==vote
     &&(other.evidence.observationId===vote.evidence.observationId
       &&(PROFILES.find(p=>p.id===other.kind)?.refines?.includes(vote.kind)&&other.evidence.lineId===vote.evidence.lineId
