@@ -20,6 +20,7 @@ const confusablePair=(a,b)=>a.length===b.length&&a.length>=5&&a.length<=20&&/\d/
   &&[...a].filter((letter,index)=>letter!==b[index]).length===1
   &&[...a].every((letter,index)=>letter===b[index]||['8B','0O','1I','1L','5S','2Z','6G'].some(pair=>pair.includes(letter)&&pair.includes(b[index])));
 
+import {rateRouteMatches} from './rateRouteTable.js';
 import {numberedRateMatches} from './numberedRate.js';
 export function pageFieldMatches(page,spec){
   const matches=spec.pattern?page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match}))):[];
@@ -37,11 +38,21 @@ export function pageFieldMatches(page,spec){
       if(observations.size>=2)delete match.issue;
     }
   }
+  if(spec.rateVocabulary)matches.push(...rateRouteMatches(page,spec));
   if(spec.numberedRate)matches.push(...numberedRateMatches(page,spec));
   if(spec.rateSection)matches.push(...rateSectionMatches(page,spec));
   if(spec.rateParty)matches.push(...ratePartyMatches(page,spec));
   if(spec.nativeCell)matches.push(...nativeCellMatches(page,spec));
   if(spec.certificatePart)matches.push(...certificateMatches(page,spec));
+  if(spec.rateVocabulary==='totalRate'){
+    // A bare Rate/Flat Rate may be a component or unit price. An explicit
+    // supported total in the same read owns the final amount. Different
+    // totals and disagreements across reads remain genuine conflicts.
+    const generic=m=>/^\s*(?:RATE|FLAT\s+RATE)\s*(?::|=|[–—-])?\s*(?:[$€£]|\d|(?:USD|EUR|GBP|CAD|AUD|CHF)\b|$)/i.test(m.labelLine?.text||m.line.text);
+    const total=m=>/^\s*(?:TOTAL|GRAND\s+TOTAL|ALL[ -]IN|CARRIER\s+(?:TOTAL\s+)?PAY)(?=\s|[:=$€£–—-]|$)/i.test(m.labelLine?.text||m.line.text);
+    const finalReads=new Set(matches.filter(m=>total(m)&&!m.issue&&[m.line,m.labelLine].filter(Boolean).every(l=>l.confidence==null||l.confidence>=.8)).map(m=>m.observation));
+    for(let i=matches.length-1;i>=0;i--)if(generic(matches[i])&&finalReads.has(matches[i].observation))matches.splice(i,1);
+  }
   if(spec.kind==='party')return reconcilePartyNoise(recoverPartyContinuations(spec.wrappedConsigned?recoverConsigneeBlocks(matches):spec.recoverInitialSpacing?recoverCarrierInitialSpacing(matches):matches));
   if(spec.recoverPartialTime)return recoverPartialBolDates(matches);
   if(!spec.checkIdentifierFragments)return matches;

@@ -4,6 +4,7 @@
 import {isDocumentParty} from './fieldGuards.js';
 import {nativeStopEvidence} from './nativeStopEvidence.js';
 import {numberedRateSignals} from './numberedRate.js';
+import {rateHeading,totalRatePattern,totalRateSignal,pickupLabel,deliveryLabel,loadNumberLabel} from './rateVocabulary.js';
 
 const pickup=/^\s*(?:PICK(?:\s*UP)?|SHIPPER)(?:\s*[:#]?\s*\d+)?\s*:?\s*$/i;
 const delivery=/^\s*(?:DELIVERY|DELIVER|DROP(?:\s*OFF)?|CONSIGNEE)(?:\s*[:#]?\s*\d+)?\s*:?\s*$/i;
@@ -144,3 +145,9 @@ export const rateConfirmationProfile={
 for(const key of ['loadNumber','totalRate','equipment','miles','billingEmail','broker','carrier','shipper','consignee','pickupDate','deliveryDate','pickupAddress','deliveryAddress','pickupAppointment','deliveryAppointment'])rateConfirmationProfile.fields[key].numberedRate=key;
 rateConfirmationProfile.fields.documentDate={label:'Document date',kind:'date',required:false,numberedRate:'documentDate'};
 for(const role of ['pickup','delivery'])rateConfirmationProfile.fields[role+'City']={label:role==='pickup'?'Pickup city / state':'Delivery city / state',kind:'text',required:false,displayWhenFound:true,numberedRate:role+'City'};
+
+// Variants share one profile and its source-evidence checks.
+rateConfirmationProfile.variants.push({heading:rateHeading,signals:[totalRateSignal,pickupLabel,deliveryLabel],sameObservation:true});
+rateConfirmationProfile.fields.totalRate.pattern=totalRatePattern;
+rateConfirmationProfile.fields.loadNumber.pattern=new RegExp(String.raw`^\s*${loadNumberLabel}\s*[:#]?\s*([A-Z0-9][A-Z0-9._/-]*)(?=\s*(?:$|\||(?:CARRIER\s+)?RATE\s*(?:CONFIRMATION|CON)\s*$))`,'id');
+for(const key of ['loadNumber','totalRate','broker','carrier','equipment','shipper','consignee','pickupDate','deliveryDate','pickupAddress','deliveryAddress','pickupAppointment','deliveryAppointment','pickupCity','deliveryCity','documentDate'])rateConfirmationProfile.fields[key].rateVocabulary=key;

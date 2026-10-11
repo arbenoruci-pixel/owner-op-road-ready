@@ -1,6 +1,7 @@
 import {resolveEvidence} from './input.js';
 import {isDocumentParty} from './fieldGuards.js';
 import {isNumberedRateTable} from './numberedRate.js';
+import {hasRateStructure} from './rateVocabulary.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
   poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
@@ -20,7 +21,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
   if(result?.engine!=='owned-smart-reader'||result.documents.length!==1||doc.kind!==selectedType
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
   const rate=selectedType==='rate_confirmation';
-  if(rate&&!result.pages.some(page=>page.observations.some(o=>isNumberedRateTable(o.lines))))return analysis;
+  if(rate&&!result.pages.some(page=>page.observations.some(o=>(isNumberedRateTable(o.lines)||hasRateStructure(o.lines)))))return analysis;
   const delivery=selectedType==='delivery_order';
   const fieldMapping=delivery?{loadNo:'loadNumber',poNumber:'poNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',documentDate:'date'}:rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',broker:'broker',carrierName:'carrier',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress',origin:'pickupCity',destination:'deliveryCity'}:mapping;
   const fields={...analysis.fields},fieldEvidence={...analysis.fieldEvidence},fieldConfidence={...analysis.fieldConfidence};
