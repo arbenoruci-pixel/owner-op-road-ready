@@ -54,4 +54,15 @@ const g=applyLogbookEditorInsert(gap,{day,event:insert()},at);
 assert.ok(!visible(g.state).some(e=>e.startMin<=935&&e.endMin>935),'Real gaps remain visible');
 const stale=previewLogbookInsertOverride(state,{day,event:insert(),expectedRows:[]},at);assert.equal(stale.ok,false);
 console.log('PASS absent/mismatched evidence, explicit Ends, real gaps and stale snapshot guards');
+for(const status of ['SB','OFF','ON','D']) {
+  const today='2026-10-11',s=fixture();s.activeDay=today;s.currentStatus=status;
+  s.eventsByDay[today]=[{id:'live',status,startMin:0,endMin:1,source:'live_status'}];
+  const now=logbookClock(s,at).minute,command={day:today,event:insert(now-30,now-15)};
+  const r=applyLogbookEditorInsert(s,command,at);assert.equal(r.ok,true,r.error);
+  const projected=projectLogbookEvents(r.state,today,at);
+  assert.equal(projected.at(-1).endMin,now);assert.equal(projected.at(-1).status,status);
+  assert.equal(r.state.currentStatus,status);
+  assert.equal(projected.reduce((sum,row)=>sum+row.endMin-row.startMin,0),now);
+}
+console.log('PASS current-day OFF/SB/ON/Driving Insert retains the live status and Now endpoint');
 mock.timers.reset();

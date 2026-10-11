@@ -29,6 +29,8 @@ if(!read(css).includes('/* Explicit Solo membership */'))fs.appendFileSync(css,`
 .team-driver-list>.team-driver-remove{display:block;min-height:44px;color:#b42318;text-align:center;border-color:#fecaca;background:#fff7f7;font-weight:700}
 .team-driver-add{grid-template-columns:minmax(0,1fr) 110px}
 .team-driver-add input,.team-driver-add button{min-height:44px}
+.team-driver-add input{background:#fff;color:#182334;color-scheme:light}
+.team-driver-add input::placeholder{color:#667085;opacity:1}
 .team-driver-panel{max-height:70dvh;overflow-y:auto}
 .team-driver-panel>strong{display:block;margin:4px 2px 10px;color:#182334}
 `);
