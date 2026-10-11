@@ -51,8 +51,55 @@ async function client(sid,takeover=false){
 }
 try{
  const ipad=await client('ipad-session');await ipad.page.getByRole('button',{name:'Edit log'}).click();
+ await ipad.page.locator('#edit').focus();
+ assert.equal(await ipad.page.locator('#edit').evaluate(el=>el===document.activeElement),true);
+ const clicksBeforeLock=await ipad.page.evaluate(()=>window.fixture.clicked);
+ // Hold a real successful verification across the offline transition. A late
+ // response must never unlock the app after its connectivity state changed.
+ await ipad.page.evaluate(() => {
+  const f=window.fixture, rpc=f.cloud.rpc;
+  f.cloud.rpc=async (...args)=>{
+   const result=await rpc(...args);
+   f.cloud.rpc=rpc;
+   return new Promise(resolve=>{f.releaseCheck=()=>resolve(result);});
+  };
+  window.dispatchEvent(new Event('pageshow'));
+ });
+ await ipad.page.waitForFunction(()=>!!window.fixture.releaseCheck);
  await ipad.context.setOffline(true);await ipad.page.getByText(/Offline. Reconnect/).waitFor();
+ assert.equal(await ipad.page.locator('#edit').evaluate(el=>el===document.activeElement),false,'Lock must release focus held by an editable control');
+ await ipad.page.keyboard.press('Enter');
+ // Also cover activation that a browser dispatches to a retained target.
+ await ipad.page.locator('#edit').dispatchEvent('click');
+ assert.equal(await ipad.page.evaluate(()=>window.fixture.clicked),clicksBeforeLock,'Locked controls must not invoke their handlers');
+ await ipad.page.evaluate(async()=>{
+  const f=window.fixture, checking=f.mod.verifyDeviceSession().catch(()=>{});
+  f.releaseCheck();await checking;
+  await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
+ });
+ assert.equal(await ipad.page.locator('main[role="alert"]').isVisible(),true,'A delayed online response must not reopen an offline device');
  assert.equal(await ipad.page.locator('#edit').evaluate(el=>el.closest('[inert]')!==null),true);
+ // A fast reconnect must request fresh authorization; the old in-flight
+ // response cannot unlock the UI even though navigator.onLine is true again.
+ await ipad.context.setOffline(false);
+ await ipad.page.getByRole('button',{name:'Edit log'}).click();
+ await ipad.page.evaluate(()=>{
+  const f=window.fixture,rpc=f.cloud.rpc;f.held=[];f.hold=true;
+  f.restoreRpc=()=>{f.hold=false;f.cloud.rpc=rpc;};
+  f.cloud.rpc=async(...args)=>{const result=await rpc(...args);if(!f.hold)return result;return new Promise(resolve=>f.held.push(()=>resolve(result)));};
+  window.dispatchEvent(new Event('pageshow'));
+ });
+ await ipad.page.waitForFunction(()=>window.fixture.held.length===1);
+ await ipad.context.setOffline(true);
+ await ipad.page.getByText(/Offline. Reconnect/).waitFor();
+ await ipad.context.setOffline(false);
+ await ipad.page.evaluate(()=>{window.dispatchEvent(new Event('online'));window.fixture.held.shift()();});
+ await ipad.page.waitForFunction(()=>window.fixture.held.length===1,{},{timeout:3000});
+ assert.equal(await ipad.page.locator('main[role="alert"]').isVisible(),true,'Reconnect waits for fresh server authorization');
+ assert.equal(await ipad.page.evaluate(()=>window.fixture.mod.deviceSessionStatus()),null,'Stale verification must not repopulate the authorization cache');
+ await ipad.page.evaluate(()=>{window.fixture.restoreRpc();window.fixture.held.shift()();});
+ await ipad.page.getByRole('button',{name:'Edit log'}).click();
+ await ipad.context.setOffline(true);await ipad.page.getByText(/Offline. Reconnect/).waitFor();
  const phone=await client('phone-session',true);await phone.page.getByRole('button',{name:'Edit log'}).click();
  const handoff=await phone.page.evaluate(async()=>{const f=window.fixture;return (await f.db.sync_meta.get(f.mod.HANDOFF_KEY)).value;});
  assert.equal(handoff.records,true);assert.equal(handoff.archive,true);assert.equal(handoff.generation,2);
@@ -73,5 +120,5 @@ try{
   release({data:{active:false}});const message=await checking;return {message,signouts:f.signouts};
  });
  assert.match(stale.message,/session changed/);assert.deepEqual(stale.signouts,[],'An old verification response must never sign out a newer login');
- console.log('PASS browser: two devices, offline lock, takeover, preserved iPad snapshot, local-only signout, revoked-session replay and durable handoff');
+ console.log('PASS browser: two devices, delayed response offline lock, fresh reconnect authorization, takeover, preserved iPad snapshot, local-only signout, revoked-session replay and durable handoff');
 }finally{await browser.close();server.close();}

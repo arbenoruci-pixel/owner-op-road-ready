@@ -13,6 +13,10 @@ const b64=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
 const token=b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:user.id,email:user.email,exp,aud:'authenticated'})+'.synthetic';
 const session={access_token:token,refresh_token:'synthetic-no-real-token',token_type:'bearer',expires_in:86400,expires_at:exp,user};
 const state={view:'day',activeDay:day,sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/Chicago',driver:{truck:'12',trailer:'53'},driverProfile:{name:'Test Driver'},carrierName:'Test Carrier',mainOfficeAddress:'Test Office',currentTrailer:'53',currentStatus:'OFF',currentLocation:{city:'Chicago',state:'IL'},eventsByDay:{[day]:[{id:'fixture-event',status:'OFF',startMin:0,endMin:1440,city:'Chicago',state:'IL',note:'Off Duty'}]},certifyStatus:{[day]:'Needs signature'},signatureByDay:{},inspectionByDay:{},routeLegsByDay:{},formByDay:{},driverSignature:{dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4WQAAAAASUVORK5CYII=',driverName:'Test Driver'},loadGuidesById:{},dotWallet:{documents:{}}};
+// Nonempty historical records make preservation checks meaningful.
+state.eventsByDay['2026-09-12']=[{id:'historical-duty',status:'OFF',startMin:0,endMin:1440,city:'Chicago',state:'IL'}];
+state.signatureByDay['2026-09-12']={signature:state.driverSignature.dataUrl,signedAt:'2026-09-13T01:00:00Z'};
+state.dotWallet.documents.insurance={title:'Synthetic insurance',dataUrl:'data:application/pdf;base64,AA=='};
 async function stored(page){return page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,r=db.transaction('app_snapshots').objectStore('app_snapshots').get('owner-op-road-ready-state-v1');r.onerror=()=>{db.close();reject(r.error);};r.onsuccess=()=>{db.close();resolve(r.result?.state);};};}));}
 async function waitState(page,predicate){for(let n=0;n<100;n++){const s=await stored(page);if(s && predicate(s))return s;await page.waitForTimeout(100);}throw Error('Persistent state condition timed out');}
 const target={id:'pending-route',day:'2026-09-13',pickupDay:day,fromCity:'Dates Delivery Dates',toCity:'Dates',shippingDocs:'38246703',status:'open'};
@@ -58,8 +62,21 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   await pending().first().locator('.route-leg-delete').click();
   assert.ok(rows(await stored(page)).some(r=>r.id===target.id));
   await pending().first().waitFor();
-  // A route deletion is local-first and works with the network offline.
-  await context.setOffline(true);acceptDelete=true;
+  // The single-device policy locks offline editing. Preserve the entire
+  // snapshot, then require successful reauthorization before deleting.
+  const cancelled=await stored(page),dialogCount=dialogs.length;
+  await pending().first().locator('.route-leg-delete').focus();
+  await context.setOffline(true);
+  await page.locator('main[role="alert"]').waitFor({state:'visible'});
+  assert.match(await page.locator('main[role="alert"]').innerText(),/Offline|Connect|Connection/i);
+  assert.equal(await pending().first().evaluate(el=>!!el.closest('[inert]')),true);
+  await page.keyboard.press('Enter');
+  await assert.rejects(pending().first().locator('.route-leg-delete').click({timeout:500}),/Timeout/);
+  assert.equal(dialogs.length,dialogCount,'Offline lock must prevent the delete handler');
+  assert.deepEqual(await stored(page),cancelled,'Offline lock must preserve all existing records');
+  await context.setOffline(false);
+  await page.locator('main[role="alert"]').waitFor({state:'detached'});
+  acceptDelete=true;
   await pending().first().locator('.route-leg-delete').click();
   const removed=await waitState(page,s=>!rows(s).some(r=>r.id===target.id));
   assert.ok(rows(removed).some(r=>r.id===other.id));
@@ -69,7 +86,6 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   assert.deepEqual(removed.dotWallet,before.dotWallet);
   assert.deepEqual(removed.loadGuidesById,before.loadGuidesById);
   assert.ok(removed.logbookRouteRemovalsV110370.deletedIds.includes(target.id));
-  await context.setOffline(false);
   await page.goto(origin+'/_not-found');
   await page.evaluate(async({removed,target,day})=>{
    const stale={...removed,routeLegsByDay:{...removed.routeLegsByDay,[day]:[...(removed.routeLegsByDay[day]||[]),{...target,updatedAt:Date.now()+10000}]},loadInfo:{...removed.loadInfo,routeLegsByDay:{[day]:[target]}}};
@@ -80,16 +96,20 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   assert.equal(await pending().count(),0);
   assert.ok(rows(reloaded).some(r=>r.id===other.id));
   assert.deepEqual(reloaded.eventsByDay,before.eventsByDay);
+  assert.deepEqual(reloaded.signatureByDay,before.signatureByDay);
+  assert.deepEqual(reloaded.dotWallet,before.dotWallet);
+  assert.deepEqual(reloaded.loadGuidesById,before.loadGuidesById);
   // Removing the final synthetic row leaves an explicit empty day after reload.
   await page.locator('.route-leg-item').filter({hasText:'Downers Grove'}).locator('.route-leg-delete').click();
   await waitState(page,s=>!rows(s).some(r=>r.id===other.id));
   await page.reload();await form().click({timeout:30000});
   assert.equal(await page.locator('.route-leg-item').count(),0);
-  assert.deepEqual((await stored(page)).eventsByDay,before.eventsByDay);
+  const final=await stored(page);
+  for(const key of ['eventsByDay','signatureByDay','dotWallet','loadGuidesById'])assert.deepEqual(final[key],before[key]);
   assert.equal(dialogs.filter(text=>text.startsWith('Delete this route leg?')).length,3);
   assert.deepEqual(errors,[]);
   await page.screenshot({path:'browser-test-results/route-delete-'+name+'.png',fullPage:true});
-  console.log('PASS — '+name+': cancel, offline Delete, IndexedDB, reload and final-route removal; duty events stay unchanged');
+  console.log('PASS — '+name+': cancel, offline lock, reauthorize, Delete, IndexedDB, stale-row suppression and final-route reload; logbook records unchanged');
  }catch(error){await page.screenshot({path:'browser-test-results/route-delete-'+name+'-failed.png',fullPage:true}).catch(()=>{});fs.writeFileSync('browser-test-results/route-delete-'+name+'-failure.json',JSON.stringify({error:String(error),errors,dialogs,text:await page.locator('body').innerText()},null,2));throw error;}
  finally{await context.close();await browser.close();}
 }
