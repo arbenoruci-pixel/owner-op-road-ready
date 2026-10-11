@@ -26,7 +26,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]].filter(([na
   // Certificate review finishes after the local fields; wait for that final
   // analysis before opening a preview that its completion would remount.
   if(certificate)await page.getByText('Page 3: AI assistance is not enabled. Check the original page.',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
+  await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).press('Enter');
   const review=page.locator('.owned-reader-preview');await review.getByRole('heading',{name:'Rate confirmation · 1, 2',exact:true}).waitFor();
   assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
   assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'TEST-74123');
