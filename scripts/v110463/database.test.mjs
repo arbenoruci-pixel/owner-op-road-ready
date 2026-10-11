@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {pathToFileURL} from 'node:url';
+const {PGlite}=await import(process.env.PGLITE_MODULE?pathToFileURL(process.env.PGLITE_MODULE):'@electric-sql/pglite');
+const db=new PGlite();
+const u='00000000-0000-4000-8000-000000000001',other='00000000-0000-4000-8000-000000000002';
+const ipad='10000000-0000-4000-8000-000000000001',phone='10000000-0000-4000-8000-000000000002';
+const a='20000000-0000-4000-8000-000000000001',b='20000000-0000-4000-8000-000000000002',c='20000000-0000-4000-8000-000000000003';
+await db.exec(`create role anon; create role authenticated; create schema auth; create schema road_ready_private; grant usage on schema road_ready_private to authenticated;
+ create table auth.users(id uuid primary key);create table auth.sessions(id uuid primary key,user_id uuid);
+ create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.uid',true),'')::uuid$$;
+ create function auth.jwt() returns jsonb language sql as $$select coalesce(nullif(current_setting('request.jwt',true),''),'{}')::jsonb$$;
+ create function public.owner_op_access_v1() returns jsonb language sql as $$select '{"approved":true}'::jsonb$$;
+ create table public.road_ready_backup_settings(user_id uuid,record_sync_enabled boolean);
+ create table public.road_ready_account_workspaces(user_id uuid primary key,revision bigint,device_id uuid,payload jsonb,updated_at timestamptz default now());
+ create table public.road_ready_account_history(user_id uuid,revision bigint,device_id uuid,payload jsonb);
+ insert into auth.users values('${u}'),('${other}');insert into auth.sessions values('${a}','${u}'),('${b}','${u}'),('${c}','${u}');
+ insert into public.road_ready_backup_settings values('${u}',true);
+ insert into public.road_ready_account_workspaces values('${u}',25,'${ipad}','{"format":"road_ready_account_v1","records":{"ipad":"week of work"}}',now());`);
+await db.exec(fs.readFileSync('supabase/migrations/20261005233838_account_sync_deltas.sql','utf8'));
+const migration=fs.readdirSync('supabase/migrations').find(p=>p.endsWith('_single_active_device.sql'));
+await db.exec(fs.readFileSync('supabase/migrations/'+migration,'utf8'));
+async function session(s,uid=u){await db.query("select set_config('request.uid',$1,false),set_config('request.jwt',$2,false)",[uid,JSON.stringify({session_id:s})]);}
+async function active(device,takeover=false){return (await db.query('select public.road_ready_active_device_v1($1,$2) v',[device,takeover])).rows[0].v;}
+async function commit(device,note){return db.query("select road_ready_private.patch_account($1,25,$2,'[]')",[device,JSON.stringify({note})]);}
+await session(b);assert.deepEqual(await active(phone),{active:false});
+await assert.rejects(commit(phone,'stale phone'),/no longer active/);
+await session(a);const first=await active(ipad);assert.equal(first.active,true);assert.equal(first.receive,false);
+await session(b);const next=await active(phone,true);assert.equal(next.active,true);assert.equal(next.receive,true);
+await assert.rejects(commit(phone,'before receive'),/no longer active/);
+await session(a);assert.equal((await active(ipad,true)).active,false);await assert.rejects(commit(ipad,'late upload'),/no longer active/);
+await session(b);assert.equal((await active(phone)).generation,next.generation);
+assert.equal((await db.query('select public.road_ready_ack_device_v1($1,$2) v',[phone,next.generation+1])).rows[0].v.active,false);
+assert.equal((await db.query('select public.road_ready_ack_device_v1($1,$2) v',[phone,next.generation])).rows[0].v.active,true);
+await commit(phone,'new active write');
+const saved=(await db.query('select * from public.road_ready_account_workspaces')).rows[0];assert.equal(saved.revision,26);assert.equal(saved.payload.records.ipad,'week of work');assert.equal(saved.payload.records.note,'new active write');
+await db.query('delete from auth.sessions where id=$1',[b]);await assert.rejects(active(phone),/current approved session/);
+await session(c);const back=await active(ipad,true);assert.equal(back.active,true);assert.equal(back.receive,true);
+await session(c,other);await assert.rejects(active(ipad,true),/current approved session/);
+await db.exec('set role authenticated');await assert.rejects(db.query('select * from road_ready_private.active_devices'),/permission denied/);
+await db.exec('reset role;set role anon');await assert.rejects(active(phone,true),/permission denied/);
+console.log('PASS PostgreSQL: rollout protects iPad, takeover revokes old session, no replay, handoff blocks writes, generation-bound acknowledgement, local session expiry, isolation and private permissions');
+await db.close();
