@@ -40,11 +40,25 @@ export async function installLocalAccountSettings(context, user) {
   // settings read in-page, so pagehide/reload cannot leave a cross-origin fetch
   // pending in WebKit. The context route still denies writes and unknown URLs.
   await context.addInitScript(({cloudOrigin, userId}) => {
+    // Feature fixtures predate session ownership. Upgrade only their synthetic
+    // JWT on navigation; never manufacture or alter a real account session.
+    try {
+      const key='owner-op-prototype-auth-v1',session=JSON.parse(localStorage.getItem(key)||'null');
+      if(session?.user?.id===userId&&session.access_token?.endsWith('.synthetic')){
+        const parts=session.access_token.split('.'),claims=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+        if(claims.sub===userId&&!claims.session_id){claims.session_id=crypto.randomUUID();parts[1]=btoa(JSON.stringify(claims)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');session.access_token=parts.join('.');localStorage.setItem(key,JSON.stringify(session));}
+      }
+    } catch {}
     const nativeFetch = window.fetch.bind(window);
     window.fetch = (input, init = {}) => {
       const request = input instanceof Request ? input : null;
       const url = new URL(request ? request.url : String(input), location.href);
       const method = String(init.method || request?.method || 'GET').toUpperCase();
+      if(url.origin===cloudOrigin&&url.pathname==='/rest/v1/rpc/road_ready_active_device_v1'&&method==='POST'){
+        const token=new Headers(init.headers||request?.headers).get('authorization')?.replace(/^Bearer /,'');
+        try{const claims=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if(token.endsWith('.synthetic')&&claims.sub===userId&&claims.session_id)return Promise.resolve(new Response(JSON.stringify({active:true,generation:1,receive:false}),{status:200,headers:{'Content-Type':'application/json'}}));}catch{}
+        return Promise.resolve(new Response(JSON.stringify({error:'Synthetic fixture: foreign device session blocked'}),{status:403,headers:{'Content-Type':'application/json'}}));
+      }
       if (url.origin === cloudOrigin && url.pathname === '/rest/v1/road_ready_backup_settings' && method === 'GET' && url.searchParams.get('select') === 'record_sync_enabled' && url.searchParams.get('user_id') === `eq.${userId}`) {
         const headers = new Headers(init.headers || request?.headers);
         const row = {record_sync_enabled: false};
