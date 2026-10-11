@@ -5,6 +5,7 @@ import {profileEvidence} from '../src/classification.js';
 import {PROFILES} from '../src/profiles.js';
 import {restoreConfirmedReading} from '../src/continuity.js';
 import {savedReadingReview} from '../src/recovery.js';
+import {scanWithSourceFields} from '../src/scanFields.js';
 import {signedRateInput,sertifiStamp} from './signed-rate-fixture.mjs';
 
 const expected={loadNumber:'TEST-74123',totalRate:'4250.00',carrier:'EXAMPLE CARRIER LLC',equipment:'Van',shipper:'SAMPLE PRESS',consignee:'SAMPLE TOYS',pickupDate:'2026-10-08',deliveryDate:'2026-10-12',documentDate:'2026-10-08',pickupCity:'Albany, NY',deliveryCity:'Madison, WI',pickupAddress:'123 Example St Albany, NY 12207',deliveryAddress:'456 Sample Rd Madison, WI 53703',pickupAppointment:'08:00 - 16:00 Apt',deliveryAppointment:'08:00 - 17:00 Apt'};
@@ -46,4 +47,25 @@ test('rereading a signed agreement preserves verified values and exact source ca
  assert.deepEqual(restored.documents[0].fields.totalRate.correction,confirmed.documents[0].fields.totalRate.correction);
  assert.deepEqual(restored.documents[0].fields.totalRate.candidates,original.documents[0].fields.totalRate.candidates);
  assert.deepEqual(saved,before);assert.deepEqual(reread,original);
+});
+
+test('filing receives only primary source fields when a certificate matches the signing envelope',()=>{
+ const input=signedRateInput(),result=readDocument(input),original=structuredClone(result);
+ const analysis={fields:{gross:'35',loadNo:'OLD'},evidenceReviewV11036:{issues:[]}},before=structuredClone(analysis);
+ const shown=scanWithSourceFields(analysis,{analysis,result},'rate_confirmation');
+ for(const [key,value]of Object.entries({gross:'4250.00',loadNo:'TEST-74123',carrierName:'EXAMPLE CARRIER LLC',origin:'Albany, NY',destination:'Madison, WI'}))assert.equal(shown.fields[key],value,key);
+ for(const field of Object.values(shown.fields.readerSourceFieldsV110393.fields))for(const e of field.evidence)assert.notEqual(e.pageId,'page-3');
+ assert.deepEqual(analysis,before);assert.deepEqual(result,original);
+ for(const [index,mutate] of [
+  x=>{x.pages[0].observations[0].lines=x.pages[0].observations[0].lines.filter(l=>!l.text.startsWith('Doc ID'));x.pages[1].observations[0].lines=x.pages[1].observations[0].lines.filter(l=>!l.text.startsWith('Doc ID'));},
+  x=>{x.pages[2].observations[0].lines.find(l=>l.text.startsWith('Doc ID')).text='Doc ID: 20261008999999999';},
+  x=>{x.pages[2].observations[0].lines.find(l=>l.text.startsWith('Doc ID')).confidence=.4;},
+  x=>{x.pages[0].observations[0].lines.find(l=>l.text.startsWith('Doc ID')).confidence=.4;},
+  x=>{x.pages[2].observations.push(textObservation('Doc ID: 20261008999999999',{id:'conflict'}));},
+  x=>{x.pages.push({...structuredClone(x.pages[0]),id:'second-load',number:4});},
+ ].entries()){const x=signedRateInput();mutate(x);assert.equal(scanWithSourceFields(analysis,{analysis,result:readDocument(x)},'rate_confirmation'),analysis,'guard '+index);}
+ const mixed={...analysis,typeEvidenceV110334:{mixedDocuments:true}};
+ assert.equal(scanWithSourceFields(mixed,{analysis:mixed,result},'rate_confirmation'),mixed);
+ const unknown=structuredClone(result);unknown.documents.push({id:'extra',kind:'unknown',role:'primary',pageIds:[]});
+ assert.equal(scanWithSourceFields(analysis,{analysis,result:unknown},'rate_confirmation'),analysis);
 });

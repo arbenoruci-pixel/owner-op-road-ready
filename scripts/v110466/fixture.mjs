@@ -1,9 +1,9 @@
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 import {signedRateInput} from '../../packages/smart-reader-core/test/signed-rate-fixture.mjs';
 
-export async function rateAgreementPdf({signed=true}={}){
+export async function rateAgreementPdf({signed=true,certificate=false}={}){
  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);
- for(const input of signedRateInput({signed}).pages){
+ for(const input of signedRateInput({signed,certificate}).pages){
   const page=pdf.addPage([612,792]);
   for(const [index,line]of input.observations[0].lines.entries()){
    const box=line.box||{x:.08,y:.06+index*.035,width:.7};

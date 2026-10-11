@@ -2,6 +2,7 @@ import {resolveEvidence} from './input.js';
 import {isDocumentParty} from './fieldGuards.js';
 import {isNumberedRateTable} from './numberedRate.js';
 import {hasRateStructure} from './rateVocabulary.js';
+import {documentReferences} from './documentReference.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
   poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
@@ -12,13 +13,23 @@ const dateWarning='Document date was not read. Enter it after checking the origi
 const payWarning='Agreed carrier pay was not found under a payment label. Fees and detention amounts are excluded.';
 const layoutWarning='Some fields could not be verified beside their labels. Check Reader preview and the original.';
 
+// A certificate may accompany one RateCon without supplying any load fields.
+// Require an exact, strong envelope match; mixed or unlinked packets stay guarded.
+function linkedRateCertificates(result,doc){
+  if(doc?.kind!=='rate_confirmation')return false;
+  const primaryRefs=documentReferences(result.pages.filter(page=>doc.pageIds.includes(page.id))),refs=documentReferences(result.pages);
+  if(!primaryRefs.length||new Set(refs.map(ref=>ref.value)).size!==1||refs.some(ref=>ref.line.confidence!==null&&ref.line.confidence<.8))return false;
+  return result.documents.every(other=>other===doc||other.kind==='signing_certificate'&&other.role==='supporting'
+    &&other.fields.documentReference?.status==='supported'&&other.fields.documentReference.value===refs[0].value);
+}
+
 // Derive the filing display from this exact scan's current source review.
 // The raw analysis and review stay immutable; load assignment and duty links
 // remain the driver's choices. Source support never means automatic filing.
 export function scanWithSourceFields(analysis,review,selectedType){
   if(!analysis||review?.analysis!==analysis||!['bol','pod','rate_confirmation','delivery_order'].includes(selectedType))return analysis;
   const result=review.result,doc=result?.documents?.[0];
-  if(result?.engine!=='owned-smart-reader'||result.documents.length!==1||doc.kind!==selectedType
+  if(result?.engine!=='owned-smart-reader'||(result.documents.length!==1&&!linkedRateCertificates(result,doc))||doc.kind!==selectedType
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
   const rate=selectedType==='rate_confirmation';
   if(rate&&!result.pages.some(page=>page.observations.some(o=>(isNumberedRateTable(o.lines)||hasRateStructure(o.lines)))))return analysis;
