@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {addTeamDriver,switchTeamDriver,normalizeTeamDriverState,importedLogbookIntegrity} from '../../source/src/core/team/teamLogbook.js';
+import {addCurrentCoDriver,removeCurrentCoDriver,registerFormTeamDrivers,formTeamDriverSummary} from '../../source/src/core/team/formTeamV110448.js';
+import {readLogbookDayState} from '../../source/src/modules/logbook/dayFormV110.js';
+import {fixture,day,prior} from '../insert-continuity/fixture.mjs';
+let state=addTeamDriver(fixture(),'Saved Partner',day);
+const primary=state.activeDriverId,partner=state.teamDrivers[1].id;
+state.teamLogbooksByDriverId[partner]={eventsByDay:{[prior]:[{id:'partner-sleep',status:'SB',startMin:0,endMin:1440}]},signatureByDay:{[prior]:{signed:true,signatureDataUrl:'saved'}}};
+state.formByDay[prior]={coDrivers:'Saved Partner'};
+const before=structuredClone(state),removed=removeCurrentCoDriver(state,partner,day);
+for(let n=5;n<=11;n++){
+  const date=`2026-10-${String(n).padStart(2,'0')}`;
+  const reloaded=normalizeTeamDriverState(JSON.parse(JSON.stringify({...removed,activeDay:date})));
+  assert.equal(reloaded.coDrivers,'');
+  assert.deepEqual(formTeamDriverSummary(readLogbookDayState(reloaded,date)).drivers.map(d=>d.id),[primary]);
+}
+assert.deepEqual(removed.eventsByDay,before.eventsByDay);
+assert.deepEqual(removed.teamLogbooksByDriverId,before.teamLogbooksByDriverId);
+assert.deepEqual(removed.signatureByDay,before.signatureByDay);
+assert.deepEqual(removed.formByDay[prior],before.formByDay[prior],'Historical Form evidence remains intact');
+assert.equal(switchTeamDriver(removed,partner,day).activeDriverId,primary,'Archived driver cannot be reactivated by Switch');
+assert.deepEqual(state,before);
+const restored=addCurrentCoDriver(removed,' saved partner ',day);
+assert.equal(restored.teamDrivers.length,2);assert.ok(restored.activeTeamDriverIds.includes(partner));
+assert.deepEqual(restored.teamLogbooksByDriverId[partner],before.teamLogbooksByDriverId[partner]);
+assert.deepEqual(switchTeamDriver(restored,partner,day).eventsByDay,before.teamLogbooksByDriverId[partner].eventsByDay);
+assert.equal(importedLogbookIntegrity(removed,normalizeTeamDriverState(JSON.parse(JSON.stringify(removed)))).ok,true);
+assert.deepEqual(removeCurrentCoDriver(state,primary,day),state);
+const cleared=registerFormTeamDrivers(state,'',day);assert.equal(normalizeTeamDriverState(cleared).coDrivers,'');
+assert.deepEqual(cleared.teamLogbooksByDriverId,state.teamLogbooksByDriverId);
+const fresh=addCurrentCoDriver(removed,'New Partner',day);assert.equal(fresh.teamDrivers.length,3);
+assert.deepEqual(formTeamDriverSummary(fresh).drivers.map(d=>d.name),['Synthetic Driver','New Partner']);
+assert.equal(registerFormTeamDrivers({driverProfile:{name:'Only Driver'}},'',day).coDrivers,'');
+console.log('PASS Solo all week/reload, Form clearing, removal without erasing logs/signatures, explicit re-add with original ID, driver isolation and import');
