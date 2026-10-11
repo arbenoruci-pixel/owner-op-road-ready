@@ -5,23 +5,25 @@ import {getOwnerOpDb} from '../local-db/dexie.js';
 import {APP_STATE_KEY,flushAppSnapshots} from '../local-db/appState.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../../source/src/modules/business/businessStore.js';
 import {bounded,hashBytes} from './mirrorCoreV110450.js';
-import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical,equivalentRecords,resolveConflict,repairChecklistState} from './accountCoreV110455.js';
+import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical,equivalentRecords,resolveConflict,repairChecklistState,scopedRecords,mergeScope} from './accountCoreV110455.js';
 import {encode,decode,piecesOf,snapshotBundle,localPieceSource} from './accountFilesV110455.js';
 export const ACCOUNT_EVENT='road-ready-account-sync',APPLY_EVENT='road-ready-account-apply';
 const FILE_TABLES=new Set(['document_blobs','capture_asset_blobs']);
 const OWNER_KEY='owner-op-account-data-owner-v1',BASE_KEY='account-sync-v110455:base';
 let mutationEpoch=0;const tableEpoch=new Map();
 let tabBase; // Keep this tab's last observed revision; another tab may advance shared IndexedDB.
-let active=null,status={phase:'idle',message:'Checking account data…'},conflictReview=null;
+let active=null,activeScope=null,interruptArchive=false,status={phase:'idle',message:'Checking account data…'},conflictReview=null;
+const priorityChannel=typeof window!=='undefined'&&typeof BroadcastChannel!=='undefined'?new BroadcastChannel('road-ready-account-priority'):null;
+if(priorityChannel)priorityChannel.onmessage=()=>{if(activeScope==='all')interruptArchive=true;};
 export const accountStatus=()=>status;
 function show(v){status={...status,...v};window.dispatchEvent(new CustomEvent(ACCOUNT_EVENT,{detail:status}));}
 async function checked(q){const r=await bounded(q);if(r.error)throw r.error;return r.data;}
 function device(){const k='owner-op-cloud-mirror-v1:device';let v=localStorage.getItem(k);if(!v){v=crypto.randomUUID();localStorage.setItem(k,v);}return v;}
 const readLocal=k=>{const s=localStorage.getItem(k);if(s===null)return undefined;try{return JSON.parse(s);}catch{return s;}};
-async function capture(){
+async function capture(scope='all'){
  await flushAppSnapshots();const epoch=mutationEpoch,db=getOwnerOpDb(),tables={},row=await db.app_snapshots.get(APP_STATE_KEY),live=window.__rrAccountState?.();
  if(window.__OWNER_OP_BUSINESS_STORE_VOLATILE_V10963__)throw Error('Save pending load changes before syncing.');
- await db.transaction('r',Object.keys(TABLE_KEYS).map(k=>db.table(k)),async()=>{for(const k of Object.keys(TABLE_KEYS))tables[k]=FILE_TABLES.has(k)?(await db.table(k).toCollection().primaryKeys()).map(id=>({[TABLE_KEYS[k]]:id})):await db.table(k).toArray();});
+ if(scope==='all')await db.transaction('r',Object.keys(TABLE_KEYS).map(k=>db.table(k)),async()=>{for(const k of Object.keys(TABLE_KEYS))tables[k]=FILE_TABLES.has(k)?(await db.table(k).toCollection().primaryKeys()).map(id=>({[TABLE_KEYS[k]]:id})):await db.table(k).toArray();});
  if(epoch!==mutationEpoch)throw Error('Documents changed during sync. Retrying shortly.');
  return {epoch,state:live||row?.state||{},business:readLocal(BUSINESS_STORE_KEY)||{},tables,locals:Object.fromEntries(LOCAL_KEYS.map(k=>[k,readLocal(k)]).filter(([,v])=>v!==undefined)),savedState:row?.state,live};
 }
@@ -35,17 +37,17 @@ function installHooks(db){
  // must not hide replacement bytes written by another window on this device.
  Dexie.on('storagemutated',parts=>{const keys=Object.keys(parts);for(const name of Object.keys(TABLE_KEYS))if(parts.all||keys.some(k=>k.startsWith('idb://'+db.name+'/'+name+'/')))mark(name);});
 }
-async function encodedRecords(bundle,opts){
+async function encodedRecords(bundle,opts,scope='all'){
  const out={};
  async function add(key,value){const parts=JSON.parse(key),sig=canonical(rawShape(value)),cached=encodeCache.get(key),changedTable=parts[0]==='table'&&cached?.epoch!==(tableEpoch.get(parts[1])||0);
   if(cached&&cached.sig===sig&&!changedTable)out[key]=cached.value;
   else{out[key]=await encode(value,opts);encodeCache.set(key,{sig,value:out[key],epoch:tableEpoch.get(parts[1])||0});}
  }
- for(const [key,value] of Object.entries(recordsFrom(bundle))){const parts=JSON.parse(key);if(parts[0]==='table'&&FILE_TABLES.has(parts[1]))continue;await add(key,value);}
+ for(const [key,value] of Object.entries(scopedRecords(recordsFrom(bundle),scope))){const parts=JSON.parse(key);if(parts[0]==='table'&&FILE_TABLES.has(parts[1]))continue;await add(key,value);}
  // Read one original at a time. ArrayBuffer-backed rows must never be loaded
  // together with getAll() during background synchronization.
  const db=getOwnerOpDb();
- for(const name of FILE_TABLES)for(const stub of bundle.tables[name]||[]){
+ if(scope==='all')for(const name of FILE_TABLES)for(const stub of bundle.tables[name]||[]){
   const id=stub[TABLE_KEYS[name]],key=JSON.stringify(['table',name,String(id)]),cached=encodeCache.get(key);
   if(cached&&cached.epoch===(tableEpoch.get(name)||0)){out[key]=cached.value;continue;}
   const row=await db.table(name).get(id);if(!row)throw Error('A saved document changed during sync. Retrying shortly.');await add(key,row);
@@ -53,7 +55,7 @@ async function encodedRecords(bundle,opts){
  if(bundle.epoch!==mutationEpoch)throw Error('Documents changed during sync. Retrying shortly.');
  dirty.clear();return out;
 }
-async function install(records,local,base,uid,check){
+async function install(records,local,base,uid,check,scope='all'){
  show({message:'Saving account data for offline use…'});
  const source=localPieceSource(),opts={storage:cloudClient().storage.from('owner-op-private'),uid,check,localPiece:source.read},decoded={},rawRecords=recordsFrom(local),db=getOwnerOpDb(),staged=new Map(),signatures=new Map();let done=0;
  // Metadata-only changes and duplicate document/capture rows can reuse saved
@@ -81,7 +83,7 @@ async function install(records,local,base,uid,check){
   }else decoded[k]=unchanged?rawRecords[k]:await decode(v,opts,new Map());
   if(++done%5===0)show({message:`Receiving saved records · ${done} / ${Object.keys(records).length}`});
  }
- const next=bundleFrom(decoded,local.state);await check();await flushAppSnapshots();
+ const next=bundleFrom(mergeScope(rawRecords,decoded,scope),local.state);await check();await flushAppSnapshots();
  const unchanged=()=>{if(mutationEpoch!==local.epoch||!same(window.__rrAccountState?.()||local.state,local.live||local.state)||!same(readLocal(BUSINESS_STORE_KEY)||{},local.business)||LOCAL_KEYS.some(k=>!same(readLocal(k),local.locals[k])))throw Error('Records changed during sync. Retrying shortly.');if(window.__rrAccountState?.()?.sheet||document.activeElement?.matches('input,textarea,select,[contenteditable=true]'))throw Error('Finish your open edit to receive the latest changes.');};
  unchanged();
  const previousLocals=new Map(),installedLocals=new Map(),now=new Date().toISOString();
@@ -96,7 +98,7 @@ async function install(records,local,base,uid,check){
    if(!await db.sync_meta.get('account-sync-v110455:first-join'))await db.sync_meta.put({key:'account-sync-v110455:first-join',value:{uid,state:local.state,business:local.business,locals:local.locals},updated_at:now});
    const checkpoint=await db.app_snapshots.get('account-sync-before-first-join');if(!checkpoint)await db.app_snapshots.put({key:'account-sync-before-first-join',state:local.state,updated_at:now});
    // Retain raw document rows for recovery; delete only identities removed relative to our common baseline.
-   for(const [name,pk] of Object.entries(TABLE_KEYS)){
+   if(scope==='all')for(const [name,pk] of Object.entries(TABLE_KEYS)){
     const incoming=new Set();
     for(const [k,v] of Object.entries(records)){
      const parts=JSON.parse(k);if(parts[0]!=='table'||parts[1]!==name)continue;
@@ -111,9 +113,9 @@ async function install(records,local,base,uid,check){
    }
    // The install and cleanup commit together. An aborted receive keeps every
    // checkpoint; success also releases old hashes/rows absent from this manifest.
-   await db.account_receive_staging.where('user_id').equals(uid).delete();
+   if(scope==='all')await db.account_receive_staging.where('user_id').equals(uid).delete();
    await db.app_snapshots.put({key:APP_STATE_KEY,state:next.state,updated_at:now});
-   await db.sync_meta.put({key:BASE_KEY,value:{...base,uid,records},updated_at:now});
+   await db.sync_meta.put({key:BASE_KEY,value:{...base,uid,records:base.records||records},updated_at:now});
    await db.sync_meta.delete('account-sync-v110455:pending');
   });
  }catch(e){for(const [k,v] of previousLocals){if(localStorage.getItem(k)!==installedLocals.get(k))continue;if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);}await db.sync_meta.delete('account-sync-v110455:pending');throw e;}
@@ -129,7 +131,7 @@ async function remoteWorkspace(uid,cached){
  const client=cloudClient(),info=await checked(client.from('road_ready_account_workspaces').select('revision,device_id,updated_at').eq('user_id',uid).maybeSingle());
  if(!info)return null;
  if(cached?.uid===uid){
-  let payload={...(cached.meta||{}),format:FORMAT,records:cached.records},revision=cached.revision;
+  let payload={...(cached.meta||{}),format:FORMAT,records:cached.remoteRecords||cached.records},revision=cached.revision;
   if(revision===info.revision)return {...info,payload};
   if(revision<info.revision){
    const history=await checked(client.from('road_ready_account_history').select('revision,payload').eq('user_id',uid).gt('revision',revision).lte('revision',info.revision).order('revision').limit(100));
@@ -139,24 +141,34 @@ async function remoteWorkspace(uid,cached){
  }
  return checked(client.from('road_ready_account_workspaces').select('*').eq('user_id',uid).single());
 }
-export function syncAccount({initial=false,choices=null}={}){
- if(active)return active;
+export function syncAccount({initial=false,choices=null,scope='all'}={}){
+ if(choices&&conflictReview?.scope)scope=conflictReview.scope;
+ if(scope==='records')priorityChannel?.postMessage('records');
+ if(active){
+  if(scope==='records'&&activeScope==='all'){
+   interruptArchive=true;
+   return active.then(()=>syncAccount({initial,choices,scope}));
+  }
+  return active;
+ }
+ activeScope=scope;interruptArchive=false;
  const run=async()=>{
   let canOpenLocal=false;
   try{
-   const session=await cloudSession();if(!session)return {signedOut:true};const uid=session.user.id,db=getOwnerOpDb();if(!db)throw Error('Device storage is unavailable.');
-   const priorOwners=(await db.sync_meta.toArray()).map(r=>r.key?.match(/^owner-op-record-sync-v1:([a-f0-9-]{36}):/i)?.[1]).filter(Boolean);
+   const session=await bounded(cloudSession(),10000);if(!session)return {signedOut:true};const uid=session.user.id,db=getOwnerOpDb();if(!db)throw Error('Device storage is unavailable.');
+   // Recovery values may contain originals; ownership only needs their keys.
+   const priorOwners=(await db.sync_meta.toCollection().primaryKeys()).map(key=>String(key).match(/^owner-op-record-sync-v1:([a-f0-9-]{36}):/i)?.[1]).filter(Boolean);
    const bound=localStorage.getItem(OWNER_KEY)||priorOwners[0];if((bound&&bound!==uid)||priorOwners.some(id=>id!==uid)){show({phase:'account_mismatch',message:'This device has another account’s offline data. Sign in with that account to open it.'});return {blocked:true};}
    if(tabBase===undefined)tabBase=(await db.sync_meta.get(BASE_KEY))?.value||null;
    installHooks(db);
    const pending=await db.sync_meta.get('account-sync-v110455:pending');
    if(pending?.value?.uid===uid){const p=pending.value;localStorage.setItem(BUSINESS_STORE_KEY,JSON.stringify(p.oldBusiness));for(const k of LOCAL_KEYS){const v=p.oldLocals[k];if(v===undefined)localStorage.removeItem(k);else localStorage.setItem(k,typeof v==='string'?v:JSON.stringify(v));}await db.sync_meta.delete('account-sync-v110455:pending');}
-   const check=async()=>{if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true')throw Error('Cloud work is paused on this device.');if((await cloudSession())?.user?.id!==uid)throw Error('Account changed. Synchronization stopped.');if(!navigator.onLine)throw Error('Offline · changes stay on this device until connected.');};
+   const check=async()=>{if(scope==='all'&&interruptArchive)throw Object.assign(Error('Sending logbook changes first.'),{deferred:true});if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true')throw Error('Cloud work is paused on this device.');if((await bounded(cloudSession(),10000))?.user?.id!==uid)throw Error('Account changed. Synchronization stopped.');if(!navigator.onLine)throw Error('Offline · changes stay on this device until connected.');};
    if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true'){show({phase:'paused',message:'Cloud work is paused on this device.'});return {paused:true};}
    if(!navigator.onLine){show({phase:'offline',message:'Offline · changes saved on this device.'});return {offline:true};}
    // Establish the owned offline copy before settings/workspace/snapshot reads
    // (or a session recheck) can fail and leave the startup gate closed.
-   const local=await capture(),saved=tabBase;
+   const local=await capture(scope),saved=tabBase;
    if(saved&&saved.uid!==uid)throw Error('Offline synchronization belongs to another account.');
    const meaningful=hasData(local);canOpenLocal=meaningful;
    await check();show({phase:'syncing',message:initial?'Opening your account data…':'Syncing changes…',conflicts:[]});
@@ -177,19 +189,21 @@ export function syncAccount({initial=false,choices=null}={}){
    if(remote)validatePayload(remote.payload);
    const opts={storage:cloudClient().storage.from('owner-op-private'),uid,known:piecesOf(remote?.payload?.records||{}),check,onProgress:message=>show({message})};
    if(!remote&&!meaningful){localStorage.setItem(OWNER_KEY,uid);show({phase:'current',message:'Ready for your first records.'});return {empty:true};}
-   local.encoded=await encodedRecords(local,opts);
-   let base=saved?.records;
-   if(!base&&remote?.payload?.seed_device===device()){
+   local.encoded=await encodedRecords(local,opts,scope);
+   let baseRecords=saved?.records;
+   if(!baseRecords&&remote?.payload?.seed_device===device()){
     // The original phone compares its newer local work against its own immutable seed, not another device.
-    const history=await checked(cloudClient().from('road_ready_account_history').select('payload').eq('user_id',uid).eq('revision',1).single());base=history.payload.records;
+    const history=await checked(cloudClient().from('road_ready_account_history').select('payload').eq('user_id',uid).eq('revision',1).single());baseRecords=history.payload.records;
    }
-   let merge=base?mergeRecords(base,local.encoded,remote?.payload?.records||{}):!meaningful&&remote?{records:remote.payload.records,conflicts:[]}:mergeRecords({},local.encoded,remote?.payload?.records||{});
+   const base=baseRecords&&scopedRecords(baseRecords,scope);
+   const remoteRecords=scopedRecords(remote?.payload?.records||{},scope);
+   let merge=base?mergeRecords(base,local.encoded,remoteRecords):!meaningful&&remote?{records:remoteRecords,conflicts:[]}:mergeRecords({},local.encoded,remoteRecords);
    if(choices&&conflictReview&&same(conflictReview.local,local.encoded)&&same(conflictReview.remote,remote?.payload?.records)){
     merge.records={...merge.records};merge.conflicts=merge.conflicts.filter(c=>{if(!['local','remote'].includes(choices[c.key]))return true;resolveConflict(merge.records,c,choices[c.key]);return false;});
    }
-   if(merge.conflicts.length){conflictReview={local:local.encoded,remote:remote?.payload?.records};await db.sync_meta.put({key:'account-sync-v110455:conflicts',value:{uid,revision:remote?.revision,conflicts:merge.conflicts},updated_at:new Date().toISOString()});show({phase:'conflict',message:'Changes on two devices need review. Both versions are kept.',conflicts:merge.conflicts});return {conflicts:merge.conflicts};}
+   if(merge.conflicts.length){conflictReview={local:local.encoded,remote:remote?.payload?.records,scope};await db.sync_meta.put({key:'account-sync-v110455:conflicts',value:{uid,revision:remote?.revision,conflicts:merge.conflicts},updated_at:new Date().toISOString()});show({phase:'conflict',message:'Changes on two devices need review. Both versions are kept.',conflicts:merge.conflicts});return {conflicts:merge.conflicts};}
    if(local.epoch!==mutationEpoch||!same(window.__rrAccountState?.()||local.state,local.live||local.state)||!same(readLocal(BUSINESS_STORE_KEY)||{},local.business))throw Error('Records changed during sync. Retrying shortly.');
-   const payload={...(remote?.payload||{}),format:FORMAT,records:merge.records};let revision=remote?.revision||0;
+   const payload={...(remote?.payload||{}),format:FORMAT,records:mergeScope(remote?.payload?.records||{},merge.records,scope)};let revision=remote?.revision||0;
    await check();
    if(!same(payload.records,remote?.payload?.records)){
     const patch=Object.fromEntries(Object.entries(payload.records).filter(([k,v])=>!same(v,remote?.payload?.records[k]))),removed=Object.keys(remote?.payload?.records||{}).filter(k=>!(k in payload.records));
@@ -197,13 +211,14 @@ export function syncAccount({initial=false,choices=null}={}){
    }
    const changed=!equivalentRecords(local.encoded,merge.records)||repairChecklistState(local.state)!==local.state;
    const meta=Object.fromEntries(Object.entries(payload).filter(([k])=>k!=='records'));
-   if(changed)await install(merge.records,local,{revision,meta},uid,check);
-   else{if(saved?.revision!==revision)await db.sync_meta.put({key:BASE_KEY,value:{uid,revision,meta,records:merge.records},updated_at:new Date().toISOString()});localStorage.setItem(OWNER_KEY,uid);}
-   tabBase={uid,revision,meta,records:merge.records};
+   const nextBase={uid,revision,meta,records:mergeScope(baseRecords||{},merge.records,scope),remoteRecords:payload.records};
+   if(changed)await install(merge.records,local,nextBase,uid,check,scope);
+   else{if(saved?.revision!==revision||!saved?.remoteRecords||!same(saved.records,nextBase.records))await db.sync_meta.put({key:BASE_KEY,value:nextBase,updated_at:new Date().toISOString()});localStorage.setItem(OWNER_KEY,uid);}
+   tabBase=nextBase;
    const resolved=await db.sync_meta.get('account-sync-v110455:conflicts');if(resolved)await db.sync_meta.put({...resolved,key:'account-sync-v110455:resolved:'+Date.now()});
    await db.sync_meta.delete('account-sync-v110455:conflicts');conflictReview=null;
-   show({phase:'current',message:'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed};
-  }catch(e){const message=e?.message||String(e);show({phase:localStorage.getItem('owner-op-record-sync-v1:paused')==='true'?'paused':navigator.onLine?'error':'offline',message});return {error:message,canOpenLocal};}
+   show({phase:scope==='records'?'records_current':'current',message:scope==='records'?'Logbook is up to date. Documents sync in the background.':'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed,scope};
+  }catch(e){if(e.deferred)return {deferred:true,canOpenLocal};const message=e?.message||String(e);show({phase:localStorage.getItem('owner-op-record-sync-v1:paused')==='true'?'paused':navigator.onLine?'error':'offline',message});return {error:message,canOpenLocal};}
  };
- active=(navigator.locks?.request?navigator.locks.request('road-ready-account-sync-v110455',initial?{}:{ifAvailable:true},lock=>lock?run():{busy:true}):run()).finally(()=>{active=null;});return active;
+ active=(navigator.locks?.request?navigator.locks.request('road-ready-account-sync-v110455',initial?{}:{ifAvailable:true},lock=>lock?run():{busy:true}):run()).finally(()=>{active=null;activeScope=null;});return active;
 }

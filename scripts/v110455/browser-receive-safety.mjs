@@ -69,6 +69,69 @@ async function scenario(name,run){
  finally{await context.close();}
 }
 try{
+ await scenario('logbook opens and uploads before unavailable archive originals; both baselines survive reload',async page=>{
+  const result=await page.evaluate(async()=>{
+   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
+   const key='["table","document_blobs","cloud-original"]';
+   const original=await encode({local_blob_id:'cloud-original',blob:new Blob(['cloud original'])},{storage:f.storage,uid:f.uid,known:new Set()});
+   const remoteState={...f.state,dotWallet:{documents:{cloud:{title:'Saved wallet'}}}};
+   f.workspace={revision:1,payload:{format:f.core.FORMAT,records:{...f.core.recordsFrom({state:remoteState}),[key]:original}}};
+   const remoteOriginal=structuredClone(original);
+   f.cloud.rpc=async(name,p)=>{
+    if(name!=='road_ready_account_patch_v1'||p.p_expected!==f.workspace.revision)throw Error('Unexpected commit');
+    const records={...f.workspace.payload.records,...p.p_patch};for(const k of p.p_deleted)delete records[k];
+    f.workspace={...f.workspace,revision:f.workspace.revision+1,payload:{...f.workspace.payload,records}};return {data:{revision:f.workspace.revision}};
+   };
+   f.downloads.clear();f.brokenPath=[...f.objects.keys()][0];
+   await f.db.document_blobs.put({local_blob_id:'local-only',blob:new Blob(['unsent local original'])});
+   const first=await f.sync.syncAccount({initial:true,scope:'records'});
+   const opened=(await f.db.app_snapshots.get(f.key)).state;
+   const readsBeforeArchive=[...f.downloads.values()].reduce((a,b)=>a+b,0);
+   localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify({expenses:[{id:'new-expense',amount:12}]}));
+   // A new module instance represents reopening with only the persisted baseline.
+   const reopened=await import('/lib/owner-op-cloud/accountSyncV110455.js?reopened');
+   const saved=await reopened.syncAccount({scope:'records'});
+   const remoteAfterSave=structuredClone(f.workspace.payload.records);
+   const archive=await reopened.syncAccount();
+   const stateAfterFailure=(await f.db.app_snapshots.get(f.key)).state;
+   f.brokenPath=null;
+   const resumed=await reopened.syncAccount();
+   return {first,saved,archive,resumed,readsBeforeArchive,opened,stateAfterFailure,remoteOriginal,remoteAfterSave,
+    cloudText:await(await f.db.document_blobs.get('cloud-original')).blob.text(),
+    localText:await(await f.db.document_blobs.get('local-only')).blob.text(),
+    wallet:(await f.db.app_snapshots.get(f.key)).state.dotWallet};
+  });
+  assert.equal(result.first.error,undefined);assert.equal(result.saved.error,undefined);
+  assert.equal(result.readsBeforeArchive,0,'Opening and saving a logbook must not download archive originals');
+  assert.ok(result.opened.eventsByDay['2026-10-07'].length);
+  assert.deepEqual(result.remoteAfterSave['["table","document_blobs","cloud-original"]'],result.remoteOriginal,'Scoped commits preserve remote originals');
+  assert.equal(result.remoteAfterSave['["business","expenses","new-expense"]'].amount,12);
+  assert.match(result.archive.error,/interrupted download/);assert.deepEqual(result.stateAfterFailure,result.opened);
+  assert.equal(result.resumed.error,undefined);assert.equal(result.cloudText,'cloud original');assert.equal(result.localText,'unsent local original');
+  assert.equal(result.wallet.documents.cloud.title,'Saved wallet');
+ });
+ await scenario('a new logbook save preempts an archive receive without replacing live work',async page=>{
+  const result=await page.evaluate(async()=>{
+   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
+   const original=await encode({local_blob_id:'pending',blob:new Blob(['pending original'])},{storage:f.storage,uid:f.uid,known:new Set()});
+   f.workspace={revision:1,payload:{format:f.core.FORMAT,records:{...f.core.recordsFrom({state:f.state}),'["table","document_blobs","pending"]':original}}};
+   f.cloud.rpc=async(name,p)=>{const records={...f.workspace.payload.records,...p.p_patch};for(const k of p.p_deleted||[])delete records[k];f.workspace={...f.workspace,revision:f.workspace.revision+1,payload:{...f.workspace.payload,records}};return {data:{revision:f.workspace.revision}};};
+   await f.sync.syncAccount({scope:'records',initial:true});
+   let release,reached;const barrier=new Promise(r=>release=r),started=new Promise(r=>reached=r),download=f.storage.download;
+   f.storage.download=async key=>{reached();await barrier;return download(key);};
+   const archive=f.sync.syncAccount();await started;
+   const state=structuredClone((await f.db.app_snapshots.get(f.key)).state);state.eventsByDay['2026-10-07'][0].note='new phone edit';
+   await f.db.app_snapshots.put({key:f.key,state});
+   const records=f.sync.syncAccount({scope:'records'});release();
+   const deferred=await archive,finished=await records;
+   return {deferred,finished,local:(await f.db.app_snapshots.get(f.key)).state,remote:f.workspace.payload.records,
+    staging:await f.db.account_receive_staging.count(),installed:await f.db.document_blobs.count()};
+  });
+  assert.equal(result.deferred.deferred,true);assert.equal(result.finished.error,undefined);
+  assert.equal(result.local.eventsByDay['2026-10-07'][0].note,'new phone edit');
+  assert.equal(result.remote['["day","driver_primary","2026-10-07"]'].eventsByDay[0].note,'new phone edit');
+  assert.equal(result.installed,0);assert.ok(result.staging>0,'Verified interrupted originals remain resumable');
+ });
  await scenario('receive reuses verified bytes across duplicate records and metadata changes',async page=>{
   const result=await page.evaluate(async()=>{
    const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');

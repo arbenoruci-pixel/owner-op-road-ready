@@ -8,6 +8,17 @@ export const TABLE_KEYS={documents_local:'local_id',document_blobs:'local_blob_i
 export const LOCAL_KEYS=['owner-op-road-ready-operator-profile-v1','owner-op-road-ready-home-terminal-timezone-v1','road-ready-owner-ops-v102'];
 export function canonical(v){if(v===undefined)return 'undefined';if(Array.isArray(v))return '['+v.map(canonical).join(',')+']';if(v&&typeof v==='object')return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}';return JSON.stringify(v);}
 export const same=(a,b)=>canonical(a)===canonical(b);
+// Working records must reach another device before the multi-GB file archive.
+// Recovery histories and wallet originals follow in the archive pass. Both
+// passes use the same cloud workspace and per-record three-way merge.
+export function workingRecord(k){
+ const [kind,field]=JSON.parse(k);
+ return kind!=='table'&&!(kind==='state'&&(field==='dotWallet'||/Backup|History|Repair/i.test(field)));
+}
+export const scopedRecords=(records={},scope='all')=>scope==='all'?records:Object.fromEntries(Object.entries(records).filter(([k])=>workingRecord(k)));
+export function mergeScope(previous={},records={},scope='all'){
+ return scope==='all'?records:{...Object.fromEntries(Object.entries(previous).filter(([k])=>!workingRecord(k))),...records};
+}
 const key=(...parts)=>JSON.stringify(parts),valid=k=>!['__proto__','constructor','prototype'].includes(k);
 export function recordsFrom(bundle){
  const {state={},business={},tables={},locals={}}=bundle,out={};
