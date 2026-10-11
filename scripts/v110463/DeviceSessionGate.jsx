@@ -8,10 +8,10 @@ import {DEVICE_EVENT,verifyDeviceSession,sessionId} from '../../../../lib/owner-
 export default function DeviceSessionGate({children}){
  const [opened,setOpened]=useState(false),[allowed,setAllowed]=useState(false),[message,setMessage]=useState('Checking this device…');
  useEffect(()=>{
-  let disposed=false,running=false,revoked=false;
+  let disposed=false,running=false,revoked=false,recheck=false,epoch=0;
   const lock=message=>{if(!disposed){setAllowed(false);setMessage(message);}};
   const retire=async sid=>{
-   if(revoked)return;revoked=true;
+   if(revoked)return;revoked=true;epoch++;
    lock('Opened on another device. Keeping your local work before signing out…');
    try{
     if(disposed||sessionId(await cloudSession())!==sid){revoked=false;return;}
@@ -24,17 +24,21 @@ export default function DeviceSessionGate({children}){
    }catch{revoked=false;lock('This device is locked. Your local work is retained. Reconnect to finish signing out.');}
   };
   const run=async()=>{
-   if(disposed||running||revoked)return;running=true;
-   try{await verifyDeviceSession();if(!disposed){setOpened(true);setAllowed(true);}}
-   catch(e){if(e.deviceRevoked)await retire(e.sid);else lock(e.message||'Connect to verify the active device.');}
-   finally{running=false;}
+   if(disposed||revoked)return;
+   if(running){recheck=true;return;}
+   running=true;recheck=false;const started=epoch;
+   try{await verifyDeviceSession();if(!disposed&&!revoked&&started===epoch&&navigator.onLine){setOpened(true);setAllowed(true);}}
+   catch(e){if(e.deviceRevoked)await retire(e.sid);else if(started===epoch)lock(e.message||'Connect to verify the active device.');}
+   finally{running=false;if(recheck&&!disposed&&!revoked&&navigator.onLine)void run();}
   };
   const observed=e=>{if(e.detail?.active===false)void retire(e.detail.sid);};
-  const offline=()=>lock('Offline. Reconnect to use this device. Your saved work stays here.');
-  const visible=()=>{if(document.visibilityState==='visible'){lock('Checking this device…');void run();}};
+  const offline=()=>{epoch++;lock('Offline. Reconnect to use this device. Your saved work stays here.');};
+  const visible=()=>{if(document.visibilityState==='visible'){epoch++;lock('Checking this device…');void run();}};
   window.addEventListener(DEVICE_EVENT,observed);window.addEventListener('offline',offline);window.addEventListener('online',run);window.addEventListener('pageshow',visible);document.addEventListener('visibilitychange',visible);
   void run();const timer=setInterval(run,4000);
   return()=>{disposed=true;clearInterval(timer);window.removeEventListener(DEVICE_EVENT,observed);window.removeEventListener('offline',offline);window.removeEventListener('online',run);window.removeEventListener('pageshow',visible);document.removeEventListener('visibilitychange',visible);};
  },[]);
- return <>{opened?<div inert={allowed?undefined:''} aria-hidden={!allowed||undefined}>{children}</div>:null}{!allowed?<main role="alert" style={{position:'fixed',inset:0,zIndex:2147483647,background:'#f4f7fb',color:'#172b46',padding:28,fontFamily:'system-ui',display:'grid',placeContent:'center'}}><section style={{maxWidth:480}}><h1>One active device</h1><p>{message}</p></section></main>:null}</>;
+ // Set the native property in the commit phase: React 18 and Next's React
+ // runtime serialize the inert JSX attribute differently.
+ return <>{opened?<div ref={node=>{if(node)node.inert=!allowed;}} aria-hidden={!allowed||undefined}>{children}</div>:null}{!allowed?<main role="alert" style={{position:'fixed',inset:0,zIndex:2147483647,background:'#f4f7fb',color:'#172b46',padding:28,fontFamily:'system-ui',display:'grid',placeContent:'center'}}><section style={{maxWidth:480}}><h1>One active device</h1><p>{message}</p></section></main>:null}</>;
 }

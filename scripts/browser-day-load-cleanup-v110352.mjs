@@ -64,7 +64,16 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   if(await eventRow.locator('.motive-edit-reveal-v11027').count()===0)await eventRow.click();
   await eventRow.locator('.motive-edit-reveal-v11027').click();
   const editor=page.locator('.editor-ui-v110');await editor.waitFor();
+  // Editing is blocked offline by the single-device policy. The open editor
+  // and all saved records must survive until fresh authorization succeeds.
+  const lockedState=await stored(page);
   await context.setOffline(true);
+  await page.locator('main[role="alert"]').waitFor({state:'visible'});
+  assert.equal(await editor.evaluate(el=>!!el.closest('[inert]')),true);
+  await assert.rejects(editor.locator('.sheet-head button').last().click({timeout:500}),/Timeout/);
+  assert.deepEqual(await stored(page),lockedState);
+  await context.setOffline(false);
+  await page.locator('main[role="alert"]').waitFor({state:'detached'});
   await editor.locator('.sheet-head button').last().click();
   const removed=await waitState(page,s=>!(s.eventsByDay?.[day]||[]).some(e=>e.id==='fixture-event'));
   assert.ok(!rows(removed).some(r=>r.id===target.id));
@@ -78,7 +87,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   assert.deepEqual(removed.dotWallet,before.dotWallet);
   assert.deepEqual(removed.loadGuidesById,before.loadGuidesById);
   await form().click();assert.equal(await pending().count(),0);
-  await context.setOffline(false);await page.reload();await form().click({timeout:30000});
+  await page.reload();await form().click({timeout:30000});
   const reloaded=await waitState(page,s=>!rows(s).some(r=>r.id===target.id));
   assert.equal(await pending().count(),0);
   assert.ok(rows(reloaded).some(r=>r.id===other.id));
@@ -86,7 +95,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
   assert.ok(!(reloaded.eventsByDay[day]||[]).some(e=>e.id==='fixture-event'));
   assert.deepEqual(errors,[]);
   await page.screenshot({path:'browser-test-results/day-load-cleanup-'+name+'.png',fullPage:true});
-  console.log('PASS — '+name+': last-event delete clears owned load/routes offline and after reload; other-day evidence preserved');
+  console.log('PASS — '+name+': last-event delete clears owned load/routes after reauthorization and reload; other-day evidence preserved');
  }catch(error){await page.screenshot({path:'browser-test-results/day-load-cleanup-'+name+'-failed.png',fullPage:true}).catch(()=>{});fs.writeFileSync('browser-test-results/day-load-cleanup-'+name+'-failure.json',JSON.stringify({error:String(error),errors,dialogs,text:await page.locator('body').innerText()},null,2));throw error;}
  finally{await context.close();await browser.close();}
 }

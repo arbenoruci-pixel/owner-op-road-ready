@@ -14,6 +14,11 @@ on:
       - 'scripts/finalize-route-removal-v110370.mjs'
       - 'scripts/v110374/**'
       - 'scripts/finalize-route-day-scope-v110374.mjs'
+      - 'scripts/browser-route-delete-v110350.mjs'
+      - 'scripts/browser-day-load-cleanup-v110352.mjs'
+      - 'scripts/browser-rest-day-v110370.mjs'
+      - 'scripts/v110463/**'
+      - 'scripts/finalize-device-recheck-v110465.mjs'
       - '.github/workflows/logbook-route-cleanup.yml'
 permissions:
   contents: read
@@ -44,6 +49,8 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium webkit
+          node scripts/v110463/browser-device.mjs
+          SYNC_TEST_BROWSER=webkit node scripts/v110463/browser-device.mjs
           npx next start --hostname 127.0.0.1 --port 3000 > /tmp/route-cleanup-server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT

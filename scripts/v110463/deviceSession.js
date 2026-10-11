@@ -6,7 +6,10 @@ import {bounded} from './mirrorCoreV110450.js';
 export const DEVICE_EVENT='road-ready-device-session';
 export const HANDOFF_KEY='road-ready-device-handoff-v1';
 const REQUEST='road-ready-device-login-v1';
-let current=null,pending=null;
+let current=null,pending=null,connectionEpoch=0;
+// Invalidate cached and in-flight authorization when connectivity is lost,
+// including a disconnect/reconnect that finishes before the RPC response.
+if(typeof window!=='undefined')window.addEventListener('offline',()=>{connectionEpoch++;current=null;});
 export function deviceId(){const key='owner-op-cloud-mirror-v1:device';let id=localStorage.getItem(key);if(!id){id=crypto.randomUUID();localStorage.setItem(key,id);}return id;}
 export function sessionId(session){try{return JSON.parse(atob(session.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id||null;}catch{return null;}}
 export function requestDeviceActivation(session){const sid=sessionId(session);if(sid)localStorage.setItem(REQUEST,sid);}
@@ -14,6 +17,8 @@ export function deviceSessionStatus(){return current;}
 export async function verifyDeviceSession(){
  if(pending)return pending;
  pending=(async()=>{
+  const started=connectionEpoch;
+  const connected=()=>{if(!navigator.onLine||started!==connectionEpoch)throw Error('Connection changed. Reconnect to verify the active device. Your saved work stays here.');};
   const session=await bounded(cloudSession(),10000),sid=sessionId(session);
   if(!session||!sid)throw Error('Sign in again to open this device.');
   if(!navigator.onLine)throw Error('Connect to the internet to verify the active device. Your saved work stays here.');
@@ -22,6 +27,7 @@ export async function verifyDeviceSession(){
   if(error)throw error;
   if(!data||typeof data.active!=='boolean')throw Error('Could not verify the active device.');
   if(sessionId(await cloudSession())!==sid)throw Error('Account session changed. Checking the new sign-in…');
+  connected();
   if(data.active){
    // Persist receive intent before allowing any child to mount or any write.
    // The server repeats receive=true until this generation is acknowledged.
@@ -32,6 +38,7 @@ export async function verifyDeviceSession(){
    }
    if(takeover)localStorage.removeItem(REQUEST);
   }
+  connected();
   current={...data,uid:session.user.id,sid,checkedAt:Date.now()};
   window.dispatchEvent(new CustomEvent(DEVICE_EVENT,{detail:current}));
   if(!data.active)throw Object.assign(Error('This account was opened on another device. Sign in again to use this one. Your local work is retained.'),{deviceRevoked:true,sid});
