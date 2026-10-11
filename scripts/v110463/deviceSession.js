@@ -21,6 +21,7 @@ export async function verifyDeviceSession(){
   const {data,error}=await bounded(cloudClient().rpc('road_ready_active_device_v1',{p_device:deviceId(),p_takeover:takeover}),10000);
   if(error)throw error;
   if(!data||typeof data.active!=='boolean')throw Error('Could not verify the active device.');
+  if(sessionId(await cloudSession())!==sid)throw Error('Account session changed. Checking the new sign-in…');
   if(data.active){
    // Persist receive intent before allowing any child to mount or any write.
    // The server repeats receive=true until this generation is acknowledged.
@@ -33,7 +34,7 @@ export async function verifyDeviceSession(){
   }
   current={...data,uid:session.user.id,sid,checkedAt:Date.now()};
   window.dispatchEvent(new CustomEvent(DEVICE_EVENT,{detail:current}));
-  if(!data.active)throw Object.assign(Error('This account was opened on another device. Sign in again to use this one. Your local work is retained.'),{deviceRevoked:true});
+  if(!data.active)throw Object.assign(Error('This account was opened on another device. Sign in again to use this one. Your local work is retained.'),{deviceRevoked:true,sid});
   return current;
  })().finally(()=>{pending=null;});
  return pending;

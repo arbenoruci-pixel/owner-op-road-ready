@@ -65,5 +65,13 @@ try{
  const replay=await client('ipad-session',true);await replay.page.waitForFunction(()=>window.fixture.signouts.length===1);assert.equal(owner,'phone-session');
  // Persistence survives module re-import without reopening stale local data.
  const again=await phone.page.evaluate(async()=>{const mod=await import('/lib/owner-op-cloud/deviceSessionV110463.js?reload');return mod.verifyDeviceSession();});assert.equal(again.active,true);assert.equal(again.generation,2);
+ const race=await client('race-session',true);await race.page.getByRole('button',{name:'Edit log'}).waitFor();
+ const stale=await race.page.evaluate(async()=>{
+  const f=window.fixture;let release;f.cloud.rpc=()=>new Promise(r=>release=r);
+  const checking=f.mod.verifyDeviceSession().catch(e=>e.message);while(!release)await new Promise(r=>setTimeout(r,0));
+  f.session={...f.session,access_token:'header.'+btoa(JSON.stringify({session_id:'new-session'}))+'.signature'};
+  release({data:{active:false}});const message=await checking;return {message,signouts:f.signouts};
+ });
+ assert.match(stale.message,/session changed/);assert.deepEqual(stale.signouts,[],'An old verification response must never sign out a newer login');
  console.log('PASS browser: two devices, offline lock, takeover, preserved iPad snapshot, local-only signout, revoked-session replay and durable handoff');
 }finally{await browser.close();server.close();}

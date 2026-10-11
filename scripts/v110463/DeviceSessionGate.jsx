@@ -1,22 +1,24 @@
 'use client';
 import React,{useEffect,useState} from 'react';
-import {cloudClient} from '../../../../lib/owner-op-cloud/client.js';
+import {cloudClient,cloudSession} from '../../../../lib/owner-op-cloud/client.js';
 import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {flushAppSnapshots} from '../../../../lib/local-db/appState.js';
-import {DEVICE_EVENT,verifyDeviceSession} from '../../../../lib/owner-op-cloud/deviceSessionV110463.js';
+import {DEVICE_EVENT,verifyDeviceSession,sessionId} from '../../../../lib/owner-op-cloud/deviceSessionV110463.js';
 
 export default function DeviceSessionGate({children}){
  const [opened,setOpened]=useState(false),[allowed,setAllowed]=useState(false),[message,setMessage]=useState('Checking this device…');
  useEffect(()=>{
   let disposed=false,running=false,revoked=false;
   const lock=message=>{if(!disposed){setAllowed(false);setMessage(message);}};
-  const retire=async()=>{
+  const retire=async sid=>{
    if(revoked)return;revoked=true;
    lock('Opened on another device. Keeping your local work before signing out…');
    try{
+    if(disposed||sessionId(await cloudSession())!==sid){revoked=false;return;}
     await flushAppSnapshots();
     const state=window.__rrAccountState?.(),db=getOwnerOpDb();
     if(state&&db)await db.app_snapshots.put({key:'single-device-signout:'+Date.now(),state:structuredClone(state),updated_at:new Date().toISOString()});
+    if(disposed||sessionId(await cloudSession())!==sid){revoked=false;return;}
     // Local sign-out must not revoke the newly signed-in device.
     const {error}=await cloudClient().auth.signOut({scope:'local'});if(error)throw error;
    }catch{revoked=false;lock('This device is locked. Your local work is retained. Reconnect to finish signing out.');}
@@ -24,10 +26,10 @@ export default function DeviceSessionGate({children}){
   const run=async()=>{
    if(disposed||running||revoked)return;running=true;
    try{await verifyDeviceSession();if(!disposed){setOpened(true);setAllowed(true);}}
-   catch(e){if(e.deviceRevoked)await retire();else lock(e.message||'Connect to verify the active device.');}
+   catch(e){if(e.deviceRevoked)await retire(e.sid);else lock(e.message||'Connect to verify the active device.');}
    finally{running=false;}
   };
-  const observed=e=>{if(e.detail?.active===false)void retire();};
+  const observed=e=>{if(e.detail?.active===false)void retire(e.detail.sid);};
   const offline=()=>lock('Offline. Reconnect to use this device. Your saved work stays here.');
   const visible=()=>{if(document.visibilityState==='visible'){lock('Checking this device…');void run();}};
   window.addEventListener(DEVICE_EVENT,observed);window.addEventListener('offline',offline);window.addEventListener('online',run);window.addEventListener('pageshow',visible);document.addEventListener('visibilitychange',visible);
