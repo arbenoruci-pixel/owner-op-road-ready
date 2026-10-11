@@ -6,6 +6,8 @@ export default function TeamDriverBar({state,onAddDriver,onRemoveDriver,onSwitch
   const summary=useMemo(()=>formTeamDriverSummary(state),[state]);
   const [open,setOpen]=useState(false),[name,setName]=useState('');
   const active=summary.activeDriver,peers=summary.drivers.filter(driver=>driver.id!==active.id);
+  const membershipKey=summary.drivers.map(driver=>driver.id).join('|');
+  React.useEffect(()=>setOpen(false),[active.id,membershipKey]);
   function add(){if(!name.trim())return;onAddDriver?.(name.trim());setName('');}
   return <div className="team-driver-shell">
     <div className="team-driver-bar">
@@ -14,7 +16,7 @@ export default function TeamDriverBar({state,onAddDriver,onRemoveDriver,onSwitch
         <span><small>{peers.length?'TEAM DRIVER':'SOLO DRIVER'}</small><b>{active.name}</b></span>
         <em>{peers.length?`${summary.drivers.length} drivers`:'Add co-driver'}</em>
       </button>
-      <button type="button" className="team-driver-toggle" onClick={()=>setOpen(!open)} aria-label="Manage co-driver" aria-expanded={open}>{open?'×':'+'}</button>
+      <button type="button" className="team-driver-toggle" onClick={()=>setOpen(!open)} aria-label="Open team drivers" aria-expanded={open}>{open?'×':'+'}</button>
     </div>
     {open&&<div className="team-driver-panel">
       <strong>{peers.length?'Co-driver':'Driving solo'}</strong>

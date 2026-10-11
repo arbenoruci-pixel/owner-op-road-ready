@@ -8,7 +8,15 @@ const api='source/src/modules/logbook/public-api.js';
 if(!read(api).includes("export {projectLogbookDutyView}"))fs.appendFileSync(api,"\nexport {projectLogbookDutyView} from './projectDutyView.js';\n");
 const editor='source/src/modules/editor/InsertEditEventSheet.jsx';
 patch(editor,'editorRangeError, projectLogbookEvents, previewLogbookInsertOverride','editorRangeError, projectLogbookEvents, projectLogbookDutyView, previewLogbookInsertOverride');
-patch(editor,"const previewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookEvents(","const previewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookDutyView(");
+if(!read(editor).includes('const continuityPreviewEvents =')) {
+  patch(editor,"const previewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookEvents(","const previewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookDutyView(");
+  patch(editor,"  const previewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookDutyView(","  const continuityPreviewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookDutyView(");
+}
+patch(editor,"  const activeId = mode === 'insert' ? insertDraftEvent.id : selectedEventId;",`  // An explicitly chosen draft End can be later than Now in this manual log.
+  // Continuity supplies the surrounding rows; the form owns the draft range.
+  const previewEvents = continuityPreviewEvents.map(row => mode === 'insert' && row.id === insertEventV11023.id
+    ? {...row,startMin:insertEventV11023.startMin,endMin:insertEventV11023.endMin,isLive:false} : row);
+  const activeId = mode === 'insert' ? insertDraftEvent.id : selectedEventId;`);
 const engine='source/src/modules/logbook/eventEditingV110.js';
 patch(engine,"import { previousRecordedDuty }", "import {confirmedDrivingDayView} from './drivingDayViewV110372.js';\nimport { previousRecordedDuty }");
 patch(engine,`  const projected=elapsedRows(state,day,at),clock=logbookClock(state,at);

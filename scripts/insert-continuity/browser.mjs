@@ -47,7 +47,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
     assert.deepEqual((await snapshot(page)).eventsByDay,saved.eventsByDay);
     console.log(`PASS ${name}: Insert open/cancel/change/save/reload retains sleeper and both Driving fragments`);
     const beforeRemove=await snapshot(page);
-    await page.getByRole('button',{name:'Manage co-driver',exact:true}).click();
+    await page.getByRole('button',{name:'Open team drivers',exact:true}).click();
     await page.getByRole('button',{name:'Remove co-driver Saved Partner',exact:true}).click();
     await page.getByText('SOLO DRIVER',{exact:true}).waitFor();
     const removed=await waitState(page,s=>s.activeTeamDriverIds?.length===1&&s.coDrivers==='');
@@ -59,7 +59,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
     await page.getByText('SOLO DRIVER',{exact:true}).waitFor();
     assert.equal((await snapshot(page)).coDrivers,'');
     await page.getByRole('button',{name:'Day ›',exact:true}).click();
-    await page.getByRole('button',{name:'Manage co-driver',exact:true}).click();
+    await page.getByRole('button',{name:'Open team drivers',exact:true}).click();
     await page.getByLabel('Co-driver name',{exact:true}).fill('Saved Partner');
     await page.getByRole('button',{name:'Add co-driver',exact:true}).click();
     await page.getByText('TEAM DRIVER',{exact:true}).waitFor();

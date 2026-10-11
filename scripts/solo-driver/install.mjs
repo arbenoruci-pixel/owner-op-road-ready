@@ -35,3 +35,7 @@ if(!read(css).includes('/* Explicit Solo membership */'))fs.appendFileSync(css,`
 .team-driver-panel>strong{display:block;margin:4px 2px 10px;color:#182334}
 `);
 console.log('PASS explicit Add/Remove co-driver controls and persistent Solo membership installed');
+// The Solo header now remains available so a co-driver can be added explicitly.
+const browser='scripts/v110448/browser-form-team.mjs';
+patch(browser,"await page.locator('.team-driver-shell').waitFor({state:'detached'});", "await page.getByText('SOLO DRIVER',{exact:true}).waitFor();");
+patch(browser,"assert.equal(await page.locator('.team-driver-shell').count(),0);", "assert.equal(await page.locator('.team-driver-shell').count(),1);await page.getByText('SOLO DRIVER',{exact:true}).waitFor();");

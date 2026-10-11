@@ -65,4 +65,22 @@ for(const status of ['SB','OFF','ON','D']) {
   assert.equal(projected.reduce((sum,row)=>sum+row.endMin-row.startMin,0),now);
 }
 console.log('PASS current-day OFF/SB/ON/Driving Insert retains the live status and Now endpoint');
+mock.timers.setTime(new Date('2026-10-11T03:55:00Z').getTime());
+const future=fixture();future.activeDay=next;future.currentStatus='D';
+future.eventsByDay[next]=[{id:'current-drive',status:'D',startMin:0,endMin:1,source:'live_status'}];
+const slots=[];let cursor=0,tree;
+const cell=initial=>{const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value;}];};
+const dispatcher={useState:cell,useRef:value=>cell(()=>({current:value}))[0],useMemo:fn=>fn(),useCallback:fn=>fn,useEffect(){},useLayoutEffect(){}};
+function renderFuture(){cursor=0;const ref=React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher,previous=ref.current;ref.current=dispatcher;try{tree=Insert({events:future.eventsByDay[next],logbookContext:future,defaults:{startMin:1430,endMin:1440},onClose(){},onCreate(){}});}finally{ref.current=previous;}}
+function findNode(predicate,node){if(Array.isArray(node)){for(const child of node){const result=findNode(predicate,child);if(result)return result;}return;}if(!node||typeof node!=='object')return;if(predicate(node))return node;return findNode(predicate,node.props?.children);}
+renderFuture();
+const times=()=>findNode(node=>node.type?.name==='EditorTimeControls',tree);
+assert.equal(times().props.end,'23:55','Initial range ends at Now');
+// EditorTimeControls translates the visible 12:00 AM choice to 24:00.
+times().props.onEndChange('24:00');renderFuture();
+assert.equal(times().props.end,'24:00','Explicit midnight input is retained');
+const previewGraph=findNode(node=>node.type?.name==='CompactGraphPanelV111',tree);
+assert.ok(previewGraph,'Actual Insert renders the graph component');
+assert.equal(previewGraph.props.events.find(row=>row.id===previewGraph.props.selectedId).endMin,1440,'Graph and handle must retain the manually chosen midnight End');
+console.log('PASS active Driving Insert keeps an explicit midnight End in the graph and handle');
 mock.timers.reset();
