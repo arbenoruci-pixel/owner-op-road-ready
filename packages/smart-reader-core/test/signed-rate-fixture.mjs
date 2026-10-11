@@ -14,6 +14,6 @@ export function signedRateInput({heading='Rate Agreement',signed=true,split=fals
    if(split)page.observations.push(stamp);else page.observations[0].lines.push(...stamp.lines);
   }
  }
- if(certificate)input.pages.push({id:'page-3',number:3,observations:[textObservation(sertifiStamp+'\nSample Signer\nsigner@example.test\nIP: 192.0.2.1',{id:'certificate',source:'pdf-text-layer'})]});
+ if(certificate)input.pages.push({id:'page-3',number:3,observations:[textObservation(heading+'\n'+sertifiStamp+'\nSample Signer\nsigner@example.test\nIP: 192.0.2.1',{id:'certificate',source:'pdf-text-layer'})]});
  return input;
 }

@@ -4,10 +4,6 @@ import {deliveryEvidence,receiverStampEvidence,fuelReceiptEvidence} from './type
 const leadingMarks=/^[\s|~'"‘’“”*_\[\]{}<>•=.,:;–—-]+/;
 const view=line=>line.text.replace(leadingMarks,'');
 const matches=(line,pattern)=>pattern.test(line.text)||pattern.test(view(line));
-// Embedded signing stamps belong to every supported RateCon heading alias.
-// Share the matching view with classification; source text stays untouched.
-export const hasRateConfirmationHeading=lines=>lines.some(line=>
-  [rateConfirmationProfile,...rateConfirmationProfile.variants||[]].some(profile=>matches(line,profile.heading)));
 // Confusable letters affect only the BOL matching view. Raw proof stays exact,
 // and all shipping structure signals are still required on the same page.
 const bolView=line=>view(line).replace(/\b(bill[ \t]+of[ \t]+)[I1]ading\b/gi,'$1lading').replace(/\b((?:this|original)[ \t]+)bil[ \t]+of[ \t]+lading\b/gi,'$1bill of lading');
@@ -71,9 +67,9 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
   }
   for(const variant of profile.variants||[]){
     if(variant.sameObservation&&lineIndices)continue;
-    // Sertifi also stamps signed primary/continuation pages. Their explicit
-    // RateCon heading owns the page; the stamp is supporting content only.
-    if(variant.method==='sertifi_signature'&&hasRateConfirmationHeading(lines))continue;
+    // A certificate can repeat the signed document's title. Require the full
+    // RateCon profile (including variants), not a heading alone, to own a stamp.
+    if(variant.method==='sertifi_signature'&&profileEvidence(lines,rateConfirmationProfile,{lineIndices}))continue;
     const support=profileEvidence(lines,{...profile,...variant,variants:null,structuralSignals:null},{lineIndices});
     if(support)return {...support,method:variant.method||support.method};
   }

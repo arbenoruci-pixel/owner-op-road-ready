@@ -21,17 +21,37 @@ for(const heading of ['Rate Confirmation','Carrier Rate Confirmation','Broker/Ca
 test('same-observation suppression uses rate variants and their normalized matching view',()=>{
  const profile=PROFILES.find(p=>p.id==='signing_certificate');
  for(const title of ['Rate Agreement','| Rate Agreement','Freight Confirmation']){
-  assert.equal(profileEvidence(textObservation(title+'\n'+sertifiStamp).lines,profile),null);
+  assert.equal(profileEvidence(textObservation(title+'\nTotal: $4,250.00\nPickup: SAMPLE PRESS\nDelivery: SAMPLE TOYS\n'+sertifiStamp).lines,profile),null);
  }
 });
+test('a stamp pooled from separate source observations stays subordinate to verified rate pages',()=>{
+ const input=signedRateInput({split:true});
+ for(const page of input.pages.slice(0,2)){
+  const stamp=page.observations.pop();
+  page.observations.push(...stamp.lines.map((line,i)=>({...stamp,id:'stamp-read-'+i,lines:[line]})));
+ }
+ assert.deepEqual(readDocument(input).documents.map(d=>[d.kind,d.pageIds]),[['rate_confirmation',['page-1','page-2']],['signing_certificate',['page-3']]]);
+});
 test('a standalone certificate or a reference to an agreement never becomes a RateCon',()=>{
- for(const heading of ['', 'Please attach Rate Agreement', 'Document name: Rate Agreement', 'NOT A RATE AGREEMENT']){
+ for(const heading of ['', 'Rate Agreement', 'Rate Confirmation', 'Freight Confirmation', '| Rate Agreement', 'Please attach Rate Agreement', 'Document name: Rate Agreement', 'NOT A RATE AGREEMENT']){
   const result=readDocument({documentId:'certificate',pages:[{observations:[textObservation(heading+'\n'+sertifiStamp)]}]});
   assert.equal(result.documents[0].kind,'signing_certificate');
  }
  const input=signedRateInput();input.pages[0].observations[0].lines.push({id:'explicit-certificate',text:'CERTIFICATE OF COMPLETION',box:{x:.08,y:.06,width:.50,height:.015}});
  input.pages[0].observations[0].lines.push({id:'signer',text:'Signer: Sample Signer'},{id:'signed',text:'Signed: 2026-10-08'});
  assert.equal(readDocument(input).documents[0].kind,'unknown','an explicit certificate heading remains a conflict');
+});
+
+test('a repeated document title on a certificate cannot become a continuation without rate terms and matching identity',()=>{
+ const input=signedRateInput();
+ input.pages[2].observations[0].lines.unshift({id:'document-title',text:'Rate Agreement'});
+ assert.deepEqual(readDocument(input).documents.map(d=>[d.kind,d.pageIds]),[['rate_confirmation',['page-1','page-2']],['signing_certificate',['page-3']]]);
+ for(const change of [
+  lines=>{lines.find(l=>l.text==='TEST-74123').text='TEST-OTHER';},
+  lines=>{lines.find(l=>l.text==='Page 2').text='Page 3';},
+  lines=>{lines.find(l=>l.text.includes('billing packet')).text='Certificate of electronic signing';},
+  lines=>{lines.push({id:'certificate-heading',text:'CERTIFICATE OF COMPLETION'});},
+ ]){const x=signedRateInput();change(x.pages[1].observations[0].lines);assert.deepEqual(readDocument(x).documents[0].pageIds,['page-1']);}
 });
 test('signed aliases retain conflicting totals and never assemble a rate variant across observations',()=>{
  const input=signedRateInput();input.pages[0].observations.push(textObservation('Total: $4,350.00',{id:'different-rate'}));
