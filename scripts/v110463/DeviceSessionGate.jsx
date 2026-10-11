@@ -38,7 +38,10 @@ export default function DeviceSessionGate({children}){
   void run();const timer=setInterval(run,4000);
   return()=>{disposed=true;clearInterval(timer);window.removeEventListener(DEVICE_EVENT,observed);window.removeEventListener('offline',offline);window.removeEventListener('online',run);window.removeEventListener('pageshow',visible);document.removeEventListener('visibilitychange',visible);};
  },[]);
+ const blockLockedEvent=event=>{if(!allowed){event.preventDefault();event.stopPropagation();}};
  // Set the native property in the commit phase: React 18 and Next's React
- // runtime serialize the inert JSX attribute differently.
- return <>{opened?<div ref={node=>{if(node)node.inert=!allowed;}} aria-hidden={!allowed||undefined}>{children}</div>:null}{!allowed?<main role="alert" style={{position:'fixed',inset:0,zIndex:2147483647,background:'#f4f7fb',color:'#172b46',padding:28,fontFamily:'system-ui',display:'grid',placeContent:'center'}}><section style={{maxWidth:480}}><h1>One active device</h1><p>{message}</p></section></main>:null}</>;
+ // runtime serialize the inert JSX attribute differently. WebKit may retain
+ // keyboard activation on an already-focused control when it becomes inert.
+ // Release that focus and guard activation before it reaches child handlers.
+ return <>{opened?<div ref={node=>{if(node){if(!allowed&&node.contains(document.activeElement))document.activeElement?.blur?.();node.inert=!allowed;}}} aria-hidden={!allowed||undefined} onClickCapture={blockLockedEvent} onKeyDownCapture={blockLockedEvent} onKeyUpCapture={blockLockedEvent} onSubmitCapture={blockLockedEvent}>{children}</div>:null}{!allowed?<main role="alert" style={{position:'fixed',inset:0,zIndex:2147483647,background:'#f4f7fb',color:'#172b46',padding:28,fontFamily:'system-ui',display:'grid',placeContent:'center'}}><section style={{maxWidth:480}}><h1>One active device</h1><p>{message}</p></section></main>:null}</>;
 }

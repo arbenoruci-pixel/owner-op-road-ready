@@ -51,6 +51,9 @@ async function client(sid,takeover=false){
 }
 try{
  const ipad=await client('ipad-session');await ipad.page.getByRole('button',{name:'Edit log'}).click();
+ await ipad.page.locator('#edit').focus();
+ assert.equal(await ipad.page.locator('#edit').evaluate(el=>el===document.activeElement),true);
+ const clicksBeforeLock=await ipad.page.evaluate(()=>window.fixture.clicked);
  // Hold a real successful verification across the offline transition. A late
  // response must never unlock the app after its connectivity state changed.
  await ipad.page.evaluate(() => {
@@ -64,6 +67,11 @@ try{
  });
  await ipad.page.waitForFunction(()=>!!window.fixture.releaseCheck);
  await ipad.context.setOffline(true);await ipad.page.getByText(/Offline. Reconnect/).waitFor();
+ assert.equal(await ipad.page.locator('#edit').evaluate(el=>el===document.activeElement),false,'Lock must release focus held by an editable control');
+ await ipad.page.keyboard.press('Enter');
+ // Also cover activation that a browser dispatches to a retained target.
+ await ipad.page.locator('#edit').dispatchEvent('click');
+ assert.equal(await ipad.page.evaluate(()=>window.fixture.clicked),clicksBeforeLock,'Locked controls must not invoke their handlers');
  await ipad.page.evaluate(async()=>{
   const f=window.fixture, checking=f.mod.verifyDeviceSession().catch(()=>{});
   f.releaseCheck();await checking;
