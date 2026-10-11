@@ -25,8 +25,10 @@ if(!s.includes('onRemoveDriver={removeTeamCoDriver}')){
   s=s.replaceAll('onAddDriver={addTeamDriverToLogbook}','onAddDriver={addTeamDriverToLogbook}\n        onRemoveDriver={removeTeamCoDriver}');fs.writeFileSync(app,s);
 }
 const css='source/src/team-driver-v110405.css';
-if(!read(css).includes('/* Explicit Solo membership */'))fs.appendFileSync(css,`\n/* Explicit Solo membership */
-.team-driver-list>.team-driver-remove{display:block;min-height:44px;color:#b42318;text-align:center;border-color:#fecaca;background:#fff7f7;font-weight:700}
+fs.writeFileSync(css,read(css).split('/* Explicit Solo membership */')[0]);
+fs.appendFileSync(css,`\n/* Explicit Solo membership */
+.team-driver-entries,.team-driver-entry{display:grid;gap:7px}
+.team-driver-entry>.team-driver-remove{display:block;width:100%;min-height:44px;padding:6px 9px;border:1px solid #fecaca;border-radius:12px;color:#b42318;text-align:center;background:#fff7f7;font-weight:700}
 .team-driver-add{grid-template-columns:minmax(0,1fr) 110px}
 .team-driver-add input,.team-driver-add button{min-height:44px}
 .team-driver-add input{background:#fff;color:#182334;color-scheme:light}

@@ -20,13 +20,15 @@ export default function TeamDriverBar({state,onAddDriver,onRemoveDriver,onSwitch
     </div>
     {open&&<div className="team-driver-panel">
       <strong>{peers.length?'Co-driver':'Driving solo'}</strong>
-      <div className="team-driver-list">
-        {peers.map(driver=><React.Fragment key={driver.id}>
+      <div className="team-driver-entries">
+        {peers.map(driver=><div className="team-driver-entry" key={driver.id}>
+          <div className="team-driver-list">
           <button type="button" onClick={()=>{onSwitchDriver?.(driver.id);setOpen(false);}}>
             <span>{driver.name.slice(0,1).toUpperCase()}</span><b>{driver.name}</b><em>Switch log</em>
           </button>
+          </div>
           <button type="button" className="team-driver-remove" aria-label={`Remove co-driver ${driver.name}`} onClick={()=>onRemoveDriver?.(driver.id)}>Remove co-driver</button>
-        </React.Fragment>)}
+        </div>)}
       </div>
       <div className="team-driver-add">
         <input aria-label="Co-driver name" placeholder="Co-driver name" value={name} onChange={event=>setName(event.target.value)} onKeyDown={event=>{if(event.key==='Enter')add();}}/>
