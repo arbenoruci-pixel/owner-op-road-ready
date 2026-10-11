@@ -63,6 +63,8 @@ function sameRefinedDocument(page, generic, specialized) {
   return fields.every(field=>field.status==='supported'&&field.value===pageReference.value);
 }
 
+const isSertifiStamp=vote=>vote.kind==='signing_certificate'&&(vote.method==='sertifi_signature'||vote.method==='combined_observations'&&vote.basis==='sertifi_signature');
+
 function classifyPage(page) {
   const votes=[];
   for(const observation of page.observations){
@@ -78,13 +80,12 @@ function classifyPage(page) {
     if(votes.some(vote=>vote.kind===profile.id))continue;
     const support=profileEvidence(pooled,profile,{lineIndices});if(!support)continue;
     const evidence=support.lines.map(line=>evidenceFor(page,origins.get(line),line,0,line.text.length));
-    votes.push({kind:profile.id,method:'combined_observations',evidence:evidence[0],supportingEvidence:evidence.slice(1)});
+    votes.push({kind:profile.id,method:'combined_observations',basis:support.method,evidence:evidence[0],supportingEvidence:evidence.slice(1)});
   }
   // Same-heading refinements remain local to an observation. A generic
   // receipt may also refine across reads when its receipt number agrees.
-  const rateHeading=PROFILES.find(p=>p.id==='rate_confirmation').heading;
-  const ratePage=pooled.some(line=>rateHeading.test(line.text));
-  const refined=votes.filter(vote=>!(ratePage&&vote.kind==='signing_certificate'&&vote.method==='sertifi_signature')&&!votes.some(other=>other!==vote
+  const ratePage=votes.some(vote=>vote.kind==='rate_confirmation');
+  const refined=votes.filter(vote=>!(ratePage&&isSertifiStamp(vote))&&!votes.some(other=>other!==vote
     &&(other.evidence.observationId===vote.evidence.observationId
       &&(PROFILES.find(p=>p.id===other.kind)?.refines?.includes(vote.kind)&&other.evidence.lineId===vote.evidence.lineId
         ||PROFILES.find(p=>p.id===vote.kind)?.fallback&&vote.method==='field_structure'&&other.kind!==vote.kind)
@@ -101,9 +102,18 @@ function makeGroups(pages, identities) {
     const previousIdentity=previous&&PROFILES.find(p=>p.id===previous.kind),continuationRefs=previousIdentity?[...new Set(identity.references[previousIdentity.id]||[])]:[];
     const partyKeys=previousIdentity?.partyKeys||[],previousPages=previous?pages.filter(p=>previous.pageIds.includes(p.id)):[];
     const conflictingParties=previousIdentity&&partyKeys.some(key=>{const spec=previousIdentity.fields[key];const before=candidatesFor(previousPages,spec).map(c=>semanticKey(spec.kind,c.value)).filter(Boolean),after=candidatesFor([page],spec).map(c=>semanticKey(spec.kind,c.value)).filter(Boolean);return before.length&&after.length&&new Set([...before,...after]).size>1;});
-    const continuation=previous?.kind==='rate_confirmation'&&rateContinuation(previousPages,page,identity,previousIdentity);
-    const canJoin=previous&&(previousIdentity?.joinPages!==false||continuation)&&previous.kind!=='unknown'&&identity.status!=='conflicting'&&!conflictingParties&&previous.reference&&continuationRefs.length===1&&continuationRefs[0]===previous.reference&&(identity.kind===previous.kind||identity.kind==='unknown');
-    if(canJoin){previous.pageIds.push(page.id);continue;}
+    // A stamp-only vote on a terms page can yield only after the existing
+    // continuation checks establish its relationship to a real primary rate.
+    // Explicit certificate headings retain their own document boundary.
+    const certificate=PROFILES.find(profile=>profile.id==='signing_certificate');
+    const stampOnly=identity.kind==='signing_certificate'&&identity.evidence.every(isSertifiStamp)
+      &&!page.observations.some(o=>o.lines.some(line=>certificate.heading.test(line.text)));
+    const continuation=previous?.kind==='rate_confirmation'&&rateContinuation(previousPages,page,stampOnly?{...identity,kind:'unknown'}:identity,previousIdentity);
+    const canJoin=previous&&(previousIdentity?.joinPages!==false||continuation)&&previous.kind!=='unknown'&&identity.status!=='conflicting'&&!conflictingParties&&previous.reference&&continuationRefs.length===1&&continuationRefs[0]===previous.reference&&(continuation||identity.kind===previous.kind||identity.kind==='unknown');
+    if(canJoin){
+      if(stampOnly)Object.assign(identity,{kind:'unknown',status:'unknown',evidence:[]});
+      previous.pageIds.push(page.id);continue;
+    }
     groups.push({id:`document-${groups.length+1}`,kind:identity.kind,role:PROFILES.find(p=>p.id===identity.kind)?.role||'primary',pageIds:[page.id],reference:refs.length===1?refs[0]:null,boundaryReview:i>0&&(identity.kind==='unknown'||!refs.length||identity.kind===previous.kind&&previous.reference===null),identityStatus:refs.length>1?'conflicting':identity.status});
   }
   return groups;

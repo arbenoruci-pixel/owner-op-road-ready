@@ -67,9 +67,9 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
   }
   for(const variant of profile.variants||[]){
     if(variant.sameObservation&&lineIndices)continue;
-    // Sertifi also stamps signed primary/continuation pages. Their explicit
-    // RateCon heading owns the page; the stamp is supporting content only.
-    if(variant.method==='sertifi_signature'&&lines.some(line=>matches(line,rateConfirmationProfile.heading)))continue;
+    // A certificate can repeat the signed document's title. Require the full
+    // RateCon profile (including variants), not a heading alone, to own a stamp.
+    if(variant.method==='sertifi_signature'&&profileEvidence(lines,rateConfirmationProfile,{lineIndices}))continue;
     const support=profileEvidence(lines,{...profile,...variant,variants:null,structuralSignals:null},{lineIndices});
     if(support)return {...support,method:variant.method||support.method};
   }
