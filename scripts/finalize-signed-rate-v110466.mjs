@@ -11,3 +11,5 @@ console.log('PASS signed Rate Agreement classification installed');
 
 for(const path of ['packages/smart-reader-core/src/engine.js','packages/smart-reader-core/package.json'])fs.writeFileSync(path,read(path).replaceAll('0.3.37','0.3.38'));
 for(const path of ['scripts/browser-native-pdf-v110363.mjs','scripts/v110373/browser-reader-evidence.mjs','scripts/v110382/browser-bol.mjs','scripts/v110384/browser-rows.mjs','scripts/browser-ratecon-structure-v110388.mjs','scripts/v110393/browser-bol-source.mjs','scripts/v110394/browser-bol-form.mjs','scripts/v110410/browser-bol-columns.mjs','scripts/v110411/browser-rate.mjs','scripts/v110411/browser-filing.mjs','scripts/v110464/browser-rate.mjs'])fs.writeFileSync(path,read(path).replaceAll("'0.3.37'","'0.3.38'"));
+
+await import('./finalize-insert-solo-v110469.mjs');
