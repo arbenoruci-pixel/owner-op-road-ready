@@ -17,3 +17,5 @@ console.log('PASS WebKit document layout release installed');
 // Historical materializers validate these test baselines by checksum.
 // Install the fixture only after those verified UI migrations have completed.
 await import('./test-support/install-legacy-cloud-fixtures.mjs');
+
+await import('./finalize-logbook-first-v110462.mjs');
