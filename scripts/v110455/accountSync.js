@@ -1,11 +1,12 @@
 'use client';
 import Dexie from 'dexie';
+import {assertActiveDevice,HANDOFF_KEY,acknowledgeHandoff} from './deviceSessionV110463.js';
 import {cloudClient,cloudSession} from './client.js';
 import {getOwnerOpDb} from '../local-db/dexie.js';
 import {APP_STATE_KEY,flushAppSnapshots} from '../local-db/appState.js';
 import {BUSINESS_STORE_KEY,BUSINESS_STORE_EVENT} from '../../source/src/modules/business/businessStore.js';
 import {bounded,hashBytes} from './mirrorCoreV110450.js';
-import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical,equivalentRecords,resolveConflict,repairChecklistState,scopedRecords,mergeScope} from './accountCoreV110455.js';
+import {FORMAT,TABLE_KEYS,LOCAL_KEYS,recordsFrom,bundleFrom,mergeRecords,hasData,validatePayload,same,canonical,equivalentRecords,resolveConflict,repairChecklistState,scopedRecords,mergeScope,workingRecord} from './accountCoreV110455.js';
 import {encode,decode,piecesOf,snapshotBundle,localPieceSource} from './accountFilesV110455.js';
 export const ACCOUNT_EVENT='road-ready-account-sync',APPLY_EVENT='road-ready-account-apply';
 const FILE_TABLES=new Set(['document_blobs','capture_asset_blobs']);
@@ -105,6 +106,7 @@ async function install(records,local,base,uid,check,scope='all'){
      incoming.add(parts[2]);const stageKey=staged.get(k);if(!stageKey)continue;
      const row=await db.account_receive_staging.get(stageKey);
      if(!row||!same(row.encoded,v))throw Error('Received file checkpoint is missing. Retry sync.');
+     if(local.handoff){const old=await db.table(name).get(row.decoded[pk]);if(old)await db.sync_meta.put({key:'single-device-retained:'+local.handoff.generation+':'+name+':'+row.decoded[pk],value:old,updated_at:now});}
      await db.table(name).put(row.decoded);
      await db.account_receive_staging.delete(stageKey);
     }
@@ -153,8 +155,9 @@ export function syncAccount({initial=false,choices=null,scope='all'}={}){
  }
  activeScope=scope;interruptArchive=false;
  const run=async()=>{
-  let canOpenLocal=false;
+  let canOpenLocal=false,receiving=false,joining=false;
   try{
+   await assertActiveDevice();
    const session=await bounded(cloudSession(),10000);if(!session)return {signedOut:true};const uid=session.user.id,db=getOwnerOpDb();if(!db)throw Error('Device storage is unavailable.');
    // Recovery values may contain originals; ownership only needs their keys.
    const priorOwners=(await db.sync_meta.toCollection().primaryKeys()).map(key=>String(key).match(/^owner-op-record-sync-v1:([a-f0-9-]{36}):/i)?.[1]).filter(Boolean);
@@ -163,17 +166,26 @@ export function syncAccount({initial=false,choices=null,scope='all'}={}){
    installHooks(db);
    const pending=await db.sync_meta.get('account-sync-v110455:pending');
    if(pending?.value?.uid===uid){const p=pending.value;localStorage.setItem(BUSINESS_STORE_KEY,JSON.stringify(p.oldBusiness));for(const k of LOCAL_KEYS){const v=p.oldLocals[k];if(v===undefined)localStorage.removeItem(k);else localStorage.setItem(k,typeof v==='string'?v:JSON.stringify(v));}await db.sync_meta.delete('account-sync-v110455:pending');}
-   const check=async()=>{if(scope==='all'&&interruptArchive)throw Object.assign(Error('Sending logbook changes first.'),{deferred:true});if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true')throw Error('Cloud work is paused on this device.');if((await bounded(cloudSession(),10000))?.user?.id!==uid)throw Error('Account changed. Synchronization stopped.');if(!navigator.onLine)throw Error('Offline · changes stay on this device until connected.');};
-   if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true'){show({phase:'paused',message:'Cloud work is paused on this device.'});return {paused:true};}
+   const handoff=(await db.sync_meta.get(HANDOFF_KEY))?.value;
+   receiving=handoff?.uid===uid&&handoff.records===true;
+   const receivingArchive=handoff?.uid===uid&&handoff.archive===true&&scope==='all';
+   joining=handoff?.uid===uid&&(handoff.records===true||handoff.archive===true);
+   const check=async()=>{await assertActiveDevice();if(scope==='all'&&interruptArchive)throw Object.assign(Error('Sending logbook changes first.'),{deferred:true});if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true')throw Error('Cloud work is paused on this device.');if((await bounded(cloudSession(),10000))?.user?.id!==uid)throw Error('Account changed. Synchronization stopped.');if(!navigator.onLine)throw Error('Offline · changes stay on this device until connected.');};
+   if(localStorage.getItem('owner-op-record-sync-v1:paused')==='true'){show({phase:'paused',message:'Cloud work is paused on this device.'});return {paused:true,blocked:joining};}
    if(!navigator.onLine){show({phase:'offline',message:'Offline · changes saved on this device.'});return {offline:true};}
    // Establish the owned offline copy before settings/workspace/snapshot reads
    // (or a session recheck) can fail and leave the startup gate closed.
    const local=await capture(scope),saved=tabBase;
+   if(receiving||receivingArchive){
+    local.handoff=handoff;
+    const key='single-device-before-handoff:'+handoff.generation;
+    if(!await db.sync_meta.get(key))await db.sync_meta.put({key,value:{uid,state:local.state,business:local.business,locals:local.locals},updated_at:new Date().toISOString()});
+   }
    if(saved&&saved.uid!==uid)throw Error('Offline synchronization belongs to another account.');
-   const meaningful=hasData(local);canOpenLocal=meaningful;
+   const meaningful=hasData(local);canOpenLocal=meaningful&&!joining;
    await check();show({phase:'syncing',message:initial?'Opening your account data…':'Syncing changes…',conflicts:[]});
    const setting=await checked(cloudClient().from('road_ready_backup_settings').select('record_sync_enabled').eq('user_id',uid).maybeSingle());
-   if(!setting?.record_sync_enabled){show({phase:'disabled',message:'Account synchronization is disabled.'});return {disabled:true};}
+   if(!setting?.record_sync_enabled){show({phase:'disabled',message:'Account synchronization is disabled.'});return {disabled:true,blocked:joining};}
    const cached=tabBase;
    let remote=await remoteWorkspace(uid,cached);
    let seed=null;
@@ -187,6 +199,7 @@ export function syncAccount({initial=false,choices=null,scope='all'}={}){
     }
    }
    if(remote)validatePayload(remote.payload);
+   if(receiving&&!remote)throw Error('The saved account copy is unavailable. Your local copy is retained.');
    const opts={storage:cloudClient().storage.from('owner-op-private'),uid,known:piecesOf(remote?.payload?.records||{}),check,onProgress:message=>show({message})};
    if(!remote&&!meaningful){localStorage.setItem(OWNER_KEY,uid);show({phase:'current',message:'Ready for your first records.'});return {empty:true};}
    local.encoded=await encodedRecords(local,opts,scope);
@@ -198,6 +211,11 @@ export function syncAccount({initial=false,choices=null,scope='all'}={}){
    const base=baseRecords&&scopedRecords(baseRecords,scope);
    const remoteRecords=scopedRecords(remote?.payload?.records||{},scope);
    let merge=base?mergeRecords(base,local.encoded,remoteRecords):!meaningful&&remote?{records:remoteRecords,conflicts:[]}:mergeRecords({},local.encoded,remoteRecords);
+   // A new active device receives the shared copy, never merges stale local work.
+   if(receiving)merge={records:remoteRecords,conflicts:[]};
+   else if(receivingArchive){
+    merge={records:{...Object.fromEntries(Object.entries(remoteRecords).filter(([k])=>!workingRecord(k))),...scopedRecords(merge.records,'records')},conflicts:merge.conflicts.filter(c=>workingRecord(c.key))};
+   }
    if(choices&&conflictReview&&same(conflictReview.local,local.encoded)&&same(conflictReview.remote,remote?.payload?.records)){
     merge.records={...merge.records};merge.conflicts=merge.conflicts.filter(c=>{if(!['local','remote'].includes(choices[c.key]))return true;resolveConflict(merge.records,c,choices[c.key]);return false;});
    }
@@ -215,10 +233,12 @@ export function syncAccount({initial=false,choices=null,scope='all'}={}){
    if(changed)await install(merge.records,local,nextBase,uid,check,scope);
    else{if(saved?.revision!==revision||!saved?.remoteRecords||!same(saved.records,nextBase.records))await db.sync_meta.put({key:BASE_KEY,value:nextBase,updated_at:new Date().toISOString()});localStorage.setItem(OWNER_KEY,uid);}
    tabBase=nextBase;
+   if(receiving)await acknowledgeHandoff(handoff.generation);
+   if(receiving||receivingArchive)await db.sync_meta.put({key:HANDOFF_KEY,value:{...handoff,records:false,archive:scope==='all'?false:handoff.archive},updated_at:new Date().toISOString()});
    const resolved=await db.sync_meta.get('account-sync-v110455:conflicts');if(resolved)await db.sync_meta.put({...resolved,key:'account-sync-v110455:resolved:'+Date.now()});
    await db.sync_meta.delete('account-sync-v110455:conflicts');conflictReview=null;
-   show({phase:scope==='records'?'records_current':'current',message:scope==='records'?'Logbook is up to date. Documents sync in the background.':'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed,scope};
-  }catch(e){if(e.deferred)return {deferred:true,canOpenLocal};const message=e?.message||String(e);show({phase:localStorage.getItem('owner-op-record-sync-v1:paused')==='true'?'paused':navigator.onLine?'error':'offline',message});return {error:message,canOpenLocal};}
+   show({phase:scope==='records'?'records_current':'current',message:scope==='records'?'Logbook is up to date. Documents sync in the background.':'Account data is up to date.',revision,completedAt:new Date().toISOString(),conflicts:[]});return {revision,changed,scope,handoffPending:joining&&scope==='records'&&handoff.archive===true};
+  }catch(e){if(e.deferred)return {deferred:true,canOpenLocal};const message=e?.message||String(e);show({phase:localStorage.getItem('owner-op-record-sync-v1:paused')==='true'?'paused':navigator.onLine?'error':'offline',message});return {error:message,canOpenLocal,blocked:joining||e.deviceRevoked===true};}
  };
  active=(navigator.locks?.request?navigator.locks.request('road-ready-account-sync-v110455',initial?{}:{ifAvailable:true},lock=>lock?run():{busy:true}):run()).finally(()=>{active=null;activeScope=null;});return active;
 }

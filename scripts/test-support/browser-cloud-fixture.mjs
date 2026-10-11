@@ -43,6 +43,7 @@ try {
       assert.deepEqual(result.single, {status: 200, body: {record_sync_enabled: false}});
       for (const key of ['foreign', 'write', 'unknown', 'storage']) assert.equal(result[key].status, 403, key);
       await installLocalAccountSettings(context, user);
+      await page.evaluate(user=>{const b=o=>btoa(JSON.stringify(o));localStorage.setItem('owner-op-prototype-auth-v1',JSON.stringify({user,access_token:b({alg:'HS256'})+'.'+b({sub:user.id})+'.synthetic'}));},user);
       await page.reload();
       const requestsBefore = requests.length;
       const local = await page.evaluate(async ({cloud, user}) => {
@@ -51,6 +52,12 @@ try {
       }, {cloud: fixtureCloudOrigin, user});
       assert.deepEqual(local, [{record_sync_enabled: false}]);
       assert.equal(requests.length, requestsBefore, 'Local-only settings reads never reach the network after reload');
+      const sessions=await page.evaluate(async({cloud,user})=>{
+        const session=JSON.parse(localStorage.getItem('owner-op-prototype-auth-v1')),claims=JSON.parse(atob(session.access_token.split('.')[1]));
+        const check=async token=>(await fetch(cloud+'/rest/v1/rpc/road_ready_active_device_v1',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:'{}'})).status;
+        return {sub:claims.sub,sid:claims.session_id,own:await check(session.access_token),foreign:await check('header.'+btoa(JSON.stringify({sub:'foreign',session_id:'foreign'}))+'.synthetic'),real:await check('header.'+btoa(JSON.stringify({sub:user.id,session_id:'real'}))+'.real-signature')};
+      },{cloud:fixtureCloudOrigin,user});
+      assert.equal(sessions.sub,user.id);assert.match(sessions.sid,/^[a-f0-9-]{36}$/);assert.equal(sessions.own,200);assert.equal(sessions.foreign,403);assert.equal(sessions.real,403);
       assert.deepEqual(errors, []);
       assert.ok(requests.some(r => r.method === 'GET' && r.path.endsWith('/road_ready_backup_settings')));
       console.log(`PASS ${engine.name()}: credentialed CORS, new headers, PostgREST row shapes; writes, foreign users, unknown APIs and storage remain blocked`);

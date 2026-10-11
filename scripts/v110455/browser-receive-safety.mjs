@@ -12,6 +12,7 @@ const modules = new Map([
  ['/lib/owner-op-cloud/mirrorCoreV110450.js', 'scripts/v110450/mirrorCore.js'],
 ]);
 const stubs = new Map([
+ ['/lib/owner-op-cloud/deviceSessionV110463.js', "export const HANDOFF_KEY='road-ready-device-handoff-v1';export const assertActiveDevice=async()=>({active:true});export const acknowledgeHandoff=async g=>{window.fixture.ack=g;};"],
  ['/lib/owner-op-cloud/client.js', 'export const cloudClient=()=>window.fixture.cloud; export const cloudSession=async()=>window.fixture.session;'],
  ['/lib/local-db/dexie.js', "export const OWNER_OP_DB_NAME='synthetic-receive'; export const getOwnerOpDb=()=>window.fixture.db;"],
  ['/lib/local-db/appState.js', "export const APP_STATE_KEY='owner-op-road-ready-state-v1'; export const flushAppSnapshots=async()=>{};"],
@@ -69,6 +70,38 @@ async function scenario(name,run){
  finally{await context.close();}
 }
 try{
+ await scenario('device handoff receives iPad logbook without uploading stale phone records and retains original local copies',async page=>{
+  const result=await page.evaluate(async()=>{
+   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
+   const local={...f.state,currentLocation:{city:'stale phone'},loadInfo:{loadNo:'old-phone'}};
+   const remote={...f.state,currentLocation:{city:'latest iPad'},loadInfo:{loadNo:'latest-ipad'}};
+   await f.db.app_snapshots.put({key:f.key,state:local});
+   await f.db.document_blobs.put({local_blob_id:'same-id',blob:new Blob(['unsent phone original'])});
+   const original=await encode({local_blob_id:'same-id',blob:new Blob(['saved iPad original'])},{storage:f.storage,uid:f.uid,known:new Set()});
+   f.workspace={revision:25,payload:{format:f.core.FORMAT,records:{...f.core.recordsFrom({state:remote}),'["table","document_blobs","same-id"]':original}}};
+   await f.db.sync_meta.put({key:'road-ready-device-handoff-v1',value:{uid:f.uid,generation:2,records:true,archive:true}});
+   const logbook=await f.sync.syncAccount({initial:true,scope:'records'});
+   const opened=(await f.db.app_snapshots.get(f.key)).state;
+   const backup=(await f.db.sync_meta.get('single-device-before-handoff:2')).value;
+   const archived=await f.sync.syncAccount();
+   const retained=await f.db.sync_meta.get('single-device-retained:2:document_blobs:same-id');
+   return {logbook,archived,opened,backup,ack:f.ack,oldText:await retained.value.blob.text(),newText:await(await f.db.document_blobs.get('same-id')).blob.text(),pending:(await f.db.sync_meta.get('road-ready-device-handoff-v1')).value};
+  });
+  assert.equal(result.logbook.error,undefined);assert.equal(result.archived.error,undefined);
+  assert.equal(result.opened.loadInfo.loadNo,'latest-ipad');assert.equal(result.backup.state.loadInfo.loadNo,'old-phone');
+  assert.equal(result.ack,2);assert.equal(result.oldText,'unsent phone original');assert.equal(result.newText,'saved iPad original');
+  assert.equal(result.pending.records,false);assert.equal(result.pending.archive,false);
+ });
+ await scenario('failed handoff keeps stale phone logbook behind the startup gate',async page=>{
+  const result=await page.evaluate(async()=>{
+   const f=window.fixture;await f.db.app_snapshots.put({key:f.key,state:f.state});
+   await f.db.sync_meta.put({key:'road-ready-device-handoff-v1',value:{uid:f.uid,generation:2,records:true,archive:true}});
+   f.fail='road_ready_account_workspaces:revision,device_id,updated_at';
+   const sync=await f.sync.syncAccount({initial:true,scope:'records'});
+   return {sync,state:(await f.db.app_snapshots.get(f.key)).state,pending:(await f.db.sync_meta.get('road-ready-device-handoff-v1')).value};
+  });
+  assert.ok(result.sync.error);assert.equal(result.sync.blocked,true);assert.equal(result.sync.canOpenLocal,false);assert.equal(result.pending.records,true);assert.ok(result.state.eventsByDay['2026-10-07']);
+ });
  await scenario('logbook opens and uploads before unavailable archive originals; both baselines survive reload',async page=>{
   const result=await page.evaluate(async()=>{
    const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
