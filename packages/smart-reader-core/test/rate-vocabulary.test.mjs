@@ -65,3 +65,12 @@ test('two unpositioned header references remain conflicting',()=>{
  for(const l of o.lines)delete l.box;
  const d=readDocument(x).documents[0];assert.equal(d.reference,null);assert.ok(d.fields.loadNumber.issues.includes('conflicting_reads'));
 });
+
+test('explicit final pay takes precedence over a generic rate in the same read',()=>{
+ for(const line of ['Rate: $3.50','Flat Rate $4,000.00']){
+  const x=input(document('Total')+'\n'+line),d=readDocument(x).documents[0];assert.equal(d.fields.totalRate.value,'4250.00');
+ }
+ const differingFinal=readDocument(input(document('Total')+'\nRate Total: $4,350.00')).documents[0];assert.equal(differingFinal.fields.totalRate.value,null);
+ const x=input(document('Total'));x.pages[0].observations.push(textObservation(document('Rate','$4,350.00'),{id:'other'}));
+ const d=readDocument(x).documents[0];assert.equal(d.fields.totalRate.value,null);assert.ok(d.fields.totalRate.issues.includes('conflicting_reads'));
+});
