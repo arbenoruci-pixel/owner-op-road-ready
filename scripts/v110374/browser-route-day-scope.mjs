@@ -1,4 +1,5 @@
 // All fixtures are synthetic. External account requests are intercepted.
+import {installLocalAccountSettings} from '../test-support/cloud-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -24,6 +25,7 @@ for(const [browserName,type]of [['chromium',chromium],['webkit',webkit]]){
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,timezoneId:'America/Chicago',serviceWorkers:'block'}),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   try{
+   await installLocalAccountSettings(context,user);
    await context.route('**/*',async route=>{
     const url=new URL(route.request().url());
     if(url.origin===origin){if(url.pathname.startsWith('/api/'))return route.fulfill({status:200,json:{}});return route.continue();}
