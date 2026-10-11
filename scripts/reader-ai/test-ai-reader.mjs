@@ -223,3 +223,15 @@ test('confirming an already suggested kind records the human choice and preserve
   assert.throws(()=>confirmReviewedKind(result,{...request,expectedRevision:99}));
   assert.throws(()=>confirmReviewedKind(result,{...request,sourceImageId:'foreign-image'}));
 });
+
+
+// Synthetic header/table evidence; no customer pages are sent to the network.
+test('source-linked native RateCon terms skip AI alongside their primary page',async()=>{
+ const {routeTableInput}=await import('../../packages/smart-reader-core/test/rate-vocabulary-fixture.mjs');
+ for(const boxed of [true,false]){
+  const input=routeTableInput();if(!boxed)for(const p of input.pages)for(const o of p.observations){delete o.sourceImageId;for(const l of o.lines)delete l.box;}
+  const review=readDocument(input);assert.equal(review.documents.length,1);
+  const assist=createAiFallback({identify:()=>review,fetcher:()=>assert.fail('recognized primary and continuation must remain local')});
+  const original={};assert.equal(await assist(original),original);
+ }
+});
