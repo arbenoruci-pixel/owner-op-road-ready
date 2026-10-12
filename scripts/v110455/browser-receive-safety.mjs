@@ -6,13 +6,13 @@ import {chromium} from 'playwright';
 
 // Real IndexedDB/Dexie and production sync/export modules; all cloud I/O is synthetic.
 const modules = new Map([
- ['/lib/owner-op-cloud/accountSyncV110455.js', 'scripts/v110455/accountSync.js'],
- ['/lib/owner-op-cloud/accountCoreV110455.js', 'scripts/v110455/accountCore.js'],
- ['/lib/owner-op-cloud/accountFilesV110455.js', 'scripts/v110455/accountFiles.js'],
- ['/lib/owner-op-cloud/mirrorCoreV110450.js', 'scripts/v110450/mirrorCore.js'],
+ ['/lib/owner-op-cloud/accountSyncV110455.js', 'lib/owner-op-cloud/accountSyncV110455.js'],
+ ['/lib/owner-op-cloud/accountCoreV110455.js', 'lib/owner-op-cloud/accountCoreV110455.js'],
+ ['/lib/owner-op-cloud/accountFilesV110455.js', 'lib/owner-op-cloud/accountFilesV110455.js'],
+ ['/lib/owner-op-cloud/mirrorCoreV110450.js', 'lib/owner-op-cloud/mirrorCoreV110450.js'],
 ]);
 const stubs = new Map([
- ['/lib/owner-op-cloud/deviceSessionV110463.js', "export const HANDOFF_KEY='road-ready-device-handoff-v1';export const assertActiveDevice=async()=>({active:true});export const acknowledgeHandoff=async g=>{window.fixture.ack=g;};"],
+ ['/lib/owner-op-cloud/deviceSessionV110463.js', "export const HANDOFF_KEY='road-ready-device-handoff-v1';export const assertActiveDevice=async()=>({active:true,generation:window.fixture.generation||1,sid:'synthetic'});export const acknowledgeHandoff=async g=>{window.fixture.ack=g;};"],
  ['/lib/owner-op-cloud/client.js', 'export const cloudClient=()=>window.fixture.cloud; export const cloudSession=async()=>window.fixture.session;'],
  ['/lib/local-db/dexie.js', "export const OWNER_OP_DB_NAME='synthetic-receive'; export const getOwnerOpDb=()=>window.fixture.db;"],
  ['/lib/local-db/appState.js', "export const APP_STATE_KEY='owner-op-road-ready-state-v1'; export const flushAppSnapshots=async()=>{};"],
@@ -91,6 +91,30 @@ try{
   assert.equal(result.opened.loadInfo.loadNo,'latest-ipad');assert.equal(result.backup.state.loadInfo.loadNo,'old-phone');
   assert.equal(result.ack,2);assert.equal(result.oldText,'unsent phone original');assert.equal(result.newText,'saved iPad original');
   assert.equal(result.pending.records,false);assert.equal(result.pending.archive,false);
+ });
+ await scenario('automatic conflict resolution stops when its recovery journal cannot be saved',async page=>{
+  const result=await page.evaluate(async()=>{
+   const f=window.fixture,local={...f.state,loadInfo:{loadNo:'active-local'}},remote={...f.state,loadInfo:{loadNo:'older-account'}};
+   await f.db.app_snapshots.put({key:f.key,state:local});
+   f.workspace={revision:7,payload:{format:f.core.FORMAT,records:f.core.recordsFrom({state:remote})}};
+   let writes=0;f.cloud.rpc=async()=>{writes++;return {data:{revision:8}};};
+   f.db.sync_meta.hook('creating',(_key,row)=>{if(row.key.startsWith('single-device-conflicts:'))throw Error('Synthetic recovery storage failure');});
+   const sync=await f.sync.syncAccount({initial:true,scope:'records'});
+   return {sync,writes,local:(await f.db.app_snapshots.get(f.key)).state,remote:f.workspace.payload.records};
+  });
+  assert.match(result.sync.error,/recovery storage failure/);assert.equal(result.writes,0);
+  assert.equal(result.local.loadInfo.loadNo,'active-local');assert.equal(result.remote['["state","loadInfo"]'].loadNo,'older-account');
+ });
+ await scenario('a device-generation change during a read blocks the old operation before saving',async page=>{
+  const result=await page.evaluate(async()=>{
+   const f=window.fixture;await f.db.app_snapshots.put({key:f.key,state:{...f.state,loadInfo:{loadNo:'old-operation'}}});
+   const from=f.cloud.from;f.cloud.from=table=>{if(table==='road_ready_account_workspaces')f.generation=2;return from(table);};
+   f.workspace={revision:8,payload:{format:f.core.FORMAT,records:f.core.recordsFrom({state:{...f.state,loadInfo:{loadNo:'new-owner'}}})}};
+   let writes=0;f.cloud.rpc=async()=>{writes++;return {data:{revision:9}};};
+   const sync=await f.sync.syncAccount({initial:true,scope:'records'});
+   return {sync,writes,local:(await f.db.app_snapshots.get(f.key)).state};
+  });
+  assert.equal(result.sync.blocked,true);assert.match(result.sync.error,/active device changed/i);assert.equal(result.writes,0);assert.equal(result.local.loadInfo.loadNo,'old-operation');
  });
  await scenario('failed handoff keeps stale phone logbook behind the startup gate',async page=>{
   const result=await page.evaluate(async()=>{

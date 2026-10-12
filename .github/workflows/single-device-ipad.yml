@@ -1,0 +1,60 @@
+name: Single active device and iPad logbook
+on:
+  pull_request:
+    paths:
+      - 'scripts/v110470/**'
+      - 'scripts/v110455/**'
+      - 'scripts/finalize-single-device-ipad-v110470.mjs'
+      - 'scripts/finalize-insert-solo-v110469.mjs'
+      - '.github/workflows/single-device-ipad.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/v110470/**'
+      - 'scripts/finalize-single-device-ipad-v110470.mjs'
+permissions:
+  contents: read
+concurrency:
+  group: single-device-ipad-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Exact production build
+        run: node scripts/build-v110.mjs > /tmp/single-device-build.log 2>&1 || { tail -n 120 /tmp/single-device-build.log; exit 1; }
+      - name: Install browser engines
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Handoff and failure recovery
+        run: |
+          node scripts/v110463/browser-device.mjs
+          SYNC_TEST_BROWSER=webkit node scripts/v110463/browser-device.mjs
+          node scripts/v110455/browser-receive-safety.mjs
+      - name: Real phone and iPad flows in Chromium and WebKit
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/single-device-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/v110470/browser-handoff.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: single-device-ipad-evidence
+          path: |
+            browser-test-results/single-device-ipad/
+            /tmp/single-device-build.log
+            /tmp/single-device-server.log
+          retention-days: 3

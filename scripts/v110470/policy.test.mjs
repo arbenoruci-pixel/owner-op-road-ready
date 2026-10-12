@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {recordsFrom,bundleFrom} from '../../lib/owner-op-cloud/accountCoreV110455.js';
+const day='2026-10-11';
+const state={activeDriverId:'primary',activeTeamDriverIds:['primary'],teamDrivers:[{id:'primary',name:'Primary Driver'},{id:'retained',name:'Retained Co-driver'}],eventsByDay:{[day]:[{id:'primary-sb',status:'SB',startMin:0,endMin:1440}]},teamLogbooksByDriverId:{retained:{eventsByDay:{[day]:[{id:'saved-other',status:'OFF',startMin:0,endMin:1440}]},signatureByDay:{[day]:{signatureDataUrl:'saved-signature'}}}}};
+const received=bundleFrom(recordsFrom({state}),{activeDriverId:'retained',activeDay:day});
+assert.equal(received.state.activeDriverId,'primary');
+assert.equal(received.state.coDrivers,'');
+assert.deepEqual(received.state.activeTeamDriverIds,['primary']);
+assert.deepEqual(received.state.eventsByDay,state.eventsByDay);
+assert.deepEqual(received.state.teamLogbooksByDriverId.retained,state.teamLogbooksByDriverId.retained);
+console.log('PASS receiving Solo on a device previously viewing the removed co-driver keeps the correct driver and every retained log/signature');

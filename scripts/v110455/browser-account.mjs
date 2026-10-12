@@ -114,12 +114,16 @@ try{
  await phone.evaluate(()=>{const s=structuredClone(window.__rrAccountState());s.testCrossTabNote='new phone record';window.dispatchEvent(new CustomEvent('road-ready-account-apply',{detail:s}));window.dispatchEvent(new Event('online'));});
  await waitFor(()=>workspace.payload.records['["state","testCrossTabNote"]']==='new phone record');await tablet.evaluate(()=>window.dispatchEvent(new Event('online')));await waitFor(()=>tablet.evaluate(()=>window.__rrAccountState()?.testCrossTabNote==='new phone record'));
  await secondTab.evaluate(()=>window.dispatchEvent(new Event('online')));await waitFor(()=>secondTab.evaluate(()=>window.__rrAccountState()?.testCrossTabNote==='new phone record'));assert.equal(workspace.payload.records['["state","testCrossTabNote"]'],'new phone record');await secondTab.close();
- // Divergent edits of one signed day must retain both versions and require review.
+ // Legacy conflicts retain both signed-day versions; the verified active device owns the save.
  await phoneContext.setOffline(true);await tabletContext.setOffline(true);
  for(const [page,note] of [[phone,'phone-edit'],[tablet,'tablet-edit']])await page.evaluate(note=>{const s=structuredClone(window.__rrAccountState());s.teamLogbooksByDriverId.beta.eventsByDay['2026-10-02'][0].note=note;window.dispatchEvent(new CustomEvent('road-ready-account-apply',{detail:s}));},note);
  await new Promise(r=>setTimeout(r,300));await phoneContext.setOffline(false);await phone.evaluate(()=>window.dispatchEvent(new Event('online')));await waitFor(()=>Object.values(workspace.payload.records).some(v=>v?.eventsByDay?.[0]?.note==='phone-edit'));
- await tabletContext.setOffline(false);await tablet.evaluate(()=>window.dispatchEvent(new Event('online')));await tablet.getByRole('button',{name:/Review changes/}).waitFor({timeout:25000});assert.equal((await snapshot(tablet)).teamLogbooksByDriverId.beta.eventsByDay[day][0].note,'tablet-edit');
- await tablet.getByRole('button',{name:/Review changes/}).click();await tablet.getByRole('radio',{name:/Saved account copy/}).check();await tablet.getByRole('button',{name:'Save selected versions'}).click();await waitFor(async()=>(await snapshot(tablet)).teamLogbooksByDriverId.beta.eventsByDay[day][0].note==='phone-edit');
+ await tabletContext.setOffline(false);await tablet.evaluate(()=>window.dispatchEvent(new Event('online')));
+ await waitFor(()=>workspace.payload.records['["day","beta","'+day+'"]']?.eventsByDay?.[0]?.note==='tablet-edit');
+ assert.equal(await tablet.getByRole('button',{name:/Review changes/}).count(),0);
+ assert.equal((await snapshot(tablet)).teamLogbooksByDriverId.beta.eventsByDay[day][0].note,'tablet-edit');
+ const retainedConflict=await tablet.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{const db=r.result,q=db.transaction('sync_meta').objectStore('sync_meta').getAll();q.onsuccess=()=>{db.close();resolve(q.result.some(row=>row.key.startsWith('single-device-conflicts:')&&row.value.conflicts.some(c=>c.local?.eventsByDay?.[0]?.note==='tablet-edit'&&c.remote?.eventsByDay?.[0]?.note==='phone-edit')));};};}));
+ assert.equal(retainedConflict,true,'Automatic resolution retains both original versions');
  // A new device cannot accept corrupt document bytes.
  corrupt=true;const {page:third}=await client(true);await seed(third,{testInstructionStore:{}},[],false);await third.getByText('A document failed verification. Local data was kept.',{exact:true}).waitFor({timeout:30000});assert.ok(await third.getByRole('button',{name:/Home/i}).first().isVisible(),'Verified logbook remains open when an archive original fails');assert.ok((await snapshot(third)).teamLogbooksByDriverId.beta);
  const originalKey=[...objects].find(([,v])=>v.equals(original))[0],beforeRetry=downloads.get(originalKey);
