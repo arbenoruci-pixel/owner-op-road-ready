@@ -1,0 +1,60 @@
+/* iPad portrait, landscape and split view; printed logs retain their own layout. */
+@media screen and (min-width:700px){
+  .screen.graph-first-screen.logbook-ui-v110.phone-day-v435,
+  .screen.logbook-home-screen-v988,
+  .team-driver-shell{
+    width:calc(100% - 40px)!important;max-width:1180px!important;margin-left:auto!important;margin-right:auto!important;box-sizing:border-box;
+  }
+  .team-driver-bar{padding:14px 20px;grid-template-columns:1fr 52px}
+  .team-driver-current{grid-template-columns:48px minmax(0,1fr) auto;gap:14px}
+  .team-driver-avatar{width:48px;height:48px;font-size:22px}
+  .team-driver-current small{font-size:12px}.team-driver-current b{font-size:20px}.team-driver-current em{font-size:15px}
+  .team-driver-toggle{width:52px;height:48px;font-size:25px}
+  .team-driver-panel{left:auto;right:12px;width:min(460px,calc(100% - 24px));box-sizing:border-box;padding:16px}
+  .team-driver-add input{background:#fff!important;color:#182334!important;-webkit-text-fill-color:#182334!important}
+  .screen.logbook-ui-v110.phone-day-v435{min-height:calc(100dvh - 76px);padding-bottom:32px!important}
+  .logbook-ui-v110.phone-day-v435 .road-topbar{min-height:84px!important;padding:14px 24px!important}
+  .logbook-ui-v110.phone-day-v435 .road-topbar-btn{width:52px!important;height:52px!important;font-size:30px!important}
+  .logbook-ui-v110.phone-day-v435 .road-topbar-title b{font-size:28px!important}
+  .logbook-ui-v110.phone-day-v435 .road-topbar-title span{font-size:13px!important}
+  .logbook-ui-v110.phone-day-v435 .logbook-day-nav-v988{padding:14px 24px!important;gap:14px!important}
+  .logbook-ui-v110.phone-day-v435 .logbook-day-nav-v988 button{min-height:52px!important;font-size:18px!important}
+  .logbook-ui-v110.phone-day-v435 .log-timezone-note{font-size:14px!important;padding:0 24px 14px!important}
+  .logbook-ui-v110.phone-day-v435 .road-tabs{margin:0 24px 16px!important;padding:6px!important;gap:6px!important}
+  .logbook-ui-v110.phone-day-v435 .road-tabs button{min-height:46px!important;font-size:18px!important}
+  .logbook-ui-v110.phone-day-v435 .graph-first-panel{margin:0 20px!important;padding:12px 4px!important;width:auto!important}
+  .logbook-ui-v110.phone-day-v435 .log-graph-v110{width:100%!important;height:auto!important;max-height:none!important}
+  .logbook-ui-v110.phone-day-v435 .graph-action-rail.clean-edit-flow-rail{padding:20px 24px!important;gap:14px!important}
+  .logbook-ui-v110.phone-day-v435 .graph-action-rail button{min-height:56px!important;font-size:18px!important}
+  .logbook-ui-v110.phone-day-v435 .events.clean-events{padding:0 16px!important}
+  .logbook-ui-v110.phone-day-v435 .event-row.clean-event-row{padding:22px 20px!important;gap:18px!important;margin:0 8px 12px!important}
+  .logbook-ui-v110.phone-day-v435 .event-title-line b{font-size:22px!important;line-height:1.35!important}
+  .logbook-ui-v110.phone-day-v435 .event-title-line span,
+  .logbook-ui-v110.phone-day-v435 .event-loc,
+  .logbook-ui-v110.phone-day-v435 .event-note,
+  .logbook-ui-v110.phone-day-v435 .event-route-meta{font-size:18px!important;line-height:1.5!important}
+  .logbook-ui-v110.phone-day-v435 .event-badge{width:50px!important;height:50px!important;font-size:17px!important}
+  .logbook-ui-v110.phone-day-v435 .event-row .blue-edit{min-width:72px!important;min-height:48px!important;font-size:17px!important}
+  .logbook-ui-v110.phone-day-v435 .cert-line-status-only{margin:0 24px 16px!important;padding:20px!important}
+  .logbook-ui-v110.phone-day-v435 .cert-line b,
+  .logbook-ui-v110.phone-day-v435 .day-transfer-inline button{font-size:17px!important}
+  .logbook-ui-v110.phone-day-v435 .road-paper-form{font-size:18px!important}
+  .logbook-home-screen-v988 .logbook-home-body-v988{padding:24px!important}
+  .logbook-home-screen-v988 .logbook-day-row-v988{min-height:84px!important;padding:18px!important}
+  .logbook-home-screen-v988 .logbook-day-copy-v988 b{font-size:20px!important}
+  .logbook-home-screen-v988 .logbook-day-copy-v988 em{font-size:16px!important}
+  .sheet.editor-ui-v110.editor-compact-v111{left:20px!important;right:20px!important;width:calc(100% - 40px)!important;max-width:1180px!important;margin:0 auto!important}
+  .sheet.editor-ui-v110.editor-compact-v111 .sheet-head{height:64px!important;min-height:64px!important;flex-basis:64px!important;font-size:24px!important;padding:0 20px!important}
+  .sheet.editor-ui-v110.editor-compact-v111 .form.editor-form-v85{padding:22px 28px!important;gap:18px!important}
+  .sheet.editor-ui-v110.editor-compact-v111 .form-label,
+  .sheet.editor-ui-v110.editor-compact-v111 .form-label-row,
+  .sheet.editor-ui-v110.editor-compact-v111 .time-group-v110 label{font-size:16px!important}
+  .sheet.editor-ui-v110.editor-compact-v111 input:not([type=checkbox]),
+  .sheet.editor-ui-v110.editor-compact-v111 textarea{font-size:20px!important;min-height:52px!important}
+  .sheet.editor-ui-v110.editor-compact-v111 .editor-duty-grid button{min-height:58px!important;font-size:20px!important}
+  .sheet.editor-ui-v110.editor-compact-v111 .compact-editor-footer-v111{padding:16px 28px calc(16px + env(safe-area-inset-bottom))!important}
+  .sheet.editor-ui-v110.editor-compact-v111 .compact-editor-footer-v111 button{min-height:56px!important;font-size:20px!important}
+  .status-page.status-driver-picker-v934{max-width:1180px!important;width:calc(100% - 40px)!important}
+  .status-page.status-driver-picker-v934 .driver-picker-head,
+  .status-page.status-driver-picker-v934 .driver-picker-body{max-width:none!important}
+}
