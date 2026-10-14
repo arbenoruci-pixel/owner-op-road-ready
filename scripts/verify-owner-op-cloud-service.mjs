@@ -27,6 +27,9 @@ assert.ok(key,'Public API key must be configured');
 assert.equal(base,'https://ghwkcgczuwctzxsxmqzx.supabase.co','Owner Operator must use only the isolated prototype Supabase project');
 assert.ok(!source.includes('vnidjrxidvusulinozbn'),'Tepiha Supabase project must never be referenced by Owner Operator cloud code');
 
+if(process.env.READER_OFFLINE_BUILD==='1'){
+  console.log('SKIP LIVE — offline build; only static project-isolation assertions ran. No backend requests made.');
+}else{
 const auth=await fetchReadOnlyWithRetry(base+'/auth/v1/settings',{headers:{apikey:key}},'Auth settings');
 if (auth) {
   assert.equal(auth.status,200,'Supabase Auth settings endpoint returned an unexpected status');
@@ -49,3 +52,5 @@ if (storage) {
 
 const reached=[auth,access,storage].filter(Boolean).length;
 console.log(`${reached}/3 live read-only isolation/auth checks reached the service; static project-isolation checks remain mandatory`);
+
+}

@@ -19,8 +19,8 @@ const isStreetAddress=value=>{
 // Use only this observation's coordinates; enlarged retry crops have their own
 // coordinate space and cannot supply page-column boundaries.
 function shippingColumn(lines,line){
-  const heading=/^[\s|\[\]{}]*(SHIP\s*FROM|SHIP\s*TO|SHIPPER|CONSIGNEE)\s*[:.]*\s*$/i;
-  const role=value=>/^(?:SHIP\s*FROM|SHIPPER)$/i.test(value)?'from':'to';
+  const heading=/^[\s|\[\]{}]*(FROM\s+SHIPPER|TO\s+CONSIGNEE|SHIP\s*FROM|SHIP\s*TO|SHIPPER|CONSIGNEE)\s*[:.]*\s*$/i;
+  const role=value=>/^(?:FROM\s+SHIPPER|SHIP\s*FROM|SHIPPER)$/i.test(value)?'from':'to';
   const match=heading.exec(line.text),a=line.box;
   if(!match||!a||a.y>=.4||a.height>.04||a.width>.25)return null;
   const peers=lines.filter(other=>{

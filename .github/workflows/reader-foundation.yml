@@ -1,0 +1,29 @@
+name: Reader foundation contracts
+on:
+  pull_request:
+    paths:
+      - 'packages/smart-reader-core/**'
+      - 'lib/reader-ai/**'
+      - 'scripts/reader-ai/**'
+      - 'scripts/reader-foundation/**'
+      - 'scripts/v110363/**'
+      - 'scripts/v110348/pdfImageReader.js'
+      - 'scripts/test-pdf-coverage-v110363.mjs'
+      - '.github/workflows/reader-foundation.yml'
+permissions:
+  contents: read
+jobs:
+  source-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test packages/smart-reader-core/test/*.test.mjs
+      - run: node --test scripts/reader-ai/test-*.mjs
+      - run: node --test scripts/reader-foundation/podSupersession.test.mjs
+      - run: node scripts/test-pdf-coverage-v110363.mjs
+      - name: No live backend probes during offline verification
+        run: READER_OFFLINE_BUILD=1 node scripts/verify-owner-op-cloud-service.mjs

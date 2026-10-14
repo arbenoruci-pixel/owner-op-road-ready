@@ -9,6 +9,7 @@ import {reconcilePartyNoise} from './partyNoise.js';
 import {recoverPartialBolDates,recoverCarrierInitialSpacing} from './bolRecovery.js';
 import {bolHeaderMatches,bolEquipmentMatches} from './bolHeader.js';
 import {referenceRowMatches} from './referenceRows.js';
+import {agreementPartyMatches} from './agreementParties.js';
 
 // A digit string is not interchangeable with another that lost end digits.
 // Unlabelled alternatives can only make a BOL uncertain; never fill its value.
@@ -42,6 +43,7 @@ export function pageFieldMatches(page,spec){
   if(spec.numberedRate)matches.push(...numberedRateMatches(page,spec));
   if(spec.rateSection)matches.push(...rateSectionMatches(page,spec));
   if(spec.rateParty)matches.push(...ratePartyMatches(page,spec));
+  if(spec.agreementParty)matches.push(...agreementPartyMatches(page,spec));
   if(spec.nativeCell)matches.push(...nativeCellMatches(page,spec));
   if(spec.certificatePart)matches.push(...certificateMatches(page,spec));
   if(spec.rateVocabulary==='totalRate'){

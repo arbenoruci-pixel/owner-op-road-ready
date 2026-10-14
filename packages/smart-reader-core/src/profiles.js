@@ -16,7 +16,7 @@ const receiptBreakdown=/\b(?:UNLOADING|LUMPER)\b|^\s*(?:(?:P\.?[ \t]*O\.?)\s*(?:
 const BASE_PROFILES = [
   rateConfirmationProfile,
   {id:'invoice',label:'Invoice',partyKeys:['vendor'],heading:/^\s*(?:(?:commercial|tax|sales)\s+)?invoice\s*(?:$|[#:]|no\b|number\b)/i,signals:[/^\s*(?:subtotal|sub total)\b/im,/^\s*(?:total|amount due|balance due)\b/im],identity:'invoiceNumber',fields:{invoiceNumber:field('Invoice number',identifier('INVOICE'),'identifier',true),vendor:field('Vendor',labeled('VENDOR|SELLER|SUPPLIER'),'party'),invoiceDate:field('Invoice date',labeled('INVOICE DATE|DATE'),'date'),subtotal:field('Subtotal',labeled('SUBTOTAL|SUB TOTAL'),'amount'),tax:field('Tax',labeled('TAX|VAT'),'amount'),total:field('Total',labeled('GRAND TOTAL|TOTAL AMOUNT|TOTAL|AMOUNT DUE'),'amount',true),currency:field('Currency',labeled('CURRENCY'),'currency',true)}},
-  {id:'bol',label:'Bill of lading',partyKeys:['shipper','consignee'],heading:/^\s*(?:straight\s+)?bill\s+of\s+lading\b\s*(?:$|[#:]|no\b|number\b|[-–—«»:]?\s*not\s+negotiable\b)/i,signals:[/^\s*(?:(?:ship\s*from|shipper)\b|from\s*:)/im,/^\s*(?:(?:ship\s*to|consignee)\b|to\s*:)/im],structuralSignals:[/^\s*(?:SHIP\s*FROM|FROM)\s*:/i,/^\s*CONSIGNED(?:\s+TO)?\s*:?\s*$/i,/^\s*CARRIER\s*:/i,/^\s*TOTAL\s+(?:NET\s+)?WEIGHT\s*:/i,/\b(?:THIS|ORIGINAL)\s+BILL\s+OF\s+LADING\b/i],identity:'bolNumber',fields:{
+  {id:'bol',label:'Bill of lading',partyKeys:['shipper','consignee'],heading:/^\s*(?:straight\s+)?bill\s+of\s+lading\b\s*(?:$|[#:]|no\b|number\b|[-–—«»:]?\s*not\s+negotiable\b)/i,signals:[/^\s*(?:(?:ship\s*from|shipper)\b|from\s+(?:shipper)\b|from\s*:)/im,/^\s*(?:(?:ship\s*to|consignee)\b|to\s+(?:consignee)\b|to\s*:)/im],structuralSignals:[/^\s*(?:SHIP\s*FROM|FROM)\s*:/i,/^\s*CONSIGNED(?:\s+TO)?\s*:?\s*$/i,/^\s*CARRIER\s*:/i,/^\s*TOTAL\s+(?:NET\s+)?WEIGHT\s*:/i,/\b(?:THIS|ORIGINAL)\s+BILL\s+OF\s+LADING\b/i],identity:'bolNumber',fields:{
     bolNumber:{...field('BOL number',identifier('BOL|B/L|BILL OF LADING'),'identifier',true),checkIdentifierFragments:true,inlineLabel:/(?:^|\|)[ \t]*(?:BOL|B\/L|BILL OF LADING)[ \t]*(?:NUMBER\b|NO\b\.?|ID\b|#|:)[ \t:#;]*/i,rightLabel:/^\s*(?:BOL|B\/L|BILL OF LADING)\s*(?:NUMBER\b|NO\b\.?|#)\s*[:;#]*\s*$/i,noisyPattern:/^[\s"'|]*(?:BAL|BIL|BL)(?:\s*NO\.?\s*[:;]\s*|\s+(?=\d{6,20}\s*$))([A-Z0-9][A-Z0-9._/-]{2,39})\s*$/id},
     shipper:{...beside('Shipper',labeled('SHIP[ \\t]*FROM|SHIPPER|FROM'),'party',/^\s*(?:SHIP\s*FROM|SHIPPER|FROM)\s*:\s*$/i,true),blockLabel:/^\s*(?:SHIP\s*FROM|SHIPPER)\s*[:.]*\s*$/i},
     consignee:{wrappedConsigned:true,...beside('Consignee',labeled('SHIP[ \\t]*TO|CONSIGNEE|CONSIGNED(?:[ \\t]+TO)?|TO(?=[ \\t]*:)'),'party',/^\s*(?:SHIP\s*TO|CONSIGNEE|CONSIGNED(?:\s+TO)?|TO(?=\s*:))\s*:?\s*$/i,true),blockLabel:/^\s*(?:SHIP\s*TO|CONSIGNEE)\s*[:.]*\s*$/i},
@@ -27,7 +27,7 @@ const BASE_PROFILES = [
 ];
 
 // Common variants share the original fields, normalization and evidence rules.
-BASE_PROFILES.find(p=>p.id==='bol').variants=[{heading:/^\s*(?:(?:UNIFORM|ALTERNATE)\s+)?(?:STRAIGHT\s+)?BILL\s+OF\s+LADING\b(?:\s*[-–—:]?\s*(?:SHORT\s+FORM|ORIGINAL|NOT\s+NEGOTIABLE))?\s*[-–—:]?\s*$/i,signals:[/^\s*(?:SHIPPER|SHIP\s*FROM)\b/i,/^\s*(?:CONSIGNEE|SHIP\s*TO)\b/i]}];
+BASE_PROFILES.find(p=>p.id==='bol').variants=[{heading:/^\s*(?:(?:UNIFORM|ALTERNATE)\s+)?(?:STRAIGHT\s+)?BILL\s+OF\s+LADING\b(?:\s*[-–—:]?\s*(?:SHORT\s+FORM|ORIGINAL|NOT\s+NEGOTIABLE))?\s*[-–—:]?\s*$/i,signals:[/^\s*(?:FROM\s+SHIPPER|SHIPPER|SHIP\s*FROM)\b/i,/^\s*(?:TO\s+CONSIGNEE|CONSIGNEE|SHIP\s*TO)\b/i]}];
 // A short-form straight BOL names its parties in receipt/consignment rows.
 // Keep the explicit title and three independent form labels as its proof.
 BASE_PROFILES.find(p=>p.id==='bol').variants.push({
@@ -52,6 +52,14 @@ bolParties.carrier.footerLabel=/^[\s|]*(?:CARRIER(?:\s+NAME)?|NAME\s+OF\s+CARRIE
 bolParties.carrier.pattern=labeled('CARRIER(?: NAME)?|NAME OF CARRIER');
 bolParties.carrier.valueStop=/\s+(?:KEEP\s+FROZEN\b|SHIPPER[’\x27]S\s+NO\s*:)/i;
 bolParties.consignee.pattern=labeled('SHIP[ \\t]*TO|CONSIGNEE|CONSIGNED(?:[ \\t]*TO)?|TO(?=[ \\t]*:)');
+// Combined role labels are labels, not part of the company name. Keep these
+// aliases scoped to BOL parties and preserve the original source value range.
+bolParties.shipper.pattern=labeled('FROM[ \\t]+SHIPPER|SHIP[ \\t]*FROM|SHIPPER|FROM');
+bolParties.consignee.pattern=labeled('TO[ \\t]+CONSIGNEE|SHIP[ \\t]*TO|CONSIGNEE|CONSIGNED(?:[ \\t]*TO)?|TO(?=[ \\t]*:)');
+bolParties.shipper.blockLabel=/^[\s|\[\]{}]*(?:FROM\s+SHIPPER|SHIP\s*FROM|SHIPPER)\s*[:.]*\s*$/i;
+bolParties.shipper.rightLabel=/^\s*(?:FROM\s+SHIPPER|SHIP\s*FROM|SHIPPER|FROM)\s*:\s*$/i;
+bolParties.consignee.blockLabel=/^[\s|\[\]{}]*(?:TO\s+CONSIGNEE|SHIP\s*TO|CONSIGNEE)\s*[:.]*\s*$/i;
+bolParties.consignee.rightLabel=/^\s*(?:TO\s+CONSIGNEE|SHIP\s*TO|CONSIGNEE|CONSIGNED(?:\s+TO)?|TO(?=\s*:))\s*:?\s*$/i;
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').variants=[{heading:/^\s*LUMPER\s+(?:RECEIPT|PAYMENT\s+RECEIPT)\s*$/i,signals:[/^\s*(?:TOTAL|NET\s+TOTAL)\s*:?\s*[$€£]?\s*\d/i,/^\s*(?:RECEIPT|CARRIER|LOAD|PO|DATE)\b/i]}];
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').filingType='lumper_receipt';
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').refines=['other_expense'];

@@ -1,0 +1,84 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {applyReaderRelease,releaseSourceCommit,RELEASE_FILES,RELEASE_NOTES,VERSION,BUILD_PREFIX} from './release.mjs';
+
+const read=file=>fs.readFileSync(file,'utf8');
+const SHA='1234567890abcdef1234567890abcdef12345678';
+const OTHER_SHA='abcdef1234567890abcdef1234567890abcdef12';
+const fixtureFiles=[...RELEASE_FILES,'source/src/modules/scan/SmartScanSheetV105.jsx'];
+
+// Exercise the actual fully materialized files, never the older tracked baseline.
+function fixture(t){
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'reader-release-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  for(const file of fixtureFiles){
+    fs.mkdirSync(path.dirname(path.join(root,file)),{recursive:true});
+    fs.copyFileSync(file,path.join(root,file));
+  }
+  return root;
+}
+const contents=root=>new Map(fixtureFiles.map(file=>[file,read(path.join(root,file))]));
+
+test('release metadata identifies the precise deployment commit, ahead of a PR SHA',()=>{
+  assert.equal(releaseSourceCommit({env:{VERCEL_GIT_COMMIT_SHA:SHA,GITHUB_SHA:OTHER_SHA}}),SHA);
+  assert.equal(releaseSourceCommit({env:{GITHUB_SHA:OTHER_SHA}}),OTHER_SHA);
+  assert.throws(()=>releaseSourceCommit({env:{VERCEL_GIT_COMMIT_SHA:'short',GITHUB_SHA:OTHER_SHA}}),/full Git SHA/);
+  assert.throws(()=>releaseSourceCommit({env:{VERCEL:'1'}}),/deployment commit SHA/);
+  assert.throws(()=>releaseSourceCommit({env:{GITHUB_ACTIONS:'true'}}),/deployment commit SHA/);
+});
+
+test('release synchronizes all materialized metadata without modifying sync or auth behavior',t=>{
+  const root=fixture(t),before=contents(root);
+  const metadata=applyReaderRelease({root,env:{VERCEL_GIT_COMMIT_SHA:SHA},now:new Date('2026-10-14T04:00:00Z')});
+  assert.equal(metadata.version,VERSION);assert.equal(metadata.force,false);assert.equal(metadata.sourceCommit,SHA);
+  assert.equal(metadata.build,`${BUILD_PREFIX}-${SHA.slice(0,12)}`);
+  for(const file of ['release-version.json','public/app-version.json']){
+    const actual=JSON.parse(read(path.join(root,file)));
+    for(const [key,value] of Object.entries(metadata))assert.deepEqual(actual[key],value,file+' / '+key);
+    assert.deepEqual(actual.notes,RELEASE_NOTES);
+  }
+  for(const file of ['package.json','package-lock.json'])assert.equal(JSON.parse(read(path.join(root,file))).version,VERSION);
+  assert.equal(JSON.parse(read(path.join(root,'package-lock.json'))).packages[''].version,VERSION);
+  const oldLocks=JSON.parse(before.get('module-locks.v1.json')),locks=JSON.parse(read(path.join(root,'module-locks.v1.json')));
+  assert.equal(locks.release,VERSION);assert.deepEqual({...locks,release:oldLocks.release},oldLocks);
+  const normalize=text=>text.replaceAll('110.4.70','RELEASE').replaceAll(VERSION,'RELEASE');
+  for(const file of ['lib/owner-op-cloud/cloudMirrorV110450.js','lib/owner-op-cloud/recordSyncV110451.js']){
+    assert.equal(normalize(read(path.join(root,file))),normalize(before.get(file)),'Only diagnostic release stamps may change: '+file);
+  }
+  assert.equal(read(path.join(root,'source/src/modules/scan/SmartScanSheetV105.jsx')),before.get('source/src/modules/scan/SmartScanSheetV105.jsx'));
+  for(const file of ['source/src/core/update/appUpdate.js','public/sw.js','scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/test-document-continuity-integration-v110375.mjs']){
+    assert.ok(read(path.join(root,file)).includes(metadata.build),file);
+    assert.ok(!read(path.join(root,file)).includes('v110470-single-device-ipad'),file);
+  }
+  assert.ok(read(path.join(root,'source/src/shared/ui/ToolsSheet.jsx')).includes('Log Tools · v{CURRENT_APP_VERSION}'));
+});
+
+test('release reruns are idempotent and a different commit receives a distinct build identity',t=>{
+  const root=fixture(t),env={VERCEL_GIT_COMMIT_SHA:SHA};
+  applyReaderRelease({root,env,now:new Date('2026-10-14T04:00:00Z')});const initial=contents(root);
+  applyReaderRelease({root,env,now:new Date('2026-10-15T04:00:00Z')});assert.deepEqual(contents(root),initial);
+  const next=applyReaderRelease({root,env:{VERCEL_GIT_COMMIT_SHA:OTHER_SHA},now:new Date('2026-10-15T04:00:00Z')});
+  assert.equal(next.sourceCommit,OTHER_SHA);assert.equal(next.build,`${BUILD_PREFIX}-${OTHER_SHA.slice(0,12)}`);
+  assert.equal(next.releasedAt,'2026-10-15T04:00:00.000Z');
+  assert.ok(read(path.join(root,'public/sw.js')).includes(next.build));
+});
+
+test('unmaterialized or inconsistent release input is rejected before writes',t=>{
+  const root=fixture(t),file=path.join(root,'package.json'),value=JSON.parse(read(file));value.version='97.3.0';fs.writeFileSync(file,JSON.stringify(value));
+  const before=contents(root);
+  assert.throws(()=>applyReaderRelease({root,env:{VERCEL_GIT_COMMIT_SHA:SHA}}),/fully materialized/);
+  assert.deepEqual(contents(root),before);
+});
+
+test('the current runtime exposes this nonforced release consistently',()=>{
+  const meta=JSON.parse(read('public/app-version.json'));
+  assert.equal(meta.version,VERSION,'Run reader-foundation/release.mjs after installation, before verification');
+  assert.equal(meta.force,false);assert.match(meta.sourceCommit,/^[a-f0-9]{40}$/);
+  assert.equal(meta.build,`${BUILD_PREFIX}-${meta.sourceCommit.slice(0,12)}`);
+  assert.equal(JSON.parse(read('release-version.json')).sourceCommit,meta.sourceCommit);
+  assert.ok(read('source/src/core/update/appUpdate.js').includes(`const FALLBACK_APP_BUILD = '${meta.build}';`));
+  assert.ok(read('public/sw.js').includes(`const OWNER_OP_SW_BUILD = '${meta.build}';`));
+});
