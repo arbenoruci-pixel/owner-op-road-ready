@@ -396,7 +396,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.equal(columnDoc.fields.trailerNumber.value,'T-700');assert.equal(columnDoc.canAutoFile,false);
     await review.screenshot({path:`${output}/${name}-receipt-columns.png`});
     console.log('PASS '+name+' lumper classification, checkout fee columns, exact source highlight and exported evidence');
-    // A fourth, bounded identifier read must retain the complete source page.
+    // Four OCR passes plus the retained original must preserve the complete source page.
     await page.goto(new URL('/_not-found',page.url()).href);
     await page.evaluate(async()=>{localStorage.clear();await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase('owner-op-road-ready-offline-v1');r.onsuccess=resolve;r.onerror=()=>reject(r.error);});});
     await seed(page,state);
@@ -421,8 +421,20 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Close source',exact:true}).click();
     const detailDownload=page.waitForEvent('download');await review.getByRole('button',{name:'Export reading review',exact:true}).click();
     const detailExport=JSON.parse(fs.readFileSync(await(await detailDownload).path(),'utf8'));
-    assert.equal(detailExport.pageCount,1);assert.equal(detailExport.pages[0].observations.length,4);
-    assert.ok(detailExport.pages[0].observations[0].lines.some(l=>l.text==='BODY MUST SURVIVE'));
+    assert.equal(detailExport.pageCount,1);
+    const detailObservations=detailExport.pages[0].observations;
+    assert.deepEqual(detailObservations.map(o=>o.id),[
+      '1-clean-page','1-table-labels','1-source-page','1-identifier-detail','original-source',
+    ],'four distinct OCR passes and one retained original, not an extra read or duplicated evidence');
+    assert.equal(await page.evaluate(()=>window.__ownedReaderCalls),4,'the original source adds no OCR request');
+    for(const observation of detailObservations.slice(0,3)){
+      assert.ok(observation.lines.some(l=>l.text==='BODY MUST SURVIVE'),observation.id+' retains the full-page body');
+    }
+    const originalObservation=detailObservations.find(o=>o.id==='original-source');
+    assert.equal(originalObservation.source,'source-image');
+    assert.deepEqual(originalObservation.lines,[],'retaining original pixels invents no text evidence');
+    assert.equal(originalObservation.sourceImageId,detailExport.documentId+':page-1:original');
+    assert.equal(new Set(detailObservations.map(o=>o.sourceImageId)).size,5,'each retained source has a distinct identity');
     const detailField=detailExport.documents[0].fields.bolNumber;assert.equal(detailField.value,null);assert.ok(detailField.issues.includes('label_needs_review'));
     assert.ok(detailField.candidates[0].evidence[0].sourceImageId.endsWith('1-identifier-detail'));
     await page.getByRole('button',{name:'Back',exact:true}).click();
@@ -491,6 +503,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     assert.deepEqual(storedReview.documents[0].pages,[1]);
     assert.equal(storedReview.trainingEligible,false);assert.ok(storedReview.remaining>0);
     await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
+    await page.getByRole('button',{name:'Browse all saved files',exact:true}).click();
     await page.getByRole('heading',{name:'Recent documents',exact:true}).waitFor();
     const recentReview=page.getByRole('region',{name:'Recent documents'});
     await recentReview.locator('.saved-document-row-v344').first().click();
