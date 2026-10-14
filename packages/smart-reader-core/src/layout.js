@@ -19,8 +19,8 @@ const isStreetAddress=value=>{
 // Use only this observation's coordinates; enlarged retry crops have their own
 // coordinate space and cannot supply page-column boundaries.
 function shippingColumn(lines,line){
-  const heading=/^[\s|\[\]{}]*(FROM\s+SHIPPER|TO\s+CONSIGNEE|SHIP\s*FROM|SHIP\s*TO|SHIPPER|CONSIGNEE)\s*[:.]*\s*$/i;
-  const role=value=>/^(?:FROM\s+SHIPPER|SHIP\s*FROM|SHIPPER)$/i.test(value)?'from':'to';
+  const heading=/^[\s|\[\]{}]*(FROM\s*:?\s+SHIPPER|TO\s+CONSIGNEE|SHIP\s*FROM|SHIP\s*TO|SHIPPER|CONSIGNEE|TO)\s*[:.]*\s*$/i;
+  const role=value=>/^(?:FROM\s*:?\s+SHIPPER|SHIP\s*FROM|SHIPPER)$/i.test(value)?'from':'to';
   const match=heading.exec(line.text),a=line.box;
   if(!match||!a||a.y>=.4||a.height>.04||a.width>.25)return null;
   const peers=lines.filter(other=>{
@@ -38,9 +38,13 @@ export function fieldMatches(lines,spec){
   const matches=[];
   const signatures=lines.filter(line=>line.box?.y>.4&&/^(?:(?:SHIPPER|CARRIER)\s+SIGNATURE\b|FREIGHT\s+COUNTED\b|TRAILER\s+LOADED\b)/i.test(line.text.trim()));
   const shortForm=lines.some(line=>line.box?.y<.3&&/^\s*(?:UNIFORM\s+)?STRAIGHT\s+BILL\s+OF\s+LADING\s*[-–—:]\s*SHORT\s+FORM\s*$/i.test(line.text));
+  const columnShortForm=lines.some(line=>line.box?.y<.3&&/^\s*(?:STRAIGHT|STRIAGHT)\s+BILL\s+OF\s+LADING\s*[-–—:]\s*SHORT\s+FORM\b/i.test(line.text))
+    &&lines.some(line=>line.box?.y<.4&&/^\s*FROM\s*:\s*SHIPPER\s*$/i.test(line.text))
+    &&lines.some(line=>line.box?.y<.4&&/^\s*TO\s*:?\s*$/i.test(line.text));
   const certification=shortForm?lines.find(line=>line.box?.y>.4&&/^\s*SHIPPER[’'S]*\s+CERTIFICATION\s*:/i.test(line.text)):null;
   for(const line of lines){
     if(spec.excludePattern?.test(line.text))continue;
+    if(columnShortForm&&spec.kind==='party'&&line.box?.y>=.45)continue;
     // OCR sometimes isolates "consigned" from "packages ..., marked,
     // consigned" in footer prose. Its adjacent sentence is not a form label.
     if(spec.wrappedConsigned&&/^\s*CONSIGNED\s*$/i.test(line.text)&&line.box?.y>.4
@@ -94,7 +98,7 @@ export function fieldMatches(lines,spec){
     if(!blockLabel||!line.box)continue;
     const label=line.box,center=label.x+label.width/2;if(!column&&(label.width>.4||Math.abs(center-.5)<.06))continue;
     const left=column?.left??(center<.5?0:.5),right=column?.right??(center<.5?.5:1);
-    const below=lines.filter(candidate=>{const box=candidate.box;return candidate!==line&&box&&candidate.text.trim()&&!isRule(candidate,line)&&box.x>=left&&box.x+box.width<=right&&box.x<=label.x+label.width+.025&&box.y>=label.y+label.height*.6&&box.y<=label.y+label.height+.035;}).sort((a,b)=>a.box.y-b.box.y||a.box.x-b.box.x);
+    const below=lines.filter(candidate=>{const box=candidate.box;return candidate!==line&&box&&candidate.text.trim()&&!isRule(candidate,line)&&box.x>=left&&box.x+box.width<=right&&(column||box.x<=label.x+label.width+.025)&&box.y>=label.y+label.height*.6&&box.y<=label.y+label.height+.035;}).sort((a,b)=>a.box.y-b.box.y||a.box.x-b.box.x);
     const first=below[0];if(!first)continue;
     if(below.some(other=>other!==first&&Math.abs(other.box.y-first.box.y)<Math.min(other.box.height,first.box.height)*.5))continue;
     if(isStreetAddress(first.text)||/^(?:[|{}\s]*)(?:SHIP\s*(?:FROM|TO)|SHIPPER|CONSIGNEE|CARRIER|TRAILER|SEAL)\b/i.test(first.text))continue;

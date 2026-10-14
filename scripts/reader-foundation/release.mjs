@@ -4,11 +4,15 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-export const VERSION='110.4.71';
-export const BUILD_PREFIX='v110471-reader-evidence';
+export const VERSION='110.4.72';
+export const BUILD_PREFIX='v110472-load-picker-pod';
 const PREVIOUS_VERSION='110.4.70';
 const PREVIOUS_BUILD='v110470-single-device-ipad';
 export const RELEASE_NOTES=Object.freeze([
+  'Document filing shows the current load first, then recent loads, with searchable company, route, date and status cards.',
+  'Imported load folders retain their saved company and route details when a logbook candidate has empty metadata.',
+  'Short-form bills of lading with damaged printed headings retain source-backed parties and carrier; a driver-selected POD stays explicit when handwriting cannot be verified.',
+  'Daily mileage separates recorded stops and keeps previous-day route distance out of short midnight continuation intervals.',
   'Source-backed Reader fields and saved readings retain evidence, page coverage, and driver-selected document type and load.',
   'PDF reading reports OCR limits, unread pages, and skipped or failed reading stages instead of implying complete coverage.',
   'Optional page-level AI field review proposes source-quoted fields for explicit review; production AI availability and accuracy are not guaranteed.',

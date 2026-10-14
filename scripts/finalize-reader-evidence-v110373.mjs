@@ -29,6 +29,7 @@ for(const [path,name] of [['source/src/core/update/appUpdate.js','FALLBACK_APP']
 }
 for(const path of ['source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx'])fs.writeFileSync(path,read(path).replace(/App v\d+\.\d+\.\d+/g,'App v'+VERSION).replace(/APP V\d+\.\d+\.\d+/g,'APP V'+VERSION));
 for(const path of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs'])
-  fs.writeFileSync(path,read(path).replaceAll("'110.3.72'","'"+VERSION+"'").replaceAll("'v110372-driving-day-continuity'","'"+BUILD+"'"));
+  fs.writeFileSync(path,read(path).replaceAll("'110.3.72'","'"+VERSION+"'").replaceAll("'v110372-driving-day-continuity'","'"+BUILD+"'")
+    .replaceAll("'110.3.70'","'"+VERSION+"'").replaceAll("'v110370-durable-route-removal'","'"+BUILD+"'"));
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=VERSION;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS — 110.3.73 Reader stop evidence installed; protected module hashes unchanged');

@@ -22,8 +22,11 @@ patch(folders,'    {notices}',"    {!library?<EvidenceCenter documents={allDocum
 patch(folders,'loading=false,onScan,onOpenLog,onContinueBilling','loading=false,ownerStore={},onImportMileage,onScan,onOpenLog,onContinueBilling');
 // Keep archive aliases in business data so a recovery needs only one durable write.
 const reconciliation='source/src/modules/owneros/loadFolderReconciliationV10974.js';
-patch(reconciliation,"const aliases=new Map((overlay.loadCorrections||[]).filter(x=>x.aliasFrom&&x.loadNo).map(x=>[upper(x.aliasFrom),upper(x.loadNo)]));","const aliases=new Map([...(businessStore.evidenceAliases||[]).map(x=>[upper(x.from),upper(x.to)]),...(overlay.loadCorrections||[]).filter(x=>x.aliasFrom&&x.loadNo).map(x=>[upper(x.aliasFrom),upper(x.loadNo)])]);");
-patch(reconciliation,"  aliases.set('178564','424590-1');","  aliases.set('178564','424590-1');\n  for(const [from,to] of aliases){let target=to;const seen=new Set([from]);while(aliases.has(target)&&!seen.has(target)){seen.add(target);target=aliases.get(target);}if(!seen.has(target))aliases.set(from,target);}");
+const reviewedAliases=fs.readFileSync(reconciliation,'utf8').includes('const aliases=new Map(Object.entries(reviewedLoadAliases(businessStore,documents,overlay)));');
+if(!reviewedAliases){
+ patch(reconciliation,"const aliases=new Map((overlay.loadCorrections||[]).filter(x=>x.aliasFrom&&x.loadNo).map(x=>[upper(x.aliasFrom),upper(x.loadNo)]));","const aliases=new Map([...(businessStore.evidenceAliases||[]).map(x=>[upper(x.from),upper(x.to)]),...(overlay.loadCorrections||[]).filter(x=>x.aliasFrom&&x.loadNo).map(x=>[upper(x.aliasFrom),upper(x.loadNo)])]);");
+ patch(reconciliation,"  aliases.set('178564','424590-1');","  aliases.set('178564','424590-1');\n  for(const [from,to] of aliases){let target=to;const seen=new Set([from]);while(aliases.has(target)&&!seen.has(target)){seen.add(target);target=aliases.get(target);}if(!seen.has(target))aliases.set(from,target);}");
+}
 const store='source/src/modules/business/businessStore.js';
 patch(store,'    loads: list(value.loads).map(cleanRecord),','    evidenceAliases:list(value.evidenceAliases),\n    evidenceExpectations:list(value.evidenceExpectations),\n    evidenceRecoveryHistory:list(value.evidenceRecoveryHistory),\n    loads: list(value.loads).map(cleanRecord),');
 patch(store,'  const out = {};','  const out = {};\n  if(value.evidenceFactsV1)out.evidenceFactsV1=value.evidenceFactsV1;');
@@ -85,7 +88,8 @@ patch(tax,"import React, { useMemo } from 'react';","import React, { useEffect, 
 patch(tax,'  const store = useMemo(() => readBusinessStore(), []);',"  const [store,setStore]=useState(()=>readBusinessStore());\n  useEffect(()=>{const refresh=()=>setStore(readBusinessStore());window.addEventListener('owner-op-business-updated',refresh);return()=>window.removeEventListener('owner-op-business-updated',refresh);},[]);");
 patch(tax,'      <main className="money-tax-body">','      <main className="money-tax-body">\n        <EvidenceCenter businessStore={store} initialArea="tax" onScan={onScan}/>');
 const home='source/src/modules/home/HomeScreen.jsx';
-patch(home,"  const [scanPreferredType, setScanPreferredType] = useState('auto');","  const [scanPreferredType, setScanPreferredType] = useState('auto');\n  const [scanEvidenceContext,setScanEvidenceContext]=useState(null);");
+if(!fs.readFileSync(home,'utf8').includes('const [scanEvidenceContext,setScanEvidenceContext]=useState(null);'))
+ patch(home,"  const [scanPreferredType, setScanPreferredType] = useState('auto');","  const [scanPreferredType, setScanPreferredType] = useState('auto');\n  const [scanEvidenceContext,setScanEvidenceContext]=useState(null);");
 patch(home,'        initialPreferredType={scanPreferredType}','        initialPreferredType={scanPreferredType}\n        evidenceContextV110413={scanEvidenceContext}');
 patch(home,"        onScan={() => setScanOpen(true)}","        onScan={context => {setScanPreferredType(context?.kind||'auto');setScanEvidenceContext(context?.kind?context:null);setScanOpen(true);}}");
 patch(home,"onClose={() => { setScanOpen(false); setSavedScanFile(null); setResumeDocumentId(''); setScanPreferredType('auto'); }}","onClose={() => { setScanOpen(false); setSavedScanFile(null); setResumeDocumentId(''); setScanPreferredType('auto'); setScanEvidenceContext(null); }}");

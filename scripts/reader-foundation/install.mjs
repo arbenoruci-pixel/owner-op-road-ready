@@ -44,3 +44,5 @@ patch('source/src/modules/owneros/SavedDocumentFilesV110344.jsx','<SavedReadingR
 await import("./installReceiptProjection.mjs");
 
 await import("./installPodSupersession.mjs");
+
+await import('./installLoadPicker.mjs');

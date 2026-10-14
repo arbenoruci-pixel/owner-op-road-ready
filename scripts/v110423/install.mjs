@@ -10,7 +10,9 @@ patch(shipment,'  for (const [day, events] of Object.entries(state.eventsByDay |
 patch(shipment,'{day, event}]);','{day, event, driverId}]);');
 patch(shipment,'    }\n  }\n  index.groups = new Map();','    }\n  }\n  }\n  index.groups = new Map();');
 // Authoritative freight origin comes from its actual pickup, across the team.
-patch(shipment,'export function shipmentContextForEvents(',`export function freightOriginForLeg(state, leg, index = routeHistoryIndex(state)) {
+const originDeclarations=read(shipment).split('export function freightOriginForLeg(').length-1;
+assert.ok(originDeclarations<=1,'Freight origin must have one declaration');
+if(!originDeclarations)patch(shipment,'export function shipmentContextForEvents(',`export function freightOriginForLeg(state, leg, index = routeHistoryIndex(state)) {
   const pickup = routeHistoryWindow(leg, index).pickup;
   return {city:text(pickup?.city || leg.fromCity), state:text(pickup?.state || leg.fromState)};
 }

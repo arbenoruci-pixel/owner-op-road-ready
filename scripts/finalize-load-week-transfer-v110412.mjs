@@ -32,5 +32,10 @@ patch(component,"import React,", "import TransferPanel from './TransferPanelV110
 patch(component,'    {notices}',"    {!library?<TransferPanel folder={folder} week={week} folders={folders} documents={documents} allDocuments={allDocuments} businessStore={businessStore} onImported={()=>setRevision(v=>v+1)}/>:null}\n    {notices}");
 // Source activity dates only organize document folders; never create duty events.
 const engine='source/src/modules/owneros/archiveEvidenceV1103.js';
-patch(engine,'const actualDays=days.length?days:unique(folder.documents.flatMap(doc=>doc.archiveEventDays || [])).sort();',"const actualDays=days.length?days:unique([...folder.documents.flatMap(doc=>doc.archiveEventDays || []),...(load.documentTransferDays || []).filter(day)]).sort();");
+const archiveSource=fs.readFileSync(engine,'utf8');
+// The tracked archive template can already contain the later v110416 guard.
+// Keep that exact, stricter transfer-date handling when rebuilding from scratch.
+const guardedTransfer=archiveSource.includes('const transferred=(load.documentTransferDays || []).filter(day).filter(date=>')
+ &&archiveSource.includes('const actualDays=days.length?days:unique([...folder.documents.flatMap(doc=>doc.archiveEventDays || []),...transferred]).sort();');
+if(!guardedTransfer)patch(engine,'const actualDays=days.length?days:unique(folder.documents.flatMap(doc=>doc.archiveEventDays || [])).sort();',"const actualDays=days.length?days:unique([...folder.documents.flatMap(doc=>doc.archiveEventDays || []),...(load.documentTransferDays || []).filter(day)]).sort();");
 console.log('PASS — 110.4.12 load and week transfer installed');

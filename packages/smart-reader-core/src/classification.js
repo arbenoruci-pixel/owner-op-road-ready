@@ -65,6 +65,25 @@ function damagedShortBolEvidence(lines){
   return {method:'noisy_heading',lines:[title,...(tail?[tail]:[]),notice,from,to]};
 }
 
+function shortFormColumnEvidence(lines){
+  // This complete printed form can use a bare TO opposite FROM: SHIPPER.
+  // STRIAGHT is a bounded adjacent-letter OCR swap in this title only.
+  const title=lines.find((line,index)=>(line.box?line.box.y<.3:index<20)
+    &&/^(?:STRAIGHT|STRIAGHT)\s+BILL\s+OF\s+LADING\s*[-–—:]\s*SHORT\s+FORM(?:\s+ORIGINAL\s*[-–—:]\s*NOT\s+NEGOTIABLE)?\s*$/i.test(view(line)));
+  if(!title)return null;
+  const patterns=[/^FROM\s*:\s*SHIPPER\s*$/i,/^TO\s*:?\s*$/i,/^CARRIER\s*:\s*\S/i,
+    /^ORIGIN\s*[-–—:]\s*CITY\s*,\s*STATE\s*,\s*ZIP\s*$/i,/^DESTINATION\s*:?\s*$/i,
+    /^KIND\s+OF\s+PACKAGING\b.*\bDESCRIPTION\s+OF\s+ARTICLES\b/i];
+  const support=patterns.map(pattern=>lines.find(line=>pattern.test(view(line))));
+  if(support.some(line=>!line))return null;
+  const notice=/\bORIGINAL\s*[-–—:]\s*NOT\s+NEGOTIABLE\b/i.test(view(title))?title
+    :lines.find(line=>/^ORIGINAL\s*[-–—:]\s*NOT\s+NEGOTIABLE\s*$/i.test(view(line)));
+  if(!notice)return null;
+  const [from,to]=support;
+  if(from.box&&to.box&&(Math.abs(from.box.y-to.box.y)>.025||Math.abs(from.box.x-to.box.x)<.3))return null;
+  return {method:'noisy_heading',lines:[...new Set([title,notice,...support])]};
+}
+
 // Every vote retains the original lines, including OCR noise and punctuation.
 export function profileEvidence(lines,profile,{lineIndices}={}){
   if(profile.deliveryBase){
@@ -83,7 +102,7 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
     if(support)return {method:support.every(line=>line.confidence==null||line.confidence>=.8)?'fuel_transaction':'weak_fuel_transaction',lines:support};
   }
   if(profile.id==='bol'&&!lineIndices){
-    const support=damagedShortBolEvidence(lines);
+    const support=damagedShortBolEvidence(lines)||shortFormColumnEvidence(lines);
     if(support)return support;
   }
   for(const variant of profile.variants||[]){

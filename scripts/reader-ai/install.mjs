@@ -48,7 +48,10 @@ export function installAiReader(){
     const evidence=sources[sourceImageId]?{pageId:page.id,pageNumber:page.number,sourceImageId}:sourceFor(group);
     setSelection(value=>({...value,evidence}));
   }`);
-  patch(preview,'  function steps(current=result,seen=new Set()){',`  function checkAiFieldSuggestion(candidate){
+  const fieldReviewAnchor=fs.readFileSync(preview,'utf8').includes('  function steps(current=result,seen=new Set()){')
+    ? '  function steps(current=result,seen=new Set()){'
+    : '  function openItem(item,current=result,continuing=false){';
+  patch(preview,fieldReviewAnchor,`  function checkAiFieldSuggestion(candidate){
     const group=result.documents.find(item=>item.id===candidate.groupId),field=group?.fields[candidate.field];
     const source=candidate.provenance?.providerImage;
     if(!field || field.status==='confirmed' || !source || !group.pageIds.includes(source.pageId) || !sources[source.sourceImageId])return;
@@ -56,7 +59,7 @@ export function installAiReader(){
     // Manual source confirmation, never an injected OCR candidate.
     setSelection(value=>({...value,candidate:null,evidence:{pageId:source.pageId,pageNumber:source.pageNumber,sourceImageId:source.sourceImageId,boxScope:'page'},aiCandidate:true}));
   }
-  function steps(current=result,seen=new Set()){`);
+${fieldReviewAnchor}`);
   patch(preview,'      <details><summary>Read page text</summary>{group.pageIds.map(id=>{',`      <AiExtractionReview analysis={analysis} result={result} group={group} sources={sources} signal={signal} disabled={busy||saving||modalOpen} onStage={stage=>update({...result,aiExtraction:stage})} onCandidate={checkAiFieldSuggestion}/>
       <details><summary>Read page text</summary>{group.pageIds.map(id=>{`);
   patch(preview,'      {rereadText?<p role="status">{rereadText}</p>:null}',`      {selection.aiCandidate?<p>AI suggested this value. Check the original page before confirming. No field has been changed yet.</p>:null}
