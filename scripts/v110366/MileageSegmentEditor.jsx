@@ -3,6 +3,8 @@ import { estimatedRoadMiles, pointFromLogLocation, recalcMilesByTimeWindow } fro
 import { durLabel, timeLabel } from '../../shared/utils/time.js';
 
 const TIME_GUIDE_MPH = 62;
+// Sanity check for automatic suggestions, not a limit on driver-entered miles.
+const MAX_ESTIMATE_MPH = 85;
 
 const KNOWN_TRUCK_ROUTES = {
   'CHICAGO, IL|ELGIN, IL': 52,
@@ -22,10 +24,6 @@ function samePlace(a, b) {
 
 function routeKey(a, b) {
   return `${a.label.toUpperCase()}|${b.label.toUpperCase()}`;
-}
-
-function operationalAnchor(event = {}) {
-  return event.status === 'ON' && /pickup|loading|hook|drop|delivery|unloading|pre[- ]?trip|inspection/i.test(`${event.note || ''} ${event.description || ''}`);
 }
 
 function drivingMinutes(events = []) {
@@ -48,18 +46,25 @@ function gpsMilesForSegment(gpsPoints = [], startMin, endMin) {
 }
 
 function estimateSegmentMiles(segment, routeLegs, gpsPoints) {
-  const timeGuide = () => ({ miles:Number(((drivingMinutes(segment.drivingEvents) / 60) * TIME_GUIDE_MPH).toFixed(2)), source:'driving-time guide', confidence:'Low', averageMph:TIME_GUIDE_MPH });
+  const minutes = drivingMinutes(segment.drivingEvents);
+  const timeGuide = (estimateNote = '') => ({ miles:Number(((minutes / 60) * TIME_GUIDE_MPH).toFixed(2)), source:'driving-time guide', confidence:'Low', averageMph:TIME_GUIDE_MPH, estimateNote });
+  const checkedEstimate = (miles, source, confidence) => miles > (minutes / 60) * MAX_ESTIMATE_MPH
+    ? timeGuide('Route distance does not fit the recorded driving time. Confirm the miles.')
+    : { miles:Number(miles.toFixed(2)), source, confidence };
+  // Midnight continuation copies the prior trip's origin. It does not record
+  // where the truck was at midnight, so full-route mileage is not day mileage.
+  if (segment.continuedFromPreviousDay) return timeGuide('The midnight location is unknown. Confirm the miles driven on this day.');
   // Without a recorded stop, no destination distance is known. The hours
   // provide an editable estimate, never a measured route or an invented stop.
   if (segment.continues) return timeGuide();
   const known = KNOWN_TRUCK_ROUTES[routeKey(segment.from, segment.to)];
-  if (known) return { miles:known, source:'verified truck route', confidence:'High' };
+  if (known) return checkedEstimate(known, 'verified truck route', 'High');
 
   const gps = gpsMilesForSegment(gpsPoints, segment.startMin, segment.endMin);
-  if (gps > 0) return { miles:Number(gps.toFixed(2)), source:'GPS breadcrumbs', confidence:'High' };
+  if (gps > 0) return checkedEstimate(gps, 'GPS breadcrumbs', 'High');
 
   const route = routeLegMiles(routeLegs, segment.from, segment.to);
-  if (route > 0) return { miles:Number(route.toFixed(2)), source:'load route', confidence:'High' };
+  if (route > 0) return checkedEstimate(route, 'load route', 'High');
 
   const a = pointFromLogLocation(segment.fromEvent || segment.drivingEvents[0]);
   const b = pointFromLogLocation(segment.toEvent || {});
@@ -67,7 +72,7 @@ function estimateSegmentMiles(segment, routeLegs, gpsPoints) {
   if (road > 0) {
     // Existing city-center road estimate is conservative. Midwest truck lanes in
     // real logs average about 15% above that value; keep it editable.
-    return { miles:Number((road * 1.15).toFixed(2)), source:'city route estimate', confidence:'Medium' };
+    return checkedEstimate(road * 1.15, 'city route estimate', 'Medium');
   }
 
   return timeGuide();
@@ -88,19 +93,13 @@ export function buildDailyMileageSegments(events = [], routeLegs = [], gpsPoints
     const drivingEvents = [ordered[i]];
     let endIndex = i;
 
-    // Keep a short legal break inside the same trip segment when driving resumes
-    // and no pickup/delivery/hook/drop anchor starts a new leg.
+    // Every recorded stop ends a mileage segment. Only adjacent Driving
+    // fragments share a segment, so a short rest cannot hide its location.
     while (endIndex + 1 < ordered.length) {
-      const pause = ordered[endIndex + 1];
-      const nextDrive = ordered[endIndex + 2];
-      if (pause.status === 'D' && pause.startMin === ordered[endIndex].endMin) {
-        drivingEvents.push(pause); endIndex += 1; continue;
-      }
-      const pauseMinutes = Math.max(0, Number(pause.endMin || 0) - Number(pause.startMin || 0));
-      if (!nextDrive || !['OFF', 'SB'].includes(pause.status) || pauseMinutes > 60 || nextDrive.status !== 'D' || operationalAnchor(pause)
-        || pause.startMin !== ordered[endIndex].endMin || nextDrive.startMin !== pause.endMin) break;
+      const nextDrive = ordered[endIndex + 1];
+      if (nextDrive.status !== 'D' || nextDrive.startMin !== ordered[endIndex].endMin) break;
       drivingEvents.push(nextDrive);
-      endIndex += 2;
+      endIndex += 1;
     }
 
     const firstDrive = drivingEvents[0];
@@ -110,7 +109,9 @@ export function buildDailyMileageSegments(events = [], routeLegs = [], gpsPoints
     const next = ordered[endIndex + 1];
     const after = next && next.status !== 'D' && next.startMin === drivingEvents.at(-1).endMin ? next : null;
 
-    const from = place(before);
+    const continuedFromPreviousDay = Boolean(firstDrive.crossMidnightContinuation || firstDrive.crossMidnightFromDay
+      || firstDrive.source === 'manual_drive_midnight_continuation');
+    const from = continuedFromPreviousDay ? {city:'',state:'',label:'Continued from previous day'} : place(before);
     const to = after ? place(after) : {city:'',state:'',label:'Continues'};
     {
       const segment = {
@@ -120,6 +121,7 @@ export function buildDailyMileageSegments(events = [], routeLegs = [], gpsPoints
         fromEvent:before,
         toEvent:after,
         continues:!after,
+        continuedFromPreviousDay,
         drivingEvents,
         drivingMinutes:drivingMinutes(drivingEvents),
         startMin:Number(drivingEvents[0].startMin || 0),
@@ -192,6 +194,7 @@ function MileageDraft({ events = [], routeLegs = [], gpsPoints = [], onClose, on
                 <span className="mileage-driving-time-v110366">{timeLabel(segment.startMin)} – {segment.endMin === 1440 ? '24:00' : timeLabel(segment.endMin)} · {durLabel(segment.drivingMinutes)} driving</span>
                 <em>{segment.source} · {segment.confidence} confidence</em>
                 {segment.averageMph && <em>{durLabel(segment.drivingMinutes)} × {segment.averageMph} mph = {segment.miles.toFixed(2)} mi estimate</em>}
+                {segment.estimateNote && <em>{segment.estimateNote}</em>}
               </span>
               <span className="mileage-segment-input">
                 <input aria-label={`Miles for segment ${index + 1}`} inputMode="decimal" value={values[segment.id] ?? ''} onChange={event => setValues(current => ({ ...current, [segment.id]:event.target.value.replace(/[^0-9.]/g, '') }))} />
