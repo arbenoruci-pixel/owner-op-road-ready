@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {chromium,webkit} from 'playwright';
+import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from '../test-support/cloud-fixture.mjs';
 import {traceGeometry} from '../../source/src/modules/graph/graphGeometryV110.js';
 const origin=process.env.TEST_ORIGIN||'http://127.0.0.1:3000';
 const output='browser-test-results/driving-day-v110372';fs.mkdirSync(output,{recursive:true});
@@ -25,10 +26,14 @@ function fixture(kind) {
 async function stored(page){return page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,q=db.transaction('app_snapshots').objectStore('app_snapshots').get('owner-op-road-ready-state-v1');q.onsuccess=()=>{db.close();resolve(q.result?.state);};q.onerror=()=>reject(q.error);};}));}
 async function openLog(page){await page.locator('.drive-mode-log-btn, .logbook-ui-v110 .log-graph-v110').first().waitFor({timeout:30000});if(await page.locator('.drive-mode-log-btn').isVisible())await page.locator('.drive-mode-log-btn').click();await page.locator('.logbook-ui-v110 .log-graph-v110').waitFor();}
 async function setup(page,context,state) {
+ // This local graph fixture predates device-session ownership. Use the shared
+ // synthetic account gate while keeping all unknown external requests blocked.
+ await installLocalAccountSettings(context,user);
  await context.route('**/*',async route=>{
   const url=new URL(route.request().url());
   if(url.origin===origin){if(url.pathname.startsWith('/api/'))return route.fulfill({json:{},status:200});assert.equal(route.request().method(),'GET');return route.continue();}
-  const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
+  if(await fulfillLocalAccountSettings(route,origin,user))return;
+  const headers=await fixtureCorsHeaders(route.request(),origin);
   if(route.request().method()==='OPTIONS')return route.fulfill({body:'',headers});
   if(url.pathname.endsWith('/rpc/owner_op_access_v1'))return route.fulfill({json:{approved:true},headers});
   if(url.pathname.endsWith('/rpc/owner_op_migration_status_v1'))return route.fulfill({body:'null',contentType:'application/json',headers});

@@ -48,6 +48,23 @@ function noisyTitle(line,profile){
   return !!prefix&&!/^(?:no|do|to|of|by|in|on|an|as|at|if|is|or|be|we|my)$/i.test(prefix[1])&&profile.heading.test(text.slice(prefix[0].length));
 }
 
+function damagedShortBolEvidence(lines){
+  // Some short forms split the final G in LADING into the next OCR line,
+  // while others drop it. Repair only this complete title shape, supported
+  // by the non-negotiability notice and independent shipping roles. Never
+  // use a mention in prose or pool partial form structure across reads.
+  const titleIndex=lines.findIndex((line,index)=>(line.box?line.box.y<.3:index<20)
+    &&/^(?:(?:UNIFORM|ALTERNATE)\s+)?(?:STRAIGHT\s+)?BILL\s+OF\s+LADIN(?:\s+G\s*[-–—:]\s*SHORT\s+FORM)?\s*$/i.test(view(line)));
+  if(titleIndex<0)return null;
+  const title=lines[titleIndex],next=lines[titleIndex+1];
+  const tail=next&&/^G\s*[-–—:]\s*SHORT\s+FORM\s*$/i.test(view(next))?next:null;
+  const notice=lines.find(line=>/^ORIGINAL\s*[-–—:]?\s*NOT\s+NEGOTIABLE\s*$/i.test(view(line)));
+  const from=lines.find(line=>/^(?:FROM\s+SHIPPER|SHIP\s*FROM|SHIPPER)(?=\s*:|\s*$)/i.test(view(line)));
+  const to=lines.find(line=>/^(?:TO\s+CONSIGNEE|SHIP\s*TO|CONSIGNEE|CONSIGNED\s+TO)(?=\s*:|\s*$)/i.test(view(line)));
+  if(!notice||!from||!to)return null;
+  return {method:'noisy_heading',lines:[title,...(tail?[tail]:[]),notice,from,to]};
+}
+
 // Every vote retains the original lines, including OCR noise and punctuation.
 export function profileEvidence(lines,profile,{lineIndices}={}){
   if(profile.deliveryBase){
@@ -64,6 +81,10 @@ export function profileEvidence(lines,profile,{lineIndices}={}){
   if(profile.id==='fuel_receipt'){
     const support=fuelReceiptEvidence(lines);
     if(support)return {method:support.every(line=>line.confidence==null||line.confidence>=.8)?'fuel_transaction':'weak_fuel_transaction',lines:support};
+  }
+  if(profile.id==='bol'&&!lineIndices){
+    const support=damagedShortBolEvidence(lines);
+    if(support)return support;
   }
   for(const variant of profile.variants||[]){
     if(variant.sameObservation&&lineIndices)continue;

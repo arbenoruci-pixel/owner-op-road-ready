@@ -191,6 +191,14 @@ export function truckingProfiles(base){
   profiles.find(p=>p.id==='fuel_receipt').structuralSignals=[sig('DIESEL|ULSD|FUEL TYPE'),sig('GALLONS|GAL'),totalSignal,sig('PAID|PAYMENT|CARD|TRANSACTION')];
   profiles.find(p=>p.id==='other_expense').structuralSignals=[sig('SUBTOTAL'),totalSignal,sig('PAYMENT METHOD|CARD TYPE|PAID|CASH|CHANGE')];
   profiles.find(p=>p.id==='other_expense').fallback=true;
+  const agreement=profiles.find(p=>p.id==='carrier_agreement');
+  agreement.distinctSignals=true;
+  for(const role of ['broker','carrier']){
+    agreement.fields[role].agreementParty=role;
+    // A company label establishes a party. Agreement prose and signature
+    // labels beginning with BROKER/CARRIER do not name a legal entity.
+    agreement.fields[role].pattern=re(`^\\s*${role}(?:\\s+(?:NAME|COMPANY(?:\\s+NAME)?))?\\s*:\\s*(.+?)\\s*$`,'id');
+  }
   profiles.find(p=>p.id==='signing_certificate').variants=[{method:'sertifi_signature',
     heading:/^\s*E-Signed\s*:(?:\s*\d{1,2}\/\d{1,2}\/\d{4}\b.*)?\s*$/i,
     signals:[/^\s*Sertifi Electronic Signature\s*$/i,/^\s*DOC\s*ID\s*:\s*\d{8,}\s*$/i]}];

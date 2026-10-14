@@ -23,23 +23,42 @@ function linkedRateCertificates(result,doc){
     &&other.fields.documentReference?.status==='supported'&&other.fields.documentReference.value===refs[0].value);
 }
 
+const sourceKinds={load_invoice:'invoice',lumper_receipt:'unloading_receipt'};
+const sourceKeys={invoiceNumber:'invoiceNo',receiptNumber:'receiptNo',bolNumber:'bolNo',loadNumber:'loadNo',trailerNumber:'trailerNo',carrier:'carrierName',vendor:'vendor',merchant:'merchant',date:'documentDate',invoiceDate:'documentDate',receiptDate:'documentDate',unitNumber:'unitNumber'};
+
+function genericFieldMapping(sourceFields,selectedType){
+  const fields=sourceFields||{};
+  const mapped=Object.fromEntries(Object.keys(fields).map(key=>[sourceKeys[key]||key,key]));
+  // Expense writers consume merchant first, then vendor. Keep those equivalent
+  // legacy slots on the same source reading, including clearing stale guesses
+  // when that reading is missing or disputed. Never touch unrelated fields.
+  if(fields.merchant&&!fields.vendor)mapped.vendor='merchant';
+  if(fields.vendor&&!fields.merchant)mapped.merchant='vendor';
+  if(selectedType==='fuel_receipt'&&fields.merchant)mapped.fuelProvider='merchant';
+  if(fields.unitNumber)mapped.truckNumber='unitNumber';
+  const dateKey=Object.keys(fields).find(key=>sourceKeys[key]==='documentDate');
+  if(dateKey)mapped.date=dateKey;
+  return mapped;
+}
+
 // Derive the filing display from this exact scan's current source review.
 // The raw analysis and review stay immutable; load assignment and duty links
 // remain the driver's choices. Source support never means automatic filing.
 export function scanWithSourceFields(analysis,review,selectedType){
-  if(!analysis||review?.analysis!==analysis||!['bol','pod','rate_confirmation','delivery_order'].includes(selectedType))return analysis;
+  if(!analysis||review?.analysis!==analysis||!selectedType)return analysis;
   const result=review.result,doc=result?.documents?.[0];
-  if(result?.engine!=='owned-smart-reader'||(result.documents.length!==1&&!linkedRateCertificates(result,doc))||doc.kind!==selectedType
+  if(result?.engine!=='owned-smart-reader'||(result.documents.length!==1&&!linkedRateCertificates(result,doc))||![selectedType,sourceKinds[selectedType]].includes(doc?.kind)
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
   const rate=selectedType==='rate_confirmation';
   if(rate&&!result.pages.some(page=>page.observations.some(o=>(isNumberedRateTable(o.lines)||hasRateStructure(o.lines)))))return analysis;
-  const delivery=selectedType==='delivery_order';
-  const fieldMapping=delivery?{loadNo:'loadNumber',poNumber:'poNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',documentDate:'date'}:rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',broker:'broker',carrierName:'carrier',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress',origin:'pickupCity',destination:'deliveryCity'}:mapping;
+  const delivery=selectedType==='delivery_order',shipping=['bol','pod'].includes(selectedType);
+  const genericMapping=genericFieldMapping(doc.fields,selectedType);
+  const fieldMapping=delivery?{loadNo:'loadNumber',poNumber:'poNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',documentDate:'date'}:rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',broker:'broker',carrierName:'carrier',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress',origin:'pickupCity',destination:'deliveryCity'}:shipping?mapping:genericMapping;
   const fields={...analysis.fields},fieldEvidence={...analysis.fieldEvidence},fieldConfidence={...analysis.fieldConfidence};
   const oldReview=analysis.evidenceReviewV11036||{},evidence={...oldReview.evidence},accepted=[],proofs={},savedWarnings=[];
   for(const [key,ownedKey]of Object.entries(fieldMapping)){
     const field=doc.fields[ownedKey];if(!field)continue;
-    const alias=rate?null:aliases[key],replaceAlias=alias&&fields[alias]===fields[key];
+    const alias=rate||!shipping?null:aliases[key],replaceAlias=alias&&fields[alias]===fields[key];
     if(replaceAlias){delete fields[alias];delete fieldEvidence[alias];delete fieldConfidence[alias];delete evidence[alias];}
     delete fields[key];delete fieldEvidence[key];delete fieldConfidence[key];delete evidence[key];
     if(key==='weight'){delete fields.weightUnit;delete fieldEvidence.weightUnit;delete evidence.weightUnit;}
@@ -68,7 +87,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
   const issues=(oldReview.issues||[]).filter(issue=>!(issue===bolWarning&&accepted.includes('bolNo')
     ||issue===dateWarning&&accepted.includes('documentDate')||issue===payWarning&&rate&&accepted.includes('gross')
     ||issue===layoutWarning&&analysis.layoutGuardV110337&&!removed.length));
-  if(!rate&&!delivery&&!fields.bolNo&&!issues.includes(bolWarning))issues.push(bolWarning);
+  if(shipping&&!fields.bolNo&&!issues.includes(bolWarning))issues.push(bolWarning);
   for(const warning of savedWarnings)if(!issues.includes(warning))issues.push(warning);
   return {...analysis,fields,fieldEvidence,fieldConfidence,needsReview:true,routing:{...analysis.routing,autoFile:false},
     ...(analysis.layoutGuardV110337?{layoutGuardV110337:{...analysis.layoutGuardV110337,removedFields:removed}}:{}),

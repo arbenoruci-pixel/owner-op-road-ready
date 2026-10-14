@@ -107,3 +107,20 @@ control characters, intervening labels, overlapping cells and other observations
 remain boundaries. Separate completion-certificate columns preserve their own
 reference/date evidence and require aligned headers and values. Geometry adds
 review proposals; it does not verify an uncertain value or infer a weight unit.
+
+### Damaged short-form titles and agreement parties
+
+An OCR title ending in `BILL OF LADIN`, including a detached `G-SHORT FORM`,
+can propose a BOL only when that same observation has the explicit
+`ORIGINAL-NOT NEGOTIABLE` notice and both shipping-party labels. This bounded
+repair keeps the original title and context as evidence and requires review.
+`FROM SHIPPER` and `TO CONSIGNEE` are party labels, not company-name prefixes.
+Rate-confirmation instructions mentioning a BOL do not establish a second type;
+genuinely competing document headings still require boundary review.
+
+Broker-carrier agreements keep broker and carrier company rows separate when
+an explicit role is followed immediately by a labeled company name in the same
+observation and, if positioned, the same column. Weak role evidence remains
+unresolved. An unlabeled signer or company does not establish a broker identity,
+and OCR text does not verify a signature. BOL, load and PO references retain
+their distinct roles; ambiguous dates and unlabelled routes are never guessed.

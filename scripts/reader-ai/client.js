@@ -1,4 +1,6 @@
 import {createAiFallback} from '../../../../lib/reader-ai/fallback.js';
+import {createAiExtraction} from '../../../../lib/reader-ai/extract.js';
+import {AI_READER_LIMITS} from '../../../../lib/reader-ai/diagnostics.js';
 import {reviewScanAnalysis} from './ownedReaderAdapter.js';
 import {retainedReviewPageSources} from './readerPageSourcesV110373.js';
 import {decodeImageFileV3,imageDataToFileV3} from './v3/imageUtilsV3.js';
@@ -28,10 +30,10 @@ export function aiPageSources(analysis,file,options={}){
 
 export async function prepareAiPage(file,signal){
   if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
-  const pixels=await decodeImageFileV3(file,{maxDimension:1800});
+  const pixels=await decodeImageFileV3(file,{maxDimension:AI_READER_LIMITS.maxImageDimension});
   const image=await imageDataToFileV3(pixels,'document-ai-page.jpg',.85);
   if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
-  if(image.size>2_000_000)throw new Error('page_too_large');
+  if(image.size>AI_READER_LIMITS.maxImageBytes)throw new Error('page_too_large');
   return new Promise((resolve,reject)=>{
     const reader=new FileReader(),abort=()=>reader.abort(),cleanup=()=>signal?.removeEventListener('abort',abort);
     reader.onload=()=>{cleanup();resolve(reader.result);};
@@ -47,4 +49,10 @@ export const assistDocumentClassification = createAiFallback({
   // after the server confirms that AI assistance is enabled.
   session:signal=>withAbort(import('../../../../lib/owner-op-cloud/client.js').then(({cloudSession})=>cloudSession()),signal),prepare:prepareAiPage,
   online:()=>typeof navigator!=='undefined'&&navigator.onLine!==false,
+});
+
+// Explicit, review-only field extraction uses the same endpoint and session.
+export const extractDocumentFields = createAiExtraction({
+  session:signal=>withAbort(import('../../../../lib/owner-op-cloud/client.js').then(({cloudSession})=>cloudSession()),signal),
+  prepare:prepareAiPage,online:()=>typeof navigator!=='undefined'&&navigator.onLine!==false,
 });

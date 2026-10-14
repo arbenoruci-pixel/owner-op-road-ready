@@ -42,7 +42,9 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
-      - name: Exact production build and behavioral contracts
+      - name: Production materialization and behavioral contracts (offline)
+        env:
+          READER_OFFLINE_BUILD: 1
         run: |
           set -o pipefail
           node scripts/build-v110.mjs 2>&1 | tee /tmp/owned-reader-build.log
@@ -68,6 +70,7 @@ jobs:
           node scripts/browser-fullscreen-reader-v110369.mjs
           node scripts/browser-saved-documents-v110344.mjs
           node scripts/reader-ai/browser.mjs
+          node scripts/reader-ai/browser-extraction.mjs
           node scripts/v110411/browser-filing.mjs
           node scripts/v110411/browser-rate.mjs
           node scripts/v110466/browser-rate.mjs
@@ -106,6 +109,7 @@ jobs:
             browser-test-results/smart-rate-v110464/
             browser-test-results/signed-rate-v110466/
             browser-test-results/ai-reader/
+            browser-test-results/ai-extraction/
             browser-test-results/ratecon-structure-v110388/
             browser-test-results/scanner-capture-v110329/
             browser-test-results/scanner-workflow-v110328/

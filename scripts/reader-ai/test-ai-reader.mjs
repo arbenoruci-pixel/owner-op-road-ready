@@ -5,6 +5,8 @@ import {readDocument,textObservation} from '../../packages/smart-reader-core/src
 import {clippedPod,soldToPacking,viaPacking} from '../../packages/smart-reader-core/test/local-first-fixture.mjs';
 import {croppedPackingObservation} from '../../packages/smart-reader-core/test/cropped-forms-fixture.mjs';
 import {aiClassificationReason,validateAiClassification,AI_READER_VERSION} from '../../lib/reader-ai/policy.js';
+import {AI_EXTRACTION_VERSION,AI_EXTRACTION_LIMITS} from '../../lib/reader-ai/extraction.js';
+import {AI_READER_LIMITS} from '../../lib/reader-ai/diagnostics.js';
 import {createAiFallback} from '../../lib/reader-ai/fallback.js';
 import {confirmReviewedKind} from '../../lib/reader-ai/confirm.js';
 import {authorizeReader,createAiReaderHandlers} from '../../lib/reader-ai/server.js';
@@ -18,6 +20,11 @@ const request=(data=body(),headers={})=>new Request('https://app.test/api/reader
 const completion=(value=pod())=>Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(value)}}]});
 const user={id:'user-a',email_confirmed_at:'2026-09-21'};
 const identify=analysis=>readDocument({documentId:'test',pages:analysis.pageTexts.map((text,i)=>({id:'page-'+(i+1),number:i+1,observations:[textObservation(text)]}))});
+function assertSkipped(result,original,reason='supported_local_type'){
+  const {aiClassification,aiExtraction,aiSourcePages,...local}=result;
+  assert.deepEqual(local,original);assert.equal(aiClassification.state,'skipped');assert.equal(aiClassification.reason,reason);
+  assert.equal(aiClassification.attemptedPageCount,0);assert.equal(aiExtraction.reason,'not_requested');assert.deepEqual(aiSourcePages,[]);
+}
 const bol='BILL OF LADING\nBOL No: B-1234\nSHIP FROM: Mill\nSHIP TO: Market\nWeight: 1200 LB';
 const rate='RATE CONFIRMATION\nLoad No: L-1234\nCarrier: Test Trucking\nTotal Carrier Pay: $2400\nPickup Date: 2026-09-21\nDelivery Date: 2026-09-22';
 
@@ -27,7 +34,7 @@ test('clear local types skip AI; missing extraction details do not trigger it',a
   assert.equal(aiClassificationReason({kind:'bol',status:'supported'},'Receiver signature: _____'),'delivery_acknowledgement');
   const assist=createAiFallback({identify:()=>({pages:[{id:'p',number:1,observations:[]}],pageIdentities:[{pageId:'p',kind:'fuel_receipt',status:'supported'}]}),fetcher:()=>assert.fail('clear type must not use network')});
   const original={needsReview:true,fields:{documentDate:''}};
-  assert.equal(await assist(original),original);
+  assertSkipped(await assist(original),original);
 });
 
 test('POD evidence must belong to a completed receiver acknowledgement',()=>{
@@ -49,7 +56,7 @@ test('fuel and lumper require transaction evidence; certainty alone is insuffici
 
 test('disabled endpoint makes zero authentication or provider requests',async()=>{
   const handlers=createAiReaderHandlers({env:()=>({}),authorize:()=>assert.fail('disabled'),fetcher:()=>assert.fail('disabled')});
-  assert.deepEqual(await (await handlers.GET()).json(),{enabled:false,version:AI_READER_VERSION});
+  assert.deepEqual(await (await handlers.GET()).json(),{enabled:false,version:AI_READER_VERSION,model:null,limits:AI_READER_LIMITS,extraction:{enabled:false,version:AI_EXTRACTION_VERSION,reason:'explicit_request_required',limits:AI_EXTRACTION_LIMITS}});
   assert.equal((await handlers.POST(request())).status,503);
 });
 
@@ -145,7 +152,7 @@ test('fallback sends only the uncertain page and preserves clear primary type, f
 
 test('recovered local forms skip AI while uncertain delivery pages retain the fallback',async()=>{
   const clear=fallbackHarness({pageTexts:[soldToPacking,viaPacking,bol,rate]});
-  assert.equal(await clear.assist(clear.analysis),clear.analysis);
+  assertSkipped(await clear.assist(clear.analysis),clear.analysis);
   assert.equal(clear.calls.length,0);assert.equal(clear.sessionCalls.length,0);
   const h=fallbackHarness({pageTexts:[soldToPacking,clippedPod,viaPacking,bol+'\nReceiver Signature: ____']});
   const before=structuredClone(h.analysis);await h.assist(h.analysis);
@@ -174,7 +181,7 @@ test('delivery sign-out found after the OCR text cap still selects the original 
 
 test('unloading instructions and pickup signatures do not spend AI calls on clear local types',async()=>{
   const h=fallbackHarness({pageTexts:[bol+'\nDriver Signature: J. Doe\nMust be unloaded and signed out before departure',croppedPackingObservation().lines.map(l=>l.text).join('\n')]});
-  assert.equal(await h.assist(h.analysis),h.analysis);assert.equal(h.calls.length,0);assert.equal(h.sessionCalls.length,0);
+  assertSkipped(await h.assist(h.analysis),h.analysis);assert.equal(h.calls.length,0);assert.equal(h.sessionCalls.length,0);
   const disabled=fallbackHarness({pageTexts:[bol+'\nUnloaded & Signed Out: ____'],enabled:false});
   const result=await disabled.assist(disabled.analysis);
   assert.equal(result.aiClassification.pages[0].status,'not_configured');assert.equal(disabled.sessionCalls.length,0);
@@ -188,7 +195,7 @@ test('repeat scans use cache and three-page packets are covered and larger packe
 });
 
 test('manual selection, cancellation and quota errors preserve the local result',async()=>{
-  const h=fallbackHarness();assert.equal(await h.assist(h.analysis,null,{preferredType:'bol'}),h.analysis);assert.equal(h.calls.length,0);
+  const h=fallbackHarness();assertSkipped(await h.assist(h.analysis,null,{preferredType:'bol'}),h.analysis,'user_selected_type');assert.equal(h.calls.length,0);
   const controller=new AbortController();controller.abort();await assert.rejects(h.assist(h.analysis,null,{signal:controller.signal}),{name:'AbortError'});
   const failed=fallbackHarness({pageTexts:['one','two','three'],status:429});const result=await failed.assist(failed.analysis);
   assert.equal(failed.calls.filter(call=>call.method==='POST').length,1);assert.equal(result.aiClassification.pages.length,3);assert.ok(result.aiClassification.pages.every(p=>p.status==='limit_reached'));
@@ -232,6 +239,6 @@ test('source-linked native RateCon terms skip AI alongside their primary page',a
   const input=routeTableInput();if(!boxed)for(const p of input.pages)for(const o of p.observations){delete o.sourceImageId;for(const l of o.lines)delete l.box;}
   const review=readDocument(input);assert.equal(review.documents.length,1);
   const assist=createAiFallback({identify:()=>review,fetcher:()=>assert.fail('recognized primary and continuation must remain local')});
-  const original={};assert.equal(await assist(original),original);
+  const original={};assertSkipped(await assist(original),original);
  }
 });

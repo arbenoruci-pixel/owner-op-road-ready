@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {AI_EXTRACTION_VERSION,AI_EXTRACTION_LIMITS} from '../../lib/reader-ai/extraction.js';
+import {AI_READER_LIMITS} from '../../lib/reader-ai/diagnostics.js';
 import {createAiReaderHandlers} from '../../lib/reader-ai/server.js';
 const project='prj_OsMcJCe943O2dpo2Z9CMXKzRBOtX',team='team_v4qKMAbBij0rd8eZ4FC86tim';
 const image='data:image/jpeg;base64,/9j/2Q==';
@@ -10,7 +12,7 @@ const completion=()=>Response.json({choices:[{finish_reason:'stop',message:{cont
 test('runtime status activates without a build environment token or project ID and exposes no credential',async()=>{
  const runtimeToken=token(),handlers=createAiReaderHandlers({env:()=>({})});
  const status=await (await handlers.GET(request(runtimeToken))).json();
- assert.deepEqual(status,{enabled:true,version:'document-classification-v2',model:'openai/gpt-5.4-mini'});
+ assert.deepEqual(status,{enabled:true,version:'document-classification-v2',model:'openai/gpt-5.4-mini',limits:AI_READER_LIMITS,extraction:{enabled:true,version:AI_EXTRACTION_VERSION,reason:'explicit_request_required',limits:AI_EXTRACTION_LIMITS}});
  assert.equal(JSON.stringify(status).includes(runtimeToken),false);
  assert.equal((await (await handlers.GET(request())).json()).enabled,false);
 });
