@@ -1,3 +1,4 @@
+import {selectedLoadFolder} from './test-support/load-folder-browser.mjs';
 import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from './test-support/cloud-fixture.mjs';
 import assert from 'node:assert/strict';
 import {instructionPdfV110312} from './v110312/savedScanFixtureV110312.mjs';
@@ -64,7 +65,7 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
    try{const lateStore=kind==='late-store'?state.testInstructionStore:null;if(lateStore)state.testInstructionStore={loads:[],documents:[]};await seed(page,state);if(lateStore){await page.evaluate(store=>{localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify(store));window.dispatchEvent(new CustomEvent('owner-op-business-updated'));},lateStore);}
 if(kind==='legacy-original'){
  await page.getByRole('button',{name:'Continue saved scan',exact:true}).click();
- await page.getByLabel('Document type',{exact:true}).waitFor({timeout:45000});assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'load_tender');assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'76543210');
+ await page.getByLabel('Document type',{exact:true}).waitFor({timeout:45000});assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'load_tender');assert.equal(await selectedLoadFolder(page),'76543210');
  const review=page.locator('.scan-driver-check-v105 input');if(await review.count())await review.check();const risk=page.locator('.ratecon-risk-ack-v10970 input');if(await risk.count())await risk.check();
  await page.locator('.scan-save-v105').click();await page.getByRole('button',{name:'Done · Open guide',exact:true}).waitFor();
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')).documents);assert.equal(saved.length,1,'Continue updates the same document');assert.equal(saved[0].id,'test-instruction-doc');assert.ok(saved[0].instructionGuide);

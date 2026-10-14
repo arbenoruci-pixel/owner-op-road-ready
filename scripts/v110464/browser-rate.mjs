@@ -1,3 +1,4 @@
+import {selectedLoadFolder} from '../test-support/load-folder-browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -27,7 +28,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]].filter(([na
   await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
   const review=page.locator('.owned-reader-preview');await review.getByRole('heading',{name:'Rate confirmation · 1, 2',exact:true}).waitFor();
   assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
-  assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'TEST-74123');
+  assert.equal(await selectedLoadFolder(page),'TEST-74123');
   assert.equal(await page.getByLabel('Document date',{exact:true}).inputValue(),'2026-10-08');
   const [download]=await Promise.all([page.waitForEvent('download'),review.getByRole('button',{name:'Export reading review',exact:true}).click()]);
   const result=JSON.parse(fs.readFileSync(await download.path(),'utf8'));fs.writeFileSync(`${output}/${name}-review.json`,JSON.stringify(result,null,2));

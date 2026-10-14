@@ -1,3 +1,4 @@
+import {selectedLoadFolder,chooseLoadFolder} from '../test-support/load-folder-browser.mjs';
 // Local synthetic integration only. OCR, AI and every backend request are mocked.
 // Run against a materialized app with TEST_ORIGIN and PLAYWRIGHT_BROWSERS_PATH.
 import assert from 'node:assert/strict';
@@ -94,7 +95,7 @@ for(const scenario of scenarios){
     await suggestions.getByRole('button',{name:'Read missing fields with AI',exact:true}).waitFor();
     assert.equal(requests.length,0,'extraction is never automatic');
     await page.getByLabel('Document type',{exact:true}).selectOption('bol');
-    await page.getByLabel('Load folder',{exact:true}).selectOption(loadNo);
+    await chooseLoadFolder(page,loadNo);
     const before=await exportReview(page),doc=before.documents[0];
     assert.equal(doc.kind,'bol');assert.equal(doc.fields.poNumber.status,'missing');assert.equal(doc.fields.poNumber.value,null);
     assert.equal((await savedRows(page)).length,0,'reading does not save a document');
@@ -116,7 +117,7 @@ for(const scenario of scenarios){
     assert.deepEqual(proposed.documents,before.documents,'AI responses must not alter core documents');
     assert.deepEqual(proposed.pages,before.pages,'AI responses must not inject OCR or change source observations');
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
-    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),loadNo);
+    assert.equal(await selectedLoadFolder(page),loadNo);
     assert.equal((await savedRows(page)).length,0,'AI candidates must not persist a document');
     assert.equal(requests.length,scenario==='offline'?0:1,'one explicit action sends at most one page request');
     if(scenario==='confirm'){
@@ -141,7 +142,7 @@ for(const scenario of scenarios){
       assert.equal(confirmed.documents[0].fields.poNumber.value,value);assert.equal(confirmed.documents[0].fields.poNumber.status,'confirmed');
       assert.equal(confirmed.aiExtraction.candidates[0].verified,false,'human confirmation must not rewrite AI provenance as verified');
       assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
-      assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),loadNo);
+      assert.equal(await selectedLoadFolder(page),loadNo);
       const check=page.locator('.scan-driver-check-v105 input');if(await check.count())await check.check();
       await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();
       await page.locator('.scan-saved-v105').waitFor();await page.reload();

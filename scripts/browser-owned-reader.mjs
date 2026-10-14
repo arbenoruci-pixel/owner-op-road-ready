@@ -1,3 +1,4 @@
+import {selectedLoadFolder} from './test-support/load-folder-browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -87,7 +88,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     const review=page.locator('.owned-reader-preview');
     await review.getByText('1 page · 1 document',{exact:true}).waitFor();
     const calls=await page.evaluate(()=>window.__ownedReaderCalls);
-    const folder=await page.getByLabel('Load folder',{exact:true}).inputValue();
+    const folder=await selectedLoadFolder(page);
     assert.equal(await review.getByRole('button',{name:'BOL-123 · Page 1',exact:true}).count(),1,'retries are consolidated into one source choice per page');
     await review.getByRole('button',{name:'BOL-123 · Page 1',exact:true}).click();
     await review.locator('mark').getByText('BOL-123',{exact:true}).waitFor();
@@ -124,7 +125,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByLabel('Confirmed value',{exact:true}).fill('BOL-129');
     await review.getByRole('button',{name:'Confirm value',exact:true}).click();
     await review.getByText('Confirmed',{exact:true}).waitFor();
-    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),folder,'preview corrections do not assign or rename the load');
+    assert.equal(await selectedLoadFolder(page),folder,'preview corrections do not assign or rename the load');
     assert.equal(await page.evaluate(()=>window.__ownedReaderCalls),calls,'source review does not rerun OCR');
     // Closing and reopening keeps confirmations; a missing optional date is editable.
     await page.getByRole('button',{name:'Reader preview · Close',exact:true}).click();
@@ -485,7 +486,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     await review.getByRole('heading',{name:'BOL number · Page 1',exact:true}).waitFor();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
-    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'','manual type recovery does not assign a load');
+    assert.equal(await selectedLoadFolder(page),'','manual type recovery does not assign a load');
     await review.getByLabel('Confirmed value',{exact:true}).fill('MANUAL-345');
     await review.getByRole('button',{name:'Save & next',exact:true}).click();
     await review.getByRole('heading',{name:'Shipper · Page 1',exact:true}).waitFor();
@@ -584,7 +585,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
     await page.getByRole('button',{name:'Read document',exact:true}).click();
     await page.getByText(/Check that signature attachments on pages 2 belong to this document/).first().waitFor();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
-    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'');
+    assert.equal(await selectedLoadFolder(page),'');
     await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
     await review.getByText('2 pages · 2 documents',{exact:true}).waitFor();
     await review.getByRole('button',{name:'86420 · Page 1',exact:true}).click();

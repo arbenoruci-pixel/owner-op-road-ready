@@ -1,3 +1,4 @@
+import {selectedLoadFolder} from '../test-support/load-folder-browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,7 +11,7 @@ const output='browser-test-results/document-filing-v110411';fs.mkdirSync(output,
 const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);
 for(const text of numberedRateText){const page=pdf.addPage([612,842]);text.split('\n').forEach((line,i)=>page.drawText(line,{x:32,y:808-i*19,size:9,font}));}
 const buffer=Buffer.from(await pdf.save());
-for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
+for(const [name,browser]of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSERS||process.env.TEST_BROWSERS.split(',').includes(name))){
  // Match the installed-app storage model and the other saved-document suites.
  // WebKit's ephemeral context can reject File/Blob writes to IndexedDB.
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'numbered-rate-'));
@@ -26,7 +27,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
   const review=page.locator('.owned-reader-preview');
   await review.getByRole('heading',{name:'Rate confirmation · 1, 2',exact:true}).waitFor();
   assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
-  assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'24680');
+  assert.equal(await selectedLoadFolder(page),'24680');
   assert.equal(await page.getByLabel('Document date',{exact:true}).inputValue(),'2026-09-24');
   assert.ok(!(await page.getByRole('region',{name:'Document reading checks',exact:true}).innerText()).includes('Agreed carrier pay was not found'),'source-supported total removes the stale missing-pay warning');
   const [download]=await Promise.all([page.waitForEvent('download'),review.getByRole('button',{name:'Export reading review',exact:true}).click()]);
