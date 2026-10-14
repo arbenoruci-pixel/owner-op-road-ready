@@ -8,7 +8,7 @@ const date=value=>/^\d{4}-\d{2}-\d{2}$/.test(text(value))?text(value):'';
 const at=value=>{const n=typeof value==='number'?value:Date.parse(value);return Number.isFinite(n)?n:0;};
 const array=value=>Array.isArray(value)?value:[];
 const fields=['broker','carrierName','origin','destination','pickupDate','deliveryDate'];
-export function loadPickerCandidates(base=[],state={},store={}){
+export function loadPickerCandidates(base=[],state={},store={},context={}){
  const rows=new Map();
  for(const candidate of base){if(candidate?.loadNo&&!hidden(candidate.status))rows.set(no(candidate.loadNo),{...candidate,loadNo:no(candidate.loadNo)});}
  const add=(record,source)=>{
@@ -26,11 +26,12 @@ export function loadPickerCandidates(base=[],state={},store={}){
  };
  for(const load of array(store.loads))add(load,'load');
  for(const doc of array(store.documents))add({...doc,...doc.fields,...doc.extracted,canonicalLoadNo:doc.canonicalLoadNo||doc.loadNo||doc.extracted?.canonicalLoadNo||doc.extracted?.loadNo},'document');
- const activeNo=no(state.loadInfo?.loadNo||state.loadInfo?.shippingDocs);
+ const hasContext=Object.hasOwn(context,'current');
+ const activeNo=hasContext?(context.current?.identity==='load'?no(context.current.loadNo):''):no(state.loadInfo?.loadNo||state.loadInfo?.shippingDocs);
  const activeGuide=state.loadGuidesById?.[state.activeLoadGuideId];
  return [...rows.values()].map(candidate=>{
-  const complete=closed(candidate.operationalStatus)||closed(candidate.status);
-  const active=!complete&&(candidate.active===true||candidate.loadNo===activeNo||candidate.loadNo===no(activeGuide?.loadNo));
+  const complete=closed(context.statuses?.[candidate.loadNo])||closed(candidate.operationalStatus)||closed(candidate.status);
+  const active=!complete&&(candidate.loadNo===activeNo||!hasContext&&(candidate.active===true||candidate.loadNo===no(activeGuide?.loadNo)));
   return {...candidate,status:complete?'completed':'open',active,
    company:text(candidate.broker)||text(candidate.carrierName)||text(candidate.displayCompany),
    recentAt:Math.max(at(candidate.latestPickupAt),at(candidate.latestActivityAt),at(date(candidate.deliveryDate)),at(date(candidate.pickupDate)))||at(candidate.updatedAt),

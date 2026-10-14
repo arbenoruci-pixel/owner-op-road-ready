@@ -1,0 +1,9 @@
+/* Keep the light business cards independent of the global dark text theme. */
+.business-screen .business-body,.business-screen .business-summary-tile,.business-screen .business-record-card,.business-screen .business-form,.business-screen .business-empty{color:#172033}
+.business-screen .business-section-head b,.business-screen .business-summary-tile b,.business-screen .business-record-card>b,.business-screen .business-record-stats b,.business-screen .business-record-row strong,.business-screen .business-form-title b,.business-screen .business-empty b{color:#172033!important}
+.business-screen .business-record-card>p,.business-screen .business-summary-tile em,.business-screen .business-record-stats em{color:#526179}
+.business-screen .business-body input,.business-screen .business-body select,.business-screen .business-body textarea{background:#f8fafc!important;color:#172033!important;border-color:#cbd5e1!important}
+.business-screen .business-body input::placeholder,.business-screen .business-body textarea::placeholder{color:#64748b!important;opacity:1}
+.business-shipment-reference{padding:14px;margin-bottom:14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;color:#9a3412;line-height:1.5;font-size:13px}
+.business-shipment-reference b,.business-shipment-reference p{display:block;margin:0 0 4px;color:inherit!important}
+.business-operational-note{display:block;margin-top:8px;color:#526179;font-size:11px;line-height:1.5}

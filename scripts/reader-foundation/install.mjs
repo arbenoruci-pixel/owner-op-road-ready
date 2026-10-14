@@ -46,3 +46,5 @@ await import("./installReceiptProjection.mjs");
 await import("./installPodSupersession.mjs");
 
 await import('./installLoadPicker.mjs');
+
+await import('./installCurrentLoad.mjs');

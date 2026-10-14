@@ -72,6 +72,7 @@ jobs:
           node scripts/reader-ai/browser.mjs
           node scripts/reader-ai/browser-extraction.mjs
           node scripts/v110411/browser-filing.mjs
+          node scripts/reader-foundation/browser-current-load.mjs
           node scripts/v110411/browser-rate.mjs
           node scripts/v110466/browser-rate.mjs
           node scripts/v110464/browser-rate.mjs
@@ -106,6 +107,7 @@ jobs:
             browser-test-results/bol-form-v110394/
             browser-test-results/bol-columns-v110410/
             browser-test-results/document-filing-v110411/
+            browser-test-results/current-load-consistency/
             browser-test-results/smart-rate-v110464/
             browser-test-results/signed-rate-v110466/
             browser-test-results/ai-reader/
