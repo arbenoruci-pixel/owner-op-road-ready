@@ -62,3 +62,13 @@ test('source loading resolves through the latest callback, not a stale folder cl
  folder='DRIVER-NEW';latestCallbacks.current={onReady:()=>{assert.equal(folder,'DRIVER-NEW');}};finish();await sourceReady;
  assert.equal(folder,'DRIVER-NEW');
 });
+
+
+test('saved typed reading retains visible source page numbers after reopen',()=>{
+ const saved=read('source/src/modules/owneros/SavedReadingReviewV110345.jsx');
+ assert.ok(saved.includes("snapshot.pages.filter(page=>group.pageIds?.includes(page.id)).map(page=>page.number).join(', ')"));
+ const snapshot={pages:[{id:'p-one',number:1},{id:'p-three',number:3}]};
+ const group={pageIds:['p-three']};
+ const expression=saved.match(/snapshot\.pages\.filter\(page=>group\.pageIds\?\.includes\(page\.id\)\)\.map\(page=>page\.number\)\.join\(', '\)/)?.[0];
+ assert.equal(vm.runInNewContext(expression,{snapshot,group}),'3');
+});
