@@ -14,6 +14,7 @@ function fieldProjection(result, group, field) {
     value: candidate.value ?? null, rawValue: candidate.rawValue ?? null,
     issue: candidate.issue || null,
     evidence: list(candidate.evidence).filter(evidenceValid).map(copy),
+    labelEvidence: list(candidate.labelEvidence).filter(evidenceValid).map(copy),
     continuationEvidence: list(candidate.continuationEvidence).filter(evidenceValid).map(copy),
   })).filter(candidate => candidate.evidence.length);
   const sourcePage = field.correction?.sourcePage;
@@ -28,6 +29,39 @@ function fieldProjection(result, group, field) {
     value, candidates, issues:list(field.issues),
     ...(confirmed ? {confirmation:{...(sourcePageValid ? {sourcePage:copy(sourcePage)} : {}), ...(correctionEvidence && evidenceValid(correctionEvidence) ? {evidence:copy(correctionEvidence)} : {})}} : {}),
   };
+}
+
+function pendingReason(field, candidate) {
+  const issues = [candidate.issue, ...list(field.issues)];
+  if (issues.includes('conflicting_reads')) return 'Different readings were found. Check which one matches the original.';
+  if (issues.includes('short_date_requires_review')) return 'Confirm the full year and month/day order on the original.';
+  if (issues.some(issue => ['ambiguous_date', 'unrecognized_date', 'invalid_date'].includes(issue))) return 'Confirm the complete date and month/day order on the original.';
+  if (issues.includes('weight_unit_required')) return 'Confirm the weight unit on the original.';
+  if (issues.includes('layout_needs_review')) return 'Check that this reading belongs to the correct label on the original.';
+  if (issues.includes('weak_recognition')) return 'The text was unclear. Check the reading against the original.';
+  return 'Check the reading against the original.';
+}
+
+// Display-only pending readings. They never become field.value, a form default,
+// a confirmation, or a load assignment. Keep packet groups and conflicting
+// alternatives separate, and show the raw reading when normalization is unsure.
+export function pendingAnalysisGroups(snapshot) {
+  if (snapshot?.version !== READER_ANALYSIS_VERSION) return [];
+  const pages = list(snapshot.pages);
+  return list(snapshot.groups).filter(group => ['bol', 'pod', 'rate_confirmation'].includes(group?.kind)).map(group => {
+    const pageIds = list(group.pageIds);
+    const fields = Object.entries(group.fields || {}).filter(([, field]) => field?.status === 'needs_review').map(([key, field]) => {
+      const candidates = list(field.candidates).map(candidate => {
+        const evidence = list(candidate?.evidence).filter(ref => ref && pageIds.includes(ref.pageId)
+          && pages.some(page => page?.id === ref.pageId) && validText(ref.quote));
+        const text = validText(candidate?.rawValue) ? candidate.rawValue : validText(candidate?.value) ? candidate.value : null;
+        return {text, pageNumbers: [...new Set(evidence.map(ref => pages.find(page => page.id === ref.pageId).number))],
+          reason: pendingReason(field, candidate || {})};
+      }).filter(candidate => candidate.text !== null && candidate.pageNumbers.length);
+      return {key, label: field.label || key, candidates};
+    }).filter(field => field.candidates.length);
+    return {id: group.id, label: group.label || group.kind, fields};
+  }).filter(group => group.fields.length);
 }
 
 // One serializable snapshot for preview, explicit save, exports and reopen.

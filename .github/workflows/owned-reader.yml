@@ -64,8 +64,11 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
-          # Check document navigation and saved originals first so a failure produces
-          # diagnostics immediately. The complete suite still gates success.
+          # Run the repaired pending-reading flow before unrelated browser suites.
+          # Cancel, explicit confirmation and saved reload must pass in Chromium.
+          node scripts/reader-foundation/browser-pending-readings.mjs
+          # Check document navigation and saved originals next for early diagnostics.
+          # The complete suite still gates success.
           node scripts/v110404/browser.mjs
           node scripts/browser-fullscreen-reader-v110369.mjs
           node scripts/browser-saved-documents-v110344.mjs
@@ -108,6 +111,7 @@ jobs:
             browser-test-results/bol-columns-v110410/
             browser-test-results/document-filing-v110411/
             browser-test-results/current-load-consistency/
+            browser-test-results/pending-reader/
             browser-test-results/smart-rate-v110464/
             browser-test-results/signed-rate-v110466/
             browser-test-results/ai-reader/

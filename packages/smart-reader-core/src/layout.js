@@ -87,6 +87,10 @@ export function fieldMatches(lines,spec){
         }
       }
       const first=eligible[0];
+      // A neighboring table heading is not a weight reading. Numeric OCR
+      // fragments remain visible for review; words such as CHARGES do not.
+      const firstValue=first?first.text.slice(...(valueRange(first)||[0,first.text.length])):'';
+      if(spec.kind==='shipping_weight'&&first&&!/^\s*\d/.test(firstValue))continue;
       if(first){const range=valueRange(first);if(range&&range[1]>range[0]&&!(spec.kind==='party'&&isStreetAddress(first.text))){const token=spec.valuePattern?.exec(first.text.slice(range[0],range[1]));
         if(spec.kind==='shipping_weight'&&/^(?:COMMODITY\s+DESCRIPTION|DESCRIPTION|QTY|QUANTITY|UNIT\s+WEIGHT|TOTAL\s+WEIGHT|NET\s+WEIGHT|TARE\s+WEIGHT)\s*$/i.test(first.text.trim()))continue;
         const receiptRow=spec.receiptRow&&right.length===1&&measurementRow(label,first.box);

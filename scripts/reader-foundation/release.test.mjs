@@ -44,7 +44,7 @@ test('release synchronizes all materialized metadata without modifying sync or a
   assert.equal(JSON.parse(read(path.join(root,'package-lock.json'))).packages[''].version,VERSION);
   const oldLocks=JSON.parse(before.get('module-locks.v1.json')),locks=JSON.parse(read(path.join(root,'module-locks.v1.json')));
   assert.equal(locks.release,VERSION);assert.deepEqual({...locks,release:oldLocks.release},oldLocks);
-  const normalize=text=>text.replaceAll('110.4.70','RELEASE').replaceAll('110.4.72','RELEASE').replaceAll(VERSION,'RELEASE');
+  const normalize=text=>text.replaceAll('110.4.70','RELEASE').replaceAll('110.4.72','RELEASE').replaceAll('110.4.73','RELEASE').replaceAll(VERSION,'RELEASE');
   for(const file of ['lib/owner-op-cloud/cloudMirrorV110450.js','lib/owner-op-cloud/recordSyncV110451.js']){
     assert.equal(normalize(read(path.join(root,file))),normalize(before.get(file)),'Only diagnostic release stamps may change: '+file);
   }
@@ -54,6 +54,41 @@ test('release synchronizes all materialized metadata without modifying sync or a
     assert.ok(!read(path.join(root,file)).includes('v110470-single-device-ipad'),file);
   }
   assert.ok(read(path.join(root,'source/src/shared/ui/ToolsSheet.jsx')).includes('Log Tools · v{CURRENT_APP_VERSION}'));
+});
+
+// Model each supported predecessor from the materialized runtime. A clean
+// production build reaches .70; already-installed Reader releases reach .72/.73.
+for(const [version,build] of [
+  ['110.4.70','v110470-single-device-ipad'],
+  ['110.4.72',`v110472-load-picker-pod-${OTHER_SHA.slice(0,12)}`],
+  ['110.4.73',`v110473-current-load-consistency-${OTHER_SHA.slice(0,12)}`],
+])test(`release upgrades ${version} without forcing an update and remains idempotent`,t=>{
+  const root=fixture(t),previous=JSON.parse(read(path.join(root,'release-version.json')));
+  for(const file of RELEASE_FILES){
+    const target=path.join(root,file);
+    fs.writeFileSync(target,read(target).replaceAll(previous.build,build).replaceAll(previous.version,version));
+  }
+  for(const file of ['release-version.json','public/app-version.json']){
+    const target=path.join(root,file),value=JSON.parse(read(target));
+    value.force=true;value.sourceCommit=OTHER_SHA;
+    value.releasedAt='2026-10-13T04:00:00.000Z';value.updatedAt=value.releasedAt;
+    fs.writeFileSync(target,JSON.stringify(value,null,2)+'\n');
+  }
+  const metadata=applyReaderRelease({root,env:{VERCEL_GIT_COMMIT_SHA:SHA},now:new Date('2026-10-14T04:00:00Z')});
+  assert.equal(metadata.version,VERSION);assert.equal(metadata.force,false);
+  assert.equal(metadata.build,`${BUILD_PREFIX}-${SHA.slice(0,12)}`);
+  assert.equal(metadata.releasedAt,'2026-10-14T04:00:00.000Z');
+  for(const file of ['release-version.json','public/app-version.json','package.json','package-lock.json']){
+    assert.equal(JSON.parse(read(path.join(root,file))).version,VERSION,file);
+  }
+  assert.ok(read(path.join(root,'source/src/core/update/appUpdate.js')).includes(`const FALLBACK_APP_VERSION = '${VERSION}';`));
+  assert.ok(read(path.join(root,'source/src/core/update/appUpdate.js')).includes(metadata.build));
+  assert.ok(read(path.join(root,'public/sw.js')).includes(`const OWNER_OP_SW_VERSION = '${VERSION}';`));
+  assert.ok(read(path.join(root,'public/sw.js')).includes(metadata.build));
+  assert.ok(read(path.join(root,'source/src/modules/home/HomeScreen.jsx')).includes(`v${VERSION}</footer>`));
+  const released=contents(root);
+  applyReaderRelease({root,env:{VERCEL_GIT_COMMIT_SHA:SHA},now:new Date('2026-10-15T04:00:00Z')});
+  assert.deepEqual(contents(root),released);
 });
 
 test('release reruns are idempotent and a different commit receives a distinct build identity',t=>{
@@ -71,6 +106,24 @@ test('unmaterialized or inconsistent release input is rejected before writes',t=
   const before=contents(root);
   assert.throws(()=>applyReaderRelease({root,env:{VERCEL_GIT_COMMIT_SHA:SHA}}),/fully materialized/);
   assert.deepEqual(contents(root),before);
+});
+
+test('an unrecognized predecessor build is rejected before writes',t=>{
+  const root=fixture(t),file=path.join(root,'release-version.json'),value=JSON.parse(read(file));
+  value.build='v110473-unrecognized-1234567890ab';fs.writeFileSync(file,JSON.stringify(value));
+  const before=contents(root);
+  assert.throws(()=>applyReaderRelease({root,env:{VERCEL_GIT_COMMIT_SHA:SHA}}),/predecessor build/);
+  assert.deepEqual(contents(root),before);
+});
+
+test('CI runs pending-reading browser coverage first and retains its failure artifacts',()=>{
+  const workflow=read('.github/workflows/owned-reader.yml').split('  app-integration:')[1];
+  assert.ok(workflow,'App integration job exists');
+  const command='          node scripts/reader-foundation/browser-pending-readings.mjs\n';
+  assert.equal(workflow.split(command).length,2,'Pending-reading regression is an unconditional, gating command');
+  assert.ok(workflow.indexOf(command)<workflow.indexOf('          node scripts/v110404/browser.mjs\n'));
+  assert.match(workflow,/uses: actions\/upload-artifact@v4\s+if: always\(\)/);
+  assert.ok(workflow.includes('            browser-test-results/pending-reader/\n'));
 });
 
 test('the current runtime exposes this nonforced release consistently',()=>{

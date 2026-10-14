@@ -21,11 +21,23 @@ Focused tests:
 
 - `node --test packages/smart-reader-core/test/*.test.mjs`
 - `node --test scripts/reader-ai/test-*.mjs`
+- `node --test scripts/reader-foundation/pending-display.test.mjs` (React source render using installed app dependencies)
 - `node scripts/test-pdf-coverage-v110363.mjs`
 - After materialization: `node scripts/test-pdf-coverage-v110363.mjs --runtime`
 - After materialization: `node --test scripts/reader-foundation/runtime.test.mjs`
 
 Always test the clean full build before treating source-only tests as runtime coverage. Do not include the incidental materialized tree in the PR.
+
+## Pending shipping readings
+
+BOL, POD and RateCon candidates that need review are displayed separately from
+accepted form values, with their raw source text, page number and reason for
+review. Conflicting alternatives remain separate. The same display is retained
+when a saved analysis is reopened; newer reviews and confirmed details keep
+precedence. No candidate is automatically confirmed, assigned to a load or
+copied into an authoritative field. Capture-only attachments still have no
+invented reading. Source-component tests do not substitute for the full build
+and real-device preview checks.
 
 ## Explicit AI field review
 
