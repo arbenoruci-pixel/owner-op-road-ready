@@ -55,6 +55,8 @@ try {
   assert.equal(result.ocrEvidenceV110323.filter(pass=>pass.source==='pdf-text-layer').length,2);
   const nativePass=result.ocrEvidenceV110323.find(pass=>pass.id==='1-pdf-native-layout');
   assert.ok(nativePass.lines.length);assert.equal(nativePass.sourceImageFile,result.pageFiles[0]);
+  assert.equal(nativePass.nativeTextIntegrity,'decoded');
+  assert.ok(nativePass.lines.every(line=>line.confidence===100),'exact native glyphs are not downgraded by page coverage');
   assert.equal(result.ocrEvidenceV110323[0].sourceImageFile,result.pageFiles[0]);
   assert.ok(progress.every((value,index)=>!index||value>=progress[index-1]));
   assert.equal(result.pageReadingV110328.coverageComplete,true);assert.equal(result.pageReadingV110328.needsReview,false);
@@ -72,9 +74,11 @@ try {
   assert.equal(nativePdfQualityV110363(rich).quality,'usable');
   assert.equal(nativePdfQualityV110363(rich+' \ufffd'.repeat(60)).quality,'weak');
   assert.equal(nativePdfQualityV110363('A '.repeat(32)).quality,'weak');
-  reset();result=await read(pdfWith([{text:rich+' \ufffd'.repeat(60)},{textError:true}]),{enablePageOcr:true},readText);
+  reset();result=await read(pdfWith([{text:rich+' \ufffd'.repeat(60)},{textError:true}]),{enablePageOcr:true,retainPageSourcesV110347:true},readText);
   assert.deepEqual(ocrCalls,[1,2]);assert.ok(result.pages[1].coverage.reasons.includes('native-text-error'));
   assert.equal(result.pages[1].coverage.ocr.status,'succeeded');
+  const suspectPass=result.ocrEvidenceV110323.find(pass=>pass.id==='1-pdf-native-layout');
+  assert.equal(suspectPass.nativeTextIntegrity,'suspect');assert.ok(suspectPass.lines.every(line=>line.confidence<=60));
 
   // OCR repeating only the native header does not prove the raster was read.
   result=await compile(async()=>({text:rich,confidence:.99,passes:[]})).read(pdfWith([{operators:raster}]),{enablePageOcr:true},readText);
@@ -144,3 +148,5 @@ try {
   assert.ok(unavailable.failures.every(failure=>failure.page===4));
   console.log(`PASS — ${runtime?'materialized':'source'} PDF coverage, mixed native/raster, field strips, native negative controls, preservation, budgets, diagnostics, fallback and cancellation`);
 } finally {if(originalDocument===undefined)delete globalThis.document;else globalThis.document=originalDocument;}
+
+if(runtime)await import('./test-pdf-native-stop-integrity-v110363.mjs');

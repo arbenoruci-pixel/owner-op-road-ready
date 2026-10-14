@@ -5,6 +5,7 @@ import {chromium,webkit} from 'playwright';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 import {baseState,seed,setupRoutes} from '../v110328/browserFixture.mjs';
 import {resolveEvidence} from '../../packages/smart-reader-core/src/index.js';
+import {clearestEvidence} from '../../packages/smart-reader-core/src/reviewEvidence.js';
 const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Courier),sheet=pdf.addPage([612,792]);
 const draw=(page,text,x,y,size=10)=>page.drawText(text,{x,y,size,font});
 draw(sheet,'PRO # 86420 Rate Confirmation',300,760);
@@ -56,7 +57,11 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
   await review.getByRole('button',{name:'Check document reference',exact:true}).click();
   const signatureImage=dialog.getByRole('img',{name:'Source image for page 2',exact:true});await signatureImage.waitFor();await signatureImage.evaluate(image=>image.decode());
   assert.ok(await signatureImage.evaluate(image=>image.complete&&image.naturalWidth>0),'sparse signature page retains its source image');
-  const signatureEvidence=result.documents[1].fields.documentReference.candidates[0].evidence[0];
+  const signatureSources=result.documents[1].fields.documentReference.candidates[0].evidence;
+  // The source viewer prefers a retained positioned native observation over
+  // an earlier text-only observation; test the evidence actually displayed.
+  const signatureEvidence=clearestEvidence(signatureSources);
+  if(signatureEvidence.box)assert.deepEqual(signatureEvidence.box,resolveEvidence(result,signatureEvidence).line.box,'highlight is the retained native line geometry, not invented coordinates');
   assert.ok(signatureEvidence.sourceImageId,'fallback evidence has its source identity before extraction');
   if(signatureEvidence.box)await dialog.getByLabel('Source line highlight',{exact:true}).waitFor();
   else assert.equal(await dialog.getByLabel('Source line highlight',{exact:true}).count(),0,'unpositioned text never receives a fabricated highlight');

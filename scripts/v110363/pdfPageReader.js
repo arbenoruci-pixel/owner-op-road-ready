@@ -124,11 +124,17 @@ export async function readPdfPagesV110328(pdf,options={},readText) {
     // the native observation available. Layout is optional, never a text gate.
     if(options.retainPageSourcesV110347&&nativeText.trim()) {
       const nativeConfidence=coverage.nativeQuality==='usable'?.97:.6;
-      const nativePass={id:`${number}-pdf-native`,page:number,text:nativeText,confidence:nativeConfidence,source:'pdf-text-layer',
+      const nativeTextIntegrity=coverage.nativeQuality==='usable'?'decoded':'suspect';
+      const nativePass={id:`${number}-pdf-native`,page:number,text:nativeText,confidence:nativeConfidence,source:'pdf-text-layer',nativeTextIntegrity,
         ...(pageFiles[number-1]?{sourceImageFile:pageFiles[number-1]}:{})};
       ocrEvidenceV110323.push(nativePass);
       try {
-        const lines=rendered?nativePdfLayout(nativeContent,rendered.viewport).map(line=>({...line,confidence:Math.min(Number(line.confidence)||0,nativeConfidence*100)})):[];
+        // Native layout confidence describes decoded glyph/coordinate integrity,
+        // not semantic accuracy or page coverage. Do not cap exact native cells
+        // with the page's heuristic .97 score: the bounded native-stop proof
+        // needs those cells independently of unread raster regions on the page.
+        // Suspect mappings still carry the weaker signal and cannot prove stops.
+        const lines=rendered?nativePdfLayout(nativeContent,rendered.viewport).map(line=>({...line,confidence:Math.min(Number(line.confidence)||0,nativeTextIntegrity==='decoded'?100:nativeConfidence*100)})):[];
         if(lines.length)ocrEvidenceV110323.push({...nativePass,id:`${number}-pdf-native-layout`,text:lines.map(line=>line.text).join('\n'),lines});
       } catch {coverage.reasons.push('native-layout-unavailable');}
     }
