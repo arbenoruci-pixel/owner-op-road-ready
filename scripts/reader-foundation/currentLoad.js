@@ -6,6 +6,7 @@ import {currentHomeLoad,cleanRoutePlace} from '../home/currentHomeLoadV110369.js
 import {getActiveLoadGuideV103} from './loadGuideV103.js';
 import {localDayKey} from '../../shared/utils/date.js';
 import {nowMin} from '../../shared/utils/time.js';
+import {reviewedLoadAliases} from '../owneros/loadAliasesV110416.js';
 const text=v=>String(v??'').trim();
 const ref=v=>text(v).toUpperCase().replace(/[^A-Z0-9]/g,'');
 const list=v=>Array.isArray(v)?v:[];
@@ -80,7 +81,7 @@ export function currentOperationalLoad(state={},store={},context={}){
 export function operationalCandidateContext(state={},store={},context={}){
  const scoped=scope(state,store),at=clock(context),index=routeHistoryIndex(scoped),statuses={};
  for(const load of list(store.loads))statuses[text(number(load)).toUpperCase()]=operationalLoadStatus(state,store,load,{...at,scoped,index});
- return {current:currentOperationalLoad(state,store,at),statuses};
+ return {current:currentOperationalLoad(state,store,at),statuses,aliases:reviewedLoadAliases(store)};
 }
 export function businessLoadRows(store={},context={}){
  const current=context.current?.identity==='load'?ref(context.current.loadNo):'';

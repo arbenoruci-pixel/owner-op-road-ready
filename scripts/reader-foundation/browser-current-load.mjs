@@ -14,7 +14,7 @@ function fixture(scenario){
   '2026-10-12':[{id:'delivery',status:'ON',startMin:900,endMin:930,note:'Delivery / Unloading',loadNo,shippingDocs:loadNo,city:'Example Town',state:'NE',source:'manual'}]};
  state.routeLegsByDay={'2026-10-08':[{id:'pickup-route',day:'2026-10-08',pickupEventId:'pickup',loadNo:shipperRef,shippingDocs:shipperRef,fromCity:'Example City',fromState:'ME',toCity:'Example Town',toState:'NE',status:'open',source:'pickup_event'}],
   '2026-10-12':[{id:'delivery-route',day:'2026-10-12',deliveryEventId:'delivery',loadNo,shippingDocs:loadNo,status:'delivered',source:'delivery_event'}]};
- state.testInstructionStore={loads:[{id:'broker-load',loadNo,broker:'Example Bay Logistics',status:'booked',source:'rate_confirmation_v105',pickupDate:'2026-10-08',deliveryDate:'2026-10-12',gross:4000,origin:'Example City, ME',destination:'Example Town, NE'}],
+ state.testInstructionStore={loads:[{id:'broker-load',loadNo,broker:'Example Bay Logistics',status:'booked',source:'rate_confirmation_v105',date:'2026-10-08',pickupDate:'2026-10-08',deliveryDate:'2026-10-12',gross:4000,origin:'Example City, ME',destination:'Example Town, NE'}],
   evidenceAliases:scenario==='unlinked'?[]:[{from:shipperRef,to:loadNo}],documents:[],fuel:[],expenses:[],maintenance:[],settlements:[]};
  return state;
 }
@@ -74,6 +74,9 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
    const picker=page.getByRole('dialog',{name:'Choose load folder',exact:true}),option=picker.locator('.reader-load-option').filter({hasText:loadNo});
    assert.match(await option.innerText(),scenario==='in_transit'?/Current load/:/Completed/,'filing uses the same operational load state');
    assert.match(await option.innerText(),/Example Bay Logistics/);
+   assert.equal(await picker.locator('.reader-load-option').filter({hasText:'Load '+shipperRef}).count(),0,'a shipment reference is never presented as a second broker load');
+   const unlinked=picker.locator('.reader-load-option').filter({hasText:'Shipment reference '+shipperRef});
+   if(await unlinked.count())assert.equal(await unlinked.isDisabled(),true,'unlinked shipment references cannot silently become filing folders');
    await option.click();assert.equal(await selectedLoadFolder(page),loadNo);
    await page.getByLabel('Document type',{exact:true}).selectOption('pod');await page.getByLabel('Document date',{exact:true}).fill('2026-10-12');
    const confirm=page.locator('.scan-driver-check-v105 input');if(await confirm.count())await confirm.check();
@@ -81,6 +84,12 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]].filter(([n
    await page.reload();
    const saved=await page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction('documents_local','readonly'),q=tx.objectStore('documents_local').getAll();tx.oncomplete=()=>{resolve(q.result);db.close();};};}));
    assert.ok(saved.some(row=>row.type==='pod'&&row.load_no===loadNo),'the manual POD is saved to its broker load rather than its BOL reference');
+   const afterStore=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')));
+   assert.deepEqual(afterStore.evidenceAliases||[],scenario==='unlinked'?[]:[{from:shipperRef,to:loadNo}],'saving retains the reviewed load link');
+   assert.equal(afterStore.loads.length,1,'filing a BOL reference does not create a second broker load');
+   assert.equal(Number(afterStore.loads[0].gross),4000,'filing preserves the existing rate');
+   if(scenario==='delivered')assert.equal(await page.locator('.adaptive-mission-v1038').count(),0);
+   else assert.equal(await page.locator('.adaptive-mission-v1038 h1').innerText(),scenario==='unlinked'?shipperRef:loadNo,'reopening keeps the same current identity');
    assert.deepEqual(protectedData(await snapshot(page)),before,'navigation and view projections preserve duty events, inspections and signatures');
    assert.deepEqual(errors,[]);console.log(`PASS ${name} ${scenario}: shared Home/Business/filing identity, POD save/reload, delivery closeout, phone/iPad contrast and unchanged duty data`);
   }catch(error){await page.screenshot({path:`${output}/${name}-${scenario}-failure.png`,fullPage:true}).catch(()=>{});fs.writeFileSync(`${output}/${name}-${scenario}-failure.json`,JSON.stringify({error:String(error),errors,body:await page.locator('body').innerText()},null,2));throw error;}

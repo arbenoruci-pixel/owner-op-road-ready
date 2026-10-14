@@ -23,6 +23,14 @@ test('reviewed shipment reference resolves to the broker number before delivery 
  assert.equal(cards[0].active,true);assert.equal(businessLoadRows(store,combined)[0].status,'in_transit');
  assert.deepEqual({state,store},before);
 });
+test('a reviewed shipment alias is one broker folder in the picker, not a second load',()=>{
+ const {state,store}=fixture(),context=operationalCandidateContext(state,store,{day:'2026-10-10',minute:500});
+ const rows=loadPickerCandidates([{loadNo:'SHIPPER-REF',broker:'Old source company',status:'open'},{loadNo:'BROKER-1',status:'open'}],state,store,context);
+ assert.equal(rows.length,1);assert.equal(rows[0].loadNo,'BROKER-1');assert.equal(rows[0].id,'broker');assert.equal(rows[0].active,true);
+ assert.equal(rows[0].company,'Example Broker');
+ const oldRow={loadNo:'SHIPPER-REF',status:'archived',broker:'Old source company'};
+ assert.equal(loadPickerCandidates([],state,{...store,loads:[...store.loads,oldRow]},context).length,1,'retained archived alias rows do not duplicate the filing folder');
+});
 test('delivery under the broker number closes the reviewed shipper reference and the stale form',()=>{
  const {state,store}=fixture(),before=structuredClone({state,store});
  assert.equal(currentOperationalLoad(state,store,at),null);
@@ -38,6 +46,8 @@ test('same route and broker without a reviewed link remain a shipment reference'
  const current=currentOperationalLoad(state,store,at);
  assert.equal(current.identity,'reference');assert.equal(current.shipmentReference,'SHIPPER-REF');assert.equal(current.canonicalLoadNo,'');
  assert.equal(operationalCandidateContext(state,store,at).statuses['BROKER-1'],'delivered');
+ const rows=loadPickerCandidates([{loadNo:'SHIPPER-REF',status:'open'}],state,store,operationalCandidateContext(state,store,at));
+ assert.equal(rows.find(row=>row.loadNo==='SHIPPER-REF').referenceOnly,true);
 });
 test('a conflicting alias cannot identify a broker load or clear a different document warning',()=>{
  const {state,store}=fixture();store.loads.push({loadNo:'BROKER-2',status:'booked'});store.evidenceAliases.push({from:'SHIPPER-REF',to:'BROKER-2'});
@@ -55,7 +65,9 @@ test('a partial multistop delivery keeps the remaining load in transit',()=>{
  assert.equal(operationalLoadStatus(state,store,store.loads[0],at),'in_transit');
 });
 test('future delivery evidence never closes the load early',()=>{
- const {state,store}=fixture();assert.equal(operationalLoadStatus(state,store,store.loads[0],{day:'2026-10-10',minute:500}),'in_transit');
+ const {state,store}=fixture(),at={day:'2026-10-10',minute:500};assert.equal(operationalLoadStatus(state,store,store.loads[0],at),'in_transit');
+ const rows=loadPickerCandidates([{loadNo:'BROKER-1',status:'completed'}],state,store,operationalCandidateContext(state,store,at));
+ assert.equal(rows[0].status,'open');assert.equal(rows[0].active,true,'the common operational view takes precedence over a stale candidate label');
 });
 test('financial invoice and paid states retain their labels and values',()=>{
  const {state,store}=fixture();store.loads[0].status='invoiced';
