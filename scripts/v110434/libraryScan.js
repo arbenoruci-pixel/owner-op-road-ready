@@ -8,7 +8,8 @@ export function libraryScanCandidates(base=[],store={},fields={}){
   const no=text(load.loadNo).toUpperCase(),previous=rows.get(no)||{};
   const aliases=(load.aliases||[]).map(a=>typeof a==='string'?{kind:'order_number',value:a,source:'imported_source_reference'}:a).filter(a=>a?.value&&norm(a.value).length>=6);
   const incoming=norm(fields.broker),saved=norm(load.broker),conflict=!!(incoming&&saved&&incoming!==saved&&!incoming.includes(saved)&&!saved.includes(incoming));
-  rows.set(no,{...load,...previous,id:previous.id||load.id||'archive-'+no,loadNo:no,status:'completed',stops:previous.stops||load.stops||[],sourceKinds:[...new Set([...(previous.sourceKinds||[]),'document_library'])],aliases:[...(previous.aliases||[]),{kind:'load_number',value:no,source:'document_library'},...aliases],brokerIdentityConflict:previous.brokerIdentityConflict||conflict});
+  const details=Object.fromEntries(['broker','carrierName','origin','destination','pickupDate','deliveryDate'].map(key=>[key,text(previous[key])||text(load[key])]));
+  rows.set(no,{...load,...previous,...details,id:previous.id||load.id||'archive-'+no,loadNo:no,status:'completed',stops:previous.stops?.length?previous.stops:load.stops||[],sourceKinds:[...new Set([...(previous.sourceKinds||[]),'document_library'])],aliases:[...(previous.aliases||[]),{kind:'load_number',value:no,source:'document_library'},...aliases],brokerIdentityConflict:previous.brokerIdentityConflict||conflict});
  }
  return [...rows.values()];
 }

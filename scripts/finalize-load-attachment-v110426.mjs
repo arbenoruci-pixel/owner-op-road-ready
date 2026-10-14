@@ -15,7 +15,8 @@ for (const p of ['source/src/modules/loads/SafeDriverMissionV10966.jsx','source/
 }
 const home='source/src/modules/home/HomeScreen.jsx';
 patch(home,"import React,", "import LoadAttachmentSheetV110426 from '../scan/LoadAttachmentSheetV110426.jsx';\nimport React,");
-patch(home,"  const [scanPreferredType, setScanPreferredType] = useState('auto');", "  const [scanPreferredType, setScanPreferredType] = useState('auto');\n  const [loadAttachment, setLoadAttachment] = useState(null);");
+if(!fs.readFileSync(home,'utf8').includes('const [loadAttachment, setLoadAttachment] = useState(null);'))
+ patch(home,"  const [scanPreferredType, setScanPreferredType] = useState('auto');", "  const [scanPreferredType, setScanPreferredType] = useState('auto');\n  const [loadAttachment, setLoadAttachment] = useState(null);");
 patch(home,'  if (scanOpen) {',`  if (loadAttachment) {
     return <LoadAttachmentSheetV110426 state={state} context={loadAttachment} onClose={() => setLoadAttachment(null)}/>;
   }

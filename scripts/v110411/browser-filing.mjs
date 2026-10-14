@@ -6,10 +6,18 @@ import path from 'node:path';
 import {chromium,webkit} from 'playwright';
 import {baseState,seed,setupRoutes} from '../v110328/browserFixture.mjs';
 import {columnBolInput} from '../../packages/smart-reader-core/test/bol-columns-fixture.mjs';
+import {readDocument} from '../../packages/smart-reader-core/src/index.js';
 
 const output='browser-test-results/document-filing-v110411';fs.mkdirSync(output,{recursive:true});
 const observations=columnBolInput().pages[0].observations.slice(0,3).map(o=>[...o.lines,{text:'Received by: Sam Sample',box:{x:.48,y:.82,width:.3,height:.016},confidence:.98}]);
-for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
+async function chooseLoad(page,value){
+ await page.getByRole('button',{name:'Choose load folder',exact:true}).click();
+ const picker=page.getByRole('dialog',{name:'Choose load folder',exact:true});
+ if(value)await picker.locator('.reader-load-option').filter({hasText:'Load '+value}).click();
+ else await picker.getByRole('button',{name:'Choose later — save without a load',exact:true}).click();
+}
+const selectedLoad=async page=>(await page.locator('.reader-load-trigger strong').innerText()).replace(/^Load /,'').replace('Choose a load','');
+for(const [name,browser]of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.TEST_BROWSERS||process.env.TEST_BROWSERS.split(',').includes(name))){
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'bol-columns-'));
   const context=await browser.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
   const page=await context.newPage(),errors=[];page.setDefaultTimeout(45000);page.on('pageerror',error=>errors.push(error.message));
@@ -31,7 +39,8 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     const state=baseState();state.view='logbook';state.activeDay='2026-09-25';
     state.eventsByDay={'2026-09-24':[{id:'real-pickup',status:'ON',startMin:1000,endMin:1030,reasons:['Pickup / Loading'],source:'manual',shippingDocs:'00654321',city:'Kingfield',state:'ME'}]};
     state.routeLegsByDay={'2026-09-24':[{id:'real-leg',pickupEventId:'real-pickup',day:'2026-09-24',shippingDocs:'00654321',fromCity:'Kingfield',fromState:'ME',toCity:'Rockleigh',toState:'NJ',status:'open'}]};
-    state.loadInfo={};state.testInstructionStore={loads:[{source:'rate_confirmation_v105',loadNo:'00654321',status:'active'},{source:'rate_confirmation_v105',loadNo:'OTHER1234',status:'booked'}],documents:[]};await seed(page,state);
+    state.loadInfo={};state.testInstructionStore={loads:[{source:'rate_confirmation_v105',loadNo:'00654321',status:'active'},{source:'rate_confirmation_v105',loadNo:'OTHER1234',status:'booked'},
+      {loadNo:'ARCHIVE-1',broker:'Sample Bay Logistics',origin:'Lisbon, ME',destination:'Omaha, NE',deliveryDate:'2026-09-23',status:'archived',operationalStatus:'closed',documentLibrarySource:'synthetic-library'}],documents:[]};await seed(page,state);
     assert.equal(await page.locator('.adaptive-mission-v1038 h1').innerText(),'00654321');
     assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),1);
     const bytes=await page.evaluate(lines=>{
@@ -47,7 +56,20 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     const review=page.locator('.owned-reader-preview');
     await review.getByRole('heading',{name:'Proof of delivery · 1',exact:true}).waitFor();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'pod');
-    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'00654321','Reader source reference refreshes the folder suggestion');
+    assert.equal(await selectedLoad(page),'00654321','Reader source reference refreshes the folder suggestion');
+    await page.getByRole('button',{name:'Choose load folder',exact:true}).click();
+    const picker=page.getByRole('dialog',{name:'Choose load folder',exact:true});
+    assert.match(await picker.locator('.reader-load-option').first().innerText(),/00654321/);
+    assert.equal(await picker.getByRole('heading',{name:'Completed loads',exact:true}).count(),1);
+    await page.screenshot({path:`${output}/${name}-load-picker.png`});
+    await picker.getByRole('searchbox',{name:'Search loads',exact:true}).fill('sample bay');
+    assert.equal(await picker.locator('.reader-load-option').count(),1);
+    assert.match(await picker.locator('.reader-load-option').innerText(),/ARCHIVE-1[\s\S]*Sample Bay Logistics[\s\S]*Lisbon, ME → Omaha, NE/);
+    await picker.locator('.reader-load-option').click();assert.equal(await selectedLoad(page),'ARCHIVE-1');
+    await chooseLoad(page,'00654321');
+    await page.getByRole('button',{name:'Choose load folder',exact:true}).click();
+    await picker.press('Escape');await picker.waitFor({state:'hidden'});
+    assert.equal(await page.getByRole('button',{name:'Choose load folder',exact:true}).evaluate(node=>node===document.activeElement),true);
     const checks=page.getByRole('region',{name:'Document reading checks',exact:true});
     assert.equal(await checks.getByText('BOL number was not verified from its label. Check the original.',{exact:true}).count(),0);
     await page.getByRole('button',{name:/^Extracted details/}).click();
@@ -63,24 +85,24 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     await dialog.getByRole('button',{name:'Close source',exact:true}).click();
     const [download]=await Promise.all([page.waitForEvent('download'),review.getByRole('button',{name:'Export reading review',exact:true}).click()]);
     const result=JSON.parse(fs.readFileSync(await download.path(),'utf8')),doc=result.documents[0];
-    assert.equal(result.engineVersion,'0.3.36');assert.equal(doc.reference,'00654321');assert.equal(doc.canAutoFile,false);
+    assert.equal(result.engineVersion,readDocument(columnBolInput()).engineVersion);assert.equal(doc.reference,'00654321');assert.equal(doc.canAutoFile,false);
     assert.equal(doc.fields.poNumber.value,'PO-87654');
     assert.equal(doc.fields.shipper.value,null);assert.equal(doc.fields.consignee.value,null);
     assert.deepEqual(doc.fields.shipper.candidates.map(c=>c.value),['Northern Water Inc']);
     assert.deepEqual(doc.fields.consignee.candidates.map(c=>c.value),['Example Market']);
     assert.ok(doc.fields.carrier.issues.includes('conflicting_reads'));
     for(const value of ['Northern Water Inc','Example Market']){
-      const choice=value==='Northern Water Inc'?'OTHER1234':'';await page.getByLabel('Load folder',{exact:true}).selectOption(choice);
+      const choice=value==='Northern Water Inc'?'OTHER1234':'';await chooseLoad(page,choice);
       await page.getByLabel('Document date',{exact:true}).fill('2026-09-23');
       await review.getByRole('button',{name:value+' · Page 1',exact:true}).click();
       await dialog.waitFor();
       assert.equal(await dialog.getByLabel('Confirmed value',{exact:true}).inputValue(),value);
       await dialog.getByRole('button',{name:'Confirm value',exact:true}).click();
       await dialog.waitFor({state:'hidden'});
-      assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),choice,'Source confirmation preserves manual folder choice');
+      assert.equal(await selectedLoad(page),choice,'Source confirmation preserves manual folder choice');
       assert.equal(await page.getByLabel('Document date',{exact:true}).inputValue(),'2026-09-23','Source confirmation preserves a manually edited date');
     }
-    await page.getByLabel('Load folder',{exact:true}).selectOption('00654321');
+    await chooseLoad(page,'00654321');
     await page.getByLabel('Document date',{exact:true}).fill('2026-09-24');
     const check=page.locator('.scan-driver-check-v105 input');if(await check.count())await check.check();
     await page.getByRole('button',{name:/^Save document$|^Save for review$/}).click();

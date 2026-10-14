@@ -15,7 +15,8 @@ const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));locks.rel
 for(const name of ['loadAliases','documentWeeks'])fs.copyFileSync(`scripts/v110416/${name}.js`,`source/src/modules/owneros/${name}V110416.js`);
 function patch(path,before,after){const source=fs.readFileSync(path,'utf8');if(source.includes(after))return;if(source.split(before).length!==2)throw new Error('Document weeks anchor changed: '+path+' / '+before.slice(0,90));fs.writeFileSync(path,source.replace(before,after));}
 const reconciliation='source/src/modules/owneros/loadFolderReconciliationV10974.js';
-patch(reconciliation,"'use client';","'use client';\nimport {reviewedLoadAliases} from './loadAliasesV110416.js';");
+if(!fs.readFileSync(reconciliation,'utf8').includes("import {reviewedLoadAliases} from './loadAliasesV110416.js';"))
+ patch(reconciliation,"'use client';","'use client';\nimport {reviewedLoadAliases} from './loadAliasesV110416.js';");
 patch(reconciliation,"  const aliases=new Map([...(businessStore.evidenceAliases||[]).map(x=>[upper(x.from),upper(x.to)]),...(overlay.loadCorrections||[]).filter(x=>x.aliasFrom&&x.loadNo).map(x=>[upper(x.aliasFrom),upper(x.loadNo)])]);","  const aliases=new Map(Object.entries(reviewedLoadAliases(businessStore,documents,overlay)));");
 patch(reconciliation,'  for(const load of loads||[]){',`  // Canonical records win over legacy projections regardless of input order.
   const orderedLoads=[...(loads||[])].sort((a,b)=>Number(!aliases.has(upper(a.loadNo||a.canonicalLoadNo)))-Number(!aliases.has(upper(b.loadNo||b.canonicalLoadNo))));

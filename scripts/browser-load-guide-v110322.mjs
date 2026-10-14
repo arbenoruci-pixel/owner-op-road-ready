@@ -1,3 +1,4 @@
+import {chooseLoadFolder,loadFolderTrigger} from './test-support/load-folder-browser.mjs';
 import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from './test-support/cloud-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -164,9 +165,9 @@ for(const[name,type] of [['chromium',chromium],['webkit',webkit]]) {
     await page.waitForFunction(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')).loads.find(l=>l.loadNo==='82002')?.broker==='Select Transport Partners LLC',{},{timeout:30000});
     await page.locator('input[type=file][accept*="application/pdf"]').setInputFiles({name:'delivery.pdf',mimeType:'application/pdf',buffer:simplePdf('PROOF OF DELIVERY\nLOAD #82002\nBOL #550044\nSHIP FROM: Example Shipper\nSHIP TO: Example Receiver\nDELIVERY DATE: 09/10/2026\nRECEIVED BY: Example Receiver')});
     await page.getByRole('button',{name:'Read document',exact:true}).click();
-    await page.getByLabel('Load folder',{exact:true}).waitFor({timeout:60000});
-    await page.getByLabel('Load folder',{exact:true}).selectOption('82002');
-    assert.match(await page.getByLabel('Load folder',{exact:true}).locator('option:checked').innerText(),/Select Transport Partners/);
+    await loadFolderTrigger(page).waitFor({timeout:60000});
+    await chooseLoadFolder(page,'82002');
+    assert.match(await loadFolderTrigger(page).innerText(),/Select Transport Partners/);
     const repaired=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')));
     assert.deepEqual(repaired.loads.find(l=>l.loadNo==='91001'),unrelated);
     assert.equal(repaired.loads.find(l=>l.loadNo==='82002').status,'completed');

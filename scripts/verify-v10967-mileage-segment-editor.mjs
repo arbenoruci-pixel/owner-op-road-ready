@@ -10,7 +10,9 @@ assert.doesNotMatch(day, /Enter total miles for this driving/, 'Legacy single-ev
 assert.match(day, /saveMileageSegments/, 'Segment save handler is missing');
 assert.match(editor, /CHICAGO, IL\|ELGIN, IL': 52/, 'Verified Chicago to Elgin route is missing');
 assert.match(editor, /ELGIN, IL\|WOODHAVEN, MI': 327/, 'Verified Elgin to Woodhaven route is missing');
-assert.match(editor, /short legal break inside the same trip segment/, 'Break-aware segment grouping is missing');
+// This legacy check also runs before the current editor is materialized. The
+// day-boundary regression tests exercise current stop behavior after that step.
+assert.match(editor, /Every recorded stop ends a mileage segment|short legal break inside the same trip segment/, 'Break-aware segment handling is missing');
 assert.match(editor, /inputMode="decimal"/, 'Segment miles are not editable');
 assert.match(editor, /Total for the day/, 'Daily total is not shown');
 assert.match(css, /mileage-segment-row\.tone-1/, 'Colored segment rows are missing');

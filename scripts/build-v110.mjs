@@ -68,7 +68,7 @@ steps.push('finalize-reader-stops-v110362.mjs','test-reader-catalog-v110361.mjs'
 steps.push('finalize-native-pdf-evidence-v110363.mjs','test-native-pdf-evidence-v110363.mjs','test-duty-graph-continuity.mjs','test-editor-grips-v110355.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-native-cells-v110364.mjs','test-native-pdf-evidence-v110363.mjs','test-duty-graph-continuity.mjs','test-editor-grips-v110355.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-carry-edit-v110365.mjs','test-carry-edit-v110365.mjs','verify-log-integrity-v1051.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','verify-isolation-locks-v110.mjs');
-steps.push('finalize-continuous-miles-v110366.mjs','test-continuous-miles-v110366.mjs','verify-v10967-mileage-segment-editor.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','verify-isolation-locks-v110.mjs');
+steps.push('finalize-continuous-miles-v110366.mjs','test-continuous-miles-v110366.mjs','test-mileage-day-boundaries.mjs','verify-v10967-mileage-segment-editor.mjs','test-duty-graph-continuity.mjs','test-rendered-duty-graph.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-shipment-carryover-v110367.mjs','test-shipment-carryover-v110367.mjs','test-route-authority-v110352.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-active-shipment-v110368.mjs','test-active-shipment-v110368.mjs','test-shipment-carryover-v110367.mjs','test-route-authority-v110352.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-fullscreen-reader-v110369.mjs','test-fullscreen-reader-v110369.mjs','test-reader-catalog-v110361.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
@@ -127,8 +127,11 @@ steps.push('finalize-delivery-order-ai-v110422.mjs','v110422/reader.test.mjs','v
 steps.push('finalize-team-freight-v110423.mjs','v110423/team-freight.test.mjs','reader-ai/test-runtime-credentials.mjs','test-route-delete-v110350.mjs','v110407/team-safety.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-load-attachment-v110426.mjs','v110426/attachment.test.mjs','v110426/vault.test.mjs','verify-isolation-locks-v110.mjs');
 steps.push('reader-foundation/install.mjs','reader-foundation/release.mjs','reader-foundation/verify.mjs');
-steps.push('test-support/install-duty-compatibility.mjs','test-support/duty-compatibility.test.mjs','v110378/test-review-regressions.mjs');
-const program=original.replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
-fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',program);
+steps.push('test-support/install-duty-compatibility.mjs','test-support/duty-compatibility.test.mjs','test-support/release-assertions.test.mjs','v110378/test-review-regressions.mjs');
+const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
+if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
+const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});")
+ .replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
+fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',"import {syncLegacyReleaseAssertions} from '../scripts/test-support/sync-release-assertions.mjs';\n"+program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
 if(result.error)throw result.error;process.exit(result.status??1);

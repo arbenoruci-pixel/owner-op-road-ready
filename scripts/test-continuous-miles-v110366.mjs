@@ -21,15 +21,15 @@ test('the reported day contains all three driving segments, including 5h30 witho
  assert.deepEqual(reported,before);
 });
 test('existing verified routes retain their estimates and a same-city drive is never skipped',()=>{
- const segments=build([row('a','D',0,60),row('stop','ON',60,90,'Elgin'),row('b','D',90,180,'Elgin'),row('stop2','OFF',180,250,'Woodhaven','MI')]);
+ const segments=build([row('a','D',0,60),row('stop','ON',60,90,'Elgin'),row('b','D',90,450,'Elgin'),row('stop2','OFF',450,520,'Woodhaven','MI')]);
  assert.deepEqual(segments.map(s=>s.miles),[52,327]);
  const same=build([row('local','D',0,60),row('stop','OFF',60,150),row('next','D',150,210),row('far','OFF',210,300,'Elgin')]);
  assert.equal(same.length,2);assert.equal(same[0].to.label,'Chicago, IL');assert.equal(same[0].continues,false);assert.equal(same[0].miles,62);
 });
-test('continuous driving fragments and short breaks count only Driving minutes',()=>{
+test('continuous driving fragments merge and recorded breaks separate segments',()=>{
  const events=[row('a','D',0,60),row('b','D',60,120),row('break','OFF',120,150),row('c','D',150,210)];
- const segments=build(events);assert.equal(segments.length,1);assert.equal(segments[0].drivingMinutes,180);assert.equal(segments[0].miles,186);
- const allocations=allocateMiles(segments[0],200.01);assert.deepEqual(allocations.map(a=>a.eventId),['a','b','c']);assert.equal(Number(allocations.reduce((sum,a)=>sum+a.miles,0).toFixed(2)),200.01);
+ const segments=build(events);assert.equal(segments.length,2);assert.equal(segments.reduce((sum,s)=>sum+s.drivingMinutes,0),180);assert.equal(segments.reduce((sum,s)=>sum+s.miles,0),186);
+ const allocations=allocateMiles(segments[0],200.01);assert.deepEqual(allocations.map(a=>a.eventId),['a','b']);assert.equal(Number(allocations.reduce((sum,a)=>sum+a.miles,0).toFixed(2)),200.01);
  const separated=build([row('a','D',0,60),row('b','D',90,120)]);assert.equal(separated.length,2);assert.equal(separated.reduce((sum,s)=>sum+s.drivingMinutes,0),90);
 });
 test('zero-length, out-of-day and synthetic rows cannot generate chargeable miles',()=>{

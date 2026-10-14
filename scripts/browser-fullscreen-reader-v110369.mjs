@@ -1,3 +1,4 @@
+import {loadFolderTrigger} from './test-support/load-folder-browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {chromium,webkit} from 'playwright';
@@ -75,7 +76,7 @@ for(const [name,browser] of [['chromium',chromium],['webkit',webkit]]){
   await page.getByRole('button',{name:'Read document',exact:true}).click();
   await page.locator('.owned-reader-preview').waitFor();
   assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bill_of_sale');
-  assert.equal(await page.getByLabel('Load folder',{exact:true}).count(),0,'equipment sale does not request a load assignment');
+  assert.equal(await loadFolderTrigger(page).count(),0,'equipment sale does not request a load assignment');
   await page.getByText('No load number required',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();
   const review=page.locator('.owned-reader-preview');

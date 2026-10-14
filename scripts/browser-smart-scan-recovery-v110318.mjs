@@ -1,3 +1,4 @@
+import {selectedLoadFolder,chooseLoadFolder} from './test-support/load-folder-browser.mjs';
 import {fixtureCorsHeaders,fulfillLocalAccountSettings,installLocalAccountSettings} from './test-support/cloud-fixture.mjs';
 import assert from 'node:assert/strict';
 import {instructionPdfV110312} from './v110312/savedScanFixtureV110312.mjs';
@@ -84,7 +85,7 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
     await page.getByRole('button',{name:'Read again',exact:true}).waitFor();
     assert.equal(await page.getByLabel('Document date',{exact:true}).inputValue(),'2026-09-08');
-    await page.getByLabel('Load folder',{exact:true}).selectOption('76543210');
+    await chooseLoadFolder(page,'76543210');
    } else if(kind==='bol-upload'){
     await page.locator('.adaptive-home-v1038.active-load').waitFor();
     await page.getByRole('button',{name:/Smart Scan/}).first().click();
@@ -92,7 +93,7 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
     await page.getByRole('button',{name:'Read document',exact:true}).click();
     await page.getByLabel('Document type',{exact:true}).waitFor({timeout:60000});
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
-    assert.equal(await page.getByLabel('Load folder',{exact:true}).inputValue(),'76543210');
+    assert.equal(await selectedLoadFolder(page),'76543210');
     assert.equal(await page.getByLabel('Document date',{exact:true}).inputValue(),'2026-09-09');
    }
    if(kind!=='missing-appointment'){
