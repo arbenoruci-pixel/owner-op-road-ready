@@ -1,8 +1,11 @@
-// Native PDF route tables put the appointment on the left and the destination
-// on the right. Associate cells inside a bounded stop, preserving every quote.
-import {hasRateStructure,hasRateTitle,totalRateLabel,loadNumberLabel,amountValue,dateValue} from './rateVocabulary.js';
+// Native PDF and positioned OCR route tables put the appointment on the left
+// and the destination on the right. Keep exact quotes and bounded stop geometry;
+// OCR additionally needs explicit, strong confidence for every supporting cell.
+import {hasRateStructure,hasRateTitle,totalRateLabel,totalRateSignal,pickupLabel,deliveryLabel,loadNumberLabel,amountValue,dateValue} from './rateVocabulary.js';
 import {isDocumentParty} from './fieldGuards.js';
 const strong=l=>l.confidence==null||l.confidence>=.8;
+const strongOcr=l=>Number.isFinite(l?.confidence)&&l.confidence>=.8;
+const ocrSource=source=>/(?:^|[-_: ])(?:ocr|tesseract)(?:$|[-_: ])/i.test(source);
 const sameRow=(a,b)=>a.box&&b.box&&Math.min(a.box.y+a.box.height,b.box.y+b.box.height)-Math.max(a.box.y,b.box.y)>=Math.min(a.box.height,b.box.height)*.45;
 const right=l=>l.box.x+l.box.width;
 const range=line=>{const t=line.text.trim(),start=line.text.indexOf(t);return {line,start,end:start+t.length};};
@@ -21,10 +24,12 @@ const one=list=>list.length===1?list[0]:null;
 export function rateRouteMatches(page,spec){
  const key=spec.rateVocabulary,matches=[];if(!key)return matches;
  for(const observation of page.observations){
-  if(observation.source!=='pdf-text-layer'||!hasRateTitle(observation.lines))continue;
+  const native=observation.source==='pdf-text-layer';
+  if((!native&&!ocrSource(observation.source))||!hasRateTitle(observation.lines))continue;
+  const title=observation.lines.slice(0,20).find(l=>hasRateTitle([l]));
   // The PDF's reading-order view can omit boxes. A standalone header label
   // may skip only known title/date/page cells to reach one exact identifier.
-  if(key==='loadNumber'&&!observation.lines.some(l=>l.box))for(const [i,label]of observation.lines.slice(0,12).entries()){
+  if(native&&key==='loadNumber'&&!observation.lines.some(l=>l.box))for(const [i,label]of observation.lines.slice(0,12).entries()){
    if(!referenceLabel.test(label.text))continue;
    const following=observation.lines.slice(i+1,i+4),candidates=[];
    for(const line of following){
@@ -35,10 +40,21 @@ export function rateRouteMatches(page,spec){
   }
   if(!observation.sourceImageId)continue;
   const lines=observation.lines.filter(l=>l.box&&l.text.trim()),complete=hasRateStructure(observation.lines);
-  const add=(line,label,extra={})=>matches.push({observation,...range(line),labelLine:label,...extra});
+  const structure=complete?[title,observation.lines.find(l=>pickupLabel.test(l.text)),observation.lines.find(l=>deliveryLabel.test(l.text)),observation.lines.find(l=>totalRateSignal.test(l.text))].filter(Boolean):[title];
+  const add=(line,label,extra={})=>{
+   if(!native&&!line.box)return;
+   const labels=native?extra.extraLabelLines:[...new Set([...structure,...(extra.extraLabelLines||[])])];
+   const proof=[line,label,...(labels||[])].filter(Boolean);
+   const method=!native&&extra.supportMethod?extra.supportMethod.replace(/^native_/, 'ocr_'):extra.supportMethod;
+   matches.push({observation,...range(line),labelLine:label,...extra,
+    ...(method?{supportMethod:method}:{}),...(labels?{extraLabelLines:labels}:{}),
+    ...(!native&&!proof.every(l=>l.box&&strongOcr(l))?{issue:'layout_needs_review'}:{})});
+  };
   const rowValue=(label,accept)=>{
    const cells=lines.filter(l=>l!==label&&sameRow(label,l)&&l.box.x>=right(label)-.002).sort((a,b)=>a.box.x-b.box.x);
-   const first=cells[0];return first&&(!cells[1]||cells[1].box.x>right(first)-.002)&&accept(first)?first:null;
+   const first=cells[0];
+   if(!native&&cells.filter(accept).length!==1)return null;
+   return first&&(!cells[1]||cells[1].box.x>right(first)-.002)&&accept(first)?first:null;
   };
   // Explicit header references can support a repeated continuation header.
   if(key==='loadNumber')for(const label of lines.filter(l=>referenceLabel.test(l.text)&&l.box.y<.3)){
@@ -57,7 +73,7 @@ export function rateRouteMatches(page,spec){
    const value=m[1];
    if(key==='equipment'?!/^(?:(?:Dry|Reefer|Refrigerated)\s+)?(?:Van|Flatbed|Step Deck|Reefer|Power Only|Conestoga|Box Truck|Double Drop)(?:\s+\d{2}['′]?)?$/i.test(value)
     :!/\b(?:LLC|INC\.?|LTD\.?|CORP\.?|CORPORATION|LIMITED)\s*$/i.test(value)||!isDocumentParty(value))continue;
-   matches.push({observation,line,start:m.indices[1][0],end:m.indices[1][1],supportMethod:'native_rate_label'});
+   add(line,null,{start:m.indices[1][0],end:m.indices[1][1],supportMethod:'native_rate_label'});
   }
   if(key==='totalRate')for(const label of lines.filter(l=>totalLabel.test(l.text))){
    // Existing strict labels retain their existing proposal semantics.
@@ -83,14 +99,14 @@ export function rateRouteMatches(page,spec){
    const date=one(cells.filter(l=>right(l)<=right(label)+.025&&Math.abs(right(l)-right(label))<.03&&dateValue.test(l.text.trim())));
    const time=one(cells.filter(l=>right(l)<=right(label)+.025&&Math.abs(right(l)-right(label))<.03&&window.test(l.text.trim())));
    if(!location||!date||!time||!sameRow(date,location)||time.box.y<=date.box.y||time.box.y-date.box.y>.035)continue;
-   const proof=[label,name,location,date,time];if(!proof.every(strong))continue;
+   const proof=[label,name,location,date,time];if(native&&!proof.every(strong))continue;
    const extra={supportMethod:'native_route_table',extraLabelLines:proof.filter(l=>l!==label)};
    if(key===party)add(name,label,extra);
    if(key===role+'Address')add(location,label,extra);
    if(key===role+'Date')add(date,label,extra);
    if(key===role+'Appointment')add(time,label,extra);
    if(key===role+'City'){
-    const m=city.exec(location.text);if(m)matches.push({observation,line:location,start:m.indices[1][0],end:m.indices[1][1],labelLine:label,...extra});
+    const m=city.exec(location.text);if(m)add(location,label,{start:m.indices[1][0],end:m.indices[1][1],...extra});
    }
   }
   if(key==='documentDate'){
@@ -106,12 +122,12 @@ export function rateHeaderContinuation(previousPages,page,identity){
  if(identity.kind!=='unknown'||identity.status==='conflicting')return false;
  const all=[...previousPages,page];
  const refs=all.map(p=>rateRouteMatches(p,{rateVocabulary:'loadNumber'}));
- if(refs.some(rows=>!rows.length||rows.some(r=>!strong(r.line)||!strong(r.labelLine))))return false;
+ if(refs.some(rows=>!rows.length||rows.some(r=>r.issue||!strong(r.line)||!strong(r.labelLine))))return false;
  if(new Set(refs.flat().map(r=>r.line.text.slice(r.start,r.end))).size!==1)return false;
  const pageNumbers=all.map(p=>p.observations.flatMap(o=>o.lines.slice(0,12).filter(l=>!l.box||l.box.y<.1).flatMap(l=>{
-  const m=/^Page\s+(\d+)(?:\s+of\s+\d+)?$/i.exec(l.text.trim());return m&&strong(l)?[Number(m[1])]:[];
+  const m=/^Page\s+(\d+)(?:\s+of\s+\d+)?$/i.exec(l.text.trim());return m&&(o.source==='pdf-text-layer'?strong(l):strongOcr(l))?[Number(m[1])]:[];
  })));
  if(pageNumbers.some((values,i)=>!values.length||values.some(n=>n!==i+1)))return false;
  if(page.observations.some(o=>hasRateStructure(o.lines)||o.lines.some(l=>pickup.test(l.text)||delivery.test(l.text)||totalLabel.test(l.text))))return false;
- return page.observations.some(o=>hasRateTitle(o.lines)&&o.lines.some(l=>strong(l)&&/\b(?:terms and conditions|billing packet|carrier.*(?:payment|compliance)|transport refrigeration)\b/i.test(l.text)));
+ return page.observations.some(o=>hasRateTitle(o.lines)&&o.lines.some(l=>(o.source==='pdf-text-layer'?strong(l):strongOcr(l))&&/\b(?:terms and conditions|billing packet|carrier.*(?:payment|compliance)|transport refrigeration)\b/i.test(l.text)));
 }

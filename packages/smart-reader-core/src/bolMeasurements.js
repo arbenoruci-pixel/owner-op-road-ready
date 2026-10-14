@@ -8,7 +8,7 @@ function weightField(label, source) {
     rightLabel:new RegExp('^\\s*(?:'+source+')\\s*:?\\s*$', 'i'), valuePattern:token};
 }
 export const bolMeasurementFields = {
-  weight:weightField('Total weight', 'TOTAL WEIGHT|GROSS WEIGHT|WEIGHT'),
+  weight:{...weightField('Total weight', 'TOTAL WEIGHT|GROSS WEIGHT|WEIGHT'),bolWeightColumn:true},
   netWeight:weightField('Net weight', 'TOTAL NET WEIGHT|NET WEIGHT'),
   tareWeight:{...weightField('Tare weight', 'TOTAL TARE|OTAL TARE|TARE WEIGHT|TARE'),noisyLabel:/^[\s|]*OTAL\s/i},
   totalUnits:{label:'Total units', kind:'count', required:false, displayWhenFound:true,measurementRow:true,

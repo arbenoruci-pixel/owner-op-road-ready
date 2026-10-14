@@ -84,6 +84,12 @@ export const PROFILES=Object.freeze([...BASE_PROFILES,...truckingProfiles(BASE_P
 export function normalizeValue(kind, raw, sourceLabel=null) {
   const value=raw.trim().replace(/[ \t]+/g,' ');if(!value)return {value:null,issue:'empty'};
   if(['shipping_weight','temperature_instruction','count'].includes(kind))return normalizeBolMeasurement(kind,value);
+  // A two-digit date is readable but cannot establish century or date order.
+  // Retain the exact candidate and ask for a complete date, never guess it.
+  if(kind==='ship_date'&&/^\d{1,2}[-/.]\d{1,2}[-/.]\d{2}$/.test(value)){
+    const [a,b]=value.split(/[-/.]/).map(Number);
+    return {value:null,issue:a>=1&&b>=1&&a<=31&&b<=31&&(a<=12||b<=12)?'short_date_requires_review':'invalid_date'};
+  }
   // Machine-read US dates require the explicit Ship Date source label.
   if(kind==='ship_date'&&sourceLabel!==null&&!/(?:^|\|)\s*SHIP\s+DATE\s*:?\s*$/i.test(sourceLabel))return normalizeValue('date',value);
   if(kind==='party')return isDocumentParty(value)?{value}:{value:null,issue:'form_instructions'};

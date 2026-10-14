@@ -4,23 +4,17 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-export const VERSION='110.4.73';
-export const BUILD_PREFIX='v110473-current-load-consistency';
+export const VERSION='110.4.74';
+export const BUILD_PREFIX='v110474-document-reading-repair';
 const PREVIOUS_VERSION='110.4.70';
 const PREVIOUS_BUILD='v110470-single-device-ipad';
 export const RELEASE_NOTES=Object.freeze([
-  'Home, Business Center and document filing share one read-only current-load view, including reviewed shipper aliases and recorded delivery closeout.',
-  'Unlinked shipment references are shown separately from broker load numbers and do not raise a false missing-BOL alert.',
-  'Business figures and load numbers use legible dark text on light cards; financial records and duty events are preserved.',
-  'Document filing shows the current load first, then recent loads, with searchable company, route, date and status cards.',
-  'Imported load folders retain their saved company and route details when a logbook candidate has empty metadata.',
-  'Short-form bills of lading with damaged printed headings retain source-backed parties and carrier; a driver-selected POD stays explicit when handwriting cannot be verified.',
-  'Daily mileage separates recorded stops and keeps previous-day route distance out of short midnight continuation intervals.',
-  'Source-backed Reader fields and saved readings retain evidence, page coverage, and driver-selected document type and load.',
-  'PDF reading reports OCR limits, unread pages, and skipped or failed reading stages instead of implying complete coverage.',
-  'Optional page-level AI field review proposes source-quoted fields for explicit review; production AI availability and accuracy are not guaranteed.',
-  'Same-original BOL-to-POD review stays pending until existing full-account synchronization verifies metadata and original bytes; no automatic synchronization is enabled.',
-  'Original files are preserved. Automatic pairing or deletion of different originals is not enabled.',
+  'BOL table reading selects weight beneath its column heading, excluding adjacent headings and freight-class cells; uncertain parties and weight units remain pending.',
+  'Positioned OCR rate confirmations read shipment IDs, carrier pay and bounded route-table fields with confidence and conflict safeguards.',
+  'Unconfirmed BOL, POD and rate-confirmation readings stay visible with source text, page and review reason, including when saved readings are reopened.',
+  'Ambiguous dates, missing weight units and conflicting alternatives remain pending instead of becoming authoritative fields.',
+  'Closing source review leaves pending readings unchanged; explicitly confirmed values are preserved through save and reload.',
+  'Original files, account access, synchronization settings and driver-selected document type and load are preserved; automatic filing and deletion are not enabled.',
 ]);
 
 const TEXT_FILES=[
@@ -62,14 +56,14 @@ export function applyReaderRelease({root=process.cwd(),env=process.env,now=new D
   const json=file=>JSON.parse(before.get(file));
   const previous=json('release-version.json');
   for(const file of ['release-version.json','public/app-version.json','package.json','package-lock.json']){
-    assert.ok([PREVIOUS_VERSION,'110.4.72',VERSION].includes(json(file).version),`Reader release requires fully materialized ${PREVIOUS_VERSION} runtime: ${file}`);
+    assert.ok([PREVIOUS_VERSION,'110.4.72','110.4.73',VERSION].includes(json(file).version),`Reader release requires fully materialized ${PREVIOUS_VERSION} runtime: ${file}`);
   }
   assert.match(before.get('source/src/modules/scan/SmartScanSheetV105.jsx')||fs.readFileSync(path.join(root,'source/src/modules/scan/SmartScanSheetV105.jsx'),'utf8'),/analysisWithProjection\(/,'Install the Reader foundation before finalizing its release');
   const previousBuild=previous.build;
-  assert.ok(previousBuild===PREVIOUS_BUILD||/^v110472-load-picker-pod-[a-f0-9]{12}$/.test(previousBuild)||new RegExp(`^${BUILD_PREFIX}-[a-f0-9]{12}$`).test(previousBuild),'Reader release predecessor build is not recognized');
+  assert.ok(previousBuild===PREVIOUS_BUILD||/^v110472-load-picker-pod-[a-f0-9]{12}$/.test(previousBuild)||/^v110473-current-load-consistency-[a-f0-9]{12}$/.test(previousBuild)||new RegExp(`^${BUILD_PREFIX}-[a-f0-9]{12}$`).test(previousBuild),'Reader release predecessor build is not recognized');
   const sameRelease=previous.version===VERSION&&previous.build===build&&previous.sourceCommit===sourceCommit;
   const releasedAt=sameRelease&&previous.releasedAt?previous.releasedAt:now.toISOString();
-  const metadata={version:VERSION,build,force:false,label:`v${VERSION} Reader evidence and explicit review`,sourceCommit,notes:[...RELEASE_NOTES],releasedAt,updatedAt:releasedAt};
+  const metadata={version:VERSION,build,force:false,label:`v${VERSION} Document reading repair`,sourceCommit,notes:[...RELEASE_NOTES],releasedAt,updatedAt:releasedAt};
   const after=new Map(before);
   const setJSON=(file,value)=>after.set(file,JSON.stringify(value,null,2)+'\n');
   for(const file of ['release-version.json','public/app-version.json'])setJSON(file,{...json(file),...metadata});
