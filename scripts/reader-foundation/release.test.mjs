@@ -44,7 +44,7 @@ test('release synchronizes all materialized metadata without modifying sync or a
   assert.equal(JSON.parse(read(path.join(root,'package-lock.json'))).packages[''].version,VERSION);
   const oldLocks=JSON.parse(before.get('module-locks.v1.json')),locks=JSON.parse(read(path.join(root,'module-locks.v1.json')));
   assert.equal(locks.release,VERSION);assert.deepEqual({...locks,release:oldLocks.release},oldLocks);
-  const normalize=text=>text.replaceAll('110.4.70','RELEASE').replaceAll(VERSION,'RELEASE');
+  const normalize=text=>text.replaceAll('110.4.70','RELEASE').replaceAll('110.4.72','RELEASE').replaceAll(VERSION,'RELEASE');
   for(const file of ['lib/owner-op-cloud/cloudMirrorV110450.js','lib/owner-op-cloud/recordSyncV110451.js']){
     assert.equal(normalize(read(path.join(root,file))),normalize(before.get(file)),'Only diagnostic release stamps may change: '+file);
   }

@@ -8,11 +8,20 @@ const date=value=>/^\d{4}-\d{2}-\d{2}$/.test(text(value))?text(value):'';
 const at=value=>{const n=typeof value==='number'?value:Date.parse(value);return Number.isFinite(n)?n:0;};
 const array=value=>Array.isArray(value)?value:[];
 const fields=['broker','carrierName','origin','destination','pickupDate','deliveryDate'];
-export function loadPickerCandidates(base=[],state={},store={}){
+export function loadPickerCandidates(base=[],state={},store={},context={}){
  const rows=new Map();
- for(const candidate of base){if(candidate?.loadNo&&!hidden(candidate.status))rows.set(no(candidate.loadNo),{...candidate,loadNo:no(candidate.loadNo)});}
+ for(const candidate of base){
+  if(!candidate?.loadNo||hidden(candidate.status))continue;
+  const original=no(candidate.loadNo),canonical=no(context.aliases?.[original]||original);
+  const record=array(store.loads).find(load=>no(load.canonicalLoadNo||load.loadNo)===canonical);
+  const previous=rows.get(canonical);
+  const row={...(previous||candidate),loadNo:canonical};
+  if(record&&canonical!==original){row.id=record.id||row.id;for(const key of fields)if(text(record[key]))row[key]=text(record[key]);}
+  for(const key of fields)if(!text(row[key])&&text(candidate[key]))row[key]=text(candidate[key]);
+  rows.set(canonical,row);
+ }
  const add=(record,source)=>{
-  const loadNo=no(record.canonicalLoadNo||record.loadNo);
+  const original=no(record.canonicalLoadNo||record.loadNo),loadNo=no(context.aliases?.[original]||original);
   if(!loadNo||hidden(record.status))return;
   const previous=rows.get(loadNo);
   // A document can enrich an existing association; it cannot create work.
@@ -26,12 +35,15 @@ export function loadPickerCandidates(base=[],state={},store={}){
  };
  for(const load of array(store.loads))add(load,'load');
  for(const doc of array(store.documents))add({...doc,...doc.fields,...doc.extracted,canonicalLoadNo:doc.canonicalLoadNo||doc.loadNo||doc.extracted?.canonicalLoadNo||doc.extracted?.loadNo},'document');
- const activeNo=no(state.loadInfo?.loadNo||state.loadInfo?.shippingDocs);
+ const hasContext=Object.hasOwn(context,'current');
+ const activeNo=hasContext?(context.current?.identity==='load'?no(context.current.loadNo):''):no(state.loadInfo?.loadNo||state.loadInfo?.shippingDocs);
  const activeGuide=state.loadGuidesById?.[state.activeLoadGuideId];
  return [...rows.values()].map(candidate=>{
-  const complete=closed(candidate.operationalStatus)||closed(candidate.status);
-  const active=!complete&&(candidate.active===true||candidate.loadNo===activeNo||candidate.loadNo===no(activeGuide?.loadNo));
-  return {...candidate,status:complete?'completed':'open',active,
+  const operation=context.statuses?.[candidate.loadNo];
+  const complete=operation?closed(operation):closed(candidate.operationalStatus)||closed(candidate.status);
+  const active=!complete&&(candidate.loadNo===activeNo||!hasContext&&(candidate.active===true||candidate.loadNo===no(activeGuide?.loadNo)));
+  const referenceOnly=hasContext&&context.current?.identity==='reference'&&candidate.loadNo===no(context.current.shipmentReference);
+  return {...candidate,status:complete?'completed':'open',active,referenceOnly,
    company:text(candidate.broker)||text(candidate.carrierName)||text(candidate.displayCompany),
    recentAt:Math.max(at(candidate.latestPickupAt),at(candidate.latestActivityAt),at(date(candidate.deliveryDate)),at(date(candidate.pickupDate)))||at(candidate.updatedAt),
   };

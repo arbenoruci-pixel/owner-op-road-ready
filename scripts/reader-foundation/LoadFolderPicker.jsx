@@ -17,8 +17,8 @@ export default function LoadFolderPicker({candidates=[],value='',onChange,create
  const chosen=candidates.find(item=>item.loadNo===value);
  const rows=candidates.filter(item=>[item.loadNo,item.company,item.broker,item.carrierName,item.origin,item.destination,item.pickupDate,item.deliveryDate].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
  const select=loadNo=>{onChange?.(loadNo);setOpen(false);setSearch('');};
- const card=item=><button type="button" key={item.loadNo} className={'reader-load-option'+(value===item.loadNo?' is-selected':'')} aria-pressed={value===item.loadNo} onClick={()=>select(item.loadNo)}>
-  <span className="reader-load-line"><strong>Load {item.loadNo}</strong><small className={item.status==='completed'?'is-completed':''}>{item.active?'Current load':item.status==='completed'?'Completed':'In progress'}</small></span>
+ const card=item=><button type="button" key={item.loadNo} disabled={item.referenceOnly} className={'reader-load-option'+(value===item.loadNo?' is-selected':'')} aria-pressed={value===item.loadNo} onClick={()=>select(item.loadNo)}>
+  <span className="reader-load-line"><strong>{item.referenceOnly?'Shipment reference ':'Load '}{item.loadNo}</strong><small className={item.status==='completed'?'is-completed':''}>{item.referenceOnly?'Needs a load link':item.active?'Current load':item.status==='completed'?'Completed':'In progress'}</small></span>
   {item.company?<b>{item.company}</b>:null}
   <span>{[item.origin,item.destination].filter(Boolean).join(' → ')||'Route details unavailable'}</span>
   <em>{item.pickupDate?'Pickup '+dateLabel(item.pickupDate):''}{item.pickupDate&&item.deliveryDate?' · ':''}{item.deliveryDate?'Delivery '+dateLabel(item.deliveryDate):''}</em>
@@ -33,8 +33,9 @@ export default function LoadFolderPicker({candidates=[],value='',onChange,create
    <header><div><span>DOCUMENT FILING</span><h2>Choose a load</h2><p>Current load first, then newest loads.</p></div><button type="button" aria-label="Close load picker" onClick={()=>setOpen(false)}>Close</button></header>
    <input autoFocus type="search" aria-label="Search loads" placeholder="Load number, company or route" value={search} onChange={event=>setSearch(event.target.value)}/>
    <div className="reader-load-results">
-    {rows.some(item=>item.status!=='completed')?<><h3>In progress</h3>{rows.filter(item=>item.status!=='completed').map(card)}</>:null}
-    {rows.some(item=>item.status==='completed')?<><h3>Completed loads</h3>{rows.filter(item=>item.status==='completed').map(card)}</>:null}
+    {rows.some(item=>!item.referenceOnly&&item.status!=='completed')?<><h3>In progress</h3>{rows.filter(item=>!item.referenceOnly&&item.status!=='completed').map(card)}</>:null}
+    {rows.some(item=>!item.referenceOnly&&item.status==='completed')?<><h3>Completed loads</h3>{rows.filter(item=>!item.referenceOnly&&item.status==='completed').map(card)}</>:null}
+    {rows.some(item=>item.referenceOnly)?<><h3>Unlinked references</h3>{rows.filter(item=>item.referenceOnly).map(card)}</>:null}
     {!rows.length?<p className="reader-load-empty">No loads match this search.</p>:null}
     {createLoadNo&&!candidates.some(item=>item.loadNo===createLoadNo)?<button type="button" className="reader-load-option" onClick={()=>select(createLoadNo)}>Create Load {createLoadNo}</button>:null}
    </div>

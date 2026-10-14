@@ -4,11 +4,14 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-export const VERSION='110.4.72';
-export const BUILD_PREFIX='v110472-load-picker-pod';
+export const VERSION='110.4.73';
+export const BUILD_PREFIX='v110473-current-load-consistency';
 const PREVIOUS_VERSION='110.4.70';
 const PREVIOUS_BUILD='v110470-single-device-ipad';
 export const RELEASE_NOTES=Object.freeze([
+  'Home, Business Center and document filing share one read-only current-load view, including reviewed shipper aliases and recorded delivery closeout.',
+  'Unlinked shipment references are shown separately from broker load numbers and do not raise a false missing-BOL alert.',
+  'Business figures and load numbers use legible dark text on light cards; financial records and duty events are preserved.',
   'Document filing shows the current load first, then recent loads, with searchable company, route, date and status cards.',
   'Imported load folders retain their saved company and route details when a logbook candidate has empty metadata.',
   'Short-form bills of lading with damaged printed headings retain source-backed parties and carrier; a driver-selected POD stays explicit when handwriting cannot be verified.',
@@ -59,11 +62,11 @@ export function applyReaderRelease({root=process.cwd(),env=process.env,now=new D
   const json=file=>JSON.parse(before.get(file));
   const previous=json('release-version.json');
   for(const file of ['release-version.json','public/app-version.json','package.json','package-lock.json']){
-    assert.ok([PREVIOUS_VERSION,VERSION].includes(json(file).version),`Reader release requires fully materialized ${PREVIOUS_VERSION} runtime: ${file}`);
+    assert.ok([PREVIOUS_VERSION,'110.4.72',VERSION].includes(json(file).version),`Reader release requires fully materialized ${PREVIOUS_VERSION} runtime: ${file}`);
   }
   assert.match(before.get('source/src/modules/scan/SmartScanSheetV105.jsx')||fs.readFileSync(path.join(root,'source/src/modules/scan/SmartScanSheetV105.jsx'),'utf8'),/analysisWithProjection\(/,'Install the Reader foundation before finalizing its release');
   const previousBuild=previous.build;
-  assert.ok(previousBuild===PREVIOUS_BUILD||new RegExp(`^${BUILD_PREFIX}-[a-f0-9]{12}$`).test(previousBuild),'Reader release predecessor build is not recognized');
+  assert.ok(previousBuild===PREVIOUS_BUILD||/^v110472-load-picker-pod-[a-f0-9]{12}$/.test(previousBuild)||new RegExp(`^${BUILD_PREFIX}-[a-f0-9]{12}$`).test(previousBuild),'Reader release predecessor build is not recognized');
   const sameRelease=previous.version===VERSION&&previous.build===build&&previous.sourceCommit===sourceCommit;
   const releasedAt=sameRelease&&previous.releasedAt?previous.releasedAt:now.toISOString();
   const metadata={version:VERSION,build,force:false,label:`v${VERSION} Reader evidence and explicit review`,sourceCommit,notes:[...RELEASE_NOTES],releasedAt,updatedAt:releasedAt};
@@ -77,7 +80,7 @@ export function applyReaderRelease({root=process.cwd(),env=process.env,now=new D
   }
   const locks=json('module-locks.v1.json');locks.release=VERSION;setJSON('module-locks.v1.json',locks);
   for(const file of TEXT_FILES){
-    let text=before.get(file).replaceAll(PREVIOUS_VERSION,VERSION).replaceAll(previousBuild,build);
+    let text=before.get(file).replaceAll(PREVIOUS_VERSION,VERSION).replaceAll(previous.version,VERSION).replaceAll(PREVIOUS_BUILD,build).replaceAll(previousBuild,build);
     if(file==='source/src/shared/ui/ToolsSheet.jsx'){
       text=text.replace(/Log Tools · v\d+\.\d+\.\d+/g,'Log Tools · v{CURRENT_APP_VERSION}');
       assert.ok(text.includes('Log Tools · v{CURRENT_APP_VERSION}'),'Reader release ToolsSheet version anchor changed');
