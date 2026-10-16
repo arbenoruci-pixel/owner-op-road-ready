@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 // Provenance: v110444 pickup word boundaries; v110455 checklist preservation;
 // v110435/v110445 DayLog display/team pickup; v110469 insert continuity;
 // v110381 insert fixture and test-support/install-legacy-cloud-fixtures.mjs.
+// v110475 adds the explicit unloading route selection and reference handling.
 export function installDutyCompatibility(root=process.cwd()) {
   const read=file=>fs.readFileSync(path.join(root,file),'utf8');
   const reviewed=JSON.parse(read('scripts/test-support/reviewed-duty-hashes.json'));

@@ -5,9 +5,7 @@ import {sameFreightReference} from './teamPickupV110445.js';
 import {applyDeliveryContextToPayloadV1034} from '../../modules/loads/multiStopDeliveryV1034.js';
 
 const text = value => String(value ?? '').trim();
-const key = value => text(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
 const list = value => Array.isArray(value) ? value : [];
-const rows = state => Object.entries(state.routeLegsByDay || {}).flatMap(([day, legs]) => list(legs).map(leg => ({...leg, day:leg.day || day})));
 const hidden = leg => /^(cancelled|canceled|archived|superseded|dismissed)$/i.test(text(leg.status));
 const closed = leg => /^(delivered|completed|closed)$/i.test(text(leg.status));
 const docs = leg => text(leg.shippingDocs || leg.bol || leg.loadNo);

@@ -34,6 +34,7 @@ patch(app, 'const loadPayload = { status, reason, city:effectiveCity, state:effe
 patch(app, 'updateRouteLegsForStatus(base.routeLegsByDay || {}, day, loadPayload, eventId, changeAt);', 'updateRouteLegsForStatus(base.routeLegsByDay || {}, day, loadPayload, eventId, changeAt, base);');
 patch(app, '      return recordOnDutyHandoffUpdate(base, markDayRecert(next, day), day, handoffUpdate, now);', '      next = finishDeliveryState(next, loadPayload, eventId);\n      return recordOnDutyHandoffUpdate(base, markDayRecert(next, day), day, handoffUpdate, now);');
 const sheet = 'source/src/modules/status/StatusWorkflowSheet.jsx';
+patch(sheet, 'import { applyDeliveryContextToPayloadV1034, resolveDeliveryContextV1034 }', 'import { resolveDeliveryContextV1034 }');
 patch(sheet, "import React, { useEffect, useRef, useState } from 'react';", "import React, { useEffect, useRef, useState } from 'react';\nimport {deliveryRouteChoices,prepareDeliveryPayload} from '../../core/routes/deliveryCloseoutV110475.js';\nimport {localDayKey} from '../../shared/utils/date.js';\nimport {nowMin} from '../../shared/utils/time.js';");
 patch(sheet, '  const [startAgoMinutes, setStartAgoMinutes] = useState(0);', `  const [startAgoMinutes, setStartAgoMinutes] = useState(0);
   const [deliveryRouteId,setDeliveryRouteId] = useState('');
@@ -48,7 +49,7 @@ patch(sheet, '      setDestination(activeDeliveryStopV1034);', `      const rout
 patch(sheet, '<section className="picker-section load-link-section multi-stop-delivery-v1034">', `<section className="picker-section load-link-section multi-stop-delivery-v1034">
             {loadReasonKind(status,selectedReasons)==='delivery' && deliveryChoices.length>0 ? <label className="delivery-route-choice">
               <span>Load to complete</span>
-              <select aria-label="Load to complete" value={chosenDeliveryRouteId} onChange={event=>{setDeliveryRouteId(event.target.value);const leg=deliveryChoices.find(row=>row.id===event.target.value);if(leg)setDestination([leg.toCity,leg.toState].filter(Boolean).join(', '));}}>
+              <select aria-label="Load to complete" value={chosenDeliveryRouteId} onChange={event=>{setDeliveryRouteId(event.target.value);const leg=deliveryChoices.find(row=>row.id===event.target.value);if(leg){setDestination([leg.toCity,leg.toState].filter(Boolean).join(', '));setShippingDocs(leg.loadNo || leg.shippingDocs || leg.bol || '');}}}>
                 <option value="">Choose the load being unloaded</option>
                 {deliveryChoices.map(leg=><option key={leg.id} value={leg.id}>{leg.shippingDocs || leg.loadNo} · {[leg.fromCity,leg.fromState].filter(Boolean).join(', ')} → {[leg.toCity,leg.toState].filter(Boolean).join(', ')}{leg.stopSequence ? ' · Stop '+leg.stopSequence : ''}</option>)}
               </select>
