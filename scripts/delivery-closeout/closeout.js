@@ -25,11 +25,11 @@ export function deliveryRouteChoices(state, {day, minute = 1440}) {
 export function deliveryRouteMatch(state, payload, {day, minute = 1440, eventId = ''}) {
   const index = routeHistoryIndex(state);
   const all = index.routes.filter(loaded);
-  const eligible = all.filter(leg => (!closed(leg) || eventId && leg.deliveryEventId === eventId)
-    && before(leg.pickupDay || leg.day, leg.pickupMin ?? 0, day, minute));
+  const currentIds = new Set(deliveryRouteChoices(state, {day,minute}).map(leg => leg.id));
+  const eligible = all.filter(leg => currentIds.has(leg.id) || eventId && leg.deliveryEventId === eventId);
   if (payload.deliveryRouteId) {
     const chosen = eligible.filter(leg => leg.id === payload.deliveryRouteId);
-    const current = deliveryRouteChoices(state, {day,minute}).some(leg => leg.id === payload.deliveryRouteId);
+    const current = currentIds.has(payload.deliveryRouteId);
     const editing = eventId && chosen[0]?.deliveryEventId === eventId;
     if (chosen.length !== 1 || !current && !editing) throw new Error('The selected load changed. Reopen Delivery / Unloading and choose its load.');
     return chosen[0];

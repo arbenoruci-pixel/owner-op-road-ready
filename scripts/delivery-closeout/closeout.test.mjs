@@ -38,6 +38,9 @@ test('canceled, empty, planned and future shipments cannot become the delivery d
     const s=fixture();Object.assign(s.routeLegsByDay[pickupDay][0],change);
     if(change.pickupDay)s.eventsByDay['2026-09-20']=s.eventsByDay[pickupDay],delete s.eventsByDay[pickupDay];
     assert.equal(deliveryRouteChoices(s,at).length,0,JSON.stringify(change));
+    const matchingReference={...payload,deliveryRouteId:'',shippingDocs:'SHIPPER-REF',loadNo:'SHIPPER-REF'};
+    assert.equal(deliveryRouteMatch(s,matchingReference,at),null,'a matching number cannot close an ineligible pickup');
+    assert.equal(completeDeliveryRoute(s.routeLegsByDay,day,matchingReference,'unload',887,s),null);
   }
 });
 test('a stale explicit selection is rejected after another device completed the route',()=>{
