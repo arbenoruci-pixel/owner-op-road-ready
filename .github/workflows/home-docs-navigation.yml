@@ -49,6 +49,7 @@ jobs:
           node scripts/workspace-navigation/browser-navigation.mjs
           node scripts/v110453/browser-workspace.mjs
           node scripts/v110435/browser-phone-home.mjs
+          node scripts/v110430/browser-export.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
