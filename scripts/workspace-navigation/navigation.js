@@ -10,7 +10,8 @@ export function returnWorkspace(state,view,fallback='logs'){
   const target=state.workspaceReturnViews?.[view];
   return {...state,view:views.has(target)&&target!==view?target:fallback,sheet:null,selectMode:false,selectedIds:[]};
 }
-export function recordLogDay(record,state){
+export function recordLogDay(record,state,fallback=''){
+  if(!record?.driverId&&!record?.day)return fallback;
   const active=state.activeDriverId||state.teamDrivers?.[0]?.id||'driver_primary';
   if(record?.driverId!==active||!/^\d{4}-\d{2}-\d{2}$/.test(text(record?.day)))return '';
   return [state.eventsByDay,state.formByDay,state.signatureByDay].some(book=>Object.hasOwn(book||{},record.day))?record.day:'';

@@ -19,7 +19,7 @@ patch(home,"import {pendingSavedLoadScanV110312}","import {recordLogDay,shipment
 patch(home,'export default function HomeScreen({\n  state,','export default function HomeScreen({\n  state,\n  onHomeSectionConsumed,');
 patch(home,"const [businessSection, setBusinessSection] = useState('');","const [businessSection, setBusinessSection] = useState(()=>state.homeSection||'');\n  useEffect(()=>{if(state.homeSection)onHomeSectionConsumed?.();},[state.homeSection,onHomeSectionConsumed]);");
 patch(home,"['overview','documents','billing','ifta','tolls','audit','connections']","['overview','documents','load_documents','billing','ifta','tolls','audit','connections']");
-patch(home,'        onOpenLog={() => onOpenDay?.(today)}','        onOpenLog={record => {const day=record?recordLogDay(record,state):today;if(day)onOpenDay?.(day);}}');
+patch(home,'        onOpenLog={() => onOpenDay?.(today)}','        onOpenLog={record => {const day=record?recordLogDay(record,state,today):today;if(day)onOpenDay?.(day);}}');
 patch(home,'        onOpenDay={() => onOpenDay?.(today)}','        onOpenDay={() => onOpenDay?.(today)}\n        onOpenLogbook={onOpenLogbook}\n        onOpenShipment={reference=>onOpenDay?.(shipmentLogDay(state,reference,today))}');
 const adaptive='source/src/modules/home/AdaptiveHomeV1038.jsx';
 patch(adaptive,'onDot, onWallet, onBackup, onDrive, operatorProfile })','onDot, onWallet, onBackup, onDrive, onLogbook, onShipment, operatorProfile })');

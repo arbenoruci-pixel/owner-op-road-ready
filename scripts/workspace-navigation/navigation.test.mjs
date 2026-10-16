@@ -29,6 +29,7 @@ test('a record link keeps its exact saved day and never switches the active driv
  assert.equal(recordLogDay({day:'2026-10-12',driverId:'archived'},state),'');
  assert.equal(recordLogDay({day:'2026-10-11',driverId:'primary'},state),'');
  assert.equal(recordLogDay({day:'invalid',driverId:'primary'},state),'');
+ assert.equal(recordLogDay({type:'click',nativeEvent:{}},state,'2026-10-16'),'2026-10-16','existing generic log buttons may pass a DOM event');
  const rows=catalog([],state);assert.equal(rows.filter(row=>row.kind==='log').length,2);
  assert.equal(rows.find(row=>row.source.driverId==='archived').source.events[0].id,'other');assert.deepEqual(state,before);
 });
