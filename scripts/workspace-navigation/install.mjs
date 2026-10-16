@@ -107,7 +107,7 @@ for(const [callback,view]of [['onDot','dot'],['onWallet','wallet'],['onBackup','
 }
 // Existing day-editor regressions now traverse the Logbook list before today.
 // Keep every form, duty, signature and sync assertion in those fixtures intact.
-patch('scripts/v110430/browser-export.mjs',"await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('button',{name:'Home',exact:true}).first().click();", "await page.getByRole('button',{name:'Back',exact:true}).click();if(!await page.locator('.phone-app-grid').isVisible())await page.getByRole('button',{name:'Home',exact:true}).first().click();");
+patch('scripts/v110430/browser-export.mjs',"await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('button',{name:'Home',exact:true}).first().click();", "await page.getByRole('button',{name:'Back',exact:true}).click();await page.locator('.phone-app-grid').waitFor();");
 for(const file of ['scripts/v110470/browser-handoff.mjs','scripts/v110423/browser-team-freight.mjs','scripts/v110455/browser-account.mjs','scripts/v110409/browser-edit-gps.mjs','scripts/v110402/browser-backup.mjs','scripts/v110421/browser-gps-sign.mjs','scripts/v110448/browser-form-team.mjs','scripts/v110445/browser-team-pickup.mjs','scripts/insert-continuity/browser.mjs','scripts/v110429/browser-portable.mjs','scripts/v110408/browser-sleeper-midnight.mjs','scripts/v110407/browser-team-import.mjs']){
  let source=read(file);if(source.includes('// Home list navigation v110477'))continue;
  const openToday=receiver=>`if(await ${receiver}.getByRole('button',{name:'Open today',exact:true}).isVisible())await ${receiver}.getByRole('button',{name:'Open today',exact:true}).click();`;
