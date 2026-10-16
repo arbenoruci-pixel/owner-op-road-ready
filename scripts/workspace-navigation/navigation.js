@@ -2,9 +2,9 @@
 const text=value=>String(value??'').trim();
 const ref=value=>text(value).toUpperCase();
 const views=new Set(['logs','logbook','day','wallet','dot','backup','driveMode','unsigned']);
-export function openWorkspace(state,view){
+export function openWorkspace(state,view,{day}={}){
   if(!views.has(view))return state;
-  return {...state,view,sheet:null,workspaceReturnViews:{...state.workspaceReturnViews,[view]:views.has(state.view)?state.view:'logs'}};
+  return {...state,view,sheet:null,...(view==='driveMode'&&/^\d{4}-\d{2}-\d{2}$/.test(text(day))?{activeDay:day}:{}),workspaceReturnViews:{...state.workspaceReturnViews,[view]:views.has(state.view)?state.view:'logs'}};
 }
 export function returnWorkspace(state,view,fallback='logs'){
   const target=state.workspaceReturnViews?.[view];

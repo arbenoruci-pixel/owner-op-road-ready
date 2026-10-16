@@ -18,6 +18,8 @@ test('Home tools return to their caller and independent origins do not overwrite
   assert.equal(returned.eventsByDay,original.eventsByDay);assert.equal(returned.signatureByDay,original.signatureByDay);
  }
  const history=openWorkspace({...original,view:'day'},'dot');assert.equal(returnWorkspace(history,'dot').view,'day');
+ const drive=openWorkspace({...original,activeDay:'2026-10-12'},'driveMode',{day:'2026-10-16'});assert.equal(drive.activeDay,'2026-10-16');assert.equal(drive.eventsByDay,original.eventsByDay);
+ assert.equal(openWorkspace({...original,activeDay:'2026-10-12'},'driveMode').activeDay,'2026-10-12','restoring an inspected day keeps its selected date');
  const logbook=openWorkspace({...history,view:'logbook'},'backup');assert.equal(returnWorkspace(logbook,'backup').view,'logbook');
  assert.equal(returnWorkspace(logbook,'dot').view,'day');assert.deepEqual(original,before);
  assert.equal(returnWorkspace({...original,workspaceReturnViews:{dot:'https://example.invalid'}},'dot').view,'logs');
@@ -73,6 +75,10 @@ test('billing receives the same recorded delivery as Home and the business list 
  assert.equal(billingReadinessV102(legacy,[],store).checklist.find(item=>item.id==='delivery').complete,true);
  assert.equal(serviceDates(legacy).delivered,true);
  assert.equal(serviceDates({...legacy,documentWorkflowStage:'tonu'}).stage,'tonu');
+ for(const originalStatus of ['tonu','cancelled','paid','invoiced','booked'])assert.equal(serviceDates({status:'archived',operationalStatus:'delivered',documentTransferEvidence:{originalStatus}}).stage,originalStatus,'archive workflow status remains authoritative');
+ assert.equal(serviceDates({...legacy,status:'archived'}).stage,'booked');
+ assert.equal(billingReadinessV102({...legacy,status:'archived'},[],store).checklist.find(item=>item.id==='delivery').complete,false,'a closed archive marker alone is not delivery evidence');
+ for(const status of ['paid','invoiced'])assert.equal(serviceDates({...legacy,status}).stage,'booked','financial closeout alone cannot replace the filed service stage');
  assert.deepEqual({state,store},before);
 });
 test('a newer explicit filing applies to mirrored metadata before grouping, without copying an original',()=>{

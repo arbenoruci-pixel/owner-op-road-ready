@@ -58,8 +58,8 @@ patch('source/src/modules/owneros/evidenceCoreV110413.js','export const loadOf =
 patch('source/src/modules/owneros/loadFolderEngineV10969.js',"function docLoad(d={}){return upper(","function docLoad(d={}){if(d.evidenceFilingV1?.version===1&&d.evidenceFilingV1.confirmed)return upper(d.evidenceFilingV1.loadNo);return upper(");
 const copies='source/src/modules/owneros/sourceCopiesV110419.js';
 patch(copies,'if(doc.repairOverlayApplied||doc.sourceCopyReviewV110419)return doc;','if(doc.repairOverlayApplied||doc.sourceCopyReviewV110419||doc.evidenceFilingV1?.confirmed)return doc;');
-patch('source/src/modules/owneros/ownerOpsStoreV102.js',"const delivered = ['delivered','invoice_ready','invoiced','submitted','paid'].includes(stage)","const delivered = !['tonu','cancelled','canceled'].includes(stage)&&load.operationalStatus==='delivered' || ['delivered','invoice_ready','invoiced','submitted','paid'].includes(stage)");
-patch('source/src/modules/owneros/loadPresentationV110417.js',"const stage=text(load.documentWorkflowStage||load.serviceStatus||load.status).toLowerCase();", "const stage=text(load.documentWorkflowStage||load.serviceStatus||load.status).toLowerCase();\n  if(load.operationalStatus==='delivered'&&!['tonu','cancelled','canceled','invoiced','submitted','paid'].includes(stage))return 'delivered';");
+patch('source/src/modules/owneros/ownerOpsStoreV102.js',"const delivered = ['delivered','invoice_ready','invoiced','submitted','paid'].includes(stage)","const delivered = (text(load.status).toLowerCase()==='delivered'&&!['tonu','cancelled','canceled','archived'].includes(stage)&&load.operationalStatus==='delivered') || ['delivered','invoice_ready','invoiced','submitted','paid'].includes(stage)");
+patch('source/src/modules/owneros/loadPresentationV110417.js',"const stage=text(load.documentWorkflowStage||load.serviceStatus||load.status).toLowerCase();", "const stage=text(load.documentWorkflowStage||load.serviceStatus||load.status).toLowerCase();\n  if(stage!=='archived'&&text(load.status).toLowerCase()==='delivered'&&load.operationalStatus==='delivered'&&!['tonu','cancelled','canceled','invoiced','submitted','paid'].includes(stage))return 'delivered';");
 const workspace='source/src/modules/owneros/EvidenceWorkspaceV110453.jsx';
 patch(workspace,"import React,{", "import {localFileRecord,recordLogDay} from '../../core/navigation/workspaceNavigationV110477.js';\nimport React,{");
 patch(workspace,"import {readDocuments,addOriginal,saveFiling}","import {addOriginal,saveFiling}");
@@ -90,7 +90,7 @@ patch(app,'      <HomeScreen\n        state={state}','      <HomeScreen\n       
 patch(app,"      onOpenLoad={()=>setState(s=>({ ...s, view:'day', roadGuardTabRequest:{ tab:'form', at:Date.now(), source:'wallet-load' } }))}","      onOpenLoad={()=>setState(s=>({...s,view:'logs',sheet:null,homeSection:'load_documents'}))}");
 for(const [view,callback]of [['dot','onOpenDot'],['wallet','onOpenWallet'],['backup','onOpenBackup'],['driveMode','onOpenDrive'],['backup','onOpenTransfer']]){
  const before=`${callback}={()=>setState(s=>({ ...s, view:'${view}', sheet:null }))}`;
- const after=`${callback}={()=>setState(s=>openWorkspace(s,'${view}'))}`;
+ const after=`${callback}={()=>setState(s=>openWorkspace(s,'${view}'${view==='driveMode'?",{day:localDayKey()}":''}))}`;
  if(read(app).includes(before))fs.writeFileSync(app,read(app).replaceAll(before,after));
  else assert.ok(read(app).includes(after),'Workspace callback anchor '+callback);
 }
@@ -101,7 +101,6 @@ for(const [tag,view,fallback]of [['DriveModeScreen','driveMode','logs'],['Digita
  if(!block.includes(after)){assert.equal(block.split(before).length,2,'Back anchor '+tag);fs.writeFileSync(app,source.slice(0,start)+block.replace(before,after)+source.slice(end));}
 }
 patch(app,"      onOpenLogs={()=>setState(s=>({ ...s, view:'logs', sheet:null }))}","      onOpenLogs={openLogbook}");
-patch(app,"onOpenLog={()=>setState(s=>({ ...s, view:'day', sheet:null, roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'drive-mode-log' } }))}","onOpenLog={()=>openDay(localDayKey())}");
 for(const [callback,view]of [['onDot','dot'],['onWallet','wallet'],['onBackup','backup']]){
  patch(app,`${callback}={()=>setState(s=>({ ...s, sheet:null, view:'${view}' }))}`,`${callback}={()=>setState(s=>openWorkspace(s,'${view}'))}`);
 }
