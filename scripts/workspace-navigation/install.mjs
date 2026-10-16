@@ -35,6 +35,7 @@ patch(tools,'    documents:<','    drive:<><circle cx="12" cy="12" r="9"/><circl
 const css='source/src/phone-home-v110435.css',cssFix='\n/* Decorative header shapes must never intercept Home controls. */\n.phone-home-v435 .command-home-head::after{pointer-events:none}\n.phone-home-v435 .phone-settings{position:relative;z-index:1}\n';
 if(!read(css).includes(cssFix))fs.appendFileSync(css,cssFix);
 const owner='source/src/modules/owneros/OwnerOperatorOSV102.jsx';
+patch('source/src/modules/loads/currentLoadV110473.js','operationalStatus:operational||load.operationalStatus','operationalStatus:load.status===\'archived\'&&load.operationalStatus===\'closed\'?\'closed\':operational||load.operationalStatus');
 patch(owner,"import EvidenceWorkspace from", "import {operationalCandidateContext,businessLoadRows} from '../loads/currentLoadV110473.js';\nimport {reconcileLoadFoldersV10974} from './loadFolderReconciliationV10974.js';\nimport EvidenceWorkspace from");
 patch(owner,"const initialTab = TABS_V102.some(([id])=>id===section) ? section : 'overview';","const initialTab = section==='load_documents'?'documents':TABS_V102.some(([id])=>id===section) ? section : 'overview';");
 patch(owner,'const [documents, setDocuments] = useState([]);','const [vaultDocuments, setDocuments] = useState([]);');

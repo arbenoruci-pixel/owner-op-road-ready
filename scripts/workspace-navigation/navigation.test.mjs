@@ -79,6 +79,9 @@ test('billing receives the same recorded delivery as Home and the business list 
  assert.equal(serviceDates({...legacy,status:'archived'}).stage,'booked');
  assert.equal(billingReadinessV102({...legacy,status:'archived'},[],store).checklist.find(item=>item.id==='delivery').complete,false,'a closed archive marker alone is not delivery evidence');
  for(const status of ['paid','invoiced'])assert.equal(serviceDates({...legacy,status}).stage,'booked','financial closeout alone cannot replace the filed service stage');
+ const archiveStore={loads:[{id:'archive',loadNo:'ARCHIVE',status:'archived',operationalStatus:'closed',gross:4000}]};
+ const archive=businessLoadRows(archiveStore,operationalCandidateContext(state,archiveStore,{day:'2026-10-16',minute:100}))[0];
+ assert.equal(archive.status,'archived');assert.equal(archive.operationalStatus,'closed');assert.equal(archive.gross,4000);assert.deepEqual(archiveStore.loads[0],{id:'archive',loadNo:'ARCHIVE',status:'archived',operationalStatus:'closed',gross:4000});
  assert.deepEqual({state,store},before);
 });
 test('a newer explicit filing applies to mirrored metadata before grouping, without copying an original',()=>{
