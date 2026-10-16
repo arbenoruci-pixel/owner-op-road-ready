@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {deliveryRouteChoices,prepareDeliveryPayload,completeDeliveryRoute,finishDeliveryState,deliveryRouteMatch} from '../../source/src/core/routes/deliveryCloseoutV110475.js';
+import {deliveryRouteChoices,deliveryRouteInfo,prepareDeliveryPayload,completeDeliveryRoute,finishDeliveryState,deliveryRouteMatch} from '../../source/src/core/routes/deliveryCloseoutV110475.js';
 import {routeLegsForDayCanonical} from '../../source/src/core/routes/routeNormalization.js';
 import {shipmentContextForEvents} from '../../source/src/core/routes/shipmentCarryover.js';
 const pickupDay='2026-09-08',day='2026-09-12',at={day,minute:887};
@@ -9,6 +9,23 @@ const event={id:'unload',status:'ON',startMin:887,endMin:917,note:'Pre-trip insp
 const payload={...event,reason:event.note,deliveryRouteId:'shipment'};
 function fixture(){return {eventsByDay:{[pickupDay]:[{id:'pickup',status:'ON',startMin:600,endMin:620,note:'Pickup / Loading',shippingDocs:'SHIPPER-REF',city:'Lisbon',state:'ME'}]},routeLegsByDay:{[pickupDay]:[{id:'shipment',day:pickupDay,pickupDay,pickupEventId:'pickup',pickupMin:600,shippingDocs:'SHIPPER-REF',loadNo:'SHIPPER-REF',fromCity:'Lisbon',fromState:'ME',toCity:'Omaha',toState:'NE',status:'open',kind:'loaded'}]},loadInfo:{shippingDocs:'SHIPPER-REF',loadNo:'SHIPPER-REF'},manualMilesByDay:{[day]:570.4},signatureByDay:{[pickupDay]:{signed:true,signature:'retained'}},certifyStatus:{[pickupDay]:'Certified'}};}
 function apply(s,p=payload){const input=prepareDeliveryPayload(s,p,at);const routes=completeDeliveryRoute(s.routeLegsByDay,day,input,event.id,at.minute,s);const next={...s,eventsByDay:{...s.eventsByDay,[day]:[{...event,...input,id:event.id}, {id:'empty',status:'D',startMin:917,endMin:1197,note:'Driving empty'}]},routeLegsByDay:routes,loadInfo:{...s.loadInfo,sourceEventId:event.id}};return {input,next:finishDeliveryState(next,input,event.id)};}
+test('a stale prior guide cannot prefill another selected shipment number or stop',()=>{
+  const s=fixture();s.activeLoadGuideId='old';s.loadInfo={loadNo:'OLD-REF',guideId:'old'};
+  s.loadGuidesById={old:{id:'old',loadNo:'OLD-REF',status:'active',stops:[{id:'old-stop',type:'delivery',city:'Prior City',state:'NE'}]}};
+  const info=deliveryRouteInfo(s,s.routeLegsByDay[pickupDay][0]);
+  assert.equal(info.loadNo,'SHIPPER-REF');assert.equal(info.destination,'Omaha, NE');assert.equal(info.context,null);
+  assert.equal(prepareDeliveryPayload(s,{...payload,loadNo:'DRIVER-ENTERED'},at).loadNo,'DRIVER-ENTERED');
+});
+test('a selected route can prefill only its own linked guide and delivery stop',()=>{
+  const s=fixture(),leg=s.routeLegsByDay[pickupDay][0];Object.assign(leg,{loadGroupId:'own',stopSequence:1});
+  s.activeLoadGuideId='old';s.loadInfo={loadNo:'OLD-REF',guideId:'old'};
+  s.loadGuidesById={old:{id:'old',loadNo:'OLD-REF'},own:{id:'own',loadNo:'OWN-BROKER',stops:[{id:'own-stop',type:'delivery',city:'Omaha',state:'NE'}]}};
+  const info=deliveryRouteInfo(s,leg);assert.equal(info.loadNo,'OWN-BROKER');assert.equal(info.context.currentStop.id,'own-stop');
+});
+test('no selected shipment leaves delivery defaults empty instead of restoring a cached guide',()=>{
+  const s=fixture();s.activeLoadGuideId='old';s.loadGuidesById={old:{id:'old',loadNo:'OLD-REF'}};
+  assert.deepEqual(deliveryRouteInfo(s,null),{loadNo:'',destination:'',context:null});
+});
 test('Omaha: broker number and original BOL close the explicitly selected route',()=>{
   const s=fixture(),before=structuredClone(s),{input,next}=apply(s);
   assert.equal(input.shippingDocs,'SHIPPER-REF');assert.equal(input.bol,'SHIPPER-REF');assert.equal(input.loadNo,'BROKER-REF');

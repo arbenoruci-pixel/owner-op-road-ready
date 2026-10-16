@@ -9,6 +9,7 @@ import {fileURLToPath} from 'node:url';
 // v110435/v110445 DayLog display/team pickup; v110469 insert continuity;
 // v110381 insert fixture and test-support/install-legacy-cloud-fixtures.mjs.
 // v110475 adds the explicit unloading route selection and reference handling.
+// v110476 scopes form defaults to that selection instead of the cached guide.
 export function installDutyCompatibility(root=process.cwd()) {
   const read=file=>fs.readFileSync(path.join(root,file),'utf8');
   const reviewed=JSON.parse(read('scripts/test-support/reviewed-duty-hashes.json'));

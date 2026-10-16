@@ -2,7 +2,7 @@
 // broker numbers alone never identify a different pickup.
 import {routeHistoryIndex, routeHistoryWindow} from './shipmentCarryover.js';
 import {sameFreightReference} from './teamPickupV110445.js';
-import {applyDeliveryContextToPayloadV1034} from '../../modules/loads/multiStopDeliveryV1034.js';
+import {applyDeliveryContextToPayloadV1034,resolveDeliveryContextV1034} from '../../modules/loads/multiStopDeliveryV1034.js';
 
 const text = value => String(value ?? '').trim();
 const list = value => Array.isArray(value) ? value : [];
@@ -12,6 +12,18 @@ const docs = leg => text(leg.shippingDocs || leg.bol || leg.loadNo);
 const loaded = leg => !hidden(leg) && !leg.noLoadDeclared && !/empty|reposition|bobtail|deadhead/i.test(text(leg.kind)) && !/^(empty|mt|empty\/mt|bobtail)$/i.test(docs(leg));
 const delivery = payload => payload.status === 'ON' && /\b(delivery|unloading|delivered)\b/i.test([payload.reason, payload.note, ...list(payload.reasons)].map(text).join(' '));
 const before = (day, minute, otherDay, otherMinute) => day < otherDay || day === otherDay && Number(minute) <= Number(otherMinute);
+
+function selectedGuideState(state, leg) {
+  const guide = leg?.loadGroupId && state.loadGuidesById?.[leg.loadGroupId];
+  return {...state, activeLoadGuideId:guide?.id || '', loadInfo:{guideId:guide?.id || ''}, loadGuidesById:guide ? {[guide.id]:guide} : {}};
+}
+
+export function deliveryRouteInfo(state, leg) {
+  if (!leg) return {loadNo:'', destination:'', context:null};
+  const context = resolveDeliveryContextV1034(selectedGuideState(state,leg),{deliveryStopSequence:leg.stopSequence});
+  return {loadNo:text(context?.loadNo || leg.loadNo || docs(leg)),
+    destination:[leg.toCity,leg.toState].filter(Boolean).join(', ') || context?.currentStopText || '', context};
+}
 
 export function deliveryRouteChoices(state, {day, minute = 1440}) {
   const index = routeHistoryIndex(state);
@@ -50,8 +62,7 @@ export function prepareDeliveryPayload(state, payload, at) {
   if (!leg) return {...payload, deliveryCompleted:true};
   // Scope the old guide helper to the chosen shipment, so a stale global guide
   // cannot replace a driver's selected delivery or its references.
-  const guide = leg.loadGroupId && state.loadGuidesById?.[leg.loadGroupId];
-  const scoped = {...state, activeLoadGuideId:guide?.id || '', loadInfo:{guideId:guide?.id || ''}, loadGuidesById:guide ? {[guide.id]:guide} : {}};
+  const scoped = selectedGuideState(state,leg);
   const context = applyDeliveryContextToPayloadV1034(scoped, {...payload, deliveryStopSequence:leg.stopSequence});
   return {...context,
     shippingDocs:docs(leg), bol:text(leg.bol || docs(leg)),
