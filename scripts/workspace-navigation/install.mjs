@@ -4,6 +4,16 @@ const read=p=>fs.readFileSync(p,'utf8');
 function patch(p,before,after){const source=read(p);if(source.includes(after))return;assert.equal(source.split(before).length,2,'Workspace navigation anchor: '+p+' / '+before.slice(0,90));fs.writeFileSync(p,source.replace(before,()=>after));}
 const nav='source/src/core/navigation/workspaceNavigationV110477.js';
 fs.mkdirSync('source/src/core/navigation',{recursive:true});fs.copyFileSync('scripts/workspace-navigation/navigation.js',nav);
+fs.copyFileSync('scripts/workspace-navigation/original.js','source/src/core/navigation/documentOriginalV110477.js');
+const transfer='source/src/modules/owneros/transferStorageV110412.js';
+patch(transfer,"import Dexie from 'dexie';","import Dexie from 'dexie';\nimport {readDocumentOriginal} from '../../core/navigation/documentOriginalV110477.js';");
+const originalStart=read(transfer).indexOf('export async function readTransferOriginal(record) {'),originalEnd=read(transfer).indexOf('\nfunction unlinked(record)',originalStart);
+assert.ok(originalStart>=0&&originalEnd>originalStart,'Original reader boundary changed');
+const originalReader=`export async function readTransferOriginal(record) {
+  return readDocumentOriginal(record,{readLocal:clientId=>vaultBlobV102({...record,client_document_id:clientId}),getAccessToken:()=>window.ownerOpGetAccessToken?.(),fetch:(...args)=>window.fetch(...args)});
+}`;
+const transferSource=read(transfer),existingReader=transferSource.slice(originalStart,originalEnd);
+if(existingReader!==originalReader){assert.ok(existingReader.includes("fetch('/api/documents/read-original'"),'Original reader implementation changed');fs.writeFileSync(transfer,transferSource.slice(0,originalStart)+originalReader+transferSource.slice(originalEnd));}
 const home='source/src/modules/home/HomeScreen.jsx';
 patch(home,"import {pendingSavedLoadScanV110312}","import {recordLogDay,shipmentLogDay} from '../../core/navigation/workspaceNavigationV110477.js';\nimport {pendingSavedLoadScanV110312}");
 patch(home,"['overview','documents','billing','ifta','tolls','audit','connections']","['overview','documents','load_documents','billing','ifta','tolls','audit','connections']");
@@ -61,6 +71,7 @@ patch(workspace,'await saveFiling(selected.source,draft);','await saveFiling(sel
 patch(workspace,"  {tab==='loads'?loadsView:null}",`  {tab==='loads'&&unlinkedShipment?<aside className="rr-files-card"><h2>Shipment reference {unlinkedShipment.shipmentReference||unlinkedShipment.loadNo}</h2><p>{unlinkedShipment.origin} → {unlinkedShipment.destination}</p><p>A broker load is not linked yet. Add its rate confirmation and review the load number before saving.</p><button type="button" className="rr-files-primary" onClick={()=>onScan?.({kind:'rate_confirmation'})}>Add rate confirmation</button></aside>:null}
   {tab==='loads'?loadsView:null}`);
 patch(workspace,'{visible.length} records <span>',"{loading?'Loading records…':visible.length+' records'} <span>");
+patch(workspace,"{rows.filter(r=>r.kind==='document').length} saved files","{rows.filter(r=>r.kind==='document').length} document records");
 patch(workspace,"{adding||selected?.kind==='document'?<form",'{adding||canEdit?<form');
 patch(workspace,"<><p>{selected.notes||CATEGORIES[selected.category]}</p>{selected.kind==='log'?<><p>{selected.source.events.length} saved events</p><button type=\"button\" onClick={onOpenLog}>Open current logbook</button></>:null}",`<><p>{selected.notes||CATEGORIES[selected.category]}</p>
     {selected.kind==='document'?<><p>{[selected.date,selected.loadNo?'Load '+selected.loadNo:'',selected.merchant].filter(Boolean).join(' · ')}</p><p>Filing for this saved record is managed in its load folder.</p><button type="button" onClick={()=>chooseTab('loads')}>Open load folders</button></>:null}
@@ -89,5 +100,15 @@ patch(app,"      onOpenLogs={()=>setState(s=>({ ...s, view:'logs', sheet:null })
 patch(app,"onOpenLog={()=>setState(s=>({ ...s, view:'day', sheet:null, roadGuardTabRequest:{ tab:'log', at:Date.now(), source:'drive-mode-log' } }))}","onOpenLog={()=>openDay(localDayKey())}");
 for(const [callback,view]of [['onDot','dot'],['onWallet','wallet'],['onBackup','backup']]){
  patch(app,`${callback}={()=>setState(s=>({ ...s, sheet:null, view:'${view}' }))}`,`${callback}={()=>setState(s=>openWorkspace(s,'${view}'))}`);
+}
+// Existing day-editor regressions now traverse the Logbook list before today.
+// Keep every form, duty, signature and sync assertion in those fixtures intact.
+for(const file of ['scripts/v110470/browser-handoff.mjs','scripts/v110423/browser-team-freight.mjs','scripts/v110455/browser-account.mjs','scripts/v110409/browser-edit-gps.mjs','scripts/v110402/browser-backup.mjs','scripts/v110421/browser-gps-sign.mjs','scripts/v110448/browser-form-team.mjs','scripts/v110445/browser-team-pickup.mjs','scripts/insert-continuity/browser.mjs','scripts/v110429/browser-portable.mjs','scripts/v110408/browser-sleeper-midnight.mjs','scripts/v110407/browser-team-import.mjs']){
+ let source=read(file);if(source.includes('// Home list navigation v110477'))continue;
+ const openToday=receiver=>`if(await ${receiver}.getByRole('button',{name:'Open today',exact:true}).isVisible())await ${receiver}.getByRole('button',{name:'Open today',exact:true}).click();`;
+ source=source.replace(/(await (\w+)\.getByRole\('button',\s*\{\s*name:\s*'Open logbook',\s*exact:\s*true\s*\}\)\.click\(\);)/g,(match,all,receiver)=>all+openToday(receiver));
+ if(file.endsWith('browser-handoff.mjs')||file==='scripts/insert-continuity/browser.mjs')source=source.replace('await insert.waitFor();',openToday('page')+'await insert.waitFor();');
+ if(file==='scripts/v110448/browser-form-team.mjs')source=source.replace('await tab.click();await page.locator',openToday('page')+'await tab.click();await page.locator');
+ fs.writeFileSync(file,'// Home list navigation v110477\n'+source);
 }
 console.log('PASS — Home hit targets, records/loads/billing projection, dated log links and workspace return navigation installed');

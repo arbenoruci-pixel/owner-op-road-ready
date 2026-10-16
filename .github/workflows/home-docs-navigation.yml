@@ -29,7 +29,7 @@ jobs:
         run: node scripts/build-v110.mjs > /tmp/home-docs-build.log 2>&1 || { tail -n 120 /tmp/home-docs-build.log; exit 1; }
       - name: Connected records and existing delivery regression
         run: |
-          node --test scripts/workspace-navigation/navigation.test.mjs scripts/delivery-closeout/closeout.test.mjs scripts/reader-foundation/currentLoad.test.mjs
+          node --test scripts/workspace-navigation/*.test.mjs scripts/delivery-closeout/closeout.test.mjs scripts/reader-foundation/currentLoad.test.mjs
           node scripts/v110453/test-packet.mjs
           node scripts/test-duty-graph-continuity.mjs
           node scripts/verify-isolation-locks-v110.mjs

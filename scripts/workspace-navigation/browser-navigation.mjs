@@ -6,7 +6,7 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
  const browser=await engine.launch({headless:true}),context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
  await setupRoutes(context);page.on('pageerror',error=>errors.push(error.message));
  try{
-  const state=baseState();state.activeDriverId='primary';state.teamDrivers=[{id:'primary',name:'Synthetic Driver'},{id:'archived',name:'Saved Driver'}];state.activeTeamDriverIds=['primary'];
+  const state=baseState();state.certifyStatus['2026-09-07']='Needs signature';state.activeDriverId='primary';state.teamDrivers=[{id:'primary',name:'Synthetic Driver'},{id:'archived',name:'Saved Driver'}];state.activeTeamDriverIds=['primary'];
   state.teamLogbooksByDriverId={archived:{eventsByDay:{'2026-10-12':[{id:'archive-off',status:'OFF',startMin:0,endMin:1440,note:'Archived rest'}]},signatureByDay:{}}};
   state.eventsByDay['2026-10-12']=[{id:'primary-off',status:'OFF',startMin:0,endMin:1440,note:'Primary rest',source:'manual'}];
   state.eventsByDay['2026-10-14']=[{id:'new-pickup',status:'ON',startMin:600,endMin:630,note:'Pickup / Loading',loadNo:'SHIP-2',shippingDocs:'SHIP-2',city:'Example City',state:'IL'},{id:'off',status:'OFF',startMin:630,endMin:1440,note:'Off Duty',source:'manual'}];
