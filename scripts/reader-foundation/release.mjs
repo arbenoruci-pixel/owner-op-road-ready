@@ -4,17 +4,17 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-export const VERSION='110.4.76';
-export const BUILD_PREFIX='v110476-delivery-context';
+export const VERSION='110.4.77';
+export const BUILD_PREFIX='v110477-home-records';
 const PREVIOUS_VERSION='110.4.70';
 const PREVIOUS_BUILD='v110470-single-device-ipad';
 export const RELEASE_NOTES=Object.freeze([
-  'Delivery form defaults come only from the selected recorded route and its own linked guide, keeping prior shipment numbers and stops out of a new unloading.',
-  'Delivery / Unloading identifies the recorded load being completed, with an explicit choice when several shipments are open.',
-  'Broker load numbers and pickup BOL references remain separate while the selected original route receives its delivery event and completed status.',
-  'The completed shipment stops carrying into later duty events and log days; empty return driving retains its recorded times and miles.',
-  'Multi-stop unloading completes the selected stop; the load guide completes after its final delivery.',
-  'Canceled, future, unrecorded and changed shipment selections cannot silently complete a different load. Existing document reading, account access and synchronization behavior are preserved.',
+  'Home Settings receives taps, Logbook opens the day list, and tools return to the screen that opened them.',
+  'Files, load folders and billing use the same reconciled saved documents and operational delivery status.',
+  'Record links open the selected log date; saved co-driver logs remain visible without changing the active driver.',
+  'Drive displays the actual OFF, SB, ON or D status and opens today’s log.',
+  'An unlinked shipment opens its own pickup log and offers rate confirmation capture without guessing a broker load.',
+  'Original files, recorded duty times, mileage, signatures and financial values are retained.',
 ]);
 
 const TEXT_FILES=[
@@ -56,14 +56,14 @@ export function applyReaderRelease({root=process.cwd(),env=process.env,now=new D
   const json=file=>JSON.parse(before.get(file));
   const previous=json('release-version.json');
   for(const file of ['release-version.json','public/app-version.json','package.json','package-lock.json']){
-    assert.ok([PREVIOUS_VERSION,'110.4.72','110.4.73','110.4.74','110.4.75',VERSION].includes(json(file).version),`Reader release requires fully materialized ${PREVIOUS_VERSION} runtime: ${file}`);
+    assert.ok([PREVIOUS_VERSION,'110.4.72','110.4.73','110.4.74','110.4.75','110.4.76',VERSION].includes(json(file).version),`Reader release requires fully materialized ${PREVIOUS_VERSION} runtime: ${file}`);
   }
   assert.match(before.get('source/src/modules/scan/SmartScanSheetV105.jsx')||fs.readFileSync(path.join(root,'source/src/modules/scan/SmartScanSheetV105.jsx'),'utf8'),/analysisWithProjection\(/,'Install the Reader foundation before finalizing its release');
   const previousBuild=previous.build;
-  assert.ok(previousBuild===PREVIOUS_BUILD||/^v110472-load-picker-pod-[a-f0-9]{12}$/.test(previousBuild)||/^v110473-current-load-consistency-[a-f0-9]{12}$/.test(previousBuild)||/^v110474-document-reading-repair-[a-f0-9]{12}$/.test(previousBuild)||/^v110475-delivery-closeout-[a-f0-9]{12}$/.test(previousBuild)||new RegExp(`^${BUILD_PREFIX}-[a-f0-9]{12}$`).test(previousBuild),'Reader release predecessor build is not recognized');
+  assert.ok(previousBuild===PREVIOUS_BUILD||/^v110472-load-picker-pod-[a-f0-9]{12}$/.test(previousBuild)||/^v110473-current-load-consistency-[a-f0-9]{12}$/.test(previousBuild)||/^v110474-document-reading-repair-[a-f0-9]{12}$/.test(previousBuild)||/^v110475-delivery-closeout-[a-f0-9]{12}$/.test(previousBuild)||/^v110476-delivery-context-[a-f0-9]{12}$/.test(previousBuild)||new RegExp(`^${BUILD_PREFIX}-[a-f0-9]{12}$`).test(previousBuild),'Reader release predecessor build is not recognized');
   const sameRelease=previous.version===VERSION&&previous.build===build&&previous.sourceCommit===sourceCommit;
   const releasedAt=sameRelease&&previous.releasedAt?previous.releasedAt:now.toISOString();
-  const metadata={version:VERSION,build,force:false,label:`v${VERSION} Delivery closes the recorded load`,sourceCommit,notes:[...RELEASE_NOTES],releasedAt,updatedAt:releasedAt};
+  const metadata={version:VERSION,build,force:false,label:`v${VERSION} Home and connected records`,sourceCommit,notes:[...RELEASE_NOTES],releasedAt,updatedAt:releasedAt};
   const after=new Map(before);
   const setJSON=(file,value)=>after.set(file,JSON.stringify(value,null,2)+'\n');
   for(const file of ['release-version.json','public/app-version.json'])setJSON(file,{...json(file),...metadata});

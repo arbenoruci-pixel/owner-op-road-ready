@@ -126,7 +126,7 @@ steps.push('finalize-gps-sign-dot-v110421.mjs','v110421/gps-sign.test.mjs','test
 steps.push('finalize-delivery-order-ai-v110422.mjs','v110422/reader.test.mjs','v110422/filing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-team-freight-v110423.mjs','v110423/team-freight.test.mjs','reader-ai/test-runtime-credentials.mjs','test-route-delete-v110350.mjs','v110407/team-safety.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-load-attachment-v110426.mjs','v110426/attachment.test.mjs','v110426/vault.test.mjs','verify-isolation-locks-v110.mjs');
-steps.push('reader-foundation/install.mjs','delivery-closeout/install.mjs','reader-foundation/release.mjs','reader-foundation/verify.mjs','delivery-closeout/closeout.test.mjs');
+steps.push('reader-foundation/install.mjs','delivery-closeout/install.mjs','workspace-navigation/install.mjs','reader-foundation/release.mjs','reader-foundation/verify.mjs','delivery-closeout/closeout.test.mjs','workspace-navigation/navigation.test.mjs');
 steps.push('test-support/install-duty-compatibility.mjs','test-support/duty-compatibility.test.mjs','test-support/release-assertions.test.mjs','v110378/test-review-regressions.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
