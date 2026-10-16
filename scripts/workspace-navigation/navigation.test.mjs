@@ -101,3 +101,32 @@ test('an explicit empty load filing cannot revive an older extracted shipment nu
  const model=reconcileLoadFoldersV10974({loads:[{loadNo:'OLD'}],documents:[doc]});
  assert.equal(model.folders[0].documents.length,0);assert.equal(catalog(model.allDocuments,{})[0].loadNo,'');assert.equal(model.reviewItems.length,1);
 });
+test('reviewed original facts supersede an older filing in both Files and load folders',()=>{
+ const sha256='e'.repeat(64),oldFiling={version:1,confirmed:true,category:'other',loadNo:'OLD',date:'2026-10-01',updatedAt:'2026-10-02T00:00:00Z'};
+ const reviewed={local_id:'reviewed',client_document_id:'shared',owner_user_id:'owner',sha256,type:'pod',document_type:'pod',load_no:'NEW',document_date:'2026-10-12',
+  evidenceFilingV1:oldFiling,extracted:{evidenceFactsV1:{version:1,source:'driver_review',sourceSha256:sha256,reviewedAt:'2026-10-13T00:00:00Z',fields:{loadNo:'NEW',date:'2026-10-12'}}}};
+ const mirror={id:'mirror',clientDocumentId:'shared',ownerId:'owner',sha256,type:'other',loadNo:'OLD',evidenceFilingV1:oldFiling};
+ const before=structuredClone([reviewed,mirror]);
+ const model=reconcileLoadFoldersV10974({loads:[{loadNo:'OLD'},{loadNo:'NEW'}],documents:[reviewed],businessStore:{documents:[mirror]}});
+ const row=catalog(model.allDocuments,{})[0];
+ assert.equal(row.category,'pod');assert.equal(row.date,'2026-10-12');assert.equal(row.loadNo,'NEW');assert.equal(row.review,false);
+ assert.equal(model.allDocuments.length,1);assert.equal(model.folders.find(f=>f.loadNo==='OLD').documents.length,0);assert.equal(model.folders.find(f=>f.loadNo==='NEW').documents.length,1);
+ assert.equal(canFileDocument(row.source,[reviewed]),false);assert.deepEqual([reviewed,mirror],before);
+});
+test('folder organization remains authoritative over a stale local filing',()=>{
+ const doc={local_id:'organized',type:'other',document_type:'pod',load_no:'ORGANIZED',canonicalLoadNo:'ORGANIZED',document_date:'2026-10-12',repairOverlayApplied:true,
+  evidenceFilingV1:{version:1,confirmed:true,category:'other',loadNo:'OLD',date:'2026-10-01'}};
+ const before=structuredClone(doc),model=reconcileLoadFoldersV10974({loads:[{loadNo:'OLD'},{loadNo:'ORGANIZED'}],documents:[doc]});
+ const row=catalog(model.allDocuments,{})[0];
+ assert.equal(row.category,'pod');assert.equal(row.date,'2026-10-12');assert.equal(row.loadNo,'ORGANIZED');assert.equal(row.review,false);
+ assert.equal(model.folders.find(f=>f.loadNo==='OLD').documents.length,0);assert.equal(model.folders.find(f=>f.loadNo==='ORGANIZED').documents.length,1);
+ assert.equal(canFileDocument(row.source,[doc]),false);assert.deepEqual(doc,before);
+});
+test('shared IDs cannot carry filings across different owners or replaced originals',()=>{
+ const original={local_id:'same-id',client_document_id:'same-client',owner_user_id:'owner',sha256:'a'.repeat(64),load_no:'OLD',
+  evidenceFilingV1:{version:1,confirmed:true,category:'bol',loadNo:'NEW',date:'2026-10-12'}};
+ for(const change of [{owner_user_id:'another-owner'},{sha256:'b'.repeat(64)}]){
+  const other={...original,...change,evidenceFilingV1:undefined};
+  assert.equal(projectDocumentFilings([original,other])[1].load_no,'OLD');assert.equal(localFileRecord(other,[original]),null);
+ }
+});
