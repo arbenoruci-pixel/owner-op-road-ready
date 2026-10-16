@@ -16,6 +16,8 @@ const transferSource=read(transfer),existingReader=transferSource.slice(original
 if(existingReader!==originalReader){assert.ok(existingReader.includes("fetch('/api/documents/read-original'"),'Original reader implementation changed');fs.writeFileSync(transfer,transferSource.slice(0,originalStart)+originalReader+transferSource.slice(originalEnd));}
 const home='source/src/modules/home/HomeScreen.jsx';
 patch(home,"import {pendingSavedLoadScanV110312}","import {recordLogDay,shipmentLogDay} from '../../core/navigation/workspaceNavigationV110477.js';\nimport {pendingSavedLoadScanV110312}");
+patch(home,'export default function HomeScreen({\n  state,','export default function HomeScreen({\n  state,\n  onHomeSectionConsumed,');
+patch(home,"const [businessSection, setBusinessSection] = useState('');","const [businessSection, setBusinessSection] = useState(()=>state.homeSection||'');\n  useEffect(()=>{if(state.homeSection)onHomeSectionConsumed?.();},[state.homeSection,onHomeSectionConsumed]);");
 patch(home,"['overview','documents','billing','ifta','tolls','audit','connections']","['overview','documents','load_documents','billing','ifta','tolls','audit','connections']");
 patch(home,'        onOpenLog={() => onOpenDay?.(today)}','        onOpenLog={record => {const day=record?recordLogDay(record,state):today;if(day)onOpenDay?.(day);}}');
 patch(home,'        onOpenDay={() => onOpenDay?.(today)}','        onOpenDay={() => onOpenDay?.(today)}\n        onOpenLogbook={onOpenLogbook}\n        onOpenShipment={reference=>onOpenDay?.(shipmentLogDay(state,reference,today))}');
@@ -84,6 +86,8 @@ patch(drive,'<span aria-hidden="true" /> MANUAL DRIVING','<span aria-hidden="tru
 patch(drive,"<span>D</span>\n        <b>{status === 'D' ? 'DRIVING' : 'CURRENT STATUS'}</b>",'<span>{status}</span>\n        <b>{driveStatusLabel(status)}</b>');
 const app='source/src/app/App.jsx';
 patch(app,"import HomeScreen from", "import {openWorkspace,returnWorkspace} from '../core/navigation/workspaceNavigationV110477.js';\nimport HomeScreen from");
+patch(app,'      <HomeScreen\n        state={state}','      <HomeScreen\n        state={state}\n        onHomeSectionConsumed={()=>setState(s=>s.homeSection?{...s,homeSection:\'\'}:s)}');
+patch(app,"      onOpenLoad={()=>setState(s=>({ ...s, view:'day', roadGuardTabRequest:{ tab:'form', at:Date.now(), source:'wallet-load' } }))}","      onOpenLoad={()=>setState(s=>({...s,view:'logs',sheet:null,homeSection:'load_documents'}))}");
 for(const [view,callback]of [['dot','onOpenDot'],['wallet','onOpenWallet'],['backup','onOpenBackup'],['driveMode','onOpenDrive'],['backup','onOpenTransfer']]){
  const before=`${callback}={()=>setState(s=>({ ...s, view:'${view}', sheet:null }))}`;
  const after=`${callback}={()=>setState(s=>openWorkspace(s,'${view}'))}`;
