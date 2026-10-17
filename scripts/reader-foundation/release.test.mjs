@@ -44,7 +44,7 @@ test('release synchronizes all materialized metadata without modifying sync or a
   assert.equal(JSON.parse(read(path.join(root,'package-lock.json'))).packages[''].version,VERSION);
   const oldLocks=JSON.parse(before.get('module-locks.v1.json')),locks=JSON.parse(read(path.join(root,'module-locks.v1.json')));
   assert.equal(locks.release,VERSION);assert.deepEqual({...locks,release:oldLocks.release},oldLocks);
-  const normalize=text=>text.replaceAll('110.4.70','RELEASE').replaceAll('110.4.72','RELEASE').replaceAll('110.4.73','RELEASE').replaceAll('110.4.74','RELEASE').replaceAll('110.4.75','RELEASE').replaceAll(VERSION,'RELEASE');
+  const normalize=text=>text.replaceAll('110.4.70','RELEASE').replaceAll('110.4.72','RELEASE').replaceAll('110.4.73','RELEASE').replaceAll('110.4.74','RELEASE').replaceAll('110.4.75','RELEASE').replaceAll('110.4.76','RELEASE').replaceAll(VERSION,'RELEASE');
   for(const file of ['lib/owner-op-cloud/cloudMirrorV110450.js','lib/owner-op-cloud/recordSyncV110451.js']){
     assert.equal(normalize(read(path.join(root,file))),normalize(before.get(file)),'Only diagnostic release stamps may change: '+file);
   }
@@ -64,6 +64,7 @@ for(const [version,build] of [
   ['110.4.73',`v110473-current-load-consistency-${OTHER_SHA.slice(0,12)}`],
   ['110.4.74',`v110474-document-reading-repair-${OTHER_SHA.slice(0,12)}`],
   ['110.4.75',`v110475-delivery-closeout-${OTHER_SHA.slice(0,12)}`],
+  ['110.4.76',`v110476-delivery-context-${OTHER_SHA.slice(0,12)}`],
 ])test(`release upgrades ${version} without forcing an update and remains idempotent`,t=>{
   const root=fixture(t),previous=JSON.parse(read(path.join(root,'release-version.json')));
   for(const file of RELEASE_FILES){

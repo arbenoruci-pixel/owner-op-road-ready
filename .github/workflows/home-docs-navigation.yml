@@ -1,0 +1,60 @@
+name: Home and connected records
+on:
+  pull_request:
+    paths:
+      - 'scripts/workspace-navigation/**'
+      - 'scripts/v110435/**'
+      - 'scripts/build-v110.mjs'
+      - 'scripts/reader-foundation/release*'
+      - '.github/workflows/home-docs-navigation.yml'
+permissions:
+  contents: read
+concurrency:
+  group: home-docs-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Exact production build and source contracts
+        run: node scripts/build-v110.mjs > /tmp/home-docs-build.log 2>&1 || { tail -n 120 /tmp/home-docs-build.log; exit 1; }
+      - name: Connected records and existing delivery regression
+        run: |
+          node --test scripts/workspace-navigation/*.test.mjs scripts/delivery-closeout/closeout.test.mjs scripts/reader-foundation/currentLoad.test.mjs
+          node scripts/v110453/test-packet.mjs
+          node scripts/test-duty-graph-continuity.mjs
+          node scripts/verify-isolation-locks-v110.mjs
+      - name: Install browser engines
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Phone, iPad, shared records and filing flows
+        run: |
+          node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000 > /tmp/home-docs-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/workspace-navigation/browser-navigation.mjs
+          node scripts/v110453/browser-workspace.mjs
+          node scripts/v110435/browser-phone-home.mjs
+          node scripts/v110430/browser-export.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: home-docs-verification
+          path: |
+            /tmp/home-docs-build.log
+            /tmp/home-docs-server.log
+          retention-days: 3
