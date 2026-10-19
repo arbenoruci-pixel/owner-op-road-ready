@@ -508,7 +508,9 @@ write(scannerUiPath, scannerUi);
 
 const reviewPath = 'source/src/modules/scan/v3/ReviewScreenV3.jsx';
 let review = read(reviewPath);
-review = review.replace(/Auto upright · build 109\.[0-9]+\.[0-9]+/, `Fast quality · build ${VERSION}`);
+// Earlier fidelity materializers replace the original Auto upright label.
+// Keep the displayed scanner build consistent with the installed strategy.
+review = review.replace(/(?:Auto upright|Fidelity lock|Fast quality) · build 109\.[0-9]+\.[0-9]+/, `Fast quality · build ${VERSION}`);
 write(reviewPath, review);
 
 writeJson('package.json', pkg => {

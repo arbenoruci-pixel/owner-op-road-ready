@@ -5,7 +5,7 @@ export const loadNumberLabel=String.raw`(?:PRO|LOAD|ORDER|SHIPMENT|TRIP|REFERENC
 export const amountValue=String.raw`(?:[$€£]\s*|(?:USD|EUR|GBP|CAD|AUD|CHF)\s*)?\d[\d.,]*(?:\s+(?:USD|EUR|GBP|CAD|AUD|CHF))?`;
 export const totalRatePattern=new RegExp(String.raw`^\s*${totalRateLabel}(?:\s*[:=–—-]\s*|\s+|(?=[$€£]))(${amountValue})\s*$`,'id');
 export const totalRateSignal=new RegExp(String.raw`^\s*${totalRateLabel}(?:(?:\s*[:=–—-]\s*|\s+|(?=[$€£]))${amountValue})?\s*:?[ \t]*$`,'i');
-export const rateHeading=/^\s*(?:(?:PRO|LOAD|ORDER|SHIPMENT)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:#]?\s*[A-Z0-9][A-Z0-9._/-]*\s+)?(?:(?:BROKER\s*[/&-]\s*)?CARRIER\s+)?(?:RATE\s*(?:CONFIRMATION|CON|AGREEMENT)|(?:LOAD|FREIGHT|SHIPMENT)\s+CONFIRMATION)(?:\s+(?:FOR\s+)?(?:LOAD|PRO|ORDER|PO|SHIPMENT)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:#]?\s*[A-Z0-9][A-Z0-9._/-]*)?\s*$/i;
+export const rateHeading=/^\s*(?:TQL\s+)?(?:(?:PRO|LOAD|ORDER|SHIPMENT)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:#]?\s*[A-Z0-9][A-Z0-9._/-]*\s+)?(?:(?:BROKER\s*[/&-]\s*)?CARRIER\s+)?(?:RATE\s*(?:CONFIRMATION|CON|AGREEMENT)|(?:LOAD|FREIGHT|SHIPMENT)\s+CONFIRMATION)(?:\s+(?:FOR\s+)?(?:LOAD|PRO|ORDER|PO|SHIPMENT)\s*(?:NUMBER\b|NO\b\.?|ID\b|#|:)\s*[:#]?\s*[A-Z0-9][A-Z0-9._/-]*)?\s*$/i;
 export const pickupLabel=/^\s*(?:ROUTE\s+)?(?:PICK[ -]?UP|PICK|SHIPPER|ORIGIN|LOAD(?:ING)?\s+(?:AT|LOCATION))(?=\s|:|$)/i;
 export const deliveryLabel=/^\s*(?:DELIVERY|DELIVER|DROP(?:[ -]?OFF)?|CONSIGNEE|DESTINATION|UNLOAD(?:ING)?\s+(?:AT|LOCATION)|STOP)(?=\s|:|$)/i;
 export const namedDate=String.raw`(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2},?\s+\d{4}`;
