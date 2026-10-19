@@ -23,6 +23,7 @@ const confusablePair=(a,b)=>a.length===b.length&&a.length>=5&&a.length<=20&&/\d/
   &&[...a].every((letter,index)=>letter===b[index]||['8B','0O','1I','1L','5S','2Z','6G'].some(pair=>pair.includes(letter)&&pair.includes(b[index])));
 
 import {rateRouteMatches} from './rateRouteTable.js';
+import {rateLabeledMatches,carrierRateTableMatches} from './rateLabeledFields.js';
 import {numberedRateMatches} from './numberedRate.js';
 export function pageFieldMatches(page,spec){
   const matches=spec.pattern?page.observations.flatMap(observation=>fieldMatches(observation.lines,spec).map(match=>({observation,...match}))):[];
@@ -41,7 +42,7 @@ export function pageFieldMatches(page,spec){
       if(observations.size>=2)delete match.issue;
     }
   }
-  if(spec.rateVocabulary)matches.push(...rateRouteMatches(page,spec));
+  if(spec.rateVocabulary)matches.push(...rateRouteMatches(page,spec),...rateLabeledMatches(page,spec),...carrierRateTableMatches(page,spec));
   if(spec.numberedRate)matches.push(...numberedRateMatches(page,spec));
   if(spec.rateSection)matches.push(...rateSectionMatches(page,spec));
   if(spec.rateParty)matches.push(...ratePartyMatches(page,spec));

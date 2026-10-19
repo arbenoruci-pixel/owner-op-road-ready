@@ -1,0 +1,68 @@
+{
+  "baseCommit": "f19e2cea3c3fb4aa6eeb852aefb9f1e2ea522181",
+  "scope": "User-authorized HOS, exact historic edit preview/history, per-driver day time-zone preservation and same-day restore. Existing certifications and originals are retained. Test build; no production publication.",
+  "tests": [
+    "29 pure HOS/time/profile regression groups",
+    "8 installed HOS/editor/backup/driver-state groups",
+    "Historical editor, Chicago proposal and profile flows in Chromium and WebKit at phone and tablet widths"
+  ],
+  "files": {
+    "source/src/modules/logbook/certificationV110.js": {
+      "before": "20ad778bf03c8fd70ebdf48ef290ae4170e3f88a326055ac79f51aa18bd21821",
+      "after": "64721c5eb446bdced1ba9ec245d2aa65ae32caf96b9789c51d79baa1b2637389"
+    },
+    "source/src/modules/logbook/public-api.js": {
+      "before": "4b45ce45c5d8ebcb3bf38e21d64115b5c1f61936176bad3b2593d4e6f16dcdbc",
+      "after": "628dac3c9e04b393ae580dfbb8fa7a54281b35c37865592a9bfc48eb83f64d4c"
+    },
+    "source/src/modules/logbook/signing.js": {
+      "before": "076748b041ce7356a37bf1dcaf4270d76e023aeef05759d6cd308de1f173040e",
+      "after": "5b8478f5a109e9f1483788e981231d82bd88f2eaf5e74422546e4b6e59c8fe53"
+    },
+    "source/src/core/hos/hosEngine.js": {
+      "before": "796130c9a78c83a7866a06376f9b2d8747c9209a3c01bd387b55ac6f6028e52d",
+      "after": "d94d9004db46b930a67c0d877bcc2bc4db0628c4f716eb7ea63b6d59a27fa244"
+    },
+    "source/src/core/backup/dayTransfer.js": {
+      "before": "4d1417372c7e32dcc88e50073994533590391ea992439700cf707e0fb59d448b",
+      "after": "aac41ae774db8226d953eb59e09a0ab9e540965193bfa9e71dd73eef3e8f351f"
+    },
+    "source/src/modules/logbook/DayLogScreen.jsx": {
+      "before": "ca8577bc89e632085c180038875524caee4eaf02b458af2b28e35973b83e6629",
+      "after": "3040a8c77073eb80d79560548472972382b1461dc2d5a41a4846f31e8e1cd6ab"
+    }
+  },
+  "runtimeFiles": {
+    "source/src/app/App.jsx": "a61e889a88a452258cc75b5eac06341c605ac72a9f1f23df2472f732426f78c7",
+    "source/src/core/backup/dayTransfer.js": "aac41ae774db8226d953eb59e09a0ab9e540965193bfa9e71dd73eef3e8f351f",
+    "source/src/core/dot/dotOfficerCheckEngine.js": "fac1860e4f0fa59dd014b855ac257ff42541220002903927b7f9cba42605c157",
+    "source/src/core/hos/hosEngine.js": "d94d9004db46b930a67c0d877bcc2bc4db0628c4f716eb7ea63b6d59a27fa244",
+    "source/src/core/hos/reliability/profile.js": "14733bf004376d5518794d5bdb8824679e536d5c6cfb206e4b3a6b319ef6e0c9",
+    "source/src/core/hos/reliability/rules.js": "dc8390024890b5cd1e2cb7b2df940998151e3435284fb7e9df58e25d21123356",
+    "source/src/core/hos/reliability/timePolicy.js": "855bf8eac8d073ccbf4637c8583ddacc6d4e6dbcc2c61d88707f5be6b41f2140",
+    "source/src/core/hos/reliability/timeline.js": "860f5d9f22d65c889c9876d86955975e03e027dc88fc06822c859ac7705d7f80",
+    "source/src/core/team/teamLogbook.js": "dfe114849e39d4883704317fbbfe849fa9a5b23141145b269e6a6e8c3054ea19",
+    "source/src/core/time/homeTerminalTime.js": "35c56a44d21281282ac165f59df3a938c81b7a466f04622dde9ac2ac82a2e3e6",
+    "source/src/modules/drive/DriveModeScreen.jsx": "c15d32a662e8f110736946a7d9fe9848e418b24335b633c51a1ccdbd2c01897c",
+    "source/src/modules/drive/HosCompactClocks.jsx": "29d1a5a7e9aa95d44e7faaa4678d2874327cd4b7bd8795e6f11ccd2264f7d206",
+    "source/src/modules/editor/EditEventSheet.jsx": "9516a3de825818abe7374df3037f781d9f7523cb34b5085c5f689da83bf8d949",
+    "source/src/modules/editor/HosImpactPreview.jsx": "68e701e3e3fcc8475c92d5d1c9a7753b40f33d62e05c2910c1f0b99abef0baa1",
+    "source/src/modules/editor/InsertEditEventSheet.jsx": "d776d34de9443c84d5e882e0ee54a272d86ad30c5bddf4141784d43150212f8e",
+    "source/src/modules/gps/DrivingFocusScreen.jsx": "8025d6e22c424324a6d64a75de0c53ecc8c35a2151dc4b66012d0998145ee649",
+    "source/src/modules/logbook/BulkMovePanelV110409.jsx": "a1e19bf55a426e30dea6f9c251423539a7b238a2f92fe1fe23d6471ef12f6f04",
+    "source/src/modules/logbook/DayLogScreen.jsx": "3040a8c77073eb80d79560548472972382b1461dc2d5a41a4846f31e8e1cd6ab",
+    "source/src/modules/logbook/LogCheckPanel.jsx": "1d962e72fb02b10e71cf81b6abef95e17fda70accc880de03599c905fac186c1",
+    "source/src/modules/logbook/LogbookHomeScreen.jsx": "3559f6cfaf984626450a7d06e0ec09517471e348ca236386e731c2526b1f590d",
+    "source/src/modules/logbook/certificationV110.js": "64721c5eb446bdced1ba9ec245d2aa65ae32caf96b9789c51d79baa1b2637389",
+    "source/src/modules/logbook/eventEditingV110.js": "e7630adbc3f5947f0349b23f811ec9ca693f0eb912f522abb1ef6842b7597d92",
+    "source/src/modules/logbook/public-api.js": "628dac3c9e04b393ae580dfbb8fa7a54281b35c37865592a9bfc48eb83f64d4c",
+    "source/src/modules/logbook/signing.js": "5b8478f5a109e9f1483788e981231d82bd88f2eaf5e74422546e4b6e59c8fe53",
+    "source/src/shared/ui/HosProfileSheet.jsx": "46451b8682859905495459f2efe946fff202ccafc4f19cce4b31368f3bd6ab51",
+    "source/src/shared/ui/TimeZoneSheet.jsx": "db06311c701217e9a24905cfe1c3c0da9303c49140a462afa6f2bd64fc7b6bde",
+    "source/src/shared/utils/useHosNow.js": "ebee363b6a0082fe31a96b435cc948f42f35b817b920656e3b66de3286c43161",
+    "source/src/shared/utils/useLogbookClockV110.js": "b1a38c749606a7ec147d47402fb3f3e7b53dbcdc03108c0a9980b704ed812348",
+    "source/src/styles.css": "7bbf8aa498cabc6f2c40c98c81f9838b809892f4e641ebe25ebd27648946de8a",
+    "lib/owner-op-cloud/accountCoreV110455.js": "87ee35d457261dd0a0c467c0f2812354601a550f7aa9e65fbfd5488f5cd34919"
+  },
+  "runtimeScope": "All 30 frozen HOS implementation/integration files apart from ToolsSheet, whose release stamp is checked separately. These checks are independent of legacy module-locks.v1.json."
+}

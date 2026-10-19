@@ -143,6 +143,7 @@ export const rateConfirmationProfile={
   },
 };
 for(const key of ['loadNumber','totalRate','equipment','miles','billingEmail','broker','carrier','shipper','consignee','pickupDate','deliveryDate','pickupAddress','deliveryAddress','pickupAppointment','deliveryAppointment'])rateConfirmationProfile.fields[key].numberedRate=key;
+rateConfirmationProfile.fields.poNumber={label:'PO number',kind:'identifier',required:false,displayWhenFound:true,rateVocabulary:'poNumber'};
 rateConfirmationProfile.fields.documentDate={label:'Document date',kind:'date',required:false,numberedRate:'documentDate'};
 for(const role of ['pickup','delivery'])rateConfirmationProfile.fields[role+'City']={label:role==='pickup'?'Pickup city / state':'Delivery city / state',kind:'text',required:false,displayWhenFound:true,numberedRate:role+'City'};
 

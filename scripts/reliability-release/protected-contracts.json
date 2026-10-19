@@ -1,0 +1,35 @@
+{
+  "baseCommit": "f19e2cea3c3fb4aa6eeb852aefb9f1e2ea522181",
+  "scope": "Authentication, active-device ownership, server authorization, API integration and billing endpoints; no credential, schema, access or subscription changes.",
+  "files": {
+    "app/api/billing/outlook-config/route.js": "fff921b3b574bc33b60c46abe3f1ffe2adf0052eafb19126a74bee0ee191a26b",
+    "app/api/documents/create-upload/route.js": "21b6a503386b2e1aa54aa28694e95b8b5b099e109c830240427c94d435bdb353",
+    "app/api/documents/read-original/route.js": "8da82b9c85a196391fccfea63dc3f8102d12622e3110a4021fcde1e26d08177e",
+    "app/api/location/reverse/route.js": "bf2296c6f9705358fe57c4bd9c83798427eb603624dda2d252525a3bb8756ab4",
+    "app/api/places/receiver/route.js": "91bcb93b13b3596713c986a93c3361ca275d34e8f128310ca1911aff07802e1f",
+    "app/api/reader/classify/route.js": "58f244580c47043ff68533b04ff0c4179b03b9d72a79f9e17d3d55d19c0876dd",
+    "app/api/sync/pull/route.js": "2971557f21cdda7aebaec4dd8d519d91482e3f9ac0aeb551063d9d8ff3023491",
+    "app/api/sync/push/route.js": "3cd1b8e068acb6e0f71983fdaf9b1add53a2adeddc3d2db2a243efeaddf6d5fa",
+    "lib/owner-op-cloud/client.js": "0752502f6da35a856762477cc8267b6a925787f0732044005da78b58fae1d708",
+    "lib/owner-op-cloud/deviceSessionV110463.js": "85eb2dc7032e48d953ef2e29d03f2306a8174c622ef556a2670bd486569ae662",
+    "lib/supabase/authBridge.js": "85beb040f01c041c0a39dd7899f18cfeda6ad1f23d5a9fd4935ed80c908e0863",
+    "lib/supabase/dutyEvents.js": "b2cc6730bd64e1bca32e106ec9b53ed0fb78354dd4ee2cb2a6533b7e81dc4647",
+    "lib/supabase/inspections.js": "f824f24ae700d357e3c732d59e11cb4fb16e7c64e22031319146db153cc8c097",
+    "lib/supabase/server.js": "66a59d51f37d3ad95a46d5c714b041ab93b87ccf67b5edf0709c884326a83c06",
+    "source/src/modules/auth/AuthGate.jsx": "21ce471be0904f0d0190c28c3ccde1a08ef9ea1778ca4dda1d1942e93fd91deb",
+    "source/src/modules/auth/DeviceSessionGateV110463.jsx": "fdda84b723e38ad4418001c5c4bcff9f6f4148e2b950900dbeda5eff558bdd39",
+    "source/src/modules/auth/auth.css": "32021cf6e8cbf2f227698e6955bbd3a6a6be403938e21baeb6d4f725fa05f6e9",
+    "source/src/modules/auth/authStartupV110377.js": "bbd5cd485ad3c7360a6054e440a6a1b97195e73f6b52c9e9897cfe9657effdb9"
+  },
+  "reviewedBusinessRoutes": {
+    "app/api/documents/commit-upload/route.js": {
+      "before": "a21124d8474a47c10918cc57ec3ecedba868f6220ebcba52376befe7a4ea736c",
+      "after": "cf8c23f3017057a5040490f559d7316bb827a2f0bfc4d92f1b35b483f725af98",
+      "scope": "User-authorized exact-original duplicate retry and missing-link completion. Preserve authentication, driver ownership, storage policy and schema. Reject conflicting bytes/metadata; serialize identical link identity.",
+      "tests": "11 actual authenticated-route contract groups with synthetic auth/storage, including duplicate and concurrent retries",
+      "authorizationStart": "export async function POST(request) {",
+      "authorizationEnd": "    const documentInsert = {",
+      "authorizationSha256": "ba5e2b48be56f2b5382a30486785e5953b915d07174a06fe661f76194620e00f"
+    }
+  }
+}
