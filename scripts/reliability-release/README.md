@@ -1,6 +1,6 @@
 # Road Ready reliability review — 110.4.78
 
-This branch is a test candidate for the existing Road Ready application. The reviewed build is applied after the complete 110.4.77 materialization chain and its existing gates. It includes functional changes to synchronization, HOS, historical edits, source documents, load/week filing and audit preparation. Production publication is pending user review and a verified restore of the complete live data backup.
+This branch is a test candidate for the existing Road Ready application. The reviewed build is applied after the complete 110.4.77 materialization chain and its existing gates. It includes functional changes to synchronization, HOS, historical edits, source documents, load/week filing and audit preparation. The user has authorized publication to main and production after validation. A verified restore of the complete live data backup is still required before live activation.
 
 ## Open and inspect the sample version
 
@@ -39,6 +39,8 @@ The build uses the real source commit from GitHub/Vercel metadata and publishes 
 
 A full clean build must pass before a preview commit is created. Generated runtime files are produced by the existing materializers plus guarded reliability installers; reviewers should edit the installer templates rather than patch a previously generated build in place.
 
+The final build also adapts legacy CI fixtures to the reviewed behavior. Historical browser edits must pass the visible approval step; same-content imports distinguish filing context from physical storage; exports resolve shared originals and retain capture versions. The adapters retain unaffected functional assertions and add explicit checks for the reviewed contracts; exact source guards reject unknown test inputs. The old duty installer tests receive twenty checksum-verified sources captured before the reliability changes, exclusively inside their temporary fixture directories. Those installers retain their original hash guards; current HOS behavior tests still exercise the final application. No CI workflow or application access policy is changed.
+
 ## Results recorded for this candidate
 
 | Gate | Observed result |
@@ -74,4 +76,4 @@ Install the browser libraries required by the host operating system. The isolate
 - Existing byte-owning camera rows remain intact. New captures reuse verified content while preserving every run, page, and variant; any retrospective consolidation of historical duplicates needs its own reviewed migration. No original or historical version is permanently removed by this candidate.
 - Review cold offline reopening separately. The existing active-device policy requires an online verification after reopening; this candidate does not bypass it.
 - Confirm actual company, fleet, IFTA and IRP base jurisdictions and applicable exemptions. The preparation views do not establish legal compliance or regulatory acceptance.
-- Check the preview on physical iPhone and iPad hardware, then obtain the user's approval before production publication. Engine/viewport tests are not physical-device tests.
+- Check the preview on physical iPhone and iPad hardware. Engine/viewport tests are not physical-device tests. Publication is already authorized; do not request that authorization again. The complete live-data restore requirement remains open.

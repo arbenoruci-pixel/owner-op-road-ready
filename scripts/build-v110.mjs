@@ -129,7 +129,8 @@ steps.push('finalize-load-attachment-v110426.mjs','v110426/attachment.test.mjs',
 steps.push('reader-foundation/install.mjs','delivery-closeout/install.mjs','workspace-navigation/install.mjs','reader-foundation/release.mjs','reader-foundation/verify.mjs','delivery-closeout/closeout.test.mjs','workspace-navigation/navigation.test.mjs','workspace-navigation/original.test.mjs');
 steps.push('test-support/install-duty-compatibility.mjs','test-support/duty-compatibility.test.mjs','test-support/release-assertions.test.mjs','v110378/test-review-regressions.mjs');
 // Apply the review only after the complete current runtime and its legacy gates.
-steps.push('reliability-sync/install.mjs','reliability-hos/install.mjs','reliability-reader/install.mjs','reliability-audit/install.mjs','reliability-preview/install.mjs','reliability-release/install.mjs','reliability-release/verify.mjs');
+steps.push('reliability-release/capture-legacy-duty.mjs','reliability-sync/install.mjs','reliability-hos/install.mjs','reliability-reader/install.mjs','reliability-audit/install.mjs','reliability-preview/install.mjs','reliability-release/install.mjs');
+steps.push('reliability-hos/legacy-test-contracts.mjs','reliability-reader/legacy-test-contracts.mjs','reliability-release/legacy-browser-tests.mjs','reliability-release/legacy-duty-tests.mjs','reliability-release/verify.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});")
