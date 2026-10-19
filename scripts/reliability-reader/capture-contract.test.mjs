@@ -254,9 +254,21 @@ test('selected capture export resolves external owners without exporting their f
 test('import retains a pre-existing capture owner and rejects conflicting bytes under its ID', async () => {
   const existing = {...capture('existing-asset'), blob:fileA}; delete existing[reference];
   const db = memoryDb({documents_local:[{local_id:'selected-local', client_document_id:'selected-client', capture_run_id:'selected-run'}], capture_asset_blobs:[existing]});
+  // Compare the persisted snapshot: Node 20 structuredClone returns a Blob for
+  // a File input. Its prototype is not part of the stored owner contract.
+  const {blob:ownerBlobBefore, ...ownerMetadataBefore} = await db.capture_asset_blobs.get('existing-asset');
+  const ownerBytesBefore = new Uint8Array(await ownerBlobBefore.arrayBuffer());
+  const ownerHashBefore = await sha256Original(ownerBlobBefore);
+  assert.equal(ownerHashBefore, hashA);
   const record = copy(existing); delete record.blob;
   await importCaptureEvidence(db, [{record, blob:fileA}]);
-  assert.deepEqual(await db.capture_asset_blobs.get('existing-asset'), existing);
+  const {blob:ownerBlobAfter, ...ownerMetadataAfter} = await db.capture_asset_blobs.get('existing-asset');
+  assert.deepEqual(ownerMetadataAfter, ownerMetadataBefore);
+  assert.deepEqual(new Uint8Array(await ownerBlobAfter.arrayBuffer()), ownerBytesBefore);
+  assert.equal(await sha256Original(ownerBlobAfter), ownerHashBefore);
+  assert.equal(ownerBlobAfter.size, ownerBlobBefore.size);
+  assert.equal(ownerBlobAfter.type, ownerBlobBefore.type);
+  assert.deepEqual(db.operations.filter(operation => operation.table === 'capture_asset_blobs'), []);
   const before = await snapshot(db);
   await assert.rejects(() => db.transaction('rw', db.capture_asset_blobs, db.document_blobs, db.documents_local, () => importCaptureEvidence(db, [{record:{...record, sha256:hashB}, blob:fileB}])), /conflicts/);
   assert.equal(await snapshot(db), before);

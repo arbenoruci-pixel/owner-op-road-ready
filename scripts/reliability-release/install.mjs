@@ -16,7 +16,7 @@ const metadata={version,build,force:false,label:'Road Ready reliability review',
   'IFTA, Safety and IRP preparation retains scope, source verification and review history.',
   'A separate sample workspace is available in preview deployments. Production publication requires review and a verified full-data restore.',
 ]};
-const stamps=['source/src/core/update/appUpdate.js','public/sw.js','source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx','lib/owner-op-cloud/cloudMirrorV110450.js','lib/owner-op-cloud/recordSyncV110451.js'];
+const stamps=['source/src/core/update/appUpdate.js','public/sw.js','source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx','lib/owner-op-cloud/cloudMirrorV110450.js','lib/owner-op-cloud/recordSyncV110451.js','scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'];
 const after=new Map(stamps.map(file=>[file,read(file).replaceAll(previous.version,version).replaceAll(previous.build,build)]));
 assert.ok(after.get('source/src/core/update/appUpdate.js').includes(`const FALLBACK_APP_VERSION = '${version}';`));
 assert.ok(after.get('public/sw.js').includes(`const OWNER_OP_SW_BUILD = '${build}';`));
