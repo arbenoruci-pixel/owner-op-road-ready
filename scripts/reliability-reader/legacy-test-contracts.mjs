@@ -8,7 +8,7 @@ import {createHash} from 'node:crypto';
 
 const MARKER='// reader-reliability:legacy-test-contracts-v1';
 const sha256=value=>createHash('sha256').update(value).digest('hex');
-const TARGETS=new Set(['scripts/v110427/browser.mjs','scripts/v110453/browser-workspace.mjs','scripts/v110430/browser-export.mjs','scripts/v110419/browser-source-copies.mjs','scripts/browser-smart-scan-recovery-v110318.mjs']);
+const TARGETS=new Set(['scripts/v110427/browser.mjs','scripts/v110453/browser-workspace.mjs','scripts/v110430/browser-export.mjs','scripts/v110419/browser-source-copies.mjs','scripts/browser-smart-scan-recovery-v110318.mjs','scripts/browser-saved-documents-v110344.mjs','scripts/v110466/browser-rate.mjs']);
 function once(source,before,after,label){
  assert.equal(source.split(before).length-1,1,'Reader CI contract anchor: '+label);
  return source.replace(before,after);
@@ -310,12 +310,55 @@ function savedScanRecovery(source){
  return once(source,'const reports=[];',resume318Helpers+'\nconst reports=[];','resume source helpers');
 }
 
+
+function savedDocuments(source){
+ source=once(source,"    let before=await localRows(page); const storeBefore=", "    const originalsBefore=await originalSnapshot(page);\n    let before=await localRows(page); const storeBefore=",'saved originals before authenticated recovery');
+ source=once(source,"    const restoredMetadata={...cached,local_blob_state:previous.local_blob_state};delete restoredMetadata.offline_original_saved_at;\n    assert.deepEqual(restoredMetadata,previous,'offline caching changes only availability metadata');",`    assert.equal(cached.original_blob_id,'example-41-blob','The identical three-page file reuses its existing byte owner');
+    assert.equal(cached.original_client_document_id,'example-41-client');
+    assert.equal(previous.original_blob_id,undefined);assert.equal(previous.original_client_document_id,undefined);
+    const restoredMetadata={...cached,local_blob_state:previous.local_blob_state};delete restoredMetadata.offline_original_saved_at;
+    delete restoredMetadata.original_blob_id;delete restoredMetadata.original_client_document_id;
+    assert.deepEqual(restoredMetadata,previous,'Offline recovery changes only the asserted immutable owner locators and availability metadata');`,'saved cloud original locator metadata');
+ source=span(source,'    const cachedBytes=await page.evaluate(async()=>{','    before=cachedRows;',`    const recoveredOriginals=await originalSnapshot(page),cachedOriginals=recoveredOriginals.blobs.filter(row=>row.client_document_id==='example-39-client');
+    assert.equal(cachedOriginals.length,1,'Cloud recovery stores one filing locator');
+    assert.equal(cachedOriginals[0].physical,false,'The cached filing never duplicates existing source bytes');
+    assert.equal(cachedOriginals[0].ownerKey,'document_blobs:example-41-blob');
+    assert.equal(cachedOriginals[0].original_blob_id,'example-41-blob');assert.equal(cachedOriginals[0].original_client_document_id,'example-41-client');
+    assert.deepEqual(Buffer.from(cachedOriginals[0].bytes),original,'The actual original resolver returns every authenticated source byte');
+    assert.equal((await PDFDocument.load(Buffer.from(cachedOriginals[0].bytes))).getPageCount(),3,'All three original pages remain available');
+    const owners=recoveredOriginals.blobs.filter(row=>row.physical&&row.sha256===cachedOriginals[0].sha256);
+    assert.equal(owners.length,1,'Identical cloud and existing filings share one physical original');assert.equal(owners[0].id,'example-41-blob');
+    assert.deepEqual(recoveredOriginals.blobs.filter(row=>row.client_document_id!=='example-39-client'),originalsBefore.blobs,'Every other original owner, reference, metadata field and byte stays unchanged');
+`,'saved cache actual resolver and source identity');
+ source=once(source,"    assert.equal(cloudRequests,2,'reopening the cached original offline never contacts cloud');",`    assert.equal(cloudRequests,2,'reopening the cached original offline never contacts cloud');
+    assert.deepEqual((await originalSnapshot(page)).blobs,recoveredOriginals.blobs,'Offline reopen does not modify or duplicate original owners or references');`,'saved offline reopen owner integrity');
+ return snapshotImports.replaceAll("'../../source/","'../source/")+snapshotHelper+'\n'+source;
+}
+
+
+function signedRateOriginals(source){
+ source=once(source,"await seed(page,state,[{id:'untouched',bytes:Array.from(buffer)}]);", "await seed(page,state,[{id:'untouched',bytes:Array.from(buffer)}]);\n  const originalOwnerBefore=await originalSnapshot(page);assert.equal(originalOwnerBefore.blobs.length,1);",'signed rate immutable existing owner');
+ source=span(source,'  const original=await page.evaluate(async clientId=>{','  assert.deepEqual(Buffer.from(original||[]),buffer);',`  const savedOriginals=await originalSnapshot(page),savedLocator=savedOriginals.blobs.find(row=>row.client_document_id===saved.client_document_id);
+  assert.equal(savedOriginals.docs.length,2,'The new reviewed filing and untouched filing remain separate');
+  assert.equal(savedOriginals.blobs.length,2,'Both filings retain an original locator');assert.ok(savedLocator);
+  assert.equal(saved.original_blob_id,'untouched-blob');assert.equal(saved.original_client_document_id,'untouched-client');
+  assert.equal(savedLocator.original_blob_id,'untouched-blob');assert.equal(savedLocator.original_client_document_id,'untouched-client');
+  assert.equal(savedLocator.ownerKey,'document_blobs:untouched-blob');assert.equal(savedLocator.physical,false);
+  assert.equal(savedOriginals.blobs.filter(row=>row.physical).length,1,'Byte-identical imports keep exactly one physical original');
+  assert.deepEqual(savedOriginals.blobs.filter(row=>row.client_document_id==='untouched-client'),originalOwnerBefore.blobs,'The pre-existing original owner and all its bytes/metadata remain unchanged');
+  const original=savedLocator.bytes;
+`,'signed rate actual source resolver');
+ return snapshotImports+snapshotHelper+'\n'+source;
+}
+
 export const legacyReaderTestContracts=[
  {file:'scripts/v110427/browser.mjs',before:'5298b41f4f73dd485c579fcb95fa8ccca94866df4251aaf3440fa891fceb7bb4',after:'e2d6c9a149d0b583348b305cfeb957e0e54a0c1f7fd8b7d2b9979810f368a53e',transform:scanner},
  {file:'scripts/v110453/browser-workspace.mjs',before:'91a709642ba96b8188d64ded5893973ba6389373e0c1b638533033388a6303de',after:'279c4991c95ec69d8ee13f574be5855e0e776610fc9a88f288550723309c2e2d',transform:workspace},
  {file:'scripts/v110430/browser-export.mjs',before:'3fca70e51fed74e40e415ffc208e6aca300edcba82156e16880d4ebd5e35ccad',after:'a19db9d0f531e26d035ed8d80397aebcb94527760319f6ffdcf3ae06ed7ac5fc',transform:exporter},
  {file:'scripts/v110419/browser-source-copies.mjs',before:'a235a9f0e7bbba1266e0b50759e774b47cf900da73dcfa3b3c71226a30ebeeba',after:'4d2bca6320c4a1632eea32aa3b6442f17fbe0e3621a2ce625086f01cf50b7615',transform:sourceCopies},
  {file:'scripts/browser-smart-scan-recovery-v110318.mjs',before:'3c6956db73994aa0a6fde0570246ae1eb5ced673b71f9ce55e3e83659a9331bd',after:'c5e07f2890cd194120169000197a0cf9c62b623c5c462eafb1254b0946c9365e',transform:savedScanRecovery},
+ {file:'scripts/browser-saved-documents-v110344.mjs',before:'238157e8625d9f322121f0c09d99305c6e3268041897eb99c0ddcf370b6e0858',after:'e215d6820b0e3530a1464ef1053af8c7acdd27f4358be8b809a68227b34aa419',transform:savedDocuments},
+ {file:'scripts/v110466/browser-rate.mjs',before:'ca6764731798955465e35ddf5374ec46e9f6ae888caa6dbe322dd75636d7da7e',after:'f074d23cec6893994dc8d0299789b89a2c42efcd675deb78e545ba2f15d7bd0d',transform:signedRateOriginals},
 ];
 export function installLegacyReaderTestContracts(root='.'){
  const directory=path.resolve(root),prepared=[];
@@ -330,7 +373,7 @@ export function installLegacyReaderTestContracts(root='.'){
  }
  // Validate every known input and output before writing any generated test file.
  for(const item of prepared)if(item.changed)fs.writeFileSync(item.target,item.output);
- console.log('PASS — Reader legacy CI contracts: owner-aware original checks, filing-context reuse, complete deduplicated capture exports, explicit saved-scan source confirmation');
+ console.log('PASS — Reader legacy CI contracts: owner-aware original checks, filing-context reuse, complete deduplicated capture exports, explicit saved-scan source confirmation, authenticated offline original reuse, signed RateCon original identity');
  return prepared.map(({file,before,after,changed})=>({file,before,after,changed}));
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))installLegacyReaderTestContracts(process.argv[2]||'.');
