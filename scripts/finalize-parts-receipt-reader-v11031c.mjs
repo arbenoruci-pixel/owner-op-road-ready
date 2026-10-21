@@ -32,6 +32,14 @@ function addCatalogNegativeSignals(source,id,needle,insert){
   if(source.includes(needle)) return source;
   const {start,end}=catalogBounds(source,id);
   let block=source.slice(start,end);
+  // The clean v1040 packing-list catalog has no optional negative-signals
+  // array. Accept only that exact known predecessor before adding the rules.
+  if(!block.includes('negativeSignals:[')){
+    const predecessor="  ],{ required:['loadNo'], fileSignals:[/packing.?list/i] }),";
+    assert.equal(id,'packing_list','110.3.1 unexpected catalog predecessor');
+    assert.equal(block.split(predecessor).length,2,'110.3.1 packing_list predecessor changed');
+    block=block.replace(predecessor,"  ],{ required:['loadNo'], negativeSignals:[], fileSignals:[/packing.?list/i] }),");
+  }
   assert.ok(block.includes('negativeSignals:['),`110.3.1 ${id} negativeSignals missing`);
   block=block.replace('negativeSignals:[',`negativeSignals:[${insert}`);
   return source.slice(0,start)+block+source.slice(end);
