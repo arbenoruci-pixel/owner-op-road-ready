@@ -11,6 +11,12 @@ fs.copyFileSync('scripts/reliability-sync/scheduler.js', lib + 'syncSchedulerRel
 fs.copyFileSync('scripts/reliability-sync/snapshot.js', lib + 'syncSnapshotReliability.js');
 fs.copyFileSync('scripts/reliability-sync/AccountSyncGate.jsx', ui + 'AccountSyncGateV110455.jsx');
 fs.copyFileSync('scripts/reliability-sync/sync.css', ui + 'syncReliability.css');
+const setup = 'source/src/modules/setup/OwnerOpSetupScreen.jsx';
+patch(setup, '      <main className="setup-body">', `      <main className="setup-body">
+        {editing ? <section className="setup-sync-access">
+          <button type="button" onClick={() => {onCancel?.();window.dispatchEvent(new Event('road-ready-open-sync-status'));}}>Synchronization status</button>
+          <p>Saved data, pending changes and cloud retry.</p>
+        </section> : null}`);
 const snapshots = 'lib/local-db/appState.js';
 patch(snapshots, "import { getOwnerOpDb } from './dexie.js';", "import { getOwnerOpDb } from './dexie.js';\nimport {snapshotChange} from '../owner-op-cloud/syncSnapshotReliability.js';");
 patch(snapshots, '  return queueSnapshotWrite(key, async () => {', `  return queueSnapshotWrite(key, async () => {

@@ -1,4 +1,4 @@
-# Reliable synchronization — 110.4.80
+# Reliable synchronization — 110.4.81
 
 This release applies the account scheduler and snapshot fixes without installing
 PR #231's HOS engine, historical edit workflow, original-reference migration,
@@ -27,3 +27,14 @@ interrupted receives and export exclusion of staging.
 No existing driving event, signature, financial transaction or original file is
 migrated or deleted. A complete live-data restore remains a prerequisite for the
 broader HOS/original-reference candidate in PR #231.
+
+The signing and working screens have no floating account-sync badge or automatic
+error panel. Settings → Synchronization status opens the retained diagnostics and
+retry controls explicitly; close and Escape work even while errors repeat.
+Account ownership, startup handoff and explicit conflict selection remain guarded.
+
+The server migration caches the current and incoming records objects before
+comparing their keys. This removes repeated extraction of the entire JSONB archive
+for each key, retaining the same delta/history format, authorization, locks and
+revision checks. Seven database reconstruction cases and a read-only large-account
+benchmark verify the delta behavior without rewriting existing records.

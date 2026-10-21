@@ -40,7 +40,7 @@ export default function AccountSyncGate({ children }) {
   const [ready, setReady] = useState(false), [status, setStatus] = useState(accountStatus);
   const [details, setDetails] = useState(false), [review, setReview] = useState(false);
   const [choices, setChoices] = useState({}), [retry, setRetry] = useState({ failures: 0, retryAt: 0 });
-  const [visibleProgress, setVisibleProgress] = useState(false), scheduler = useRef(null);
+  const scheduler = useRef(null);
   const reviewedVersions=useRef('');
   useEffect(()=>{
     if(!status.conflicts?.length)return;
@@ -48,10 +48,11 @@ export default function AccountSyncGate({ children }) {
     if(versions!==reviewedVersions.current){reviewedVersions.current=versions;setChoices({});}
   },[status.conflicts]);
   useEffect(() => {
-    if (status.phase !== 'syncing') { setVisibleProgress(false); return; }
-    const timer = setTimeout(() => setVisibleProgress(true), 1200);
-    return () => clearTimeout(timer);
-  }, [status.phase]);
+    if (!details) return;
+    const close = event => { if (event.key === 'Escape') setDetails(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [details]);
   useEffect(() => {
     const finish = result => {
       if (result?.conflicts?.length) { if(result.canOpenLocal===true)setReady(true); return; }
@@ -73,6 +74,7 @@ export default function AccountSyncGate({ children }) {
       locals: Object.fromEntries(LOCAL_KEYS.map(key => [key, localValue(key)])) });
     let settingsRecords = savedSettings();
     const update = event => setStatus(event.detail);
+    const openDetails = () => setDetails(true);
     const saved = event => {
       if (event.detail?.source === 'account-receive') { settingsRecords = savedSettings(); return; }
       if (event.type !== 'road-ready-local-saved') {
@@ -84,6 +86,7 @@ export default function AccountSyncGate({ children }) {
     const offline = () => setStatus(current => ({ ...current, phase: 'offline', message: 'Offline. Pending changes stay on this device until connected.' }));
     const leave = () => queue.wake();
     window.addEventListener(ACCOUNT_EVENT, update);
+    window.addEventListener('road-ready-open-sync-status', openDetails);
     window.addEventListener('road-ready-local-saved', saved);
     window.addEventListener('owner-op-business-updated', saved);
     window.addEventListener('road-ready-owner-ops-updated-v102', saved);
@@ -94,6 +97,7 @@ export default function AccountSyncGate({ children }) {
     return () => {
       queue.stop(); scheduler.current = null;
       window.removeEventListener(ACCOUNT_EVENT, update);
+      window.removeEventListener('road-ready-open-sync-status', openDetails);
       window.removeEventListener('road-ready-local-saved', saved);
       window.removeEventListener('owner-op-business-updated', saved);
       window.removeEventListener('road-ready-owner-ops-updated-v102', saved);
@@ -112,21 +116,17 @@ export default function AccountSyncGate({ children }) {
     {status.conflicts?.length && status.phase!=='account_mismatch' ? <button onClick={()=>setReview(true)}>Review saved versions</button> : null}
   </main>;
   const issue = status.issue || (retry.failures >= 4 ? { phase: 'error', message: 'Synchronization needs attention. Your pending changes will be checked again.' } : null);
-  const label = issue ? 'Sync needs attention' : status.phase === 'offline' ? 'Offline · saved locally' :
-    status.phase === 'paused' ? 'Sync paused' : visibleProgress ? 'Syncing' : status.phase === 'waiting' ? 'Saved · sync pending' : 'Saved';
   return <>{opening?openingView:children}
     {!opening?<>
-    <button className={`rr-sync-chip ${issue ? 'attention' : ''}`} aria-label="Synchronization status" onClick={() => setDetails(v => !v)} aria-expanded={details}>
-      <span aria-hidden="true">{issue ? '!' : status.phase === 'offline' ? '○' : '●'}</span>{label}
-    </button>
-    {issue || details ? <aside className="rr-sync-details" aria-label="Account synchronization">
-      <div><strong>{issue ? 'Synchronization needs attention' : 'Saved records'}</strong><button aria-label="Close sync details" onClick={() => setDetails(false)} hidden={Boolean(issue)}>×</button></div>
+    {details ? <aside className="rr-sync-details" aria-label="Account synchronization">
+      <div><strong>{issue ? 'Synchronization needs attention' : 'Saved records'}</strong><button aria-label="Close sync details" onClick={() => setDetails(false)}>×</button></div>
       <p role={issue ? 'status' : undefined}>{issue?.message || status.message}</p>
       {status.completedAt ? <small>Last completed check: {new Date(status.completedAt).toLocaleString()}</small> : null}
       {retry.retryAt ? <small>Another attempt is scheduled. You can keep working.</small> : null}
       <div className="rr-sync-actions">
+        <a href="/cloud">Cloud settings</a>
         {status.conflicts?.length ? <button onClick={() => setReview(true)}>Review changes ({status.conflicts.length})</button> :
-          status.phase === 'paused' ? <a href="/cloud">Open cloud settings</a> : <button onClick={retryNow}>Retry sync</button>}
+          status.phase === 'paused' ? null : <button onClick={retryNow}>Retry sync</button>}
       </div>
     </aside> : null}
     </>:null}
