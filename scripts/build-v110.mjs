@@ -128,9 +128,16 @@ steps.push('finalize-team-freight-v110423.mjs','v110423/team-freight.test.mjs','
 steps.push('finalize-load-attachment-v110426.mjs','v110426/attachment.test.mjs','v110426/vault.test.mjs','verify-isolation-locks-v110.mjs');
 steps.push('reader-foundation/install.mjs','delivery-closeout/install.mjs','workspace-navigation/install.mjs','reader-foundation/release.mjs','reader-foundation/verify.mjs','delivery-closeout/closeout.test.mjs','workspace-navigation/navigation.test.mjs','workspace-navigation/original.test.mjs');
 steps.push('test-support/install-duty-compatibility.mjs','test-support/duty-compatibility.test.mjs','test-support/release-assertions.test.mjs','v110378/test-review-regressions.mjs');
+// This regression consumes the completed freight projection installed later in
+// the chain. Preserve every assertion and run it on the final runtime.
+const finalRouteCheck='v110374/test-route-day-scope.mjs';
+if(steps.filter(script=>script===finalRouteCheck).length!==4)throw Error('Expected the four legacy route-day checkpoints');
+for(let index=steps.length-1;index>=0;index--)if(steps[index]===finalRouteCheck)steps.splice(index,1);
+steps.push(finalRouteCheck);
+steps.push('smart-import/install.mjs','smart-import/core.test.mjs','smart-import/storage.test.mjs','smart-import/runtime.test.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
-const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});")
+const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")
  .replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',"import {syncLegacyReleaseAssertions} from '../scripts/test-support/sync-release-assertions.mjs';\n"+program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});

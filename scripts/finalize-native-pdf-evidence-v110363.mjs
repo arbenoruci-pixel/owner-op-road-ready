@@ -5,6 +5,18 @@ const read=path=>fs.readFileSync(path,'utf8');
 function patch(path,before,after){const source=read(path);if(source.includes(after))return;assert.equal(source.split(before).length-1,1,'Release anchor '+path);fs.writeFileSync(path,source.replace(before,after));}
 const pdfPath='source/src/modules/scan/pdfPageReaderV110328.js';
 const intakePath='source/src/modules/scan/SmartScanSheetV105.jsx';
+// Some legacy materializers retain the exact v110347 page reader. Restore the
+// already-reviewed v110348 OCR parity before applying native-coordinate support.
+if(!read(pdfPath).includes("import {readPdfImageV110348} from './pdfImageReaderV110348.js';")){
+  let source=read(pdfPath);
+  assert.equal(source,read('scripts/v110347/pdfPageReader.js'),'Native PDF predecessor changed');
+  const before="const result=await recognizeDocumentText(input,{signal:options.signal,pageSegMode:'3',returnLayout:true,preserveSpaces:true,dpi:300,onProgress:value=>{if(!options.signal?.aborted)progress(.08+((number-1+value*.9)/pdf.numPages)*.78,`Reading PDF page ${number} of ${pdf.numPages}…`);}});";
+  const after="const result=await readPdfImageV110348(input,{signal:options.signal,onProgress:value=>{if(!options.signal?.aborted)progress(.08+((number-1+value*.9)/pdf.numPages)*.78,`Reading PDF page ${number} of ${pdf.numPages}…`);}},number);";
+  assert.equal(source.split(before).length,2,'Native PDF OCR parity anchor changed');
+  source=source.replace(before,after).replace("import {recognizeDocumentText} from './webOcr.js';","import {readPdfImageV110348} from './pdfImageReaderV110348.js';")
+    .replace("ocrEvidenceV110323.push({...result,id:`${number}-pdf-ocr`,page:number,sourceImageFile:input})","ocrEvidenceV110323.push(...result.passes)");
+  fs.writeFileSync(pdfPath,source);
+}
 patch(intakePath,'        signal:controllerV110328.signal,','        signal:controllerV110328.signal,\n        retainPageSourcesV110347:true,');
 patch(intakePath,'applyResult({ ...result, scanMeta:{ ...(scanMeta || {}), originalFileName:rateConFileNameV10964 } });','applyResult({ ...result, scanMeta:{ ...(scanMeta || {}), ...(result.scanMeta || {}), originalFileName:rateConFileNameV10964 } });');
 patch(pdfPath,"import {readPdfImageV110348} from './pdfImageReaderV110348.js';","import {readPdfImageV110348} from './pdfImageReaderV110348.js';\nimport {nativePdfLayout} from '../../../../packages/smart-reader-core/src/pdfLayout.js';");
