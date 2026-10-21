@@ -134,6 +134,7 @@ const finalRouteCheck='v110374/test-route-day-scope.mjs';
 if(steps.filter(script=>script===finalRouteCheck).length!==4)throw Error('Expected the four legacy route-day checkpoints');
 for(let index=steps.length-1;index>=0;index--)if(steps[index]===finalRouteCheck)steps.splice(index,1);
 steps.push(finalRouteCheck);
+steps.push('reliability-sync/install.mjs','reliability-sync/scheduler.test.mjs','reliability-sync/snapshot.test.mjs','reliability-sync/deadline.test.mjs','reliability-sync/recordIndexer.test.mjs','reliability-sync/recordRuntime.test.mjs');
 steps.push('smart-import/install.mjs','smart-import/core.test.mjs','smart-import/storage.test.mjs','smart-import/runtime.test.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
@@ -141,4 +142,4 @@ const program=original.replace(runAnchor,"function run(command,args=[]){if(args[
  .replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',"import {syncLegacyReleaseAssertions} from '../scripts/test-support/sync-release-assertions.mjs';\n"+program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
-if(result.error)throw result.error;process.exit(result.status??1);
+if(result.error)throw result.error;if(result.status!==0)console.error('Materialization process ended:',result.status,result.signal);process.exit(result.status??1);

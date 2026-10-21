@@ -63,19 +63,24 @@ export function installSmartImport(root = process.cwd()) {
   const build = 'scripts/build-v110.mjs', hook = "steps.push('smart-import/install.mjs','smart-import/core.test.mjs','smart-import/storage.test.mjs','smart-import/runtime.test.mjs');";
   if (!read(build).includes(hook)) patch(build, 'const runAnchor=', hook + '\nconst runAnchor=');
   if (!read(build).includes("const finalRouteCheck='v110374/test-route-day-scope.mjs';")) patch(build, hook, "// Run the existing route assertions on the completed freight projection.\nconst finalRouteCheck='v110374/test-route-day-scope.mjs';\nif(steps.filter(script=>script===finalRouteCheck).length!==4)throw Error('Expected the four legacy route-day checkpoints');\nfor(let index=steps.length-1;index>=0;index--)if(steps[index]===finalRouteCheck)steps.splice(index,1);\nsteps.push(finalRouteCheck);\n" + hook);
+  // Keep the legacy package-picker checks through the recovery disclosure and
+  // also require the new primary statement-import entry point to be visible.
+  const phoneTest='scripts/v110435/browser-phone-home.mjs';
+  patch(phoneTest,"await page.getByRole('button',{name:'Import',exact:true}).click();await page.getByRole('button',{name:'Choose import ZIP',exact:true}).waitFor();", "await page.getByRole('button',{name:'Import',exact:true}).click();await page.getByRole('heading',{name:'Smart Import',exact:true}).waitFor();await page.getByText('Road Ready packages & recovery',{exact:true}).click();await page.getByRole('button',{name:'Choose import ZIP',exact:true}).waitFor();");
+  write(phoneTest,read(phoneTest).replace('/active logs/','/active logbook/'));
   console.log('PASS — Smart Import, canonical fuel/tolls and read-only monthly records installed');
 }
 
 export function releaseSmartImport(root = process.cwd()) {
-  const VERSION = '110.4.79', read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const VERSION = '110.4.80', read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const sha = String(process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'})).trim();
   assert.match(sha, /^[a-f0-9]{40}$/i);
-  const BUILD = 'v110479-smart-import-' + sha.slice(0, 12);
+  const BUILD = 'v110480-sync-smart-import-' + sha.slice(0, 12);
   const previous = JSON.parse(read('release-version.json'));
-  assert.ok(['110.4.77', VERSION].includes(previous.version), 'Smart Import requires the current reviewed main runtime');
+  assert.ok(['110.4.77', '110.4.79', VERSION].includes(previous.version), 'Smart Import requires the current reviewed main runtime');
   for (const file of ['release-version.json', 'public/app-version.json']) {
     const value = JSON.parse(read(file));
-    Object.assign(value, {version: VERSION, build: BUILD, force: false, sourceCommit: sha, label: 'v110.4.79 Smart Import and My month', releasedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), notes: ['Review fuel, state miles and toll imports before saving their original sources.', 'Count canonical transactions once, preserve zero taxable mileage and require review for conflicts.', 'Organize monthly logs, fuel, loads, expenses and original ELD reports without changing duty events.']});
+    Object.assign(value, {version: VERSION, build: BUILD, force: false, sourceCommit: sha, label: 'v110.4.80 Reliable sync, Smart Import and My month', releasedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), notes: ['Review fuel, state miles and toll imports before saving their original sources.', 'Count canonical transactions once, preserve zero taxable mileage and require review for conflicts.', 'Organize monthly logs, fuel, loads, expenses and original ELD reports without changing duty events.']});
     fs.writeFileSync(path.join(root, file), JSON.stringify(value, null, 2) + '\n');
   }
   for (const file of ['package.json', 'package-lock.json']) {
@@ -85,7 +90,7 @@ export function releaseSmartImport(root = process.cwd()) {
   }
   const lockFile = 'module-locks.v1.json', locks = JSON.parse(read(lockFile)); locks.release = VERSION;
   fs.writeFileSync(path.join(root, lockFile), JSON.stringify(locks, null, 2) + '\n');
-  for (const file of ['source/src/core/update/appUpdate.js', 'public/sw.js', 'source/src/modules/home/HomeScreen.jsx', 'source/src/shared/ui/ToolsSheet.jsx', 'lib/owner-op-cloud/cloudMirrorV110450.js', 'lib/owner-op-cloud/recordSyncV110451.js']) fs.writeFileSync(path.join(root, file), read(file).replaceAll(previous.version, VERSION).replaceAll(previous.build, BUILD));
+  for (const file of ['source/src/core/update/appUpdate.js', 'public/sw.js', 'source/src/modules/home/HomeScreen.jsx', 'source/src/shared/ui/ToolsSheet.jsx', 'lib/owner-op-cloud/cloudMirrorV110450.js', 'lib/owner-op-cloud/recordSyncV110451.js', 'scripts/test-duty-graph-continuity.mjs', 'scripts/test-editor-grips-v110355.mjs', 'scripts/verify-log-integrity-v1051.mjs', 'scripts/test-document-continuity-integration-v110375.mjs']) fs.writeFileSync(path.join(root, file), read(file).replaceAll(previous.version, VERSION).replaceAll(previous.build, BUILD));
   return {version: VERSION, build: BUILD, sourceCommit: sha};
 }
 

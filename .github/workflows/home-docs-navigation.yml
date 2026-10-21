@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'scripts/workspace-navigation/**'
+      - 'scripts/smart-import/**'
+      - 'scripts/reliability-sync/**'
       - 'scripts/v110435/**'
       - 'scripts/build-v110.mjs'
       - 'scripts/reader-foundation/release*'
@@ -50,6 +52,8 @@ jobs:
           node scripts/v110453/browser-workspace.mjs
           node scripts/v110435/browser-phone-home.mjs
           node scripts/v110430/browser-export.mjs
+          node scripts/smart-import/browser-import.mjs
+          node scripts/reliability-sync/browser-receive.test.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:

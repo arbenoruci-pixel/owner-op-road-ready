@@ -1,4 +1,4 @@
-# Smart Import and My month — proposed 110.4.79
+# Smart Import and My month — 110.4.80
 
 Fuel statements can currently be counted in both the owner ledger and business
 ledger; repeated imports can add further business rows. The two CSV entry
@@ -43,63 +43,30 @@ existing records. It targets the existing application on `main`.
   authentication, permissions, cloud schemas and service-worker behavior remain
   unchanged. Release stamps advance to the nonforced 110.4.79 candidate.
 
-## Build
+## Verification and release scope
 
-The final installer runs after the current main materialization chain. Edit the
-templates in this directory; generated `source/` copies are build output.
+Release 110.4.80 includes Smart Import, My month and the account/index scheduler
+fixes documented in `../reliability-sync/README.md`. It does not install the
+broader HOS, historical edit or original-reference candidate from PR #231.
 
-Two existing clean-build predecessor defects were also reproduced and repaired:
-the parts-counter catalog installer assumed an optional negative-signals array
-already existed; the native PDF installer assumed the v110348 page reader even
-when the exact earlier v110347 reader was retained. Both fixes require the known
-predecessor and preserve the existing classification and PDF regression gates.
-The unchanged 18-case route-day regression runs after the completed freight
-projection, rather than against an intermediate materialization stage.
+The focused suite covers CSV identity and conflicting sources, real Dexie
+transactions using synthetic IndexedDB, rollback and quota recovery, unchanged
+HOS locks, account changes, deadlines, save coalescing and actual installed index
+capture/cache/finish boundaries. Production compilation and architecture checks
+run on the final materialized runtime. The existing CI runs the complete build
+and legacy browser workflows; release-label assertions track the actual release
+while retaining their behavioral assertions.
 
-```sh
-npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
-node scripts/build-v110.mjs
-```
+`browser-import.mjs` uses the existing isolated account fixture to exercise the
+actual Home, CSV review/save/reimport/conflict, zero-taxable mileage, original
+logbook PDF storage and monthly UI in Chromium and WebKit. It checks retained
+cross-month load identity, phone/tablet layout and unchanged logbook evidence.
+The browser receive suite separately exercises actual account reconciliation
+and IndexedDB with synthetic cloud transport. Real account services are blocked.
 
-For the separate in-memory IndexedDB persistence tests, install the test-only
-dependency without changing the production dependency graph:
-
-```sh
-npm install --no-save --package-lock=false fake-indexeddb@6.2.4
-node --test scripts/smart-import/core.test.mjs \
-  scripts/smart-import/storage.test.mjs \
-  scripts/smart-import/runtime.test.mjs \
-  scripts/smart-import/indexeddb.test.mjs
-```
-
-The tests exercise actual Dexie transactions with synthetic source files and
-account data, including original-byte verification, rollback, quota recovery,
-reimport, account changes and concurrent saves. The runtime tests verify all
-frozen file hashes. All 46 focused tests passed, together with Next production
-compilation and the existing architecture/module-isolation checks, against the
-materialized current application. Browser and physical-device verification of
-the new screens remains pending.
-
-A fresh all-in-one clean build is **still blocked before Smart Import runs** by
-the existing `scripts/v110379/install.mjs` App.jsx predecessor check: the source
-has SHA-256 `a7d0a146852c574ba4e1cc6237314caf9d8d146ae22a599c06094027402e361e`,
-while that installer requires
-`9fa786c626b5e796ad0c06ac51020bc2c28797bf770ba72284ba79311c032572`.
-The checksum check is retained. Its exact source/version chain needs a separate
-repair and a successful complete clean build before this candidate can activate.
-
-## Live activation status
-
-Publication to main was already authorized. The complete live-backup restore
-requirement is still unmet. A signed-in inspection reached the full-device
-export, but the browser refused the download and could not safely resume its
-native credential state. A complete current file was never retrieved or
-restored. Backend access to retrieve an alternative complete copy was also
-unavailable in this session. Private account data is excluded from this change.
-
-Keep this candidate in draft until a current complete Export Everything file,
-including source originals, can be restored in an independent environment and
-checked against its source. Review actual redacted Mudflap/Motive exports and
-the iPhone workflow before activation. The separate reliability/HOS candidate
-in PR #231 and its Chicago transition remain pending; this change does not
-silently activate that candidate or move historical log events.
+These client changes retain the existing storage format and do not rewrite
+historical events or consolidate old financial rows. The complete live-data
+restore and Chicago transition gates for PR #231 remain open. Private account
+records, cloud file lists, authentication data and diagnostics are excluded from
+this source change. Physical iPhone testing remains distinct from browser-engine
+and viewport testing.
