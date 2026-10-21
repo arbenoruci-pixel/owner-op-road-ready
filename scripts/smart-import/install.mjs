@@ -73,15 +73,15 @@ export function installSmartImport(root = process.cwd()) {
 }
 
 export function releaseSmartImport(root = process.cwd()) {
-  const VERSION = '110.4.80', read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const VERSION = '110.4.81', read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const sha = String(process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'})).trim();
   assert.match(sha, /^[a-f0-9]{40}$/i);
-  const BUILD = 'v110480-sync-smart-import-' + sha.slice(0, 12);
+  const BUILD = 'v110481-quiet-sync-' + sha.slice(0, 12);
   const previous = JSON.parse(read('release-version.json'));
-  assert.ok(['110.4.77', '110.4.79', VERSION].includes(previous.version), 'Smart Import requires the current reviewed main runtime');
+  assert.ok(['110.4.77', '110.4.79', '110.4.80', VERSION].includes(previous.version), 'Smart Import requires the current reviewed main runtime');
   for (const file of ['release-version.json', 'public/app-version.json']) {
     const value = JSON.parse(read(file));
-    Object.assign(value, {version: VERSION, build: BUILD, force: false, sourceCommit: sha, label: 'v110.4.80 Reliable sync, Smart Import and My month', releasedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), notes: ['Review fuel, state miles and toll imports before saving their original sources.', 'Count canonical transactions once, preserve zero taxable mileage and require review for conflicts.', 'Organize monthly logs, fuel, loads, expenses and original ELD reports without changing duty events.']});
+    Object.assign(value, {version: VERSION, build: BUILD, force: false, sourceCommit: sha, label: 'v110.4.81 Quiet synchronization', releasedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), notes: ['Synchronization status opens from Settings and never covers the signing screen automatically.', 'Count canonical transactions once, preserve zero taxable mileage and require review for conflicts.', 'Organize monthly logs, fuel, loads, expenses and original ELD reports without changing duty events.']});
     fs.writeFileSync(path.join(root, file), JSON.stringify(value, null, 2) + '\n');
   }
   for (const file of ['package.json', 'package-lock.json']) {
