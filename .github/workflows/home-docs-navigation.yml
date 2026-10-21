@@ -48,12 +48,11 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
-          node scripts/workspace-navigation/browser-navigation.mjs
-          node scripts/v110453/browser-workspace.mjs
-          node scripts/v110435/browser-phone-home.mjs
-          node scripts/v110430/browser-export.mjs
-          node scripts/smart-import/browser-import.mjs
-          node scripts/reliability-sync/browser-receive.test.mjs
+          failed=0
+          for test in workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs; do
+            if ! node "scripts/$test"; then failed=1; fi
+          done
+          exit "$failed"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
@@ -61,4 +60,5 @@ jobs:
           path: |
             /tmp/home-docs-build.log
             /tmp/home-docs-server.log
+            browser-test-results/
           retention-days: 3

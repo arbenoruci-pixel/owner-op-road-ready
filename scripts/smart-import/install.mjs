@@ -66,6 +66,7 @@ export function installSmartImport(root = process.cwd()) {
   // Keep the legacy package-picker checks through the recovery disclosure and
   // also require the new primary statement-import entry point to be visible.
   const phoneTest='scripts/v110435/browser-phone-home.mjs';
+  patch(phoneTest,"assert.equal(await page.getByRole('navigation',{name:'Apps'}).getByRole('button').count(),10);", "assert.equal(await page.getByRole('navigation',{name:'Apps'}).getByRole('button').count(),11);assert.equal(await page.getByRole('navigation',{name:'Apps'}).getByRole('button',{name:'My month',exact:true}).count(),1);");
   patch(phoneTest,"await page.getByRole('button',{name:'Import',exact:true}).click();await page.getByRole('button',{name:'Choose import ZIP',exact:true}).waitFor();", "await page.getByRole('button',{name:'Import',exact:true}).click();await page.getByRole('heading',{name:'Smart Import',exact:true}).waitFor();await page.getByText('Road Ready packages & recovery',{exact:true}).click();await page.getByRole('button',{name:'Choose import ZIP',exact:true}).waitFor();");
   write(phoneTest,read(phoneTest).replace('/active logs/','/active logbook/'));
   console.log('PASS — Smart Import, canonical fuel/tolls and read-only monthly records installed');

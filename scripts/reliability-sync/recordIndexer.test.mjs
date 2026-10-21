@@ -24,8 +24,15 @@ test('hidden/offline work waits for wake and never acknowledges unsent changes',
 });
 test('temporary failures back off and exhaust a bounded index attempt budget',async()=>{
  let attempts=0;const f=fixture({sync:async()=>{attempts++;return {error:'timeout'};}});f.queue.start();
- await f.advance(900000);assert.equal(attempts,6);assert.equal(f.queue.inspect().blocked,true);assert.equal(f.queue.inspect().acknowledged,0);
+ await f.advance(900000);assert.equal(attempts,6);assert.equal(f.queue.inspect().blocked,true);assert.equal(f.queue.inspect().acknowledged,0);assert.equal(f.counts().polls,0);assert.equal(f.timers.size,0);
  f.queue.wake({retry:true});await f.advance(0);assert.equal(attempts,7);f.queue.stop();
+});
+test('disabled indexing stops correction polls until an explicit retry rechecks settings',async()=>{
+ let enabled=false,attempts=0;const f=fixture({sync:async()=>{attempts++;return enabled?{}:{disabled:true};}});
+ f.queue.start();await f.advance(900000);assert.equal(attempts,1);assert.equal(f.counts().polls,0);assert.equal(f.timers.size,0);assert.equal(f.queue.inspect().acknowledged,0);
+ f.queue.wake();await f.advance(900000);assert.equal(attempts,1);assert.equal(f.counts().polls,0);
+ enabled=true;f.queue.wake({retry:true});await f.advance(0);assert.equal(attempts,2);assert.equal(f.queue.inspect().acknowledged,1);
+ await f.advance(90000);assert.equal(f.counts().polls,1);f.queue.stop();
 });
 test('an interrupted pass retains its dirty generation and cleanup stops timers',async()=>{
  let n=0;const f=fixture({sync:async()=>++n===1?{deferred:true}:{}});f.queue.start();await f.advance(15000);assert.equal(f.queue.inspect().acknowledged,0);

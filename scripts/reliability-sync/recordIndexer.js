@@ -6,16 +6,16 @@ export function createRecordIndexer({sync, corrections, onError = () => {},
   let stopped = false, running = false, dirty = 1, acknowledged = 0;
   let timer = null, failures = 0, blocked = false;
   function schedule(delay) {
-    if (stopped || timer !== null || !available()) return;
+    if (stopped || blocked || timer !== null || !available()) return;
     timer = setTimer(() => {timer = null; void run();}, delay);
   }
   async function run() {
-    if (stopped || running || !available()) return;
+    if (stopped || blocked || running || !available()) return;
     const captured = dirty;
     running = true;
     let retry = false;
     try {
-      if (!blocked && dirty > acknowledged) {
+      if (dirty > acknowledged) {
         const result = await sync() || {};
         if (result.error) throw new Error(result.error);
         if (result.paused || result.disabled || result.signedOut) blocked = true;
@@ -29,9 +29,9 @@ export function createRecordIndexer({sync, corrections, onError = () => {},
       if (failures >= 6) blocked = true;
       retry = true;
     } finally {running = false;}
-    if (stopped) return;
-    schedule(retry && !blocked ? Math.min(120000, 5000 * 2 ** Math.min(failures, 5)) :
-      !blocked && dirty > acknowledged ? debounceMs : pollMs);
+    if (stopped || blocked) return;
+    schedule(retry ? Math.min(120000, 5000 * 2 ** Math.min(failures, 5)) :
+      dirty > acknowledged ? debounceMs : pollMs);
   }
   return {
     start() {schedule(initialMs);},
