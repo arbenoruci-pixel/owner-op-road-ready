@@ -49,7 +49,7 @@ for(const [name,engine] of engines){
   await page.getByLabel('Report’s home-terminal timezone').selectOption('America/Chicago');
   await page.getByRole('button',{name:'Review import',exact:true}).click();
   await page.getByRole('alert').filter({hasText:'Choose the provider printed on the report.'}).waitFor();
-  await page.getByLabel('Provider',{exact:true}).selectOption('Motive / KeepTruckin');
+  await page.getByRole('combobox',{name:/^Provider/}).selectOption('Motive / KeepTruckin');
   await page.getByRole('button',{name:'Review import',exact:true}).click();await review().waitFor();
   assert.match(await review().innerText(),/Archive for Synthetic Driver.*America\/Chicago/);
   await review().getByRole('checkbox').check();await review().getByRole('button',{name:'Save original logbook report',exact:true}).click();
