@@ -41,7 +41,7 @@ existing records. It targets the existing application on `main`.
   retained; the active load supplies no fallback reference.
 - The existing terminal policy, duty events, signatures, HOS modules,
   authentication, permissions, cloud schemas and service-worker behavior remain
-  unchanged. Release stamps advance to the nonforced 110.4.79 candidate.
+  unchanged. Release stamps advance to the nonforced 110.4.80 candidate.
 
 ## Verification and release scope
 

@@ -11,6 +11,7 @@ for(const [name,engine] of engines){
  const browser=await engine.launch({headless:true});
  const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
  const page=await context.newPage(),errors=[];
+ fs.mkdirSync('browser-test-results/smart-import',{recursive:true});
  await setupRoutes(context);page.on('pageerror',e=>errors.push(e.message));
  try{
   const state=baseState();state.activeDriverId='primary';state.teamDrivers=[{id:'primary',name:'Synthetic Driver'}];state.activeTeamDriverIds=['primary'];
@@ -46,6 +47,9 @@ for(const [name,engine] of engines){
   await upload('Motive-logbook.pdf',simplePdf('Synthetic logbook report'),'application/pdf');
   await page.getByLabel('First report date').fill('2026-10-01');await page.getByLabel('Last report date').fill('2026-10-02');
   await page.getByLabel('Report’s home-terminal timezone').selectOption('America/Chicago');
+  await page.getByRole('button',{name:'Review import',exact:true}).click();
+  await page.getByRole('alert').filter({hasText:'Choose the provider printed on the report.'}).waitFor();
+  await page.getByLabel('Provider',{exact:true}).selectOption('Motive / KeepTruckin');
   await page.getByRole('button',{name:'Review import',exact:true}).click();await review().waitFor();
   assert.match(await review().innerText(),/Archive for Synthetic Driver.*America\/Chicago/);
   await review().getByRole('checkbox').check();await review().getByRole('button',{name:'Save original logbook report',exact:true}).click();
@@ -63,5 +67,6 @@ for(const [name,engine] of engines){
   assert.equal((await business()).fuel.length,1);assert.deepEqual(errors,[]);
   fs.mkdirSync('browser-test-results/smart-import',{recursive:true});await page.screenshot({path:`browser-test-results/smart-import/${name}-month.png`,fullPage:true});
   console.log('PASS '+name+' reviewed CSV save/reimport/conflict, zero taxable miles, read-only PDF, monthly totals, cross-month identity, responsive layout and unchanged logs');
- }finally{await context.close();await browser.close();}
+ }catch(error){await page.screenshot({path:`browser-test-results/smart-import/${name}-failure.png`,fullPage:true});console.error(await page.locator('body').innerText(),errors);throw error;}
+ finally{await context.close();await browser.close();}
 }

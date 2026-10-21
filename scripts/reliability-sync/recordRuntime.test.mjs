@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {createHash,webcrypto} from 'node:crypto';
 // Execute the installed indexer and its real capture/cache/finish boundaries.
 // Cloud responses and the device database below contain synthetic records only.
-function fixture({count=2,afterBatch=()=>{},busy=false}={}){
+function fixture({count=2,afterBatch=()=>{},busy=false,tabBusy=false}={}){
  const cache=new Map(),locals=new Map(),calls=[],document={visibilityState:'visible'};let now=100000,revision=1;
  const snapshot={key:'owner-op-road-ready-state-v1',state:{eventsByDay:{'2026-10-01':[]}}};
  const db={tables:[{name:'app_snapshots',toArray:async()=>[snapshot]}],sync_meta:{get:async k=>cache.get(k),put:async r=>cache.set(r.key,r),delete:async k=>cache.delete(k)},transaction:async(...args)=>args.at(-1)()};
@@ -14,7 +14,7 @@ function fixture({count=2,afterBatch=()=>{},busy=false}={}){
  const source=fs.readFileSync('lib/owner-op-cloud/recordSyncV110451.js','utf8').replace(/^import[^\n]*\n/gm,'').replace(/\bexport /g,'');
  class ClockDate extends Date {static now(){return now;}}
  const names=['cloudClient','cloudSession','sha256','getOwnerOpDb','BUSINESS_STORE_KEY','BUSINESS_STORE_EVENT','bounded','visible','canonical','projectRecords','prepareCorrection','idOf','window','document','navigator','localStorage','crypto','CustomEvent','Date'];
- const values=[()=>client,async()=>({user:{id:'00000000-0000-4000-8000-000000000001'}}),async bytes=>createHash('sha256').update(bytes).digest('hex'),()=>db,'business','business-event',async q=>q,v=>v,JSON.stringify,()=>Array.from({length:count},(_,i)=>({record_key:'row/'+i,kind:'saved_records',data:{i,revision}})),()=>{},v=>v.id,{dispatchEvent(){}},document,{onLine:true},localStorage,webcrypto,class{constructor(type,options){this.type=type;Object.assign(this,options);}},ClockDate];
+ const values=[()=>client,async()=>({user:{id:'00000000-0000-4000-8000-000000000001'}}),async bytes=>createHash('sha256').update(bytes).digest('hex'),()=>db,'business','business-event',async q=>q,v=>v,JSON.stringify,()=>Array.from({length:count},(_,i)=>({record_key:'row/'+i,kind:'saved_records',data:{i,revision}})),()=>{},v=>v.id,{dispatchEvent(){}},document,{onLine:true,locks:{request:async(name,options,callback)=>callback(tabBusy?null:{})}},localStorage,webcrypto,class{constructor(type,options){this.type=type;Object.assign(this,options);}},ClockDate];
  const runtime=new Function(...names,source+'\nreturn {syncRecords,recordSyncStatus};')(...values);
  return {...runtime,calls,cache,document,advance:ms=>{now+=ms;},change:()=>{revision++;}};
 }
@@ -32,6 +32,9 @@ test('hidden startup performs no query or cache acknowledgement',async()=>{
 });
 test('a server lease held by another run remains busy and unsent',async()=>{
  const f=fixture({busy:true});assert.equal((await f.syncRecords()).busy,true);assert.deepEqual(f.calls,['begin']);assert.equal(f.cache.size,0);
+});
+test('a competing tab retains its pending index without any server write or acknowledgement',async()=>{
+ const f=fixture({tabBusy:true});assert.equal((await f.syncRecords({changed:true})).busy,true);assert.deepEqual(f.calls,[]);assert.equal(f.cache.size,0);
 });
 test('explicit manual indexing can recheck a previously acknowledged inventory',async()=>{
  const f=fixture();await f.syncRecords();await f.syncRecords({force:true});assert.equal(f.calls.filter(c=>c==='finish').length,2);

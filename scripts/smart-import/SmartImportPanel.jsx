@@ -27,6 +27,7 @@ export default function SmartImportPanel({state = {}, initialFile, onDone, onSca
   function choose(value) {
     setFile(value || null); setMessage('');
     if (value && /\.pdf$/i.test(value.name)) setKind('logs');
+    else if (kind === 'logs') setKind('auto');
   }
   async function inspect(event) {
     event.preventDefault();
@@ -72,7 +73,7 @@ export default function SmartImportPanel({state = {}, initialFile, onDone, onSca
         {file ? <p className="rr-smart-filename">{file.name}</p> : null}
         <div className="rr-smart-fields">
           <label>File contains<select value={kind} onChange={event => setKind(event.target.value)}><option value="auto">Detect CSV format</option><option value="fuel">Fuel transactions</option><option value="mileage">State miles / IFTA distance</option><option value="tolls">Toll transactions</option><option value="logs">Read-only logbook PDF</option></select></label>
-          <label>Provider<select value={provider} onChange={event => setProvider(event.target.value)}><option value="auto">Detect from source</option>{providers.map(name => <option key={name}>{name}</option>)}<option value="other">Another provider</option></select></label>
+          <label>Provider<select value={provider} onChange={event => setProvider(event.target.value)}><option value="auto">{kind === 'logs' ? 'Choose from the report' : 'Detect from source'}</option>{providers.map(name => <option key={name}>{name}</option>)}<option value="other">Another provider</option></select></label>
           {provider === 'other' ? <label>Provider name<input value={customProvider} maxLength={80} onChange={event => setCustomProvider(event.target.value)}/></label> : null}
           <label>Provider account label (optional)<input value={account} maxLength={80} placeholder="Company account or card label" onChange={event => setAccount(event.target.value)}/></label>
           {kind === 'mileage' || kind === 'auto' ? <label>Distance unit, if unlabeled<select value={unit} onChange={event => setUnit(event.target.value)}><option value="">Use labeled source units</option><option value="mi">Miles</option><option value="km">Kilometers — convert to miles</option></select></label> : null}

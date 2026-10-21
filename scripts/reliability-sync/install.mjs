@@ -76,6 +76,7 @@ patch(lib+'mirrorCoreV110450.js',
  "import {bounded} from './cloudDeadlineReliability.js';\nexport {bounded} from './cloudDeadlineReliability.js';");
 const index=lib+'recordSyncV110451.js';
 patch(index,'export function syncRecords({force=false}={}){','export function syncRecords({force=false,changed=false}={}){');
+patch(index,'lock=>lock?run():null','lock=>lock?run():{busy:true}');
 patch(index,'if(!force&&cache.completedAt&&Date.now()-cache.completedAt<60000)','if(!force&&!changed&&cache.completedAt&&Date.now()-cache.completedAt<60000)');
 patch(index,"async function checked(query){",`function assertIndexVisible(){if(typeof document!=='undefined'&&document.visibilityState==='hidden')throw Object.assign(Error('Record indexing will continue when this app is open.'),{deferred:true});}
 async function checked(query){`);
