@@ -79,6 +79,7 @@ jobs:
           node scripts/v110411/browser-rate.mjs
           node scripts/v110466/browser-rate.mjs
           node scripts/v110464/browser-rate.mjs
+          node scripts/contract-rate/browser.mjs
           node scripts/v110410/browser-bol-columns.mjs
           node scripts/v110394/browser-bol-form.mjs
           node scripts/v110393/browser-bol-source.mjs

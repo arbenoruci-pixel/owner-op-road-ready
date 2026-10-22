@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
 await import('./insert-continuity/install.mjs');
-await import('./solo-driver/install.mjs');
+// Reapply after historical team installers, even if another installer loaded
+// the helper earlier in this build process.
+await import('./solo-driver/install.mjs?finalize=v110469');
 const read=p=>fs.readFileSync(p,'utf8');
 const VERSION='110.4.69',BUILD='v110469-insert-continuity-solo';
 for(const path of ['release-version.json','public/app-version.json']) {

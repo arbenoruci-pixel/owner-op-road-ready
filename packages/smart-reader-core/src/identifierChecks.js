@@ -11,6 +11,7 @@ import {bolHeaderMatches,bolEquipmentMatches} from './bolHeader.js';
 import {referenceRowMatches} from './referenceRows.js';
 import {bolTableMeasurementMatches} from './bolTableMeasurements.js';
 import {agreementPartyMatches} from './agreementParties.js';
+import {contractRateMatches} from './contractRate.js';
 
 // A digit string is not interchangeable with another that lost end digits.
 // Unlabelled alternatives can only make a BOL uncertain; never fill its value.
@@ -42,6 +43,7 @@ export function pageFieldMatches(page,spec){
     }
   }
   if(spec.rateVocabulary)matches.push(...rateRouteMatches(page,spec));
+  if(spec.rateVocabulary)matches.push(...contractRateMatches(page,spec));
   if(spec.numberedRate)matches.push(...numberedRateMatches(page,spec));
   if(spec.rateSection)matches.push(...rateSectionMatches(page,spec));
   if(spec.rateParty)matches.push(...ratePartyMatches(page,spec));

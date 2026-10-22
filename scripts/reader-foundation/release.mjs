@@ -75,6 +75,20 @@ export function applyReaderRelease({root=process.cwd(),env=process.env,now=new D
   const locks=json('module-locks.v1.json');locks.release=VERSION;setJSON('module-locks.v1.json',locks);
   for(const file of TEXT_FILES){
     let text=before.get(file).replaceAll(PREVIOUS_VERSION,VERSION).replaceAll(previous.version,VERSION).replaceAll(PREVIOUS_BUILD,build).replaceAll(previousBuild,build);
+    // Historical installers can retain an older fallback label while the
+    // fully installed runtime/manifest already has the supported predecessor.
+    // Set each unique release constant directly; keep the runtime untouched.
+    const prefix=file==='source/src/core/update/appUpdate.js'?'FALLBACK_APP':file==='public/sw.js'?'OWNER_OP_SW':null;
+    if(prefix)for(const [key,value] of [['VERSION',VERSION],['BUILD',build]]){
+      const pattern=new RegExp(`const ${prefix}_${key}\\s*=\\s*['"][^'"]+['"];?`,'g');
+      assert.equal([...text.matchAll(pattern)].length,1,'Unique release stamp: '+file+' / '+key);
+      text=text.replace(pattern,`const ${prefix}_${key} = '${value}';`);
+    }
+    if(file==='source/src/modules/home/HomeScreen.jsx')text=text.replace(/v\d+\.\d+\.\d+(?=<\/footer>)/g,'v'+VERSION);
+    if(file.startsWith('scripts/'))text=text
+      .replace(/(assert\.equal\(meta\.version,\s*)['"]\d+\.\d+\.\d+['"](?=\))/,(_,prefix)=>prefix+"'"+VERSION+"'")
+      .replace(/(assert\.equal\(meta\.build,\s*)['"]v[^'"]+['"](?=\))/,(_,prefix)=>prefix+"'"+build+"'")
+      .replace(/(assert\.equal\(JSON\.parse\(read\('public\/app-version\.json'\)\)\.version,\s*)['"]\d+\.\d+\.\d+['"](?=\))/,(_,prefix)=>prefix+"'"+VERSION+"'");
     if(file==='source/src/shared/ui/ToolsSheet.jsx'){
       text=text.replace(/Log Tools · v\d+\.\d+\.\d+/g,'Log Tools · v{CURRENT_APP_VERSION}');
       assert.ok(text.includes('Log Tools · v{CURRENT_APP_VERSION}'),'Reader release ToolsSheet version anchor changed');

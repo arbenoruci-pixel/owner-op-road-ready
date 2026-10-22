@@ -104,6 +104,21 @@ test('release reruns are idempotent and a different commit receives a distinct b
   assert.ok(read(path.join(root,'public/sw.js')).includes(next.build));
 });
 
+test('supported materialized predecessors replace stale fallback labels without changing runtime behavior',t=>{
+  const root=fixture(t);
+  for(const [file,prefix] of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
+    const target=path.join(root,file);
+    fs.writeFileSync(target,read(target).replace(new RegExp(`const ${prefix}_VERSION = '[^']+';`),`const ${prefix}_VERSION = '110.4.57';`)
+      .replace(new RegExp(`const ${prefix}_BUILD = '[^']+';`),`const ${prefix}_BUILD = 'v110457-resumable-device-transfer';`));
+  }
+  const before=contents(root),metadata=applyReaderRelease({root,env:{VERCEL_GIT_COMMIT_SHA:SHA}});
+  for(const [file,prefix] of [['source/src/core/update/appUpdate.js','FALLBACK_APP'],['public/sw.js','OWNER_OP_SW']]){
+    const normalize=text=>text.replace(new RegExp(`const ${prefix}_VERSION = '[^']+';`),'VERSION').replace(new RegExp(`const ${prefix}_BUILD = '[^']+';`),'BUILD');
+    assert.equal(normalize(read(path.join(root,file))),normalize(before.get(file)));
+    assert.ok(read(path.join(root,file)).includes(metadata.build));
+  }
+});
+
 test('unmaterialized or inconsistent release input is rejected before writes',t=>{
   const root=fixture(t),file=path.join(root,'package.json'),value=JSON.parse(read(file));value.version='97.3.0';fs.writeFileSync(file,JSON.stringify(value));
   const before=contents(root);

@@ -1,6 +1,7 @@
 // Matching views never replace source text or its evidence offsets.
 import {rateConfirmationProfile} from './rateConfirmation.js';
 import {deliveryEvidence,receiverStampEvidence,fuelReceiptEvidence} from './typeEvidence.js';
+import {contractRateEvidence} from './contractRate.js';
 const leadingMarks=/^[\s|~'"‘’“”*_\[\]{}<>•=.,:;–—-]+/;
 const view=line=>line.text.replace(leadingMarks,'');
 const matches=(line,pattern)=>pattern.test(line.text)||pattern.test(view(line));
@@ -86,6 +87,9 @@ function shortFormColumnEvidence(lines){
 
 // Every vote retains the original lines, including OCR noise and punctuation.
 export function profileEvidence(lines,profile,{lineIndices}={}){
+  if(profile.id==='rate_confirmation'&&!lineIndices){
+    const contract=contractRateEvidence(lines);if(contract)return contract;
+  }
   if(profile.deliveryBase){
     const shipping=profileEvidence(lines,profile.deliveryBase,{lineIndices});
     const explicit=deliveryEvidence(lines);

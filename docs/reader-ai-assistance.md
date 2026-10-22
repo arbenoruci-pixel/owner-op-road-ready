@@ -2,6 +2,10 @@
 
 The local reader runs first. Uncertain/generic/conflicting page identities and BOL receiver acknowledgement labels can request one visual classification of the retained page. Missing dates or other fields alone do not trigger AI. Clear primary pages are skipped. At most four uncached pages are requested per scan, sequentially. No automatic retries, provider cascade, archive upload, field extraction, or load assignment is added.
 
+Verbal carrier rate agreements can place the contract and total on their first page, followed by a separate pickup/delivery schedule. The local reader recognizes that contract structure and links consecutive schedule pages only when the printed reference and publication footer agree. BOL mentions in contract instructions do not establish a BOL. An unqualified legacy BOL/POD guess requires a type choice; explicit driver choices retain authority.
+
+Invalid provider output retains the existing `invalid_ai_result` status and records a bounded `outputIssue`: `token_limit`, `refused_output`, `incomplete_output`, `invalid_json`, or `invalid_schema`. Raw provider output is excluded. A failed request stops the paid batch without changing the selected model, request limits or local evidence.
+
 AI results are suggestions. The review screen shows their evidence, opens the source page, and requires the driver's existing confirmation action. Blank and pickup signatures cannot pass the POD evidence gate. Fuel needs product, dispensing, and payment evidence. Mixed/uncertain results remain for review. A suggestion never becomes a second OCR vote. The original type, fields, packet guards and manual corrections are preserved. The saved reading and review export retain the AI provenance separately.
 
 ## Activation

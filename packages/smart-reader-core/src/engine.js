@@ -9,6 +9,7 @@ import {validateBol} from './bolChecks.js';
 import {corroborateBolReference} from './barcodeEvidence.js';
 import {reconcileBolMeasurements} from './measurementConsensus.js';
 import {rateContinuation} from './rateContinuation.js';
+import {contractRateContinuation} from './contractRate.js';
 
 // Fold cosmetic corporate commas, preserving word and identifier boundaries.
 const semanticKey=(kind,value)=>kind==='party'?partyKey(value):String(value||'');
@@ -108,8 +109,10 @@ function makeGroups(pages, identities) {
     const certificate=PROFILES.find(profile=>profile.id==='signing_certificate');
     const stampOnly=identity.kind==='signing_certificate'&&identity.evidence.every(isSertifiStamp)
       &&!page.observations.some(o=>o.lines.some(line=>certificate.heading.test(line.text)));
-    const continuation=previous?.kind==='rate_confirmation'&&rateContinuation(previousPages,page,stampOnly?{...identity,kind:'unknown'}:identity,previousIdentity);
-    const canJoin=previous&&(previousIdentity?.joinPages!==false||continuation)&&previous.kind!=='unknown'&&identity.status!=='conflicting'&&!conflictingParties&&previous.reference&&continuationRefs.length===1&&continuationRefs[0]===previous.reference&&(continuation||identity.kind===previous.kind||identity.kind==='unknown');
+    const contractContinuation=previous?.kind==='rate_confirmation'&&contractRateContinuation(previousPages,page,identity);
+    const continuation=contractContinuation||previous?.kind==='rate_confirmation'&&rateContinuation(previousPages,page,stampOnly?{...identity,kind:'unknown'}:identity,previousIdentity);
+    const matchingReference=continuationRefs.length===1&&continuationRefs[0]===previous?.reference||contractContinuation&&continuationRefs.length===0;
+    const canJoin=previous&&(previousIdentity?.joinPages!==false||continuation)&&previous.kind!=='unknown'&&identity.status!=='conflicting'&&!conflictingParties&&previous.reference&&matchingReference&&(continuation||identity.kind===previous.kind||identity.kind==='unknown');
     if(canJoin){
       if(stampOnly)Object.assign(identity,{kind:'unknown',status:'unknown',evidence:[]});
       previous.pageIds.push(page.id);continue;
