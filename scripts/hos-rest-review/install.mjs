@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {installDutyCompatibility} from '../test-support/install-duty-compatibility.mjs';
 
 // Applied after the legacy materializers, before the production build. All
 // replacements are validated before any runtime file is written.
@@ -37,6 +38,15 @@ patch(hos,`    if (restProgressForReviewV109.block.allSleeper && restProgressFor
     warnings.push({ severity:'low', text:\`Rest \${durLabel(restProgressForReviewV109.duration)} / 10h full reset.\` });`);
 
 const engine='source/src/modules/logbook/eventEditingV110.js';
+const compatibilityManifest='scripts/test-support/reviewed-duty-hashes.json';
+const reviewedDuty=JSON.parse(read(compatibilityManifest));
+const hash=source=>createHash('sha256').update(source).digest('hex');
+// Pin the previously reviewed complete edit engine before applying the exact
+// transformations below. A repeat must match this installer's saved result.
+if(!read(engine).includes('export function projectEditorLogbookEvents')) {
+  assert.equal(reviewedDuty[engine],'0df17e2433c360da033ba1d0cb8d2e3b888727caa48af14ca72e4eabcfc9811b');
+}
+assert.equal(hash(read(engine)),reviewedDuty[engine],'Reviewed engine predecessor changed');
 patch(engine,"import { getHomeTerminalTimeZone, homeTerminalDayKey, homeTerminalMinute }", "import { historicalStatusTailV110317 } from '../../core/timeline/historicalStatusTailV110317.js';\nimport { getHomeTerminalTimeZone, homeTerminalDayKey, homeTerminalMinute }");
 patch(engine,'const EDIT_FIELDS=new Set(',`// The editor opens the same proven past-day tail as the daily graph. The
 // stored snapshot and projectLogbookEvents remain exact, so viewing/cancelling
@@ -65,6 +75,14 @@ const editor='source/src/modules/editor/EditEventSheet.jsx';
 const source=read(editor);
 assert.ok(source.includes('projectLogbookEvents')||source.includes('projectEditorLogbookEvents'),'Editor projection import');
 prepared.set(editor,source.replaceAll('projectLogbookEvents','projectEditorLogbookEvents'));
+// This fixed output includes the retained GPS and unloading repairs. Register
+// only that reviewed editor, and the deterministic edit-engine transform of
+// the pinned predecessor; unrelated downstream edits remain rejected.
+const reviewedEditor='0eba613f1dd1aff4140fd9280fd9cb9fd0aeca7c8bc62305472ea6b5c2a3e194';
+assert.equal(hash(read(editor)),reviewedEditor,'Reviewed final midnight editor changed');
+prepared.set(compatibilityManifest,JSON.stringify({...reviewedDuty,
+  [engine]:hash(read(engine)),[editor]:reviewedEditor,
+},null,2)+'\n');
 
 for(const [file,source] of prepared)fs.writeFileSync(file,source);
 // Explicit revision of the HOS implementation and public Logbook API. Other
@@ -72,4 +90,5 @@ for(const [file,source] of prepared)fs.writeFileSync(file,source);
 const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));
 for(const file of [hos,api])locks.files[file]=createHash('sha256').update(read(file)).digest('hex');
 fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
+installDutyCompatibility();
 console.log('PASS — contextual rest review and consistent historical editor intervals installed');
