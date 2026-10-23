@@ -12,7 +12,7 @@ const session={access_token:b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:user.id,se
 const profile={setupComplete:true,mode:'own_authority',companyName:'Example Carrier LLC',carrierName:'Example Carrier LLC',truckNumber:'12',trailerNumber:'TEST',fleetSize:1,modules:['documents','loads','logbook','dot','drive','wallet'],createdAt:'2026-01-01T00:00:00Z',updatedAt:Date.now()};
 const fake='live_1788780557647';
 function baseState(){return {view:'home',activeDay:'2026-09-07',sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,homeTerminalTimeZone:'America/New_York',driver:{truck:'12',trailer:'TEST',email:user.email},driverProfile:{name:'Synthetic Driver',email:user.email},carrierName:'Example Carrier LLC',mainOfficeAddress:'100 Example Road, Example City, IL 60000',dotNumber:'0000000',currentTrailer:'TEST',currentStatus:'OFF',currentReason:'Off Duty',currentLocation:{city:'Downers Grove',state:'IL'},eventsByDay:{'2026-09-07':[{id:fake,status:'OFF',startMin:0,endMin:985,city:'Downers Grove',state:'IL',source:'manual',note:'Off Duty'}]},certifyStatus:{'2026-09-07':'Active day / Not certified yet'},signatureByDay:{},inspectionByDay:{},formByDay:{},dotWallet:{documents:{}},loadGuidesById:{},activeLoadGuideId:'',routeLegsByDay:{'2026-09-07':[{id:'leg_'+fake,loadGroupId:fake,pickupEventId:fake,fromCity:'Downers Grove',fromState:'IL',toCity:'',toState:'',shippingDocs:'',loadNo:'',kind:'loaded',status:'open',source:'pickup_event'}]},loadInfo:{loadNo:'',shippingDocs:'',pickupCity:'Downers Grove',pickupState:'IL',guideId:'',sourceEventId:fake,sourceEventDay:'2026-09-07',updatedAt:Date.now()}};}
-async function seed(page,state,originalFiles=[]){
+async function seed(page,state,originalFiles=[],{navigateHome=true}={}){
  await page.goto(origin+'/_not-found');
  await page.evaluate(async({schemas,state,session,profile,originalFiles})=>{
   localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify(state.testInstructionStore));delete state.testInstructionStore;
@@ -24,6 +24,7 @@ async function seed(page,state,originalFiles=[]){
    tx.objectStore('app_snapshots').put({key:'owner-op-road-ready-state-v1',state,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=event=>reject(new Error('Fixture write: '+(event.target?.error?.message||tx.error?.message||event.type)));tx.onabort=()=>reject(new Error('Fixture transaction aborted: '+(tx.error?.message||'unknown')));};});
  },{schemas,state,session,profile,originalFiles});
  await page.goto(origin);
+ if(!navigateHome)return;
  await page.locator('.logbook-home-screen-v988').waitFor({timeout:30000});
  const adaptiveHome=page.locator('.adaptive-home-v1038');
  if(!(await adaptiveHome.isVisible().catch(()=>false))){
