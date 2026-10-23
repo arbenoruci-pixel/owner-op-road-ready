@@ -138,6 +138,7 @@ steps.push('reliability-sync/install.mjs','reliability-sync/scheduler.test.mjs',
 steps.push('smart-import/install.mjs','smart-import/core.test.mjs','smart-import/storage.test.mjs','smart-import/runtime.test.mjs');
 steps.push('contract-rate/install.mjs','contract-rate/runtime.test.mjs');
 steps.push('reliability-sync/profile-release.mjs');
+steps.push('hos-rest-review/install.mjs','hos-rest-review/rest-review.test.mjs','hos-rest-review/rendered.test.mjs','hos-rest-review/compatibility.test.mjs','test-support/duty-compatibility.test.mjs','v110378/test-review-regressions.mjs','hos-rest-review/release.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")
