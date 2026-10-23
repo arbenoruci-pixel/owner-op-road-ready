@@ -90,5 +90,5 @@ for(const [file,source] of prepared)fs.writeFileSync(file,source);
 const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));
 for(const file of [hos,api])locks.files[file]=createHash('sha256').update(read(file)).digest('hex');
 fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
-installDutyCompatibility();
+installDutyCompatibility(process.cwd(),{previousReviewed:reviewedDuty});
 console.log('PASS — contextual rest review and consistent historical editor intervals installed');

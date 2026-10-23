@@ -10,7 +10,7 @@ import {fileURLToPath} from 'node:url';
 // v110381 insert fixture and test-support/install-legacy-cloud-fixtures.mjs.
 // v110475 adds the explicit unloading route selection and reference handling.
 // v110476 scopes form defaults to that selection instead of the cached guide.
-export function installDutyCompatibility(root=process.cwd()) {
+export function installDutyCompatibility(root=process.cwd(),{previousReviewed=null}={}) {
   const read=file=>fs.readFileSync(path.join(root,file),'utf8');
   const reviewed=JSON.parse(read('scripts/test-support/reviewed-duty-hashes.json'));
   for(const [file,expected] of Object.entries(reviewed)) {
@@ -26,6 +26,14 @@ export function installDutyCompatibility(root=process.cwd()) {
   const prepared=edits.map(([file,before,after])=>{
     const source=read(file);
     if(source.includes(after))return [file,source];
+    // An intentional downstream revision replaces the exact preceding guard.
+    // Validate every current runtime target above and every old guard here;
+    // unknown code still fails before any installer is written.
+    const preceding=previousReviewed && after.replace(serialized,JSON.stringify(previousReviewed));
+    if(preceding && preceding!==after && source.includes(preceding)) {
+      assert.equal(source.split(preceding).length,2,'Duty compatibility predecessor changed: '+file);
+      return [file,source.replace(preceding,()=>after)];
+    }
     assert.equal(source.split(before).length,2,'Duty compatibility installer anchor changed: '+file);
     return [file,source.replace(before,()=>after)];
   });
