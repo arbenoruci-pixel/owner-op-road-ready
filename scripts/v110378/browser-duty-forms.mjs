@@ -76,18 +76,29 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
   const currentDesign=await design(page);assert.deepEqual(currentDesign.labels,recordedDesign.labels);assert.equal(currentDesign.background,recordedDesign.background);assert.equal(currentDesign.overflow,false);assert.equal(currentDesign.footerVisible,true);
   await root.getByRole('button',{name:'Drop Load / Trailer',exact:true}).click();await root.getByLabel('Trailer being dropped',{exact:true}).waitFor();
   await page.screenshot({path:`${output}/${name}-current.png`});await root.getByRole('button',{name:'Cancel',exact:true}).click();assert.deepEqual((await stored(page)).eventsByDay[day],baseline.eventsByDay[day]);
-  await edit(page,'pickup');await root.getByText('Recorded pickup needs review',{exact:true}).waitFor();
-  page.once('dialog',d=>d.accept());await root.getByRole('button',{name:'Use recorded pickup details',exact:true}).click();
-  assert.equal(await root.getByLabel('Load / order #',{exact:true}).inputValue(),'TRIP-A');assert.equal(await root.getByLabel('BOL #',{exact:true}).inputValue(),'BOL-A');assert.equal(await root.getByLabel('Going to',{exact:true}).inputValue(),'Milwaukee, WI');
-  await page.screenshot({path:`${output}/${name}-reviewed-draft.png`});await root.getByRole('button',{name:'Save changes',exact:true}).click();
-  const saved=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='pickup')?.destination==='Milwaukee, WI');const e=saved.eventsByDay[day].find(e=>e.id==='pickup');
-  assert.equal(e.startMin,704);assert.equal(e.endMin,705);assert.equal(e.loadNo,'TRIP-A');assert.equal(e.bol,'BOL-A');assert.equal(saved.routeLegsByDay[day].find(r=>r.id==='recorded-leg').toCity,'Milwaukee');
-  assert.deepEqual(saved.eventsByDay[prior],baseline.eventsByDay[prior]);assert.deepEqual(saved.signatureByDay,baseline.signatureByDay);assert.deepEqual(saved.manualMilesByDay,baseline.manualMilesByDay);assert.deepEqual(saved.routeLegsByDay[day].find(r=>r.id==='plan'),baseline.routeLegsByDay[day].find(r=>r.id==='plan'));
-  assert.equal(saved.logbookEditHistoryByDay[day].at(-1).beforeEvents.find(e=>e.id==='pickup').destination,'Dates');
-  await page.reload();await page.locator('[data-log-event-id=drop]').waitFor();const reopened=await stored(page);assert.equal(reopened.eventsByDay[day].find(e=>e.id==='pickup').destination,'Milwaukee, WI');
-  await edit(page,'pickup');await root.getByLabel('Going to',{exact:true}).fill('Reviewed City, WI');await root.getByRole('button',{name:'Save changes',exact:true}).click();
-  const changed=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='pickup')?.destination==='Reviewed City, WI');const final=changed.eventsByDay[day].find(e=>e.id==='pickup');assert.equal(final.loadNo,'TRIP-A');assert.equal(final.shippingDocs,'TRIP-A');assert.equal(final.bol,'BOL-A');assert.equal(final.startMin,704);assert.equal(final.endMin,705);
-  assert.deepEqual(errors,[]);reports.push({browser:name,passed:true,checks:['shared form and labels','recorded Drop restored','historical GPS confirmation','320px layout','Cancel read-only','explicit source correction','audit and route sync','reopen','destination leaves BOL/time intact']});console.log('PASS — '+name+' unified current/recorded Duty Form and protected pickup correction');
+  await edit(page,'pickup');
+  const loadSection=root.locator('[data-duty-section=load]');
+  assert.equal(await loadSection.locator('input').count(),1);
+  assert.equal(await root.getByLabel('BOL #',{exact:true}).inputValue(),'BOL-A');
+  for(const label of ['BOL / Shipping document #','Going to','Load / order #'])assert.equal(await root.getByLabel(label,{exact:true}).count(),0);
+  await root.getByLabel('BOL #',{exact:true}).fill('04');
+  await root.getByRole('button',{name:'Cancel',exact:true}).click();assert.deepEqual((await stored(page)).eventsByDay[day],baseline.eventsByDay[day]);
+  await edit(page,'pickup');assert.equal(await root.getByLabel('BOL #',{exact:true}).inputValue(),'BOL-A');
+  await root.getByLabel('BOL #',{exact:true}).fill('04');
+  await page.screenshot({path:`${output}/${name}-single-bol.png`});
+  await root.getByRole('button',{name:'Save changes',exact:true}).click();
+  const saved=await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='pickup')?.bol==='04');
+  const e=saved.eventsByDay[day].find(e=>e.id==='pickup'),original=baseline.eventsByDay[day].find(e=>e.id==='pickup');
+  for(const key of ['status','startMin','endMin','loadNo','shippingDocs','destination','destinationState','description','note'])assert.deepEqual(e[key],original[key],key);
+  assert.deepEqual(saved.routeLegsByDay,baseline.routeLegsByDay);
+  assert.deepEqual(saved.eventsByDay[prior],baseline.eventsByDay[prior]);assert.deepEqual(saved.signatureByDay,baseline.signatureByDay);assert.deepEqual(saved.manualMilesByDay,baseline.manualMilesByDay);
+  assert.equal(saved.logbookEditHistoryByDay[day].at(-1).beforeEvents.find(e=>e.id==='pickup').bol,'BOL-A');
+  await page.reload();await page.locator('[data-log-event-id=drop]').waitFor();await edit(page,'pickup');
+  assert.equal(await root.getByLabel('BOL #',{exact:true}).inputValue(),'04');
+  await root.getByLabel('BOL #',{exact:true}).fill('');await root.getByRole('button',{name:'Save changes',exact:true}).click();
+  await waitState(page,s=>s.eventsByDay[day].find(e=>e.id==='pickup')?.bol==='');
+  await page.reload();await page.locator('[data-log-event-id=drop]').waitFor();await edit(page,'pickup');assert.equal(await root.getByLabel('BOL #',{exact:true}).inputValue(),'');
+  assert.deepEqual(errors,[]);reports.push({browser:name,passed:true,checks:['shared form and labels','recorded Drop restored','historical GPS confirmation','320px layout','Cancel read-only','one BOL input','short BOL Save/Cancel/reopen/clear','audit retained','hidden references and route preserved']});console.log('PASS — '+name+' unified current/recorded Duty Form and BOL-only recorded details');
  }catch(error){await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});fs.writeFileSync(`${output}/${name}-failure.json`,JSON.stringify({error:String(error),stack:error.stack,state:await stored(page).catch(()=>null),errors},null,2));reports.push({browser:name,passed:false,error:String(error)});console.error(error);}
  finally{await context.close();await browser.close();}
 }

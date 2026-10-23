@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "fix/single-bol-editor-20261023": false
+    }
+  },
   "framework": "nextjs",
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
   "buildCommand": "node scripts/build-v110.mjs",
