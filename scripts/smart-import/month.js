@@ -1,4 +1,4 @@
-import {canonicalFuel, canonicalTolls, importDate, jurisdiction, numeric, text} from './core.js';
+import {canonicalFuel, canonicalTolls, canonicalMileage, mileagePeriod, importDate, jurisdiction, numeric, text} from './core.js';
 
 const list = value => Array.isArray(value) ? value.filter(Boolean) : [];
 const money = rows => rows.reduce((sum, row) => sum + Math.round(Number(row.total || row.amount || 0) * 100), 0) / 100;
@@ -24,7 +24,9 @@ export function monthlyRecords({month, state = {}, owner = {}, business = {}, do
   logs.sort((a, b) => a.day.localeCompare(b.day) || a.driverId.localeCompare(b.driverId));
   const fuel = canonicalFuel(owner, business), tolls = canonicalTolls(owner, business);
   const fuelRows = fuel.rows.filter(row => inMonth(row.date)), tollRows = tolls.rows.filter(row => inMonth(row.date));
-  const mileage = list(owner.mileageImports).filter(row => inMonth(row.date));
+  const mileageModel = canonicalMileage(owner);
+  const mileage = mileageModel.rows.filter(row => { const period = mileagePeriod(row); return inMonth(period.start) && inMonth(period.end); });
+  const mileagePeriods = mileageModel.rows.filter(row => { const period = mileagePeriod(row); return overlaps(period.start, period.end, start, end) && !(inMonth(period.start) && inMonth(period.end)); });
   const files = list(documents).filter(document => {
     const fields = document.extracted || {};
     if (driverId && fields.driverId && fields.driverId !== driverId) return false;
@@ -54,5 +56,5 @@ export function monthlyRecords({month, state = {}, owner = {}, business = {}, do
       const next = new Date(day + 'T00:00:00Z'); next.setUTCDate(next.getUTCDate() + 1); day = next.toISOString().slice(0, 10);
     }
   }
-  return {month, start, end, logs, archives, files, loads, fuel: fuelRows, mileage, expenses, tolls: tollRows, settlements, expiring, missingLocalDays, undated, conflicts: [...fuel.conflicts, ...tolls.conflicts], sourceLinksToReview: withoutSource.length, totalFuel: money(fuelRows), gallons: fuelRows.reduce((sum, row) => sum + (numeric(row.gallons) || 0), 0), miles: mileage.reduce((sum, row) => sum + (numeric(row.miles) || 0), 0), jurisdictions: [...new Set(mileage.map(row => jurisdiction(row.state)))].filter(Boolean), totalExpenses: money(expenses) + money(tollRows), unknownTaxableRows: mileage.filter(row => row.taxableMiles === null).length};
+  return {month, start, end, logs, archives, files, loads, fuel: fuelRows, mileage, mileagePeriods, expenses, tolls: tollRows, settlements, expiring, missingLocalDays, undated, conflicts: [...fuel.conflicts, ...tolls.conflicts, ...mileageModel.conflicts], sourceLinksToReview: withoutSource.length, totalFuel: money(fuelRows), gallons: fuelRows.reduce((sum, row) => sum + (numeric(row.gallons) || 0), 0), miles: mileage.reduce((sum, row) => sum + (numeric(row.miles) || 0), 0), jurisdictions: [...new Set(mileage.map(row => jurisdiction(row.state)))].filter(Boolean), totalExpenses: money(expenses) + money(tollRows), unknownTaxableRows: mileage.filter(row => row.taxableMiles == null).length};
 }

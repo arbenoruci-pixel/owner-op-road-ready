@@ -43,6 +43,7 @@ jobs:
         run: |
           node scripts/date-transfer/storage.test.mjs
           node scripts/v110431/large-backup.test.mjs
+          node scripts/smart-import/indexeddb.test.mjs
       - name: iPhone and iPad browser roundtrips
         run: |
           npx next start --hostname 127.0.0.1 --port 3000 > /tmp/date-transfer-server.log 2>&1 &
@@ -53,12 +54,16 @@ jobs:
             sleep 1
           done
           node scripts/date-transfer/browser.mjs
+          node scripts/smart-import/browser-import.mjs
+          node scripts/smart-import/browser-quarterly.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: date-transfer-evidence
           path: |
             browser-test-results/date-transfer/
+            browser-test-results/smart-import/
+            browser-test-results/motive-quarterly/
             /tmp/date-transfer-build.log
             /tmp/date-transfer-server.log
           retention-days: 3

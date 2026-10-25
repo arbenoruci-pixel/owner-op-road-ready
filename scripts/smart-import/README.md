@@ -1,4 +1,35 @@
-# Smart Import and My month — 110.4.80
+# Smart Import and My month
+
+## 110.4.86 — Motive quarterly actual miles
+
+Home → Import → **Import Motive miles — IFTA / IRP** accepts a jurisdiction
+Distance Summary CSV, a selected year/quarter and the source truck number.
+Per-row source vehicles and dates take priority; missing report dates can use
+the explicitly reviewed quarter. Fleet aggregates require a truck. Raw columns,
+source units, converted miles, period, original bytes and SHA-256 are retained.
+No API subscription, paid integration, new backend or schema is introduced.
+
+Quarter totals stay in their period and never become fabricated daily/monthly
+miles. Manual logbook mileage, signatures, GPS and duty events stay untouched.
+Home → My month shows a separate quarter/truck/state table, original reports,
+and a distance-only CSV export. Imported coverage is explicitly distinguished
+from a complete filed return or trip evidence; tax exemptions are not inferred.
+
+Aggregate identities include period end and truck, independent of filename or
+row order. Reimports count once. Changed totals, daily/monthly/quarter overlaps,
+unknown legacy truck overlaps and conflicting sources block saving rather than
+replace or double mileage. Conflicting historical versions stay outside totals.
+An identical original cannot silently acquire another truck or period.
+
+Originals are saved transactionally, then read back and hashed before projection.
+An interrupted/quota-failed projection leaves the original staged for an
+idempotent retry. Missing binaries restore to their existing metadata identity.
+Tests cover all quarters/leap year, source dates/units, 20,000 trip rows,
+overlaps in either import order, corruption, recovery, signed-log preservation
+and actual Chromium/WebKit UI import/reimport, CSV download and mobile widths.
+The build asserts authored files survive the full legacy materialization chain.
+
+The sections below describe the existing statement and monthly functionality.
 
 Fuel statements can currently be counted in both the owner ledger and business
 ledger; repeated imports can add further business rows. The two CSV entry

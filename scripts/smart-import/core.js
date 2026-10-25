@@ -1,5 +1,5 @@
 // Shared, pure import rules. All identities include the provider and account.
-export const PARSER_VERSION = 'road-ready-statements/1';
+export const PARSER_VERSION = 'road-ready-statements/2';
 export const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const lower = value => text(value).toLowerCase();
 const header = value => lower(value).replace(/[^a-z0-9]+/g, ' ').trim();
@@ -72,12 +72,12 @@ export function csvRows(source = '') {
 }
 
 const ALIASES = {
-  date: ['transaction date', 'date of visit', 'purchase date', 'trip date', 'start date', 'date', 'day'],
+  date: ['transaction date', 'date of visit', 'purchase date', 'trip date', 'start date', 'period start', 'date', 'day'],
   state: ['jurisdiction', 'state province', 'location state', 'state', 'region'],
   gallons: ['net gallons', 'fuel gallons', 'gallons dispensed', 'gallons', 'quantity gallons', 'quantity', 'qty'],
   total: ['net amount', 'paid', 'transaction amount', 'total amount', 'toll amount', 'total', 'amount', 'charge', 'debit'],
-  miles: ['ifta distance', 'jurisdiction miles', 'total miles', 'distance miles', 'miles', 'distance'],
-  taxable: ['ifta taxable miles', 'taxable miles'],
+  miles: ['ifta distance miles', 'ifta distance mi', 'ifta distance', 'jurisdiction miles', 'total distance miles', 'total distance mi', 'total distance', 'total miles', 'distance miles', 'distance mi', 'distance km', 'miles', 'distance'],
+  taxable: ['ifta taxable miles', 'taxable miles', 'taxable distance miles', 'taxable distance mi', 'taxable distance'],
   truck: ['vehicle number', 'unit number', 'truck number', 'truck', 'unit', 'vehicle'],
   transaction: ['transaction id', 'trip id', 'record id', 'reference number', 'invoice number', 'reference', 'id'],
   merchant: ['merchant name', 'merchant', 'truck stop', 'station', 'location name'],
@@ -121,6 +121,7 @@ function externalId(row) {
 }
 export function statementKey(row, kind = 'fuel') {
   const scope = scopeOf(row), id = externalId(row);
+  if (kind === 'mileage' && mileagePeriod(row).aggregate) return JSON.stringify([kind, ...scope, 'period', ...mileageIdentity(row)]);
   // A mileage trip can contain several jurisdictions and calendar days.
   if (id) return JSON.stringify([kind, ...scope, 'id', id, ...(kind === 'mileage' ? [importDate(row.date), jurisdiction(row.state), lower(row.truck)] : [])]);
   return JSON.stringify([kind, ...scope, 'fingerprint', ...material(row, kind)]);
@@ -128,11 +129,67 @@ export function statementKey(row, kind = 'fuel') {
 export function material(row, kind) {
   const shared = [importDate(row.date), jurisdiction(row.state || row.cityState), lower(row.truck || row.unitNumber), lower(row.loadNo)];
   if (kind === 'fuel') return [...shared, numeric(row.gallons), numeric(row.total), lower(row.merchant), text(row.transactionDate || row.transactionTime), lower(row.fuelType)];
-  if (kind === 'mileage') return [...shared, numeric(row.miles), row.taxableMiles == null ? null : numeric(row.taxableMiles)];
+  if (kind === 'mileage') return [...shared, ...(mileagePeriod(row).aggregate ? [mileagePeriod(row).end] : []), numeric(row.miles), row.taxableMiles == null ? null : numeric(row.taxableMiles)];
   return [...shared, numeric(row.amount ?? row.total), lower(row.plaza || row.merchant), lower(row.plate)];
 }
 const equivalent = (left, right, kind) => JSON.stringify(material(left, kind)) === JSON.stringify(material(right, kind));
 const sum = (rows, key, decimals = 3) => rows.reduce((total, row) => total + Math.round(Number(row[key] || 0) * 10 ** decimals), 0) / 10 ** decimals;
+
+export function quarterPeriod(value) {
+  const match = text(value).match(/^(\d{4})-Q([1-4])$/);
+  if (!match) throw Error('Choose a year and quarter.');
+  const year = Number(match[1]), quarter = Number(match[2]);
+  const start = `${match[1]}-${String(quarter * 3 - 2).padStart(2, '0')}-01`;
+  const end = new Date(Date.UTC(year, quarter * 3, 0)).toISOString().slice(0, 10);
+  if (!importDate(start)) throw Error('Choose a valid report year.');
+  return {start, end};
+}
+const quarterOf = day => `${day.slice(0, 4)}-Q${Math.ceil(Number(day.slice(5, 7)) / 3)}`;
+export function mileagePeriod(row) {
+  const start = importDate(row.periodStart || row.date), end = importDate(row.periodEnd || row.date);
+  return {start, end, aggregate: Boolean(start && end && start !== end)};
+}
+const mileageIdentity = row => { const {start, end} = mileagePeriod(row); return [start, end, jurisdiction(row.state), lower(row.truck)]; };
+function mileageOverlap(a, b) {
+  if (text(a.workspaceId || a.companyId) !== text(b.workspaceId || b.companyId) || jurisdiction(a.state) !== jurisdiction(b.state)) return false;
+  if (text(a.truck) && text(b.truck) && lower(a.truck) !== lower(b.truck)) return false;
+  const x = mileagePeriod(a), y = mileagePeriod(b);
+  if (!x.start || !y.start || x.start > y.end || y.start > x.end) return false;
+  // Independent, identified trips on the same day may legitimately share a state.
+  return x.aggregate || y.aggregate || !externalId(a) || !externalId(b);
+}
+
+// Index by workspace and jurisdiction so large daily trip reports only compare
+// overlapping dates. Unknown legacy trucks still require a deliberate review.
+function mileageConflicts(rows) {
+  const groups = new Map(), conflicts = [];
+  for (const row of rows) {
+    const key = JSON.stringify([text(row.workspaceId || row.companyId), jurisdiction(row.state)]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  for (const group of groups.values()) {
+    if (group.every(row => !mileagePeriod(row).aggregate && externalId(row))) continue;
+    const sorted = group.slice().sort((a, b) => mileagePeriod(a).start.localeCompare(mileagePeriod(b).start));
+    let active = [];
+    for (const row of sorted) {
+      const start = mileagePeriod(row).start;
+      active = active.filter(previous => mileagePeriod(previous).end >= start);
+      const saved = active.filter(previous => mileageOverlap(previous, row));
+      if (saved.length) conflicts.push({incoming: row, saved, reason: 'Overlapping mileage reports for the same truck and state. Keep one source of totals; existing records were preserved.'});
+      active.push(row);
+    }
+  }
+  return conflicts;
+}
+
+export function canonicalMileage(owner = {}) {
+  const result = canonicalStatementRows(owner.mileageImports, [], 'mileage');
+  const invalidRows = result.rows.filter(row => { const period = mileagePeriod(row); return !period.start || !period.end || period.end < period.start || quarterOf(period.start) !== quarterOf(period.end) || !jurisdiction(row.state) || numeric(row.miles) === null || numeric(row.miles) < 0 || row.taxableMiles != null && (numeric(row.taxableMiles) === null || numeric(row.taxableMiles) < 0 || numeric(row.taxableMiles) > numeric(row.miles)); });
+  const invalid = new Set(invalidRows), validRows = result.rows.filter(row => !invalid.has(row));
+  const overlaps = mileageConflicts(validRows), blocked = new Set(overlaps.flatMap(conflict => [conflict.incoming, ...conflict.saved]));
+  return {...result, invalidRows, rows: validRows.filter(row => !blocked.has(row)), conflicts: [...result.conflicts, ...overlaps]};
+}
 
 export function parseStatementCsv(source, fileName = '', options = {}) {
   const table = csvRows(source);
@@ -143,8 +200,9 @@ export function parseStatementCsv(source, fileName = '', options = {}) {
   const detected = has(headers, 'gallons') && has(headers, 'total') ? 'fuel' : has(headers, 'miles') && has(headers, 'state') ? 'mileage' : has(headers, 'plaza') && has(headers, 'total') ? 'tolls' : '';
   const kind = options.kind && options.kind !== 'auto' ? options.kind : detected;
   if (!['fuel', 'mileage', 'tolls'].includes(kind)) throw Error('Format not recognized. Choose fuel, state miles or tolls and check the column names. For duty logs, choose a read-only logbook report.');
+  if (kind === 'mileage' && (options.periodStart || options.periodEnd) && (!importDate(options.periodStart) || !importDate(options.periodEnd) || options.periodStart > options.periodEnd)) throw Error('Choose a valid mileage report period.');
   const required = kind === 'fuel' ? ['date', 'gallons', 'total'] : kind === 'mileage' ? ['date', 'state', 'miles'] : ['date', 'total'];
-  const missing = required.filter(key => !has(headers, key));
+  const missing = required.filter(key => !has(headers, key) && !(kind === 'mileage' && key === 'date' && importDate(options.periodStart) && importDate(options.periodEnd)));
   if (missing.length) throw Error('Missing columns: ' + missing.join(', ') + '.');
   const provider = providerName(fileName, options, headers);
   const rows = [], issues = [], footer = {}, fingerprints = new Map();
@@ -159,14 +217,15 @@ export function parseStatementCsv(source, fileName = '', options = {}) {
     }
     const issue = message => issues.push({row: index + 1, message});
     if (values.length !== headers.length) { issue('Column count does not match the header.'); continue; }
-    const date = importDate(get(row, 'date'));
+    const sourceDate = get(row, 'date');
+    const date = importDate(sourceDate || (kind === 'mileage' && !has(headers, 'date') ? options.periodStart : ''));
     if (!date) { issue('Missing or invalid calendar date.'); continue; }
     const state = jurisdiction(get(row, 'state'));
     if ((kind === 'fuel' || kind === 'mileage') && !state) { issue('A recognized state or province is required.'); continue; }
     const transactionId = get(row, 'transaction');
     const item = {
       date, state, provider, providerAccount: text(options.providerAccount || get(row, 'account')),
-      workspaceId: text(options.workspaceId), truck: get(row, 'truck'), transactionId, externalId: transactionId,
+      workspaceId: text(options.workspaceId), truck: get(row, 'truck') || (kind === 'mileage' ? text(options.truck) : ''), transactionId, externalId: transactionId,
       // A source may explicitly identify a load. The active load is never a fallback.
       loadNo: get(row, 'load').toUpperCase(), source: 'statement_import_v1', parserVersion: PARSER_VERSION,
       sourceRow: index + 1, fileName: text(fileName), raw: row, sourceDate: get(row, 'date'),
@@ -182,19 +241,23 @@ export function parseStatementCsv(source, fileName = '', options = {}) {
     } else if (kind === 'mileage') {
       let miles = numeric(get(row, 'miles'));
       let taxableMiles = get(row, 'taxable') === '' ? null : numeric(get(row, 'taxable'));
-      const unit = lower(pick(row, ['distance unit', 'units', 'unit of measure']) || options.mileageUnit || (headers.some(key => /\bmiles\b/.test(key)) ? 'mi' : ''));
+      const distanceHeader = ALIASES.miles.find(key => text(row[key])) || '';
+      const unit = lower(pick(row, ['distance unit', 'units', 'unit of measure']) || (/\bkm\b/.test(distanceHeader) ? 'km' : /\b(?:miles|mi)\b/.test(distanceHeader) ? 'mi' : options.mileageUnit));
       if (!['mi', 'miles', 'km', 'kilometers', 'kilometres'].includes(unit)) { issue('Choose the distance unit shown on the source statement.'); continue; }
       if (miles === null || miles < 0 || get(row, 'taxable') !== '' && (taxableMiles === null || taxableMiles < 0 || taxableMiles > miles)) { issue('Invalid total or taxable distance. Zero taxable miles is allowed.'); continue; }
       const originalMiles = miles, originalTaxableMiles = taxableMiles;
-      const sourceEnd = pick(row, ['end date', 'period end', 'to date']);
+      const sourceEnd = pick(row, ['end date', 'period end', 'to date']) || (!sourceDate ? text(options.periodEnd) : '');
+      if (!sourceEnd && headers.some(key => ['start date', 'period start'].includes(key))) { issue('A mileage period needs its source end date. Do not treat a period total as a daily trip.'); continue; }
       if (sourceEnd) {
         const end = importDate(sourceEnd);
         if (!end || end < date) { issue('The mileage period has an invalid end date.'); continue; }
-        if (end.slice(0, 7) !== date.slice(0, 7)) { issue('This mileage total spans multiple months. Import daily or month-specific jurisdiction detail.'); continue; }
+        if (quarterOf(end) !== quarterOf(date)) { issue('This mileage total crosses quarters. Export one quarter or daily jurisdiction detail from Motive.'); continue; }
         item.periodStart = date; item.periodEnd = end;
       }
+      if ((mileagePeriod(item).aggregate || options.requireTruck) && !item.truck) { issue('Choose the truck shown on this mileage report. Fleet totals without a truck need vehicle-specific detail.'); continue; }
+      if (options.periodStart && (date < options.periodStart || (item.periodEnd || date) > options.periodEnd)) { issue('The source dates are outside the selected report period. Check the quarter.'); continue; }
       if (['km', 'kilometers', 'kilometres'].includes(unit)) { miles *= 0.621371192237334; if (taxableMiles !== null) taxableMiles *= 0.621371192237334; }
-      Object.assign(item, {miles, taxableMiles, originalMiles, originalTaxableMiles, originalUnit: unit, unit: 'mi'});
+      Object.assign(item, {miles, taxableMiles, originalMiles, originalTaxableMiles, originalUnit: unit, unit: 'mi', mileageBasis: options.mileageBasis || 'provider_report', granularity: mileagePeriod(item).aggregate ? 'period' : 'day'});
     } else {
       const amount = numeric(get(row, 'total'));
       if (amount === null || amount < 0) { issue('A valid toll charge is required.'); continue; }
@@ -215,7 +278,10 @@ export function parseStatementCsv(source, fileName = '', options = {}) {
     uniqueRows.push(row); uniqueKeys.set(row.importKey, row);
   }
   const totals = {total: sum(uniqueRows, kind === 'tolls' ? 'amount' : 'total', 2), gallons: sum(uniqueRows, 'gallons'), miles: sum(uniqueRows, 'miles'), taxableMiles: sum(uniqueRows, 'taxableMiles')};
-  for (const [key, expected] of Object.entries(footer)) if (expected === null || Math.abs(totals[key] - expected) > (key === 'total' ? .011 : .012)) issues.push({row: 'total', message: `Statement ${key} does not match the transaction rows.`});
+  for (const [key, expected] of Object.entries(footer)) {
+    const sourceTotal = kind === 'mileage' && key === 'miles' ? sum(uniqueRows, 'originalMiles') : totals[key];
+    if (expected === null || Math.abs(sourceTotal - expected) > (key === 'total' ? .011 : .012)) issues.push({row: 'total', message: `Statement ${key} does not match the transaction rows.`});
+  }
   if (!rows.length) issues.push({row: 'file', message: 'No valid transaction rows were found.'});
   const dates = rows.flatMap(row => [row.periodStart || row.date, row.periodEnd || row.date]).sort();
   return {kind, provider, parserVersion: PARSER_VERSION, rows: uniqueRows, sourceDuplicateRows, sourceRowCount: rows.length, issues, valid: issues.length === 0, totals, periodStart: dates[0] || '', periodEnd: dates.at(-1) || '', headers};
@@ -237,6 +303,7 @@ export function previewStatement(parsed, existing = []) {
     else if (saved.every(value => equivalent(value, row, parsed.kind))) duplicates.push(row);
     else conflicts.push({incoming: row, saved});
   }
+  if (parsed.kind === 'mileage') conflicts.push(...mileageConflicts([...existing, ...added]));
   return {...parsed, added, duplicates, conflicts, canSave: parsed.valid && conflicts.length === 0};
 }
 
@@ -264,7 +331,7 @@ export function canonicalStatementRows(ownerRows = [], businessRows = [], kind =
     const id = externalId(row);
     if (id) { if (!ownersById.has(id)) ownersById.set(id, []); ownersById.get(id).push(row); }
     else { const key = legacyFinancialKey(row, kind); if (!ownersWithoutId.has(key)) ownersWithoutId.set(key, []); ownersWithoutId.get(key).push(row); }
-    const key = row.importKey || statementKey(row, kind), previous = keys.get(key);
+    const key = kind === 'mileage' ? statementKey(row, kind) : row.importKey || statementKey(row, kind), previous = keys.get(key);
     if (!previous) { keys.set(key, row); rows.push(row); }
     else if (equivalent(previous, row, kind)) duplicates.push(row);
     else conflicts.push({incoming: row, saved: [previous]});
@@ -290,9 +357,10 @@ export function canonicalTolls(owner = {}, business = {}) {
   return canonicalStatementRows(owner.tolls, list(business.expenses).filter(row => lower(row.category) === 'tolls' || row.source === 'toll_csv_v102'), 'tolls');
 }
 
-export function iftaStatementSummary(owner = {}, business = {}, quarter = '') {
-  const fuel = canonicalFuel(owner, business), mileage = canonicalStatementRows(owner.mileageImports, [], 'mileage');
-  const invalidRows = [], states = new Map();
+export function iftaStatementSummary(owner = {}, business = {}, quarter = '', truck = '') {
+  const selectTruck = row => !truck || lower(row.truck) === lower(truck);
+  const fuel = canonicalFuel(owner, business), mileage = canonicalMileage(owner);
+  const invalidRows = [...mileage.invalidRows], states = new Map();
   let unknownTaxableRows = 0;
   const within = row => {
     const day = importDate(row.date);
@@ -305,15 +373,19 @@ export function iftaStatementSummary(owner = {}, business = {}, quarter = '') {
     return states.get(state);
   };
   for (const row of mileage.rows.filter(within)) {
+    if (!selectTruck(row)) continue;
+    const period = mileagePeriod(row);
+    if (!period.end || period.end < period.start || quarterOf(period.start) !== quarterOf(period.end)) { invalidRows.push(row); continue; }
     if (numeric(row.miles) === null || numeric(row.miles) < 0 || row.taxableMiles != null && (numeric(row.taxableMiles) === null || numeric(row.taxableMiles) < 0)) { invalidRows.push(row); continue; }
     const target = ensure(row.state);
     target.miles += Number(row.miles || 0);
-    if (row.taxableMiles === null) unknownTaxableRows += 1;
-    else target.taxableMiles += Number(row.taxableMiles ?? row.miles ?? 0);
+    if (row.taxableMiles == null) unknownTaxableRows += 1;
+    else target.taxableMiles += Number(row.taxableMiles);
     target.mileageRows += 1;
     if (row.provider) target.sources.add(row.provider);
   }
   for (const row of fuel.rows.filter(within)) {
+    if (!selectTruck(row)) continue;
     if (numeric(row.gallons) === null || numeric(row.gallons) <= 0 || numeric(row.total) === null || numeric(row.total) < 0) { invalidRows.push(row); continue; }
     const target = ensure(row.state || row.cityState);
     target.gallons += Number(row.gallons || 0);
