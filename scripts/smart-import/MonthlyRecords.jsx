@@ -4,6 +4,7 @@ import {readBusinessStore, BUSINESS_STORE_EVENT} from '../business/businessStore
 import {readOwnerOpsStoreV102, OWNER_OPS_STORE_EVENT_V102} from '../owneros/ownerOpsStoreV102.js';
 import {listVaultDocumentsV102, openVaultDocumentV102} from '../owneros/documentVaultV102.js';
 import {monthlyRecords} from './month.js';
+import QuarterlyMileage from './QuarterlyMileage.jsx';
 import './smartImport.css';
 
 const money = value => Number(value || 0).toLocaleString('en-US', {style: 'currency', currency: 'USD'});
@@ -47,12 +48,14 @@ export default function MonthlyRecords({state = {}, onBack, onImport, onDocument
     <p>Saved records and source documents for {month}. Loads spanning two months keep their original identity.</p>
     {loading ? <p role="status">Loading saved source files…</p> : null}
     {error ? <p role="alert" className="rr-smart-error">{error}</p> : null}
+    <QuarterlyMileage owner={owner} documents={documents} today={today} onImport={onImport} onOriginal={original}/>
     <div className="rr-month-grid">
       <Card title="Logs" value={`${model.logs.length} saved days`} detail={`${model.logs.filter(log => log.signature).length} saved signatures · ${model.archives.length} imported reports`}>
         <button type="button" onClick={onLog}>Open logbook</button>
         {model.missingLocalDays.length ? <details><summary>{model.missingLocalDays.length} days have no local log</summary><p>Imported PDF ranges need individual review. A local gap may have an original report on file.</p><p>{model.missingLocalDays.join(' · ')}</p></details> : null}
       </Card>
       <Card title="State miles" value={model.miles.toFixed(1) + ' mi'} detail={`${model.mileage.length} source rows · ${model.jurisdictions.join(', ') || 'No state miles imported'}`}>
+        {model.mileagePeriods.length ? <p>{model.mileagePeriods.length} longer-period rows appear in the quarter above. They are not assigned to this month.</p> : null}
         {model.unknownTaxableRows ? <p>{model.unknownTaxableRows} rows need separate taxable-mileage review.</p> : null}<button type="button" onClick={onImport}>Import miles</button>
       </Card>
       <Card title="Fuel" value={money(model.totalFuel)} detail={`${model.gallons.toFixed(3)} US gal · ${model.fuel.length} transactions`}>

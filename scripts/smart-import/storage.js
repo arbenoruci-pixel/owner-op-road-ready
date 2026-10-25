@@ -2,13 +2,14 @@
 import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {BUSINESS_STORE_KEY, BUSINESS_STORE_EVENT, readBusinessStore} from '../business/businessStore.js';
 import {OWNER_OPS_STORE_KEY_V102, OWNER_OPS_STORE_EVENT_V102, readOwnerOpsStoreV102} from '../owneros/ownerOpsStoreV102.js';
-import {canonicalFuel, canonicalTolls, importDate, previewStatement, text} from './core.js';
+import {canonicalFuel, canonicalTolls, canonicalMileage, importDate, previewStatement, material, statementKey, text} from './core.js';
 
 const OWNER_KEY = 'owner-op-account-data-owner-v1';
 const owner = () => localStorage.getItem(OWNER_KEY) || '';
 const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
 const hashText = value => hash(new TextEncoder().encode(value));
 const announce = () => window.dispatchEvent(new Event('road-ready-evidence-filed'));
+const mileageFiling = rows => JSON.stringify((rows || []).map(row => JSON.stringify([statementKey(row, 'mileage'), material(row, 'mileage')])).sort());
 
 export function importContext(state = {}) {
   const driverId = state.activeDriverId || state.teamDrivers?.[0]?.id || 'driver_primary';
@@ -20,7 +21,7 @@ export function readImportSnapshot(kind) {
   const targetKey = kind === 'mileage' ? OWNER_OPS_STORE_KEY_V102 : BUSINESS_STORE_KEY;
   // Include both legacy and canonical stores in the reviewed identity snapshot.
   const serialized = JSON.stringify([localStorage.getItem(BUSINESS_STORE_KEY), localStorage.getItem(OWNER_OPS_STORE_KEY_V102), owner()]);
-  const existing = kind === 'fuel' ? canonicalFuel(ops, business) : kind === 'tolls' ? canonicalTolls(ops, business) : {rows: ops.mileageImports, conflicts: []};
+  const existing = kind === 'fuel' ? canonicalFuel(ops, business) : kind === 'tolls' ? canonicalTolls(ops, business) : canonicalMileage(ops);
   return {business, ops, targetKey, serialized, existing: existing.rows.map(row => row.workspaceId ? row : {...row, workspaceId: owner()}), existingConflicts: existing.conflicts, owner: owner()};
 }
 
@@ -61,13 +62,13 @@ export async function stageStatementOriginal(review, db = getOwnerOpDb()) {
   const blobId = 'blob-' + client;
   const types = {fuel: 'fuel_receipt', mileage: 'mileage_statement', tolls: 'toll_statement', logs: 'logbook_archive'};
   const type = types[plan.kind], at = new Date().toISOString();
-  const fields = {type, date: plan.periodEnd, periodStart: plan.periodStart, periodEnd: plan.periodEnd, provider: plan.provider, timezone: plan.timezone || plan.rows[0]?.timezone || '', driverId: context.driverId, driverName: context.driverName, loadNo: '', documentScope: plan.kind === 'logs' ? 'logbook_archive' : 'statement', transactions: plan.rows, readOnlyLogbook: plan.kind === 'logs', rangeReviewedByDriver: plan.kind === 'logs'};
+  const fields = {type, date: plan.periodEnd, periodStart: plan.periodStart, periodEnd: plan.periodEnd, provider: plan.provider, timezone: plan.timezone || plan.rows[0]?.timezone || '', trucks: [...new Set(plan.rows.map(row => row.truck).filter(Boolean))], mileageBasis: plan.rows[0]?.mileageBasis || '', driverId: context.driverId, driverName: context.driverName, loadNo: '', documentScope: plan.kind === 'logs' ? 'logbook_archive' : 'statement', transactions: plan.rows, readOnlyLogbook: plan.kind === 'logs', rangeReviewedByDriver: plan.kind === 'logs'};
   let document;
   await db.transaction('rw', db.documents_local, db.document_blobs, async () => {
     const existing = await db.documents_local.get(id);
     if (existing) {
       // A renamed reimport cannot silently change the earlier filing.
-      if (existing.extracted?.periodStart !== fields.periodStart || existing.extracted?.periodEnd !== fields.periodEnd || existing.extracted?.timezone !== fields.timezone) throw Error('This original is already saved with different dates or timezone. Review its saved filing first.');
+      if (existing.extracted?.periodStart !== fields.periodStart || existing.extracted?.periodEnd !== fields.periodEnd || existing.extracted?.timezone !== fields.timezone || plan.kind === 'mileage' && mileageFiling(existing.extracted?.transactions) !== mileageFiling(fields.transactions)) throw Error('This original is already saved with different dates or timezone, or different mileage details. Review its saved filing first.');
       document = existing;
     } else {
       document = {local_id: id, client_document_id: client, driver_id: context.driverId, type, document_type: type, title: `${plan.provider} · ${plan.kind === 'logs' ? 'Logbook report' : plan.kind + ' statement'}`, original_file_name: file.name, mime_type: plan.kind === 'logs' ? 'application/pdf' : 'text/csv', file_size_bytes: file.size, sha256: fileHash, load_no: '', document_date: plan.periodEnd, status: 'saved', reviewStatus: 'needs_review', local_blob_state: 'local', sync_state: 'local_only', created_at: at, updated_at: at, extracted: fields, statementImportV1: {status: 'staged', kind: plan.kind, sha256: fileHash, scopeHash, stagedAt: at, rowCount: plan.rows.length, newRows: plan.added.length, readOnly: plan.kind === 'logs'}};
@@ -77,6 +78,8 @@ export async function stageStatementOriginal(review, db = getOwnerOpDb()) {
     if (!original) await db.document_blobs.add({local_blob_id: blobId, client_document_id: client, blob: file, sha256: fileHash, created_at: at});
     else if (original.sha256 !== fileHash || original.blob?.size !== file.size) throw Error('The saved original needs verification before this import can continue.');
   });
+  const retained = await db.document_blobs.get(blobId);
+  if (!retained?.blob?.arrayBuffer || await hash(await retained.blob.arrayBuffer()) !== fileHash) throw Error('The saved original failed checksum verification. No mileage or financial rows were added.');
   return document;
 }
 

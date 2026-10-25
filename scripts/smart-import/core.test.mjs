@@ -132,9 +132,14 @@ test('legacy no-ID mirror candidates require review instead of doubling totals',
   const result = iftaStatementSummary({fuelImports: [{...row, truck: '7005'}]}, {fuel: [{...row, provider: undefined, source: 'mudflap_csv_v102'}]}, '2026-Q4');
   assert.equal(result.conflicts.length, 1); assert.equal(result.gallons, 0); assert.equal(result.needsReview, true);
 });
-test('multi-month aggregate mileage cannot silently land in the first month', () => {
-  const parsed = parseStatementCsv('Start Date,End Date,State,Miles\n2026-10-01,2026-12-31,IL,5000', 'Motive.csv');
-  assert.equal(parsed.valid, false); assert.match(parsed.issues[0].message, /multiple months/);
-  const monthly = parseStatementCsv('Start Date,End Date,State,Miles\n2026-10-01,2026-10-31,IL,1000', 'Motive.csv');
-  assert.equal(monthly.valid, true); assert.equal(monthly.periodEnd, '2026-10-31');
+test('multi-month mileage belongs to its quarter without being assigned to a month', () => {
+  const parsed = parseStatementCsv('Start Date,End Date,State,Miles,Vehicle\n2026-10-01,2026-12-31,IL,5000,36', 'Motive.csv');
+  assert.equal(parsed.valid, true); assert.equal(parsed.periodEnd, '2026-12-31');
+  assert.equal(iftaStatementSummary({mileageImports: parsed.rows}, {}, '2026-Q4').totalMiles, 5000);
+  for (const month of ['2026-10', '2026-11', '2026-12']) {
+    const model = monthlyRecords({month, owner: {mileageImports: parsed.rows}});
+    assert.equal(model.miles, 0); assert.equal(model.mileagePeriods.length, 1);
+  }
+  const monthly = parseStatementCsv('Start Date,End Date,State,Miles,Vehicle\n2026-10-01,2026-10-31,IL,1000,36', 'Motive.csv');
+  assert.equal(monthly.valid, true); assert.equal(monthlyRecords({month: '2026-10', owner: {mileageImports: monthly.rows}}).miles, 1000);
 });

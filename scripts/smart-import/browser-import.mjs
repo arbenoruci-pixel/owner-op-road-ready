@@ -8,7 +8,7 @@ const csv='Transaction ID,Date of Visit,Truck Stop,State,Gallons Dispensed,Paid\
 const businessKey='owner-op-road-ready-business-v1';
 const engines=process.env.TEST_BROWSER==='chromium'?[['chromium',chromium]]:[['chromium',chromium],['webkit',webkit]];
 for(const [name,engine] of engines){
- const browser=await engine.launch({headless:true});
+ const browser=await engine.launch({headless:true,...(name==='webkit'&&process.env.WEBKIT_EXECUTABLE?{executablePath:process.env.WEBKIT_EXECUTABLE}:{})});
  const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
  const page=await context.newPage(),errors=[];
  fs.mkdirSync('browser-test-results/smart-import',{recursive:true});

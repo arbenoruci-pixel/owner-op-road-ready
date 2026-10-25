@@ -20,7 +20,7 @@ export function installSmartImport(root = process.cwd()) {
   };
   const base = 'source/src/modules/smart-import/';
   fs.mkdirSync(path.join(root, base), {recursive: true});
-  for (const file of ['core.js', 'storage.js', 'month.js', 'SmartImportPanel.jsx', 'MonthlyRecords.jsx', 'smartImport.css']) fs.copyFileSync(path.join(root, 'scripts/smart-import', file), path.join(root, base, file));
+  for (const file of ['core.js', 'storage.js', 'month.js', 'SmartImportPanel.jsx', 'MonthlyRecords.jsx', 'QuarterlyMileage.jsx', 'smartImport.css']) fs.copyFileSync(path.join(root, 'scripts/smart-import', file), path.join(root, base, file));
   fs.copyFileSync(path.join(root, 'scripts/smart-import/fuelStatement.js'), path.join(root, 'source/src/modules/document-readers/fuel-receipt/fuelStatementV1103.js'));
   fs.copyFileSync(path.join(root, 'scripts/smart-import/ImportDocumentsScreen.jsx'), path.join(root, 'source/src/modules/home/ImportDocumentsScreenV110435.jsx'));
 
