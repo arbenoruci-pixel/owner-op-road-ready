@@ -30,14 +30,18 @@ patch(editor,"      <DutyFieldGrid fields={[\n        {key:'shippingDocs',label:
 const dot='source/src/core/dot/dotOfficerCheckEngine.js';
 patch(dot,"const hasBol = safeText(event.shippingDocs || event.loadNo) || legs.some(leg => leg.pickupEventId === event.id && safeText(leg.shippingDocs || leg.loadNo));","const hasBol = [event.bol,event.shippingDocs,event.loadNo].some(value => safeText(value)) || legs.some(leg => leg.pickupEventId === event.id && [leg.bol,leg.shippingDocs,leg.loadNo].some(value => safeText(value)));");
 patch(dot,"const hasDest = safeText(event.destination || event.destinationState)","const hasDest = [event.destination,event.destinationCity,event.destinationState].some(value => safeText(value))");
+const routes='source/src/core/routes/editedPickupReferencesV110378.js';
+patch(routes,"['shippingDocs','loadNo','destination','destinationState']","['shippingDocs','loadNo','bol','destination','destinationState']");
+patch(routes,"  if(Object.hasOwn(patch,'shippingDocs'))updates.shippingDocs=event.shippingDocs;","  if(Object.hasOwn(patch,'shippingDocs'))updates.shippingDocs=event.shippingDocs;\n  if(Object.hasOwn(patch,'bol'))updates.bol=event.bol;");
 // Keep the prior source-conflict regression: broker identity is now checked in
 // saved data instead of demanding an extra pickup input from the driver.
 patch('scripts/v110378/browser-duty-forms.mjs',"assert.equal(await root.getByLabel('Load / order #',{exact:true}).inputValue(),'TRIP-A');","assert.equal(await root.getByLabel('Load / order #',{exact:true}).count(),0);assert.equal(await root.locator('[data-duty-section=load] input').count(),2);");
 
 const reviewedFile='scripts/test-support/reviewed-duty-hashes.json';
 const previousReviewed=JSON.parse(fs.readFileSync(reviewedFile,'utf8'));
-const reviewed={...previousReviewed,[editor]:'634c587ad279d8cfdec905af4f3f4584ae0b8cdcbb24447a997708ebdb0983a9'};
+const reviewed={...previousReviewed,[editor]:'634c587ad279d8cfdec905af4f3f4584ae0b8cdcbb24447a997708ebdb0983a9',[routes]:'d71602f636ce5cc4b7a6d38519dc975f8405c625dc9ff3775fb480f5422e8c9d'};
 assert.equal(createHash('sha256').update(fs.readFileSync(editor)).digest('hex'),reviewed[editor],'Exact reviewed simple pickup editor');
+assert.equal(createHash('sha256').update(fs.readFileSync(routes)).digest('hex'),reviewed[routes],'Exact reviewed explicit BOL route synchronization');
 fs.writeFileSync(reviewedFile,JSON.stringify(reviewed,null,2)+'\n');
 installDutyCompatibility(process.cwd(),{previousReviewed});
 console.log('PASS — pickup uses one BOL and destination; DOT reads saved BOL; separate identities retained');

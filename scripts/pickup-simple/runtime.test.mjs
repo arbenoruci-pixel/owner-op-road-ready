@@ -23,9 +23,14 @@ test('an exact linked route BOL satisfies pickup; unrelated route does not',()=>
  assert.equal(pickupIssues(s).length,1);s.routeLegsByDay[day][0].pickupEventId=event.id;assert.equal(pickupIssues(s).length,0);
 });
 test('explicit BOL edit retains broker, PO, times, GPS, signature and audit copy',()=>{
- const s=state(event),before=structuredClone(s),result=applyLogbookEditorEdit(s,{day,id:event.id,expected:event,patch:{bol:'NEW-BOL',loadDetailsExplicit:true}},new Date('2026-10-25T12:00:00Z'));
+ const s=state(event);
+ const linked={id:'linked',day,pickupDay:day,pickupEventId:event.id,source:'pickup_event',status:'open',loadNo:'BROKER-1',bol:event.bol,po:'ROUTE-PO',shippingDocs:'DISTINCT-SHIPPER'};
+ const unlinked={...linked,id:'unlinked',pickupEventId:'other'};
+ s.routeLegsByDay[day]=[linked,unlinked];
+ const before=structuredClone(s),result=applyLogbookEditorEdit(s,{day,id:event.id,expected:event,patch:{bol:'NEW-BOL',loadDetailsExplicit:true}},new Date('2026-10-25T12:00:00Z'));
  assert.equal(result.ok,true);const saved=result.state.eventsByDay[day].find(e=>e.id===event.id);
  for(const field of ['loadNo','po','startMin','endMin','status','lat','lng','locationSource'])assert.deepEqual(saved[field],event[field],field);
  assert.equal(saved.bol,'NEW-BOL');assert.deepEqual(result.state.signatureByDay,s.signatureByDay);assert.deepEqual(result.state.manualMilesByDay,s.manualMilesByDay);
+ assert.deepEqual(result.state.routeLegsByDay[day],[{...linked,bol:'NEW-BOL'},unlinked]);
  assert.deepEqual(result.state.logbookEditHistoryByDay[day].at(-1).beforeEvents,before.eventsByDay[day]);assert.deepEqual(s,before);
 });
