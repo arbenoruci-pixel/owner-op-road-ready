@@ -21,7 +21,7 @@ const stubs = new Map([
 const root = process.cwd();
 const server = http.createServer((req,res)=>{
  const url = new URL(req.url,'http://localhost');
- if(url.pathname==='/')return res.end('<!doctype html><script type="importmap">{"imports":{"dexie":"/node_modules/dexie/dist/dexie.mjs"}}</script>');
+ if(url.pathname==='/')return res.end('<!doctype html><script type="importmap">{"imports":{"dexie":"/node_modules/dexie/dist/dexie.mjs","pdf-lib":"/node_modules/pdf-lib/dist/pdf-lib.esm.js"}}</script>');
  const file = path.resolve(root,modules.get(url.pathname)||'.'+url.pathname);
  if(!file.startsWith(root+path.sep)){res.writeHead(404);return res.end();}
  try{res.setHeader('Content-Type','text/javascript');res.end(stubs.get(url.pathname)??fs.readFileSync(file));}
