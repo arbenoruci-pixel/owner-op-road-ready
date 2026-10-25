@@ -28,8 +28,8 @@ review=await prepareTransferImport(checked,current,{db,storage});let fail=true;c
 // Full backup ZIP follows the same safe merge path. No destructive restore.
 const full=await buildLargeBackup({db,state,businessStore:business,localRows:[]});const fullChecked=await inspectTransfer(full.file);assert.equal(fullChecked.kind,'complete backup');
 review=await prepareTransferImport(fullChecked,current,{db,storage});result=await commitTransferImport(review,{db,storage,getState:()=>current});assert.deepEqual(result.state.eventsByDay['2026-10-12'],state.eventsByDay['2026-10-12']);
-const week=await inspectTransfer(new File([JSON.stringify({kind:'owner_op_road_ready_cycle_week_export',state:checked.data.state})],'week.json'));assert(week.data.state.eventsByDay['2026-10-04']);
-const single=await inspectTransfer(new File([JSON.stringify({kind:'owner_op_road_ready_day_backup',sourceDay:'2026-10-04',dayData:{events:state.eventsByDay['2026-10-04'],signature:state.signatureByDay['2026-10-04']}})],'day.json'));assert.deepEqual(single.data.state.signatureByDay,state.signatureByDay);
+const week=await inspectTransfer(new File([JSON.stringify({kind:'owner_op_road_ready_cycle_week_export',state:checked.data.state})],'week.json'));assert(week.data.state.eventsByDay['2026-10-04']);assert.equal(week.kind,'one week');
+const single=await inspectTransfer(new File([JSON.stringify({kind:'owner_op_road_ready_day_backup',sourceDay:'2026-10-04',dayData:{events:state.eventsByDay['2026-10-04'],signature:state.signatureByDay['2026-10-04']}})],'day.json'));assert.deepEqual(single.data.state.signatureByDay,state.signatureByDay);assert.equal(single.kind,'single day');
 
 // Duplicate original with different source IDs remaps every document relationship.
 const aliased=structuredClone(checked);aliased.data.dexie.documents_local[0].local_id='source-d';aliased.data.dexie.documents_local[0].client_document_id='source-c';aliased.data.dexie.document_blobs[0].client_document_id='source-c';aliased.data.state.documentsByDay={'2026-10-04':[{id:'doc-ref',clientDocumentId:'source-c',localDocumentId:'source-d'}]};

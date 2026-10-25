@@ -51,7 +51,7 @@ export async function inspectTransfer(file,{onProgress=()=>{}}={}){
  archive=JSON.parse(await file.text());
  if(archive.kind==='owner_op_road_ready_device_safety_archive'){const v=await verifyDeviceSafetyArchive(archive);if(!v.ok)throw Error('Backup checksum failed: '+v.reason);payload=archive.payload;verified=true;kind='complete backup';}
  else if(archive.kind==='owner_op_road_ready_zip_backup')throw Error('Choose the original ZIP. This index needs the files inside its ZIP.');
- else{const state=legacyState(archive);if(!state)throw Error('This file is an audit report or unsupported format. Choose a Road Ready backup, week, day or date-range package.');payload={state,businessStore:archive.businessStore||{},dexie:{}};}
+ else{const state=legacyState(archive);if(!state)throw Error('This file is an audit report or unsupported format. Choose a Road Ready backup, week, day or date-range package.');payload={state,businessStore:archive.businessStore||{},dexie:{}};kind=({'owner_op_road_ready_cycle_week_export':'one week','owner_op_road_ready_day_backup':'single day','owner_op_road_ready_date_range_backup':'date range','owner_op_road_ready_full_backup':'complete backup'})[archive.kind]||'legacy';}
  }
  const data=await decode(payload,resolve);for(const [table,count]of Object.entries(data.transferMetadata?.counts||{}))if(!Array.isArray(data.dexie?.[table])||data.dexie[table].length!==count)throw Error('Record count mismatch: '+table);if(!object(data.state)||!object(data.state.eventsByDay))throw Error('This package has no Road Ready logbook records.');
  const days=Object.keys(data.state.eventsByDay).filter(day).sort();const window=data.transferMetadata?.window||{from:days[0]||'',to:days.at(-1)||''};
