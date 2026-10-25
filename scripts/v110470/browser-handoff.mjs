@@ -13,7 +13,7 @@ const sid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const token=id=>{const b=v=>Buffer.from(JSON.stringify(v)).toString('base64url');return b({alg:'HS256',typ:'JWT'})+'.'+b({sub:user.id,session_id:id,exp:Math.floor(Date.now()/1000)+86400,aud:'authenticated'})+'.synthetic';};
 const claims=token=>JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString());
 async function waitFor(fn){for(let i=0;i<120;i++){if(await fn())return;await new Promise(r=>setTimeout(r,150));}throw Error('Timed out waiting for account handoff');}
-async function openDay(page){const insert=page.getByRole('button',{name:'Insert',exact:true}),open=page.getByRole('button',{name:'Open logbook',exact:true});await insert.or(open).first().waitFor();if(!await insert.isVisible())await open.click({timeout:3000}).catch(async e=>{if(!await insert.isVisible())throw e;});await insert.waitFor();}
+async function openDay(page){const insert=page.getByRole('button',{name:'Insert',exact:true}),open=page.getByRole('button',{name:'Open logbook',exact:true}),today=page.getByRole('button',{name:'Open today',exact:true});await insert.or(open).or(today).first().waitFor();if(await open.isVisible())await open.click({timeout:3000}).catch(async error=>{if(!await insert.isVisible()&&!await today.isVisible())throw error;});await insert.or(today).first().waitFor();if(await today.isVisible())await today.click();await insert.waitFor();}
 async function rows(page,table){return page.evaluate(async({dbName,table})=>new Promise((resolve,reject)=>{const r=indexedDB.open(dbName);r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,q=db.transaction(table).objectStore(table).getAll();q.onsuccess=()=>{db.close();resolve(q.result);};q.onerror=()=>reject(q.error);};}),{dbName,table});}
 
 for(const [engineName,engine] of (process.env.SYNC_TEST_BROWSER==='chromium'?[['chromium',chromium]]:process.env.SYNC_TEST_BROWSER==='webkit'?[['webkit',webkit]]:[['chromium',chromium],['webkit',webkit]])){
@@ -29,7 +29,7 @@ for(const [engineName,engine] of (process.env.SYNC_TEST_BROWSER==='chromium'?[['
  history.set(1,workspace.payload);
  async function client(id,viewport,takeover=false){
   const context=await browser.newContext({viewport,isMobile:true,hasTouch:true,serviceWorkers:'block',timezoneId:'America/New_York'}),page=await context.newPage();contexts.push(context);pages.push(page);page.on('pageerror',e=>errors.push(e.message));
-  await setupRoutes(context,{cloudSettings:true});await page.clock.setFixedTime(new Date('2026-10-12T05:20:00Z'));
+  await setupRoutes(context,{cloudSettings:true});await page.clock.install({time:new Date('2026-10-12T05:20:00Z')});
   await context.addInitScript(({authKey,id,device,takeover})=>{localStorage.setItem('owner-op-cloud-mirror-v1:device',device);const raw=localStorage.getItem(authKey);if(!raw)return;const session=JSON.parse(raw),parts=session.access_token.split('.'),c=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));if(c.session_id==='00000000-0000-4000-8000-000000000001'){c.session_id=id;parts[1]=btoa(JSON.stringify(c)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');session.access_token=parts.join('.');localStorage.setItem(authKey,JSON.stringify(session));if(takeover)localStorage.setItem('road-ready-device-login-v1',id);}}, {authKey,id:sid(id),device:sid(id+100),takeover});
   await context.route(cloud+'/**',async route=>{
    const req=route.request(),url=new URL(req.url()),path=url.pathname,headers=await req.allHeaders();
@@ -63,11 +63,36 @@ for(const [engineName,engine] of (process.env.SYNC_TEST_BROWSER==='chromium'?[['
   const phone=await client(2,{width:390,height:844});await seed(phone.page,structuredClone(local),[],false);
   if(process.env.EXPECT_LEGACY_REVIEW==='1'){await phone.page.getByRole('button',{name:/Review changes/}).waitFor();console.log('REPRODUCED: verified active device still blocks on legacy Review changes');continue;}
   await openDay(phone.page);
+  // Divergent original logbook records require a deliberate choice, even on the active device.
+  await phone.page.getByRole('button',{name:/Home/i}).first().click();
+  await phone.page.getByRole('button',{name:'Settings',exact:true}).click();
+  await phone.page.getByRole('button',{name:'Synchronization status',exact:true}).click();
+  await phone.page.getByRole('button',{name:/Review changes/}).click();
+  const review=phone.page.getByRole('dialog',{name:'Review changes from your devices'});
+  const confirm=review.getByRole('button',{name:'Confirm selected versions',exact:true});
+  assert.ok(await confirm.isDisabled());
+  assert.equal(workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note,'Older account sleeper','No logbook correction is applied before approval');
+  for(let attempt=0;attempt<3&&await review.isVisible();attempt++){
+   // Initial mounting may finish normalization after the first comparison.
+   // A stale choice must refresh the comparison, never apply an unseen version.
+   for(const radio of await review.getByLabel('Keep this device’s version',{exact:true}).all())await radio.check();
+   await confirm.click();
+   await new Promise(resolve=>setTimeout(resolve,250));
+   await waitFor(async()=>workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note==='Latest active device sleeper'||await phone.page.getByText('Records changed while you reviewed. Compare the latest versions.',{exact:true}).count()>0);
+   if(await review.isVisible()){
+    assert.equal(workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note,'Older account sleeper','A stale comparison cannot overwrite the original');
+    await phone.page.getByText('Records changed while you reviewed. Compare the latest versions.',{exact:true}).waitFor();
+   }
+  }
+  await waitFor(()=>workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note==='Latest active device sleeper');
+  await review.waitFor({state:'hidden'});
+  await phone.page.getByRole('button',{name:'Close sync details',exact:true}).click();
+  await openDay(phone.page);
   await waitFor(()=>workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note==='Latest active device sleeper');
   assert.equal(workspace.payload.records['["state","loadInfo"]'].loadNo,'LATEST-ACTIVE');
   assert.equal(await phone.page.getByRole('button',{name:/Review changes/}).count(),0);
   const recovery=(await rows(phone.page,'sync_meta')).filter(row=>row.key.startsWith('single-device-conflicts:'));
-  assert.ok(recovery.some(row=>row.value.conflicts.some(c=>c.local?.eventsByDay?.[0]?.note==='Latest active device sleeper'&&c.remote?.eventsByDay?.[0]?.note==='Older account sleeper')),'Both conflicting driver-day versions are retained before the automatic save');
+  assert.ok(recovery.some(row=>row.value.conflicts.some(c=>c.local?.eventsByDay?.[0]?.note==='Latest active device sleeper'&&c.remote?.eventsByDay?.[0]?.note==='Older account sleeper')),'Both conflicting driver-day versions are retained before the approved correction');
   const phoneState=await snapshot(phone.page);assert.equal(phoneState.coDrivers,'');
   const ipad=await client(3,{width:820,height:1180},true),stale=structuredClone(local);stale.eventsByDay[day][0].note='Stale iPad';stale.activeDriverId='retained';
   await seed(ipad.page,stale,[],false);await openDay(ipad.page);
@@ -103,7 +128,7 @@ for(const [engineName,engine] of (process.env.SYNC_TEST_BROWSER==='chromium'?[['
   const width=(await phone.page.locator('.logbook-ui-v110').boundingBox()).width;assert.ok(width<=390);
   await phone.page.screenshot({path:`${output}/${engineName}-phone.png`});
   assert.deepEqual(errors,[]);
-  console.log(`PASS ${engineName}: legacy conflict recovery, Solo transfer, phone → iPad → real phone sign-in, old-device logout, exact inserted log, reload, iPad portrait/landscape and phone width; commits=${commits}`);
+  console.log(`PASS ${engineName}: explicit conflict approval, Solo transfer, phone → iPad → real phone sign-in, old-device logout, exact inserted log, reload, iPad portrait/landscape and phone width; commits=${commits}`);
  }catch(error){for(let i=0;i<pages.length;i++){await pages[i].screenshot({path:`${output}/${engineName}-failure-${i}.png`}).catch(()=>{});console.error('PAGE '+i+' '+(await pages[i].locator('body').innerText()).slice(-2500));}throw error;}
  finally{await browser.close();}
 }

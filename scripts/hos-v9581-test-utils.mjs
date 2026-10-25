@@ -1,3 +1,5 @@
+import {DEFAULT_HOME_TERMINAL_TIMEZONE} from '../source/src/core/time/homeTerminalTime.js';
+// Construct fixture instants in the same terminal zone used by the engine.
 export function assert(condition, message) {
   if (!condition) throw new Error(message || 'assertion failed');
 }
@@ -6,7 +8,7 @@ export function assertMinutes(actual, expected, label) {
   assert(actual === expected, `${label}: expected ${expected} minutes, got ${actual}`);
 }
 
-function zonedDate(day, hour = 0, minute = 0, timeZone = 'America/New_York') {
+function zonedDate(day, hour = 0, minute = 0, timeZone = DEFAULT_HOME_TERMINAL_TIMEZONE) {
   const [y, m, d] = String(day).split('-').map(Number);
   const targetUtc = Date.UTC(y, m - 1, d, hour, minute, 0, 0);
   let utc = targetUtc;
@@ -39,7 +41,7 @@ function zonedDate(day, hour = 0, minute = 0, timeZone = 'America/New_York') {
   return new Date(utc);
 }
 
-export function localDate(day, hour = 0, minute = 0, timeZone = 'America/New_York') {
+export function localDate(day, hour = 0, minute = 0, timeZone = DEFAULT_HOME_TERMINAL_TIMEZONE) {
   return zonedDate(day, hour, minute, timeZone);
 }
 

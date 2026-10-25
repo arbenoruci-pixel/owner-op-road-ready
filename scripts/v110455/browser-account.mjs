@@ -7,7 +7,9 @@ const objects=new Map(),history=new Map(),downloads=new Map();let workspace=null
 const pages=[],contexts=[],errors=[];let settingsBarrier=null,storageBarrier=null;const secondOriginal=simplePdf('Second original checkpoint test');
 async function client(rejectNativeBlobs=false){
  const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',ignoreHTTPSErrors:true}),page=await context.newPage();contexts.push(context);pages.push(page);page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message);});await setupRoutes(context,{cloudSettings:true});
- await page.clock.setFixedTime(new Date('2026-10-07T15:00:00Z'));
+ // Keep the source date deterministic while retry/backoff time advances.
+ await page.clock.install({time:new Date('2026-10-07T15:00:00Z')});
+ await context.addInitScript(()=>window.addEventListener('road-ready-account-sync',event=>window.__fixtureAccountStatus=event.detail));
  if(rejectNativeBlobs)await context.addInitScript(()=>{
   const hasBlob=v=>v instanceof Blob||Array.isArray(v)&&v.some(hasBlob)||v&&Object.getPrototypeOf(v)===Object.prototype&&Object.values(v).some(hasBlob);
   const nativeGetAll=IDBObjectStore.prototype.getAll;IDBObjectStore.prototype.getAll=function(...args){if(['document_blobs','capture_asset_blobs'].includes(this.name))throw Error('Binary rows must be read one at a time');return nativeGetAll.apply(this,args);};
@@ -33,6 +35,9 @@ async function client(rejectNativeBlobs=false){
  });
  return {context,page};
 }
+const openSync=async page=>{const settings=page.getByRole('button',{name:'Settings',exact:true});const home=page.getByRole('button',{name:/Home/i}).first();await settings.or(home).first().waitFor();if(!await settings.isVisible())await home.click();await settings.click();await page.getByRole('button',{name:'Synchronization status',exact:true}).click();await page.getByRole('complementary',{name:'Account synchronization'}).waitFor();};
+const openLogbook=async page=>{await page.getByRole('button',{name:'Open logbook',exact:true}).click();const status=page.getByRole('button',{name:'Status',exact:true}),today=page.getByRole('button',{name:'Open today',exact:true});await status.or(today).first().waitFor();if(await today.isVisible())await today.click();await status.waitFor();};
+const closeSync=async page=>page.getByRole('button',{name:'Close sync details',exact:true}).click();
 const waitFor=async f=>{for(let i=0;i<80;i++){if(await f())return;await new Promise(r=>setTimeout(r,250));}throw Error('Timed out waiting for synchronization');};
 async function changeBusiness(page,id){await page.evaluate(id=>{const k='owner-op-road-ready-business-v1',b=JSON.parse(localStorage.getItem(k)||'{}');b.expenses=[...(b.expenses||[]),{id,date:'2026-10-05',amount:25,category:'repair',notes:id}];localStorage.setItem(k,JSON.stringify(b));window.dispatchEvent(new Event('owner-op-business-updated'));},id);}
 const expense=async(page,id)=>page.evaluate(id=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')||'{}').expenses?.some(x=>x.id===id),id);
@@ -46,7 +51,7 @@ try{
  await waitFor(()=>tablet.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{const db=r.result,q=db.transaction('document_blobs').objectStore('document_blobs').get('original-blob');q.onsuccess=()=>{resolve(!!q.result);db.close();};};})));
  const bytes=await tablet.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,q=db.transaction('document_blobs').objectStore('document_blobs').get('original-blob');q.onerror=()=>{db.close();reject(q.error);};q.onsuccess=async()=>{try{resolve([...new Uint8Array(await window.__rrFixtureBlob(q.result.blob).arrayBuffer())]);}catch(error){reject(error);}finally{db.close();}};};}));assert.deepEqual(Buffer.from(bytes),original);
  assert.equal(downloads.get(originalObject)-beforeTabletDownloads,1,'Two document records sharing original bytes must download those bytes only once per receive');
- const beforePause=commits;await tablet.evaluate(()=>{localStorage.setItem('owner-op-record-sync-v1:paused','true');window.dispatchEvent(new Event('online'));});await tablet.getByText('Cloud work is paused on this device.',{exact:true}).waitFor();assert.equal(commits,beforePause);await tablet.evaluate(()=>localStorage.setItem('owner-op-record-sync-v1:paused','false'));
+ const beforePause=commits;await tablet.evaluate(()=>{localStorage.setItem('owner-op-record-sync-v1:paused','true');window.dispatchEvent(new Event('online'));});assert.equal(await tablet.getByRole('complementary',{name:'Account synchronization'}).count(),0,'Pause does not cover the app automatically');await openSync(tablet);await tablet.getByText('Cloud work is paused on this device.',{exact:true}).waitFor();assert.equal(commits,beforePause);await closeSync(tablet);await tablet.evaluate(()=>localStorage.setItem('owner-op-record-sync-v1:paused','false'));
  // A legacy device's automatic repair timestamps cannot create a review loop.
  for(const [page,t] of [[phone,111],[tablet,222]])await page.evaluate(t=>{const s=structuredClone(window.__rrAccountState());s.loadInfo={...s.loadInfo,updatedAt:t};s.loadGuidesById.stable_guide.logIntegrityRepairedAt=t;s._integrityRepairV107={repairedAt:t};s.logIntegrityRepairV1051={repairedAt:t};s.roadReadyFoundationV105={repairedAt:t};window.dispatchEvent(new CustomEvent('road-ready-account-apply',{detail:s}));window.dispatchEvent(new Event('online'));},t);
  await new Promise(r=>setTimeout(r,4000));
@@ -54,7 +59,7 @@ try{
  const stableRevision=workspace.revision;for(const page of [phone,tablet])await page.evaluate(()=>window.dispatchEvent(new Event('online')));await new Promise(r=>setTimeout(r,2000));assert.equal(workspace.revision,stableRevision,'Metadata-only changes must not create upload churn');
  // Save Sleeper on the tablet and immediately hide it, as when locking the iPad.
  // The completed local write must upload even if a previous read is in flight.
- await tablet.getByRole('button',{name:'Open logbook',exact:true}).click();
+ await openLogbook(tablet);
  const heldRead={context:tabletContext,reached:false};heldRead.wait=new Promise(resolve=>heldRead.release=resolve);settingsBarrier=heldRead;
  await tablet.evaluate(()=>window.dispatchEvent(new Event('online')));await waitFor(()=>heldRead.reached);
  await tablet.getByRole('button',{name:'Status',exact:true}).click();
@@ -80,7 +85,7 @@ try{
  assert.equal(reopened.currentStatus,'SB');assert.equal(reopened.currentLocation.city,'Buffalo');
  assert.deepEqual(reopened.eventsByDay['2026-10-07'],sleeperState.eventsByDay['2026-10-07']);
  assert.equal(reopened.teamLogbooksByDriverId.beta.signatureByDay[day].signatureDataUrl,'data:image/png;base64,YmV0YS1zaWduYXR1cmU=');
- await phone.getByRole('button',{name:'Open logbook',exact:true}).click();
+ await openLogbook(phone);
  await phone.locator('[data-log-event-id="'+sleeper.id+'"]').waitFor();
  assert.match(await phone.locator('[data-log-event-id="'+sleeper.id+'"]').innerText(),/Buffalo/);
  await tablet.evaluate(()=>{delete document.visibilityState;document.dispatchEvent(new Event('visibilitychange'));});
@@ -114,26 +119,29 @@ try{
  await phone.evaluate(()=>{const s=structuredClone(window.__rrAccountState());s.testCrossTabNote='new phone record';window.dispatchEvent(new CustomEvent('road-ready-account-apply',{detail:s}));window.dispatchEvent(new Event('online'));});
  await waitFor(()=>workspace.payload.records['["state","testCrossTabNote"]']==='new phone record');await tablet.evaluate(()=>window.dispatchEvent(new Event('online')));await waitFor(()=>tablet.evaluate(()=>window.__rrAccountState()?.testCrossTabNote==='new phone record'));
  await secondTab.evaluate(()=>window.dispatchEvent(new Event('online')));await waitFor(()=>secondTab.evaluate(()=>window.__rrAccountState()?.testCrossTabNote==='new phone record'));assert.equal(workspace.payload.records['["state","testCrossTabNote"]'],'new phone record');await secondTab.close();
- // Legacy conflicts retain both signed-day versions; the verified active device owns the save.
+ // Divergent signed-day versions retain both originals and require explicit approval.
  await phoneContext.setOffline(true);await tabletContext.setOffline(true);
  for(const [page,note] of [[phone,'phone-edit'],[tablet,'tablet-edit']])await page.evaluate(note=>{const s=structuredClone(window.__rrAccountState());s.teamLogbooksByDriverId.beta.eventsByDay['2026-10-02'][0].note=note;window.dispatchEvent(new CustomEvent('road-ready-account-apply',{detail:s}));},note);
  await new Promise(r=>setTimeout(r,300));await phoneContext.setOffline(false);await phone.evaluate(()=>window.dispatchEvent(new Event('online')));await waitFor(()=>Object.values(workspace.payload.records).some(v=>v?.eventsByDay?.[0]?.note==='phone-edit'));
  await tabletContext.setOffline(false);await tablet.evaluate(()=>window.dispatchEvent(new Event('online')));
- await waitFor(()=>workspace.payload.records['["day","beta","'+day+'"]']?.eventsByDay?.[0]?.note==='tablet-edit');
+ await openSync(tablet);await tablet.getByRole('button',{name:/Review changes/}).click();const review=tablet.getByRole('dialog',{name:'Review changes from your devices'});await review.waitFor();
+ assert.equal(workspace.payload.records['["day","beta","'+day+'"]']?.eventsByDay?.[0]?.note,'phone-edit','No divergent signed-day version is applied before approval');
+ const approve=review.getByRole('button',{name:'Confirm selected versions',exact:true});assert(await approve.isDisabled());for(const radio of await review.getByLabel('Keep this device’s version',{exact:true}).all())await radio.check();await approve.click();
+ await waitFor(()=>workspace.payload.records['["day","beta","'+day+'"]']?.eventsByDay?.[0]?.note==='tablet-edit');await closeSync(tablet);
  assert.equal(await tablet.getByRole('button',{name:/Review changes/}).count(),0);
  assert.equal((await snapshot(tablet)).teamLogbooksByDriverId.beta.eventsByDay[day][0].note,'tablet-edit');
  const retainedConflict=await tablet.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{const db=r.result,q=db.transaction('sync_meta').objectStore('sync_meta').getAll();q.onsuccess=()=>{db.close();resolve(q.result.some(row=>row.key.startsWith('single-device-conflicts:')&&row.value.conflicts.some(c=>c.local?.eventsByDay?.[0]?.note==='tablet-edit'&&c.remote?.eventsByDay?.[0]?.note==='phone-edit')));};};}));
- assert.equal(retainedConflict,true,'Automatic resolution retains both original versions');
+ assert.equal(retainedConflict,true,'Explicitly approved resolution retains both original versions');
  // A new device cannot accept corrupt document bytes.
- corrupt=true;const {page:third}=await client(true);await seed(third,{testInstructionStore:{}},[],false);await third.getByText('A document failed verification. Local data was kept.',{exact:true}).waitFor({timeout:30000});assert.ok(await third.getByRole('button',{name:/Home/i}).first().isVisible(),'Verified logbook remains open when an archive original fails');assert.ok((await snapshot(third)).teamLogbooksByDriverId.beta);
+ corrupt=true;const {page:third}=await client(true);await seed(third,{testInstructionStore:{}},[],false);await third.waitForFunction(()=>window.__fixtureAccountStatus?.message==='A document failed verification. Local data was kept.');await third.getByRole('button',{name:/Home/i}).or(third.getByRole('button',{name:'Settings',exact:true})).first().waitFor();assert.equal(await third.getByRole('complementary',{name:'Account synchronization'}).count(),0,'Corrupt archive does not cover verified logs automatically');await openSync(third);await third.getByText('A document failed verification. Local data was kept.',{exact:true}).waitFor({timeout:30000});assert.ok(await third.locator('.adaptive-home-v1038').isVisible(),'Verified logbook remains open when an archive original fails');assert.ok((await snapshot(third)).teamLogbooksByDriverId.beta);
  const originalKey=[...objects].find(([,v])=>v.equals(original))[0],beforeRetry=downloads.get(originalKey);
  const stagedCount=await third.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onsuccess=()=>{const db=r.result,q=db.transaction('account_receive_staging').objectStore('account_receive_staging').count();q.onsuccess=()=>{resolve(q.result);db.close();};};}));assert.ok(stagedCount>0,'Verified records must survive a failed transfer');
- corrupt=false;await third.getByRole('button',{name:'Retry sync'}).click();await waitFor(async()=>await third.locator('[aria-label="Account synchronization"]').count()===0);assert.equal(await third.getByText('Opening your logbook',{exact:true}).count(),0);assert.equal(downloads.get(originalKey),beforeRetry,'Retry must reuse a verified original without downloading again');assert.ok((await snapshot(third)).teamLogbooksByDriverId.beta);
+ corrupt=false;await third.getByRole('button',{name:'Retry sync'}).click();await waitFor(async()=>await third.getByText('A document failed verification. Local data was kept.',{exact:true}).count()===0);await closeSync(third);assert.equal(await third.locator('[aria-label="Account synchronization"]').count(),0);assert.equal(await third.getByText('Opening your logbook',{exact:true}).count(),0);assert.equal(downloads.get(originalKey),beforeRetry,'Retry must reuse a verified original without downloading again');assert.ok((await snapshot(third)).teamLogbooksByDriverId.beta);
 
  // A background storage failure before capture cannot unmount the open app.
  await phone.evaluate(()=>{window.__testNativeGet=IDBObjectStore.prototype.get;IDBObjectStore.prototype.get=function(...args){if(this.name==='app_snapshots')throw Error('Synthetic background read failure');return window.__testNativeGet.apply(this,args);};window.dispatchEvent(new Event('online'));});
- await phone.getByText('Synthetic background read failure',{exact:true}).waitFor();assert.ok(await phone.locator('.adaptive-home-v1038').isVisible(),'Background failure must not unmount App');
- await phone.evaluate(()=>{IDBObjectStore.prototype.get=window.__testNativeGet;window.dispatchEvent(new Event('online'));});
+ assert.equal(await phone.getByRole('complementary',{name:'Account synchronization'}).count(),0,'Background error does not open a panel');await openSync(phone);await phone.getByText('Synthetic background read failure',{exact:true}).waitFor();assert.ok(await phone.locator('.adaptive-home-v1038').isVisible(),'Background failure must not unmount App');
+ await phone.evaluate(()=>{IDBObjectStore.prototype.get=window.__testNativeGet;window.dispatchEvent(new Event('online'));});await closeSync(phone);
  console.log('PASS delayed or corrupt archive files do not block the verified logbook; background read failure keeps the app mounted');
  // Same-size replacement in another tab must invalidate cached file bytes.
  await tabletContext.route(origin+'/__test_dexie.mjs',r=>r.fulfill({body:fs.readFileSync('node_modules/dexie/dist/dexie.mjs'),contentType:'text/javascript'}));
