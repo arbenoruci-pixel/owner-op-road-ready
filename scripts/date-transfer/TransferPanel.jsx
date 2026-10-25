@@ -5,9 +5,10 @@ import {readBusinessStore} from '../business/businessStore.js';
 import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {buildCycleWeekExport} from './cycleWeekExport.js';
 import {localDayKey} from '../../shared/utils/date.js';
-export default function TransferPanel({state,onApply,onPrepared,appVersion}){
+export default function TransferPanel({state,onApply,onPrepared,appVersion,externalBusy=false,onBusyChange}){
  const latest=useRef(state);latest.current=state;const input=useRef(null),abort=useRef(null);
- const [from,setFrom]=useState(''),[to,setTo]=useState(''),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[preview,setPreview]=useState(null),[result,setResult]=useState(null),[open,setOpen]=useState(false);
+ const [from,setFrom]=useState(''),[to,setTo]=useState(''),[working,setWorking]=useState(false),[status,setStatus]=useState(''),[preview,setPreview]=useState(null),[result,setResult]=useState(null),[open,setOpen]=useState(false);
+ const busy=working||externalBusy;const setBusy=value=>{setWorking(value);onBusyChange?.(value);};
  const [savedConflicts,setSavedConflicts]=useState([]);
  useEffect(()=>{let mounted=true;getOwnerOpDb()?.sync_meta.toArray().then(rows=>{if(mounted)setSavedConflicts(rows.filter(r=>r.key.startsWith('transfer-review-')).map(r=>r.value));}).catch(()=>{});return ()=>{mounted=false;};},[result]);
  const last7=()=>{const end=localDayKey(),d=new Date(end+'T12:00Z');d.setUTCDate(d.getUTCDate()-6);return [d.toISOString().slice(0,10),end];};

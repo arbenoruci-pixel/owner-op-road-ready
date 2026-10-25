@@ -5,9 +5,12 @@ function patch(file,before,after){const s=read(file);if(s.includes(after))return
 const target='source/src/modules/backup/';
 for(const [from,to]of Object.entries({'hash.js':'transferHash.js','core.js':'transferCore.js','archive.js':'transferArchive.js','storage.js':'transferStorage.js','TransferPanel.jsx':'TransferPanel.jsx'}))fs.writeFileSync(target+to,read('scripts/date-transfer/'+from).replaceAll("'./hash.js'","'./transferHash.js'"));
 const screen=target+'BackupLogsScreen.jsx';
+// Reinstall cleanly on an already materialized workspace as well as a fresh build.
+write(screen,read(screen).replace(/\n\s*<TransferPanel\b[^>]*\/>/g,''));
 patch(screen,"import React,", "import TransferPanel from './TransferPanel.jsx';\nimport React,");
 patch(screen,'export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImportBackup })','export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImportBackup, onApplyTransfer })');
-patch(screen,'<main className="backup-body">','<main className="backup-body">\n        <TransferPanel state={state} onApply={onApplyTransfer} onPrepared={showPreparedExport} appVersion={CURRENT_APP_VERSION}/>');
+patch(screen,'<main className="backup-body">','<main className="backup-body">\n        <TransferPanel state={state} onApply={onApplyTransfer} onPrepared={showPreparedExport} appVersion={CURRENT_APP_VERSION} externalBusy={busy} onBusyChange={setBusy}/>');
+patch(screen,'onClick={onBack} aria-label="Back"','onClick={onBack} disabled={busy} aria-label="Back"');
 const app='source/src/app/App.jsx';
 patch(app,'onImportBackup={importManualBackup}',"onImportBackup={importManualBackup}\n        onApplyTransfer={next => setState(next)}");
 // Additive final-stage installation: the legacy materializers remain intact and

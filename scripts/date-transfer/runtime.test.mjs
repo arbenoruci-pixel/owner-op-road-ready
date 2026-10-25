@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {getHomeTerminalTimeZone} from '../../source/src/core/time/homeTerminalTime.js';
 const read=f=>fs.readFileSync(f,'utf8');
-assert(read('source/src/modules/backup/BackupLogsScreen.jsx').includes('<TransferPanel'));
+assert.equal(read('source/src/modules/backup/BackupLogsScreen.jsx').split('<TransferPanel').length-1,1);
 assert(read('source/src/app/App.jsx').includes('onApplyTransfer={next => setState(next)}'));
 assert.equal(getHomeTerminalTimeZone({}),'America/Chicago');assert.equal(getHomeTerminalTimeZone({homeTerminalTimeZone:'America/New_York'}),'America/New_York');
 // DST and midnight assertions use Intl directly and the app's terminal helpers.
