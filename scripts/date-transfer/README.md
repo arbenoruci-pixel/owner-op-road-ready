@@ -49,3 +49,9 @@ Date packages also retain original supporting HOS history for the preceding
 eight calendar days and the last older recorded anchor, without clipping events.
 The preview identifies these supporting days separately from the selected dates.
 A 70-hour cycle regression compares the source clocks to the packaged history.
+
+Compact `BOL#<reference>` headings now require shipping parties before becoming
+BOL evidence. A RateCon mentioning a BOL stays a RateCon. The retained end-to-end
+scanner test verifies PO references stay in the existing load folder. Account
+browser fixtures use the current Settings status panel and explicitly approve
+conflicting logbook versions, asserting neither original is silently replaced.

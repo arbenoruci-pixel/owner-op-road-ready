@@ -40,3 +40,9 @@ assert.ok([priorRaw,reviewedRaw].includes(locks.files[raw]),'Coverage lock prede
 locks.files[raw]=reviewedRaw;
 locks.futureDayCoverageReview='Future-date notice returns zero assessed minutes; recorded historical intervals and totals remain unchanged. date-transfer/runtime.test.mjs and v110372 rendered contracts.';
 write('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
+
+// A compact BOL# heading plus shipping parties is source evidence. Keep RateCon
+// headings authoritative when they merely mention the related BOL reference.
+patch('source/src/modules/scan/documentIdentityV110334.js',
+  'if(groups>=2&&(heading(s,bolTitle)||heading(s,podTitle))){',
+  'if(groups>=2&&(heading(s,bolTitle)||heading(s,podTitle)||(heading(s,/^B[O0]L[ \\t]*(?:NUMBER|N[O0]\\.?|#|:)[ \\t:#-]*[A-Z0-9]*\\d[A-Z0-9._/-]*/i)&&!heading(s,rateTitle)))){');
