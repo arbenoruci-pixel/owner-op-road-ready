@@ -15,11 +15,14 @@ for(const [name,engine]of engines){
  });
  try{
   const state=baseState();state.routeLegsByDay={};state.loadInfo={};
-  state.testInstructionStore={loads:[{id:'received-load',loadNo:'TEST-RECEIVED',status:'invoiced',pickupDate:'2026-10-19',deliveryDate:'2026-10-23',origin:'Example City, IL',destination:'Example Town, NJ',gross:2000},{id:'closed-load',loadNo:'TEST-ARCHIVED',status:'archived',operationalStatus:'closed',pickupDate:'2026-10-05',deliveryDate:'2026-10-08',gross:1000,origin:'Example, IL',destination:'Example, ME'}],documents:[{id:'received-doc',type:'invoice',loadNo:'TEST-RECEIVED',fileName:'Received-invoice.pdf',documentDate:'2026-10-23',createdAt:Date.parse('2026-10-23')}],fuel:[],expenses:[],maintenance:[],settlements:[]};
+  state.testInstructionStore={loads:[{id:'received-load',loadNo:'TEST-RECEIVED',status:'invoiced',pickupDate:'2026-10-19',deliveryDate:'2026-10-23',origin:'Example City, IL',destination:'Example Town, NJ',gross:2000},{id:'closed-load',loadNo:'TEST-ARCHIVED',status:'archived',operationalStatus:'closed',pickupDate:'2026-10-05',deliveryDate:'2026-10-08',gross:1000,origin:'Example, IL',destination:'Example, ME'}],documents:[{id:'legacy-shared',sha256:'a'.repeat(64),type:'other',loadNo:'TEST-ARCHIVED',fileName:'Unrelated-legacy.pdf',documentDate:'2026-10-08'},{id:'legacy-shared',sha256:'b'.repeat(64),type:'invoice',loadNo:'TEST-RECEIVED',fileName:'Matching-legacy.pdf',documentDate:'2026-10-23'},{id:'received-doc',type:'invoice',loadNo:'TEST-RECEIVED',fileName:'Received-invoice.pdf',documentDate:'2026-10-23',createdAt:Date.parse('2026-10-23')}],fuel:[],expenses:[],maintenance:[],settlements:[]};
   await seed(page,state);const before=protectedData(await snapshot(page));
   const saved=await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-business-v1'));
   await page.getByRole('button',{name:'Documents',exact:true}).click();const workspace=page.getByRole('region',{name:'Records workspace'});
-  const search=workspace.getByPlaceholder('Load, receipt, truck or name');await search.fill('Received-invoice');
+  const search=workspace.getByPlaceholder('Load, receipt, truck or name');
+  await workspace.locator('.rr-files-row').first().waitFor();
+  for(const query of ['Matching-legacy','Unrelated-legacy','Matching-legacy']){await search.fill(query);await workspace.getByRole('button',{name:new RegExp(query)}).waitFor();assert.equal(await workspace.locator('.rr-files-row').count(),1,'Filtering preserved source copies must not leave phantom rows');}
+  await search.fill('Received-invoice');
   await workspace.getByRole('button',{name:/Received-invoice.pdf/}).waitFor();
   for(let i=0;i<3;i++){
    await notify();await page.waitForFunction(()=>!document.querySelector('.rr-files-count')?.textContent.includes('Loading'));
