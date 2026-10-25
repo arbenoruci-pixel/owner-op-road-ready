@@ -10,8 +10,9 @@ const business=storage=>JSON.parse(storage.getItem(BUSINESS_STORE_KEY)||'{}');
 const usable=b=>b instanceof Blob&&b.size>0;
 async function canOpen(blob,mime){if(!usable(blob))return false;const h=new Uint8Array(await blob.slice(0,16).arrayBuffer()),s=new TextDecoder().decode(h);if(mime==='application/pdf')return s.startsWith('%PDF-');if(mime==='image/png')return h[0]===137&&s.slice(1,4)==='PNG';if(mime==='image/jpeg')return h[0]===255&&h[1]===216;return true;}
 async function prepareDocuments(data,rows,summary,onProgress){
- const incoming=list(data.dexie?.documents_local),saved=list(rows.documents_local),writes=[],blobs=[],aliases=new Map(),conflicts=[],missing=[];
- const savedBlobs=list(rows.document_blobs),incomingBlobs=list(data.dexie?.document_blobs),hashes=new Map(),physical=new Map();
+ const incoming=[...list(data.dexie?.documents_local)],saved=list(rows.documents_local),writes=[],blobs=[],aliases=new Map(),conflicts=[],missing=[];
+ const seenClients=new Set();const savedBlobs=list(rows.document_blobs),incomingBlobs=list(data.dexie?.document_blobs).map(b=>{const source=b.client_document_id;const client=source&&!seenClients.has(source)?source:'transfer-source-'+hashValue([source,b.local_blob_id]).slice(0,32);seenClients.add(client);return {...b,client_document_id:client,source_client_document_id:source};}),hashes=new Map(),physical=new Map();
+ for(const b of incomingBlobs)if(!incoming.some(d=>d.client_document_id===b.client_document_id)){incoming.push({local_id:'recovered-'+b.client_document_id,client_document_id:b.client_document_id,original_file_name:b.blob?.name||'Recovered original',mime_type:b.blob?.type||'application/octet-stream',type:'other',provenance:{sourceBlobId:b.local_blob_id,sourceClientId:b.source_client_document_id||'',reason:'Original has no unique document metadata; review its filing.'}});}
  for(const b of savedBlobs)if(usable(b.blob)){const sha=await hashBlob(b.blob);physical.set(b.client_document_id,sha);hashes.set(sha,b);}
  const loads=[...list(data.businessStore?.loads),...list(rows.__business?.loads)];
  for(const d of incoming){onProgress('Checking original '+(d.original_file_name||d.local_id)+'…');const src=incomingBlobs.find(b=>b.client_document_id===d.client_document_id);
