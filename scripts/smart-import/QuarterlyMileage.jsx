@@ -28,9 +28,9 @@ export default function QuarterlyMileage({owner = {}, documents = [], today, onI
     <h2>IFTA / IRP — actual miles</h2>
     <p>Motive Vehicle Gateway reports stay separate from manual daily logbook miles.</p>
     <div className="rr-smart-fields">
-      <label>Report year<select value={year} onChange={event => setYear(event.target.value)}>{[...new Set([today.slice(0, 4), ...(owner.mileageImports || []).map(row => mileagePeriod(row).start.slice(0, 4)).filter(Boolean)])].sort().reverse().map(value => <option key={value}>{value}</option>)}</select></label>
-      <label>Quarter<select value={quarter} onChange={event => setQuarter(event.target.value)}>{[1, 2, 3, 4].map(value => <option key={value} value={value}>Q{value}</option>)}</select></label>
-      <label>Truck<select value={truck} onChange={event => setTruck(event.target.value)}><option value="">All trucks</option>{trucks.map(value => <option key={value}>{value}</option>)}</select></label>
+      <label>Report year<select aria-label="Report year" value={year} onChange={event => setYear(event.target.value)}>{[...new Set([today.slice(0, 4), ...(owner.mileageImports || []).map(row => mileagePeriod(row).start.slice(0, 4)).filter(Boolean)])].sort().reverse().map(value => <option key={value}>{value}</option>)}</select></label>
+      <label>Quarter<select aria-label="Quarter" value={quarter} onChange={event => setQuarter(event.target.value)}>{[1, 2, 3, 4].map(value => <option key={value} value={value}>Q{value}</option>)}</select></label>
+      <label>Truck<select aria-label="Truck" value={truck} onChange={event => setTruck(event.target.value)}><option value="">All trucks</option>{trucks.map(value => <option key={value}>{value}</option>)}</select></label>
     </div>
     <p>{report.period.start} → {report.period.end} · <strong>{report.groups.reduce((total, row) => total + row.miles, 0).toFixed(1)} mi</strong> from saved source reports</p>
     {report.conflicts.length ? <p role="alert">{report.conflicts.length} overlapping or conflicting mileage groups need review. Conflicting versions stay outside totals; export is paused.</p> : null}

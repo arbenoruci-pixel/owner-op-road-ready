@@ -7,6 +7,7 @@ import './smartImport.css';
 const providers = ['Mudflap', 'Motive / KeepTruckin', 'Samsara', 'Geotab', 'Illinois Tollway', 'E-ZPass'];
 const zones = ['America/Chicago', 'America/New_York', 'America/Denver', 'America/Los_Angeles', 'America/Phoenix', 'America/Anchorage'];
 const money = value => Number(value || 0).toLocaleString('en-US', {style: 'currency', currency: 'USD'});
+const reportToday = () => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 
 export default function SmartImportPanel({state = {}, initialFile, onDone, onScan}) {
   const input = useRef(null), generation = useRef(0);
@@ -15,7 +16,7 @@ export default function SmartImportPanel({state = {}, initialFile, onDone, onSca
   const [account, setAccount] = useState(''), [unit, setUnit] = useState(''), [timezone, setTimezone] = useState('');
   const [periodStart, setPeriodStart] = useState(''), [periodEnd, setPeriodEnd] = useState('');
   const [motive, setMotive] = useState(false), [truck, setTruck] = useState('');
-  const [reportYear, setReportYear] = useState(() => new Date().getFullYear()), [reportQuarter, setReportQuarter] = useState(() => Math.ceil((new Date().getMonth() + 1) / 3));
+  const [reportYear, setReportYear] = useState(() => reportToday().slice(0,4)), [reportQuarter, setReportQuarter] = useState(() => Math.ceil(Number(reportToday().slice(5,7)) / 3));
   const [driverId, setDriverId] = useState(state.activeDriverId || state.teamDrivers?.[0]?.id || 'driver_primary');
   const [busy, setBusy] = useState(false), [review, setReview] = useState(null), [checked, setChecked] = useState(false);
   const [error, setError] = useState(''), [message, setMessage] = useState('');
@@ -79,7 +80,7 @@ export default function SmartImportPanel({state = {}, initialFile, onDone, onSca
         <div className="rr-smart-fields">
           <label>File contains<select disabled={motive} value={kind} onChange={event => setKind(event.target.value)}><option value="auto">Detect CSV format</option><option value="fuel">Fuel transactions</option><option value="mileage">State miles / IFTA distance</option><option value="tolls">Toll transactions</option><option value="logs">Read-only logbook PDF</option></select></label>
           <label>Provider<select disabled={motive} value={provider} onChange={event => setProvider(event.target.value)}><option value="auto">{kind === 'logs' ? 'Choose from the report' : 'Detect from source'}</option>{providers.map(name => <option key={name}>{name}</option>)}<option value="other">Another provider</option></select></label>
-          {motive ? <><label>Report year<input type="number" min="1900" max="2200" required value={reportYear} onChange={event => setReportYear(event.target.value)}/></label><label>Quarter<select value={reportQuarter} onChange={event => setReportQuarter(event.target.value)}>{[1, 2, 3, 4].map(value => <option key={value} value={value}>Q{value}</option>)}</select></label></> : null}
+          {motive ? <><label>Report year<input type="number" min="1900" max="2200" required value={reportYear} onChange={event => setReportYear(event.target.value)}/></label><label>Quarter<select aria-label="Quarter" value={reportQuarter} onChange={event => setReportQuarter(event.target.value)}>{[1, 2, 3, 4].map(value => <option key={value} value={value}>Q{value}</option>)}</select></label></> : null}
           {kind === 'mileage' ? <label>Truck / unit, if absent from CSV<input value={truck} maxLength={80} placeholder="Use the number on the Motive report" onChange={event => setTruck(event.target.value)}/></label> : null}
           {provider === 'other' ? <label>Provider name<input value={customProvider} maxLength={80} onChange={event => setCustomProvider(event.target.value)}/></label> : null}
           <label>Provider account label (optional)<input value={account} maxLength={80} placeholder="Company account or card label" onChange={event => setAccount(event.target.value)}/></label>

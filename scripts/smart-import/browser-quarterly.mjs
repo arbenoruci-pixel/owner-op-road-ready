@@ -30,8 +30,9 @@ for(const [name,engine] of engines){
   const stored=await page.evaluate(async()=>{
    const value=JSON.parse(localStorage.getItem('road-ready-owner-ops-v102'));
    const original=await new Promise((resolve,reject)=>{const request=indexedDB.open('owner-op-road-ready-offline-v1');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('document_blobs'),q=tx.objectStore('document_blobs').getAll();q.onsuccess=()=>{db.close();resolve(q.result);};};});
-   return {rows:value.mileageImports,originals:await Promise.all(original.map(async row=>({text:await row.blob.text(),sha256:row.sha256})))};
+   return {rows:value.mileageImports,originals:await Promise.all(original.map(async row=>({text:await window.__rrFixtureBlob(row.blob).text(),sha256:row.sha256})))};
   });assert.equal(stored.rows.length,2);assert.equal(stored.originals.length,1);assert.equal(stored.originals[0].text,csv);assert.match(stored.originals[0].sha256,/^[a-f0-9]{64}$/);
+  await page.evaluate(()=>{window.open=()=>({location:{set href(value){window.__openedMileageOriginal=value;}},close(){}});});await report.getByText('Original mileage reports (1)',{exact:true}).click();await report.getByRole('button',{name:'Open original',exact:true}).click();await page.waitForFunction(()=>window.__openedMileageOriginal?.startsWith('blob:'));assert.equal(await page.evaluate(async()=>await (await fetch(window.__openedMileageOriginal)).text()),csv,'Actual Open original handler returns exact persisted bytes');
   await report.getByLabel('Quarter',{exact:true}).selectOption('3');assert.match(await report.innerText(),/0\.0 mi/);await report.getByLabel('Quarter',{exact:true}).selectOption('4');
   for(const width of [320,390,820]){await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Fits '+width);}
   const after=await snapshot(page);for(const field of ['eventsByDay','signatureByDay','certifyStatus','formByDay'])assert.deepEqual(after[field],before[field],field+' stays exact');
