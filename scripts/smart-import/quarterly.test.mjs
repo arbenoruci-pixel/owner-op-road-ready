@@ -82,4 +82,5 @@ test('20,000 identified daily jurisdiction rows retain their trips without quadr
   const parsed = parseStatementCsv(body,'Motive.csv',{workspaceId:'company'});
   assert.equal(parsed.valid,true); assert.equal(previewStatement(parsed).added.length,20000);
   assert.equal(canonicalMileage({mileageImports:parsed.rows}).rows.length,20000);
+  const overlap = previewStatement(summary(), parsed.rows); assert.equal(overlap.canSave,false); assert.equal(overlap.conflicts.length,1); assert.equal(overlap.conflicts[0].saved.length,20000);
 });

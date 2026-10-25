@@ -150,34 +150,36 @@ export function mileagePeriod(row) {
   return {start, end, aggregate: Boolean(start && end && start !== end)};
 }
 const mileageIdentity = row => { const {start, end} = mileagePeriod(row); return [start, end, jurisdiction(row.state), lower(row.truck)]; };
-function mileageOverlap(a, b) {
-  if (text(a.workspaceId || a.companyId) !== text(b.workspaceId || b.companyId) || jurisdiction(a.state) !== jurisdiction(b.state)) return false;
-  if (text(a.truck) && text(b.truck) && lower(a.truck) !== lower(b.truck)) return false;
-  const x = mileagePeriod(a), y = mileagePeriod(b);
-  if (!x.start || !y.start || x.start > y.end || y.start > x.end) return false;
-  // Independent, identified trips on the same day may legitimately share a state.
-  return x.aggregate || y.aggregate || !externalId(a) || !externalId(b);
-}
-
-// Index by workspace and jurisdiction so large daily trip reports only compare
-// overlapping dates. Unknown legacy trucks still require a deliberate review.
+// Connected period intervals form one review group. Identified daily trips
+// remain independent unless an aggregate overlaps them. This avoids pairwise
+// scans and oversized conflict lists for 20,000-row Gateway reports.
 function mileageConflicts(rows) {
   const groups = new Map(), conflicts = [];
   for (const row of rows) {
     const key = JSON.stringify([text(row.workspaceId || row.companyId), jurisdiction(row.state)]);
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(row);
+    groups.get(key).push({row, ...mileagePeriod(row)});
   }
   for (const group of groups.values()) {
-    if (group.every(row => !mileagePeriod(row).aggregate && externalId(row))) continue;
-    const sorted = group.slice().sort((a, b) => mileagePeriod(a).start.localeCompare(mileagePeriod(b).start));
-    let active = [];
-    for (const row of sorted) {
-      const start = mileagePeriod(row).start;
-      active = active.filter(previous => mileagePeriod(previous).end >= start);
-      const saved = active.filter(previous => mileageOverlap(previous, row));
-      if (saved.length) conflicts.push({incoming: row, saved, reason: 'Overlapping mileage reports for the same truck and state. Keep one source of totals; existing records were preserved.'});
-      active.push(row);
+    const trucks = new Map(), unknown = group.filter(entry => !text(entry.row.truck));
+    for (const entry of group) {
+      const truck = lower(entry.row.truck);
+      if (!truck) continue;
+      if (!trucks.has(truck)) trucks.set(truck, []);
+      trucks.get(truck).push(entry);
+    }
+    if (!trucks.size) trucks.set('', []);
+    for (const known of trucks.values()) {
+      const entries = [...known, ...unknown].sort((a, b) => a.start.localeCompare(b.start));
+      let component = [], end = '';
+      const finish = () => {
+        if (component.length > 1 && component.some(entry => entry.aggregate || !externalId(entry.row))) conflicts.push({incoming: component.at(-1).row, saved: component.slice(0, -1).map(entry => entry.row), reason: 'Overlapping mileage reports for the same truck and state. Keep one source of totals; existing records were preserved.'});
+      };
+      for (const entry of entries) {
+        if (component.length && entry.start > end) { finish(); component = []; end = ''; }
+        component.push(entry); if (entry.end > end) end = entry.end;
+      }
+      finish();
     }
   }
   return conflicts;
