@@ -175,8 +175,8 @@ backupScreen = backupScreen.replace("      const payload = buildFullBackupPayloa
 if (!backupScreen.includes('repairedImportStateV107')) {
   backupScreen = replaceOnce(
     backupScreen,
-    "      await onImportBackup?.(effectivePayload, {\n        filename:file.name,\n        summary:sum,\n        schemaVersion:extracted.schemaVersion,\n      });\n      if (extracted.businessStore) writeBusinessStore(extracted.businessStore);",
-    "      const repairedImportStateV107 = repairRoadReadyStateV107(extracted.state, { nowDay:localDayKey(), repairNavigation:true, source:'full_backup_import_v107' });\n      const repairedBusinessV107 = repairBusinessStoreV107(extracted.businessStore || readBusinessStore(), repairedImportStateV107, { nowDay:localDayKey() });\n      const repairedPayloadV107 = { ...effectivePayload, state:repairedImportStateV107, businessStore:repairedBusinessV107 };\n      await onImportBackup?.(repairedPayloadV107, {\n        filename:file.name,\n        summary:sum,\n        schemaVersion:extracted.schemaVersion,\n      });\n      writeBusinessStore(repairedBusinessV107);",
+    "      await onImportBackup?.(payload, {\n        filename:file.name,\n        summary:sum,\n        schemaVersion:extracted.schemaVersion,\n      });\n      if (extracted.businessStore) writeBusinessStore(extracted.businessStore);",
+    "      const repairedImportStateV107 = repairRoadReadyStateV107(extracted.state, { nowDay:localDayKey(), repairNavigation:true, source:'full_backup_import_v107' });\n      const repairedBusinessV107 = repairBusinessStoreV107(extracted.businessStore || readBusinessStore(), repairedImportStateV107, { nowDay:localDayKey() });\n      const repairedPayloadV107 = { ...payload, state:repairedImportStateV107, businessStore:repairedBusinessV107 };\n      await onImportBackup?.(repairedPayloadV107, {\n        filename:file.name,\n        summary:sum,\n        schemaVersion:extracted.schemaVersion,\n      });\n      writeBusinessStore(repairedBusinessV107);",
     'backup import integrity repair'
   );
 }

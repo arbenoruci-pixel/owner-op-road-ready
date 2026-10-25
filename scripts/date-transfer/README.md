@@ -1,0 +1,41 @@
+# Date transfer and Smart Import
+
+Installs at the **end** of `build-v110.mjs`. Legacy source generators run first;
+this feature never changes their string anchors. Tests assert the final runtime.
+
+Date ZIPs reuse the chunked, stored ZIP implementation and include exact raw
+state (without the old repair normalizer), relevant Dexie rows, original PDFs,
+scanner sources and all documents for overlapping loads. The embedded transfer
+manifest records counts, calendar dates, terminal timezone and original SHA-256
+hashes. Package and per-chunk checksums are also verified before preview.
+
+Smart Import merges complete backups, date ZIPs, legacy week/day/JSON backups
+and indexed load-library document ZIPs. Unsupported reading/audit ZIPs are
+explained. Matching existing HOS days are indivisible evidence: changed or extra
+events, signatures, GPS, inspections and certifications are kept as durable
+review conflicts, never silently applied. New driver books retain source IDs.
+
+New files and records commit in one Dexie transaction. A deliberately interrupted
+transaction rolls back. Business localStorage projection uses a durable commit
+journal; Finish recovery replays it only onto its reviewed baseline. Existing
+queues, sessions, localStorage, originals and recovery snapshots are never cleared.
+Metadata with a missing binary receives the original without a duplicate row.
+File content is hashed incrementally in 1 MB reads, and read back after persistence.
+
+`core.test.mjs` uses synthetic pure data; `storage.test.mjs` uses real Dexie with
+fake-indexeddb; `browser.mjs` tests the built app with isolated synthetic cloud
+fixtures in Chromium and WebKit at iPhone/iPad widths. No real records or remote
+backend are modified. The existing HOS and scanner regressions remain enabled.
+
+The 34h option preserves the existing HOS reset finder. The importable ZIP includes
+whole boundary calendar days so original duty-event times remain exact. The older
+exact 7x24-hour diagnostic export remains separately available for review.
+
+New devices default to America/Chicago. Previously configured terminal zones and
+historical event timestamps remain unchanged; a source-zone difference is recorded
+for review rather than shifting history.
+
+Known limits: ZIP32 (under 4 GB / 65,535 entries); stored Road Ready ZIPs only;
+legacy JSON has no checksums and reports that explicitly. Missing source originals
+are disclosed and retained as metadata, never manufactured. No new paid services,
+cloud upload path, database migration or background jobs are introduced.

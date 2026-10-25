@@ -1,0 +1,64 @@
+name: Date transfer and Smart Import
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: date-transfer-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify-date-transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      READER_OFFLINE_BUILD: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Exact production build and retained behavioral contracts
+        run: node scripts/build-v110.mjs > /tmp/date-transfer-build.log 2>&1
+      - name: Final runtime and HOS preservation
+        run: |
+          npm run verify:architecture
+          node scripts/date-transfer/core.test.mjs
+          node scripts/date-transfer/runtime.test.mjs
+          node scripts/verify-hos-drive-clock-no-midnight-reset-v9581.mjs
+          node scripts/verify-hos-drive-clock-resets-after-10h-off-v9581.mjs
+          node scripts/verify-hos-shift-clock-no-midnight-reset-v9581.mjs
+          node scripts/verify-hos-cycle-70hr-8day-v9581.mjs
+          node scripts/verify-hos-34hr-restart-v9581.mjs
+          node scripts/verify-split-sleeper-v966.mjs
+      - name: Install isolated persistence and browser tools
+        run: |
+          npm install --no-save --package-lock=false fake-indexeddb@6.2.4 playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Real IndexedDB transfer, rollback, recovery and large ZIP
+        run: |
+          node scripts/date-transfer/storage.test.mjs
+          node scripts/v110431/large-backup.test.mjs
+      - name: iPhone and iPad browser roundtrips
+        run: |
+          npx next start --hostname 127.0.0.1 --port 3000 > /tmp/date-transfer-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/date-transfer/browser.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: date-transfer-evidence
+          path: |
+            browser-test-results/date-transfer/
+            /tmp/date-transfer-build.log
+            /tmp/date-transfer-server.log
+          retention-days: 3

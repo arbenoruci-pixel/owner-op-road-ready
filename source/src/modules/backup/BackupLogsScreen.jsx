@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { buildDateRangeBackup, mergeDateRangeBackup } from './dateRangeTransfer.js';
 import { CURRENT_APP_VERSION } from '../../core/update/appUpdate.js';
 import { readBusinessStore, writeBusinessStore } from '../business/businessStore.js';
 import {
@@ -122,8 +121,6 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
   void LEGACY_EXPORT_MARKER;
   void LEGACY_IMPORT_MARKER;
   const fileInputRef = useRef(null);
-  const [fromDay,setFromDay] = useState('');
-  const [toDay,setToDay] = useState('');
   const safetyFileInputRef = useRef(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -260,17 +257,6 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
     }
   }
 
-  async function exportRange() {
-    setBusy(true);
-    try {
-      const payload = buildDateRangeBackup(state,readBusinessStore(),fromDay,toDay,CURRENT_APP_VERSION);
-      const filename = `road-ready-${fromDay}-to-${toDay}.json`;
-      const result = await shareOrDownloadJson(payload,filename);
-      setStatus(result === 'cancelled' ? 'Export cancelled.' : `Date-range backup ready: ${filename}`);
-    } catch(error) { setStatus(error?.message || 'Date-range export failed'); }
-    finally { setBusy(false); }
-  }
-
   async function importFile(file) {
     if (!file) return;
     const verifiedSafety = lastSafetyExport || readStoredSafetyExport();
@@ -285,17 +271,15 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
     try {
       const text = await file.text();
       const payload = JSON.parse(text);
-      const isRange = payload?.kind === 'owner_op_road_ready_date_range_backup' && payload?.scope === 'date_range';
-      const effectivePayload = isRange ? mergeDateRangeBackup(payload,state,readBusinessStore()) : payload;
-      const extracted = extractFullBackupV105(effectivePayload);
+      const extracted = extractFullBackupV105(payload);
       if (!extracted?.state) throw new Error('This file does not contain Road Ready log data.');
       const sum = extracted.summary || {};
       const message = [
-        isRange ? 'MERGE selected dates into Road Ready? Existing records will be preserved.' : 'RESTORE all Road Ready data from this file?',
+        'RESTORE all Road Ready data from this file?',
         '',
         ...summaryLines(sum),
         '',
-        isRange ? 'Matching records are skipped; existing signed logs remain unchanged.' : 'Current local app data will be replaced. A verified Device Safety Backup was created first and saved from this device.',
+        'Current local app data will be replaced. A verified Device Safety Backup was created first and saved from this device.',
       ].join('\n');
       if (typeof window !== 'undefined' && !window.confirm(message)) {
         setStatus('Restore cancelled. Your current data is unchanged.');
@@ -310,7 +294,7 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
         await onBuildBackup(safety);
       }
 
-      await onImportBackup?.(effectivePayload, {
+      await onImportBackup?.(payload, {
         filename:file.name,
         summary:sum,
         schemaVersion:extracted.schemaVersion,
@@ -387,23 +371,10 @@ export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImpor
           <button type="button" className="backup-secondary" onClick={exportBackup} disabled={busy}>2 · Export readable all-data JSON</button>
         </section>
 
-        <section className="backup-actions-card">
-          <b>Export by date / Export one week</b>
-          <p>Choose the dates to export. The file can be imported back without replacing other days.</p>
-          <label>From <input type="date" value={fromDay} onChange={e => setFromDay(e.target.value)} /></label>
-          <label>To <input type="date" value={toDay} onChange={e => setToDay(e.target.value)} /></label>
-          <button type="button" className="backup-secondary" disabled={busy || !fromDay || !toDay || fromDay > toDay} onClick={exportRange}>Export selected dates</button>
-          <button type="button" className="backup-secondary" disabled={busy} onClick={() => {
-            const last = Object.keys(state.eventsByDay || {}).filter(d => /^\\d{4}-\\d{2}-\\d{2}$/.test(d)).sort().at(-1) || new Date().toISOString().slice(0,10);
-            const start = new Date(last + 'T12:00:00Z');
-            start.setUTCDate(start.getUTCDate() - 6);
-            setFromDay(start.toISOString().slice(0,10)); setToDay(last);
-          }}>Select latest 7 days</button>
-        </section>
         <section className="backup-info-card">
           <b>Restore protection</b>
           <p>Restore stays locked until this device has a valid verified Device Safety Backup record. Returning from iPhone Files or reopening the PWA will not relock it.</p>
-          <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy || !lastSafetyExport}>Smart Import JSON (full or selected dates)</button>
+          <button type="button" className="backup-secondary" onClick={() => fileInputRef.current?.click()} disabled={busy || !lastSafetyExport}>Restore from readable backup</button>
           <input ref={fileInputRef} type="file" accept="application/json,.json,.roadready" hidden onChange={event => importFile(event.target.files?.[0])} />
         </section>
 
