@@ -55,3 +55,11 @@ BOL evidence. A RateCon mentioning a BOL stays a RateCon. The retained end-to-en
 scanner test verifies PO references stay in the existing load folder. Account
 browser fixtures use the current Settings status panel and explicitly approve
 conflicting logbook versions, asserting neither original is silently replaced.
+
+Document closure follows identity fields only, excluding shared driver/user
+attributes. Legacy BOL aliases and typed references still select all originals
+for their actual overlapping load. Conflicting originals receive deterministic
+separate Needs Review identities and retain source provenance. Reimport reuses
+that review copy. An unapplied recovery journal blocks subsequent imports in
+preview and within the committing transaction, so a pending projection cannot
+be replaced. Regression tests exercise each of these failure cases.

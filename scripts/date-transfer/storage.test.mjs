@@ -24,7 +24,16 @@ review=await prepareTransferImport(conflict,current,{db,storage});result=await c
 // Transaction abort rolls back blobs, snapshots and document metadata together.
 await db.document_blobs.clear();const before=await db.app_snapshots.toArray();review=await prepareTransferImport(checked,current,{db,storage});await assert.rejects(()=>commitTransferImport(review,{db,storage,getState:()=>current,injectFailure:()=>{throw Error('synthetic interruption');}}),/synthetic interruption/);assert.equal(await db.document_blobs.count(),0);assert.deepEqual(await db.app_snapshots.toArray(),before);
 // Projection failure is recoverable after the database transaction commits.
-review=await prepareTransferImport(checked,current,{db,storage});let fail=true;const quota={...storage,setItem:(k,v)=>{if(fail)throw Error('synthetic quota');storage.setItem(k,v);}};result=await commitTransferImport(review,{db,storage:quota,getState:()=>current});assert.equal(result.projectionPending,true);fail=false;assert(await recoverTransferProjection({db,storage:quota}));assert.equal((await db.sync_meta.get('road-ready-smart-import-journal-v1')).value.status,'applied');
+const pendingBundle={...checked,token:checked.token+'-pending',data:{...checked.data,businessStore:{...business,loads:[...business.loads,{id:'pending-load',loadNo:'PENDING-IMPORT'}]}}};
+const staleReview=await prepareTransferImport(checked,current,{db,storage});
+review=await prepareTransferImport(pendingBundle,current,{db,storage});let fail=true;const quota={...storage,setItem:(k,v)=>{if(fail)throw Error('synthetic quota');storage.setItem(k,v);}};result=await commitTransferImport(review,{db,storage:quota,getState:()=>current});assert.equal(result.projectionPending,true);current=result.state;
+const pendingJournal=await db.sync_meta.get('road-ready-smart-import-journal-v1');
+await assert.rejects(()=>prepareTransferImport(checked,current,{db,storage}),/Finish recovery/);
+await assert.rejects(()=>commitTransferImport(staleReview,{db,storage,getState:()=>current}),/Finish recovery/);
+assert.deepEqual(await db.sync_meta.get('road-ready-smart-import-journal-v1'),pendingJournal);
+assert(!JSON.parse(storage.getItem('owner-op-road-ready-business-v1')).loads.some(r=>r.id==='pending-load'));
+fail=false;assert(await recoverTransferProjection({db,storage:quota}));assert.equal((await db.sync_meta.get('road-ready-smart-import-journal-v1')).value.status,'applied');
+assert(JSON.parse(storage.getItem('owner-op-road-ready-business-v1')).loads.some(r=>r.id==='pending-load'));
 // Full backup ZIP follows the same safe merge path. No destructive restore.
 const full=await buildLargeBackup({db,state,businessStore:business,localRows:[]});const fullChecked=await inspectTransfer(full.file);assert.equal(fullChecked.kind,'complete backup');
 review=await prepareTransferImport(fullChecked,current,{db,storage});result=await commitTransferImport(review,{db,storage,getState:()=>current});assert.deepEqual(result.state.eventsByDay['2026-10-12'],state.eventsByDay['2026-10-12']);
@@ -37,6 +46,30 @@ review=await prepareTransferImport(aliased,current,{db,storage});assert.equal(re
 review=await prepareTransferImport(checked,current,{db,storage});await assert.rejects(()=>commitTransferImport(review,{db,storage,getState:()=>({...current,currentStatus:'SB'})}),/Records changed after preview/);
 const orphan=structuredClone(checked);orphan.data.dexie.document_blobs.push({local_blob_id:'orphan-original',blob:new Blob([bytes,'\n% recovered original'],{type:'application/pdf'})});review=await prepareTransferImport(orphan,current,{db,storage});assert(review.docs.writes.some(r=>r.reviewStatus==='needs_review'&&r.provenance?.sourceBlobId==='orphan-original'));assert(review.docs.blobs.some(r=>r.blob.size===blob.size+21));
 const referenced=structuredClone(checked);referenced.data.state.documentsByDay={'2026-10-04':[{id:'missing-ref',clientDocumentId:'missing-original',type:'pod',fileName:'missing.pdf',loadNo:'38622645'}]};review=await prepareTransferImport(referenced,current,{db,storage});assert.equal(review.merge.summary.missingFiles,1);assert(review.docs.writes.some(r=>r.client_document_id==='missing-original'));
+// A different original for the same identity is retained under a review identity.
+const changed=structuredClone(checked),changedBlob=new Blob([bytes,'\n% incoming conflicting original'],{type:'application/pdf'}),changedSha=await hashBlob(changedBlob);
+changed.data.dexie.documents_local[0].sha256=changedSha;changed.data.dexie.document_blobs[0].blob=changedBlob;
+const originalBefore=await hashBlob((await db.document_blobs.get('transfer-blob-c')).blob);
+review=await prepareTransferImport(changed,current,{db,storage});assert.equal(review.docs.blobs.length,1);const retainedId=review.docs.writes[0].local_id;
+result=await commitTransferImport(review,{db,storage,getState:()=>current});current=result.state;
+assert.equal(await hashBlob((await db.document_blobs.get('transfer-blob-c')).blob),originalBefore);
+assert.equal(await hashBlob((await db.document_blobs.get(retainedId)).blob),changedSha);
+assert.equal((await db.documents_local.get(retainedId)).reviewStatus,'needs_review');
+assert.equal((await PDFDocument.load(await (await db.document_blobs.get(retainedId)).blob.arrayBuffer())).getPageCount(),1);
+assert((await db.sync_meta.toArray()).some(r=>r.value?.retainedOriginal?.localDocumentId===retainedId));
+const reviewCount=await db.documents_local.count(),blobCount=await db.document_blobs.count();
+review=await prepareTransferImport(changed,current,{db,storage});result=await commitTransferImport(review,{db,storage,getState:()=>current});
+assert.equal(await db.documents_local.count(),reviewCount);assert.equal(await db.document_blobs.count(),blobCount);
+// Asset conflicts retain distinct incoming originals even with identical metadata.
+const assetBase={local_asset_id:'asset-conflict',client_document_id:'c',blob:new Blob(['saved pixels'],{type:'image/jpeg'})};await db.capture_asset_blobs.put(assetBase);
+for(const pixels of ['incoming pixels one','incoming pixels two']){
+ const assetBundle={...checked,data:{...checked.data,dexie:{...checked.data.dexie,capture_asset_blobs:[{...assetBase,blob:new Blob([pixels],{type:'image/jpeg'})}]}}};
+ review=await prepareTransferImport(assetBundle,current,{db,storage});result=await commitTransferImport(review,{db,storage,getState:()=>current});current=result.state;
+}
+const retainedAssets=(await db.sync_meta.toArray()).filter(r=>r.value?.path==='capture_asset_blobs/asset-conflict');assert.equal(retainedAssets.length,2);
+assert.deepEqual((await Promise.all(retainedAssets.map(r=>r.value.incoming.blob.text()))).sort(),['incoming pixels one','incoming pixels two']);
+assert.equal(await (await db.capture_asset_blobs.get('asset-conflict')).blob.text(),'saved pixels');
+console.log('PASS — conflicting PDF originals persist independently and reimport once; pending projection cannot be replaced');
 const broken=new File([exported.file.slice(0,150),new Uint8Array([255]),exported.file.slice(151)],'broken.zip');await assert.rejects(()=>inspectTransfer(broken));
 await assert.rejects(()=>inspectTransfer(new File([JSON.stringify({kind:'audit_report',logbook:[]})],'audit.json')),/audit report/);
 console.log('PASS — real Dexie/date ZIP roundtrip; readable PDF original restored once; signed log preservation; repeated import; HOS conflict review; atomic rollback; interrupted projection recovery; full backup recognition; damaged ZIP/audit rejection');

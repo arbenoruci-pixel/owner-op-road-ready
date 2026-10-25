@@ -21,19 +21,22 @@ export function selectRange(state,business,rows,from,to){
  const selected=selectBook(state);selected.teamLogbooksByDriverId=Object.fromEntries(Object.entries(state.teamLogbooksByDriverId||{}).map(([id,b])=>[id,selectBook(b)]));
  for(const book of [selected,...Object.values(selected.teamLogbooksByDriverId)])for(const [k,v]of Object.entries(book))if(dayMap(k,v))for(const records of Object.values(v))for(const r of list(records))if(loadNo(r))refs.add(loadNo(r));
  const loads=list(business.loads).filter(l=>overlaps(l,from,to)||refs.has(loadNo(l)));loads.forEach(l=>refs.add(loadNo(l)));
- const relevant=r=>overlaps(r,from,to)||refs.has(loadNo(r));
+ const relevant=r=>overlaps(r,from,to)||refs.has(loadNo(r))||refs.has(identifyDocument(r,loads).loadNo);
  for(const field of ['documentsByDay','fuelReceiptsByDay']){selected[field]={...(selected[field]||{})};for(const [d,items]of Object.entries(state[field]||{})){const extra=list(items).filter(r=>refs.has(loadNo(r)));if(extra.length&&!selected[field][d])selected[field][d]=extra;}}
  const nextBusiness={...business};for(const [k,v]of Object.entries(nextBusiness))if(Array.isArray(v))nextBusiness[k]=v.filter(relevant);nextBusiness.loads=loads;
  // Documents for an overlapping load remain included regardless of scan date.
  selected.loadGuidesById=Object.fromEntries(Object.entries(state.loadGuidesById||{}).filter(([,g])=>refs.has(loadNo(g))||relevant(g)));
  const docs=list(rows.documents_local).filter(relevant),ids=new Set();
- function collect(v){if(typeof v==='string')ids.add(v);else if(v&&typeof v==='object'&&!(v instanceof Blob))for(const x of Object.values(v))collect(x);}
+ // Only document/load/source identities can grow this graph. Shared owners,
+ // dates, statuses and filenames are attributes, never relationship edges.
+ const relation=k=>/^(id|localid|serverid|clientdocumentid|localdocumentid|documentid|documentids|loadid|sourceid|sourceassetid|sourcefileid|sourcedocumentid|originaldocumentid|parentdocumentid|originalassetid|originalfileid|blobid|localblobid|localassetid|assetid|assetids|capturerunid|runid)$/.test(k.replaceAll('_','').toLowerCase());
+ function collect(v,key=''){if(typeof v==='string'){if(relation(key))ids.add(v);}else if(Array.isArray(v))for(const x of v)collect(x,key);else if(v&&typeof v==='object'&&!(v instanceof Blob))for(const [k,x]of Object.entries(v))collect(x,k);}
  collect(docs);collect(selected);collect(nextBusiness);
  const chosen={documents_local:docs};
  // Traverse stable source/asset/link identities until the relationship closure is complete.
  const retained=new Map();let changed=true;while(changed){changed=false;for(const [table,records]of Object.entries(rows)){
  if(/^(app_snapshots|sync_meta|mutation_queue|account_receive_staging|duty_events_local|log_days_local|inspections_local)$/.test(table))continue;
- const set=retained.get(table)||new Set();retained.set(table,set);for(const r of records){if(set.has(r))continue;const linked=Object.entries(r).some(([k,v])=>typeof v==='string'&&/(id|key|ref)$/i.test(k)&&ids.has(v));if((table==='documents_local'?docs.includes(r)||linked:linked||relevant(r))){set.add(r);collect(r);changed=true;}}
+ const set=retained.get(table)||new Set();retained.set(table,set);for(const r of records){if(set.has(r))continue;const linked=Object.entries(r).some(([k,v])=>typeof v==='string'&&relation(k)&&ids.has(v));if((table==='documents_local'?docs.includes(r)||linked:linked||relevant(r))){set.add(r);collect(r);changed=true;}}
  }}
  for(const [k,v]of retained)chosen[k]=[...v];
  for(const k of ['duty_events_local','log_days_local','inspections_local'])chosen[k]=list(rows[k]).filter(r=>within(rowDay(r),from,to));

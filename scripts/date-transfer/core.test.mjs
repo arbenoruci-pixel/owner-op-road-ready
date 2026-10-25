@@ -20,3 +20,16 @@ const team=mergeTransfer(current,{activeDriverId:'second',eventsByDay:{'2026-10-
 console.log('PASS — incremental SHA-256 vectors; exact date boundaries; overlapping loads with early/late originals; scanner graph closure; repeated safe merge; certified signatures and HOS conflicts; typed BOL/PO references; RateCon priority; distinct drivers; timezone preservation');
 
 const reversedAlias=mergeTransfer({eventsByDay:{}},{eventsByDay:{},loadGuidesById:{bad:{loadNo:'81657654'}}},{loads:[]},{loads:[{id:'bad-alias',loadNo:'81657654'},loads[0]]});assert.equal(reversedAlias.businessStore.loads.length,1);assert.equal(reversedAlias.businessStore.loads[0].loadNo,'38622645');assert.equal(Object.keys(reversedAlias.state.loadGuidesById).length,0);assert.equal(reversedAlias.conflicts.length,2);
+
+const privateRows={documents_local:[
+ {local_id:'selected-doc',client_document_id:'selected-client',driver_id:'local-owner-op',document_date:'2026-10-04',type:'bol'},
+ {local_id:'unrelated-doc',client_document_id:'unrelated-client',driver_id:'local-owner-op',document_date:'2026-12-01',type:'bol'}],
+ document_blobs:[{local_blob_id:'selected-blob',client_document_id:'selected-client',driver_id:'local-owner-op',blob:new Blob(['selected'])},{local_blob_id:'unrelated-blob',client_document_id:'unrelated-client',driver_id:'local-owner-op',blob:new Blob(['unrelated'])}],
+ capture_asset_blobs:[{local_asset_id:'selected-photo',client_document_id:'selected-client',driver_id:'local-owner-op',blob:new Blob(['selected photo'])},{local_asset_id:'unrelated-photo',client_document_id:'unrelated-client',driver_id:'local-owner-op',blob:new Blob(['unrelated photo'])}],
+ document_links_local:[{local_id:'selected-link',document_id:'selected-doc',driver_id:'local-owner-op'},{local_id:'unrelated-link',document_id:'unrelated-doc',driver_id:'local-owner-op'}]};
+const privateRange=selectRange({eventsByDay:{},teamDrivers:[{id:'local-owner-op'}]}, {},privateRows,from,to);
+for(const [table,records]of Object.entries(privateRange.rows))if(privateRows[table])assert.equal(records.length,1,'Shared driver must not expand '+table);
+assert.equal(privateRange.rows.documents_local[0].local_id,'selected-doc');
+console.log('PASS — document graph excludes unrelated originals sharing driver, type and attributes');
+
+const aliasDocs=selectRange({eventsByDay:{}},{loads},{documents_local:[{local_id:'old-bol-alias',load_no:'81657654',document_date:'2026-10-20'},{local_id:'typed-bol-only',bolNumber:'10082601',document_date:'2026-10-20'}]},from,to);assert.equal(aliasDocs.rows.documents_local.length,2,'Late originals with legacy BOL aliases follow their canonical overlapping load');

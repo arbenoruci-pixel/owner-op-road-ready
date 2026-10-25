@@ -24,7 +24,18 @@ async function prepareDocuments(data,rows,summary,onProgress){
  let sha=usable(src?.blob)?await hashBlob(src.blob):d.sha256||'';if(d.sha256&&usable(src?.blob)&&d.sha256!==sha)throw Error('Original checksum does not match '+(d.original_file_name||d.local_id));
  const direct=saved.find(r=>r.local_id===d.local_id||r.client_document_id&&r.client_document_id===d.client_document_id);
  const duplicate=saved.find(r=>physical.get(r.client_document_id)===sha&&sha)||saved.find(r=>r.sha256===sha&&sha);const old=direct||duplicate;
- if(old&&physical.has(old.client_document_id)&&sha&&physical.get(old.client_document_id)!==sha){conflicts.push({path:'document/'+d.local_id,saved:old,incoming:d,reason:'Original content changed'});continue;}
+ if(old&&physical.has(old.client_document_id)&&sha&&physical.get(old.client_document_id)!==sha){
+ const identity='transfer-review-original-'+hashValue([d.client_document_id||d.local_id,sha]);
+ const retained=saved.find(r=>r.local_id===identity);
+ const reviewRef={localDocumentId:identity,clientDocumentId:identity,sha256:sha};
+ conflicts.push({path:'document/'+d.local_id,saved:old,incoming:d,retainedOriginal:reviewRef,reason:'Original content differs; incoming version requires review'});
+ if(retained){summary.duplicatesSkipped++;continue;}
+ if(!usable(src?.blob)||!await canOpen(src.blob,d.mime_type)){missing.push(d.local_id);continue;}
+ const row={...d,local_id:identity,client_document_id:identity,sha256:sha,extracted:{...(d.extracted||{}),loadNo:'',brokerLoadNumber:''},load_no:'',loadNo:'',canonicalLoadNo:'',brokerLoadNumber:'',sync_state:'local_only',reviewStatus:'needs_review',
+ provenance:{...d.provenance,sourceBlobId:src.local_blob_id,sourceDocumentId:d.local_id,sourceClientId:d.client_document_id,conflictWithLocalId:old.local_id,conflictWithClientId:old.client_document_id,originalLoadReference:loadNo(d)}};
+ writes.push(row);saved.push(row);summary.documentsImported++;
+ blobs.push({...src,local_blob_id:identity,client_document_id:identity,blob:src.blob,sha256:sha});physical.set(identity,sha);hashes.set(sha,{blob:src.blob});continue;
+ }
  const match=identifyDocument(d,loads.filter((l,i,a)=>a.findIndex(x=>loadNo(x)===loadNo(l)&&String(x.broker||'')===String(l.broker||''))===i));
  if(old){aliases.set(d.local_id,old.local_id);aliases.set(d.client_document_id,old.client_document_id);summary.duplicatesSkipped++;
  if(classifyDocument(d)!=='other'&&(old.document_type||old.type)&&classifyDocument(d)!==(old.document_type||old.type))conflicts.push({path:'document/type/'+old.local_id,saved:old,incoming:{...d,type:classifyDocument(d)},reason:'Document classification requires review'});
@@ -49,7 +60,7 @@ async function prepareDocuments(data,rows,summary,onProgress){
 }
 function remap(value,aliases){if(value instanceof Blob||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;if(typeof value==='string')return aliases.get(value)||value;if(Array.isArray(value))return value.map(x=>remap(x,aliases));if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,remap(v,aliases)]));return value;}
 export async function prepareTransferImport(bundle,state,{db=getOwnerOpDb(),storage=window.localStorage,onProgress=()=>{}}={}){
- if(!db)throw Error('Device storage is unavailable.');const sourceName=String(bundle.data.state.driverProfile?.name||bundle.data.state.teamDrivers?.find(d=>d.id===bundle.data.state.activeDriverId)?.name||'').trim().toLowerCase(),targetName=String(state.driverProfile?.name||state.teamDrivers?.find(d=>d.id===state.activeDriverId)?.name||'').trim().toLowerCase();if(sourceName&&targetName&&sourceName!==targetName&&(bundle.data.state.activeDriverId||'driver_primary')===(state.activeDriverId||'driver_primary'))throw Error('Driver names differ for the same driver identity. Review the source driver before importing.');const rows=await readRows(db),currentBusiness=business(storage);rows.__business=currentBusiness;
+ if(!db)throw Error('Device storage is unavailable.');const pending=await db.sync_meta.get(JOURNAL);if(pending?.value&&pending.value.status!=='applied')throw Error('Finish recovery for the previous import before choosing another archive.');const sourceName=String(bundle.data.state.driverProfile?.name||bundle.data.state.teamDrivers?.find(d=>d.id===bundle.data.state.activeDriverId)?.name||'').trim().toLowerCase(),targetName=String(state.driverProfile?.name||state.teamDrivers?.find(d=>d.id===state.activeDriverId)?.name||'').trim().toLowerCase();if(sourceName&&targetName&&sourceName!==targetName&&(bundle.data.state.activeDriverId||'driver_primary')===(state.activeDriverId||'driver_primary'))throw Error('Driver names differ for the same driver identity. Review the source driver before importing.');const rows=await readRows(db),currentBusiness=business(storage);rows.__business=currentBusiness;
  let merge=mergeTransfer(state,bundle.data.state,currentBusiness,bundle.data.businessStore);const recordDuplicates=merge.summary.duplicatesSkipped;const docs=await prepareDocuments(bundle.data,rows,merge.summary,onProgress);const docSummary={documentsImported:merge.summary.documentsImported,missingFiles:merge.summary.missingFiles,duplicates:merge.summary.duplicatesSkipped-recordDuplicates};merge=mergeTransfer(state,remap(bundle.data.state,docs.aliases),currentBusiness,remap(bundle.data.businessStore,docs.aliases));merge.summary.documentsImported=docSummary.documentsImported;merge.summary.missingFiles=docSummary.missingFiles;merge.summary.duplicatesSkipped+=docSummary.duplicates;merge.conflicts.push(...docs.conflicts);merge.summary.conflicts=merge.conflicts.length;
  const token=hashValue({state,business:currentBusiness,rows:Object.fromEntries(Object.entries(rows).filter(([k])=>!['__business','app_snapshots','sync_meta'].includes(k)).map(([k,v])=>[k,k==='sync_meta'?[]:v.map(r=>{const o={...r};for(const key of Object.keys(o))if(o[key] instanceof Blob)o[key]={size:o[key].size};return o;})]))});
  return {bundle,merge,docs,token,owner:storage.getItem(OWNER_KEY)||'',stateToken:hashValue(state),businessToken:hashValue(currentBusiness),rows};
@@ -71,6 +82,7 @@ export async function commitTransferImport(review,{db=getOwnerOpDb(),storage=win
  // originals commit in the same Dexie transaction as every new evidence row.
  const tables=db.tables.filter(t=>!/^(mutation_queue|account_receive_staging)$/.test(t.name));
  await db.transaction('rw',tables,async()=>{
+ const pending=await db.sync_meta.get(JOURNAL);if(pending?.value&&pending.value.status!=='applied')throw Error('Finish recovery for the previous import before importing another archive.');
  if(hashValue(getState())!==review.stateToken||hashValue(business(storage))!==review.businessToken)throw Error('Records changed while checking originals. Review again.');
  const recoveryKey='transfer-before-'+archiveId;
  if(!await db.app_snapshots.get(recoveryKey))await db.app_snapshots.add({key:recoveryKey,state,updated_at:now});
@@ -93,7 +105,7 @@ export async function commitTransferImport(review,{db=getOwnerOpDb(),storage=win
  }
  }
  if(injectFailure)await injectFailure();
- const conflicts=merge.conflicts.map(c=>({...c,id:c.id||hashValue(c)}));
+ const conflicts=[];for(const c of merge.conflicts)conflicts.push({...c,id:c.id||await Dexie.waitFor(fingerprint(c))});
  for(const c of conflicts)await db.sync_meta.put({key:'transfer-review-'+c.id,value:{...c,archiveId,requiresExplicitApproval:true},updated_at:now});
  merge.summary.conflicts=conflicts.length;
  await db.app_snapshots.put({key:STATE_KEY,state:merge.state,updated_at:now});
