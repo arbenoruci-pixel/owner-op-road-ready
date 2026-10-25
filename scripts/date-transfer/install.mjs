@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 const read=f=>fs.readFileSync(f,'utf8'),write=(f,s)=>fs.writeFileSync(f,s);
 function patch(file,before,after){const s=read(file);if(s.includes(after))return;assert.equal(s.split(before).length,2,'Transfer anchor changed: '+file+' '+before.slice(0,70));write(file,s.replace(before,()=>after));}
 const target='source/src/modules/backup/';
@@ -23,3 +24,18 @@ const time='source/src/core/time/homeTerminalTime.js';
 patch(time,"export const DEFAULT_HOME_TERMINAL_TIMEZONE = 'America/New_York';","export const DEFAULT_HOME_TERMINAL_TIMEZONE = 'America/Chicago';");
 patch(time,"export const DEFAULT_HOME_TERMINAL_TIMEZONE_LABEL = 'Eastern Time';","export const DEFAULT_HOME_TERMINAL_TIMEZONE_LABEL = 'Central Time';");
 // Existing configured timezones and recorded event times are intentionally retained.
+
+// Explicit reviewed revision: future dates have no assessed coverage (targetEnd=0).
+// Resolve the temporal-dead-zone crash without touching historical calculations.
+const raw='source/src/core/compliance/rawRodsChecks.js';
+const priorRaw='2ba364f4967f6def08257e62d62ef54ae7ae92c7c1329eaebe332415af2b2d7f';
+const reviewedRaw='eb44423f1c9ae36122da4157a81fcbd5469536945e7af96dc0e19b28a557f975';
+const digest=value=>createHash('sha256').update(value).digest('hex');
+assert.ok([priorRaw,reviewedRaw].includes(digest(read(raw))),'Reviewed raw coverage predecessor changed');
+patch(raw,"})], total, targetEnd, current, future };","})], total:0, targetEnd, current, future };");
+assert.equal(digest(read(raw)),reviewedRaw,'Reviewed future-day coverage output changed');
+const locks=JSON.parse(read('module-locks.v1.json'));
+assert.ok([priorRaw,reviewedRaw].includes(locks.files[raw]),'Coverage lock predecessor changed');
+locks.files[raw]=reviewedRaw;
+locks.futureDayCoverageReview='Future-date notice returns zero assessed minutes; recorded historical intervals and totals remain unchanged. date-transfer/runtime.test.mjs and v110372 rendered contracts.';
+write('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');

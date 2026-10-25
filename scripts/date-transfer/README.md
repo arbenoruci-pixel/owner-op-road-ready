@@ -39,3 +39,8 @@ Known limits: ZIP32 (under 4 GB / 65,535 entries); stored Road Ready ZIPs only;
 legacy JSON has no checksums and reports that explicitly. Missing source originals
 are disclosed and retained as metadata, never manufactured. No new paid services,
 cloud upload path, database migration or background jobs are introduced.
+
+The future-date coverage notice returns zero assessed minutes instead of reading
+a later uninitialized total. This one-line stable-module revision pins both the
+reviewed predecessor and result hashes, explicitly revises only its lock, and
+retains every historical coverage calculation and rendered Driving regression.

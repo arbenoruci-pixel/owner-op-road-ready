@@ -21,6 +21,7 @@ async function prepareDocuments(data,rows,summary,onProgress){
  if(old&&physical.has(old.client_document_id)&&sha&&physical.get(old.client_document_id)!==sha){conflicts.push({path:'document/'+d.local_id,saved:old,incoming:d,reason:'Original content changed'});continue;}
  const match=identifyDocument(d,loads.filter((l,i,a)=>a.findIndex(x=>loadNo(x)===loadNo(l)&&String(x.broker||'')===String(l.broker||''))===i));
  if(old){aliases.set(d.local_id,old.local_id);aliases.set(d.client_document_id,old.client_document_id);summary.duplicatesSkipped++;
+ if(classifyDocument(d)!=='other'&&(old.document_type||old.type)&&classifyDocument(d)!==(old.document_type||old.type))conflicts.push({path:'document/type/'+old.local_id,saved:old,incoming:{...d,type:classifyDocument(d)},reason:'Document classification requires review'});
  if(loadNo(old)&&match.loadNo&&loadNo(old)!==match.loadNo)conflicts.push({path:'document/load/'+old.local_id,saved:old,incoming:d,reason:'Document belongs to a different load'});
  }else{
  const row={...d,...typedReferences(d),sha256:sha,brokerLoadNumber:match.loadNo,canonicalLoadNo:match.loadNo,loadNo:match.loadNo,load_no:match.loadNo,type:classifyDocument(d),document_type:classifyDocument(d),sync_state:'local_only',reviewStatus:match.loadNo&&classifyDocument(d)!=='other'?'verified':'needs_review',provenance:{...d.provenance,importedFrom:d.local_id,originalLoadReference:loadNo(d),matchBasis:match.basis}};
