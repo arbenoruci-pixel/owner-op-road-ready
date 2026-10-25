@@ -44,3 +44,8 @@ The future-date coverage notice returns zero assessed minutes instead of reading
 a later uninitialized total. This one-line stable-module revision pins both the
 reviewed predecessor and result hashes, explicitly revises only its lock, and
 retains every historical coverage calculation and rendered Driving regression.
+
+Date packages also retain original supporting HOS history for the preceding
+eight calendar days and the last older recorded anchor, without clipping events.
+The preview identifies these supporting days separately from the selected dates.
+A 70-hour cycle regression compares the source clocks to the packaged history.

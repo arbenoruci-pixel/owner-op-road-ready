@@ -37,7 +37,14 @@ export function selectRange(state,business,rows,from,to){
  }}
  for(const [k,v]of retained)chosen[k]=[...v];
  for(const k of ['duty_events_local','log_days_local','inspections_local'])chosen[k]=list(rows[k]).filter(r=>within(rowDay(r),from,to));
- return {state:selected,businessStore:nextBusiness,rows:chosen,window:{from,to}};
+ // Preserve supporting duty evidence for 70/8, 34h restart and split-rest
+ // calculations. These are original rows, never clipped or synthesized. Keep
+ // the last older recorded day as an anchor for long OFF/SB continuations.
+ const contextStartDate=new Date(from+'T12:00Z');contextStartDate.setUTCDate(contextStartDate.getUTCDate()-8);const contextFrom=contextStartDate.toISOString().slice(0,10),contextDays=new Set();
+ function addContext(source,target){const dates=Object.keys(source.eventsByDay||{}).filter(d=>day(d)&&d<from).sort(),anchor=dates.filter(d=>d<contextFrom).at(-1),days=new Set(dates.filter(d=>d>=contextFrom));if(anchor)days.add(anchor);for(const d of days)contextDays.add(d);for(const [k,v]of Object.entries(source))if(dayMap(k,v)&&protectedMap(k)){target[k]={...(target[k]||{})};for(const d of days)if(v[d]!==undefined)target[k][d]=v[d];}}
+ addContext(state,selected);for(const [id,book]of Object.entries(state.teamLogbooksByDriverId||{}))addContext(book,selected.teamLogbooksByDriverId[id]);
+ for(const k of ['duty_events_local','log_days_local','inspections_local'])chosen[k]=list(rows[k]).filter(r=>within(rowDay(r),from,to)||contextDays.has(rowDay(r)));
+ return {state:selected,businessStore:nextBusiness,rows:chosen,window:{from,to},hosContext:{purpose:'Original supporting history for HOS calculations; no event times changed',days:[...contextDays].sort(),requestedFrom:contextFrom}};
 }
 export const recordId=r=>String(r?.local_id||r?.id||r?.eventId||r?.client_event_id||r?.localDocumentId||r?.clientDocumentId||hashValue(r));
 export function mergeTransfer(current,incoming,business={},incomingBusiness={}){

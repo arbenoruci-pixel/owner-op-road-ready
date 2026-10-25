@@ -17,7 +17,7 @@ export async function buildRangeArchive({state,businessStore,from,to,db=getOwner
  const result=await buildLargeBackup({state:selected.state,businessStore:selected.businessStore,db:rowDatabase(selected.rows),localRows:[],inventory:{logDays:Object.keys(selected.state.eventsByDay||{}).length,documentBlobRows:list(selected.rows.document_blobs).length},appVersion,onProgress,signal});
  const files=await readStoredZip(result.file),zip=new ChunkedZip(),fileHashes=[];
  for(const [path,e]of files){if(path==='Road-Ready-Backup.roadready.json')continue;onProgress('Checking '+path+'…');const sha=await hashBlob(e.blob,{signal});fileHashes.push({path,bytes:e.size,sha256:sha});zip.add(path,e.blob,await inspectBlob(e.blob,{signal}));}
- const payload={...result.archive.payload,transferMetadata:{kind:KIND,version:1,window:{from,to},driver:state.teamDrivers||[state.driverProfile||{}],timezone:state.homeTerminalTimeZone||'America/Chicago',counts,fileHashes}};
+ const payload={...result.archive.payload,transferMetadata:{kind:KIND,version:1,window:{from,to},hosContext:selected.hosContext,driver:state.teamDrivers||[state.driverProfile||{}],timezone:state.homeTerminalTimeZone||'America/Chicago',counts,fileHashes}};
  const archive={...result.archive,payload,payloadSha256:await sha256(new TextEncoder().encode(JSON.stringify(payload)))};
  await zip.text('Road-Ready-Backup.roadready.json',JSON.stringify(archive),{signal});
  await zip.text('Transfer-Manifest.json',JSON.stringify({kind:KIND,version:1,payloadSha256:archive.payloadSha256,window:{from,to},counts,fileHashes},null,2),{signal});
