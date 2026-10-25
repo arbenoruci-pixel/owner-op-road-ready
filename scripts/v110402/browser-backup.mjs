@@ -89,7 +89,7 @@ for (const [name, browser] of [['chromium', chromium], ['webkit', webkit]]) {
     const corrupt = structuredClone(archive);
     corrupt.payload.state.customByDay['2026-09-07'].original = 'modified';
     fs.writeFileSync(corruptPath, JSON.stringify(corrupt));
-    const fileInput = page.locator('input[type=file]').first();
+    const fileInput = page.getByLabel('Verify saved backup from Files',{exact:true});
     await fileInput.setInputFiles(corruptPath);
     await page.getByRole('status').filter({ hasText:'checksum mismatch' }).waitFor();
     assert.equal(await protection(), null);

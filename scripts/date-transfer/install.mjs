@@ -11,6 +11,7 @@ write(screen,read(screen).replace(/\n\s*<TransferPanel\b[^>]*\/>/g,''));
 patch(screen,"import React,", "import TransferPanel from './TransferPanel.jsx';\nimport React,");
 patch(screen,'export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImportBackup })','export default function BackupLogsScreen({ state, onBack, onBuildBackup, onImportBackup, onApplyTransfer })');
 patch(screen,'<main className="backup-body">','<main className="backup-body">\n        <TransferPanel state={state} onApply={onApplyTransfer} onPrepared={showPreparedExport} appVersion={CURRENT_APP_VERSION} externalBusy={busy} onBusyChange={setBusy}/>');
+patch(screen,'<input ref={safetyFileInputRef}', '<input aria-label="Verify saved backup from Files" ref={safetyFileInputRef}');
 patch(screen,'onClick={onBack} aria-label="Back"','onClick={onBack} disabled={busy} aria-label="Back"');
 const app='source/src/app/App.jsx';
 patch(app,'onImportBackup={importManualBackup}',"onImportBackup={importManualBackup}\n        onApplyTransfer={next => setState(next)}");

@@ -32,7 +32,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
   const file=value=>({name:'everything.roadready.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(value))});
   await device(async page=>{
    const state=baseState();state.view='logbook';state.testInstructionStore={};await seed(page,state);await openBackup(page);const before=await contents(page);
-   await page.locator('input[type=file]').first().setInputFiles(file(archive));
+   await page.getByLabel('Verify saved backup from Files',{exact:true}).setInputFiles(file(archive));
    await page.getByRole('status').filter({hasText:'Choose the backup exported from this device'}).waitFor();
    assert.equal(await page.getByRole('button',{name:'Import Everything',exact:true}).isDisabled(),true);
    assert.equal(await page.evaluate(()=>localStorage.getItem('owner-op-road-ready-last-device-safety-export-v1')),null);
