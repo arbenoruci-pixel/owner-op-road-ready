@@ -72,8 +72,20 @@ for(const [engineName,engine] of (process.env.SYNC_TEST_BROWSER==='chromium'?[['
   const confirm=review.getByRole('button',{name:'Confirm selected versions',exact:true});
   assert.ok(await confirm.isDisabled());
   assert.equal(workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note,'Older account sleeper','No logbook correction is applied before approval');
-  for(const radio of await review.getByLabel('Keep this device’s version',{exact:true}).all())await radio.check();
-  await confirm.click();
+  for(let attempt=0;attempt<3&&await review.isVisible();attempt++){
+   // Initial mounting may finish normalization after the first comparison.
+   // A stale choice must refresh the comparison, never apply an unseen version.
+   for(const radio of await review.getByLabel('Keep this device’s version',{exact:true}).all())await radio.check();
+   await confirm.click();
+   await new Promise(resolve=>setTimeout(resolve,250));
+   await waitFor(async()=>workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note==='Latest active device sleeper'||await phone.page.getByText('Records changed while you reviewed. Compare the latest versions.',{exact:true}).count()>0);
+   if(await review.isVisible()){
+    assert.equal(workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note,'Older account sleeper','A stale comparison cannot overwrite the original');
+    await phone.page.getByText('Records changed while you reviewed. Compare the latest versions.',{exact:true}).waitFor();
+   }
+  }
+  await waitFor(()=>workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note==='Latest active device sleeper');
+  await review.waitFor({state:'hidden'});
   await phone.page.getByRole('button',{name:'Close sync details',exact:true}).click();
   await openDay(phone.page);
   await waitFor(()=>workspace.payload.records['["day","primary","'+day+'"]']?.eventsByDay[0].note==='Latest active device sleeper');
