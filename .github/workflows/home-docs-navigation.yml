@@ -5,6 +5,7 @@ on:
       - 'scripts/workspace-navigation/**'
       - 'scripts/smart-import/**'
       - 'scripts/reliability-sync/**'
+      - 'scripts/import-display/**'
       - 'scripts/materialize-v982.mjs'
       - 'scripts/v110435/**'
       - 'scripts/build-v110.mjs'
@@ -50,7 +51,7 @@ jobs:
             sleep 1
           done
           failed=0
-          for test in reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs; do
+          for test in reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
             if ! node "scripts/$test"; then failed=1; fi
           done
           exit "$failed"
