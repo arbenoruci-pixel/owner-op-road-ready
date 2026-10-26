@@ -36,6 +36,7 @@ patch(routes,"  if(Object.hasOwn(patch,'shippingDocs'))updates.shippingDocs=even
 // Keep the prior source-conflict regression: broker identity is now checked in
 // saved data instead of demanding an extra pickup input from the driver.
 patch('scripts/v110378/browser-duty-forms.mjs',"assert.equal(await root.getByLabel('Load / order #',{exact:true}).inputValue(),'TRIP-A');","assert.equal(await root.getByLabel('Load / order #',{exact:true}).count(),0);assert.equal(await root.locator('[data-duty-section=load] input').count(),2);");
+patch('scripts/v110380/browser-on-duty-intervals.mjs',"assert.equal(await root.getByLabel('Load / order #',{exact:true}).inputValue(),'TRIP-A');","assert.equal(await root.getByLabel('Load / order #',{exact:true}).count(),0);assert.equal((await stored(page)).eventsByDay[day].find(event=>event.id==='pickup').loadNo,'TRIP-A');");
 
 const reviewedFile='scripts/test-support/reviewed-duty-hashes.json';
 const previousReviewed=JSON.parse(fs.readFileSync(reviewedFile,'utf8'));
