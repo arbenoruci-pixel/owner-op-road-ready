@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/v110378/**'
+      - 'scripts/pickup-simple/**'
       - 'scripts/v110379/**'
       - 'scripts/v110380/**'
       - 'scripts/v110381/**'
@@ -46,6 +47,7 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          node scripts/pickup-simple/browser.mjs
           node scripts/v110378/browser-duty-forms.mjs
           node scripts/v110379/browser-ongoing-on-duty.mjs
           node scripts/v110380/browser-on-duty-intervals.mjs
