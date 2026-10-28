@@ -146,6 +146,8 @@ steps.push('pickup-simple/install.mjs','pickup-simple/runtime.test.mjs','test-su
 steps.push('linkage-consistency/install.mjs','linkage-consistency/core.test.mjs');
 steps.push('inspection-snapshot/install.mjs','inspection-snapshot/core.test.mjs','inspection-snapshot/edge.test.mjs','inspection-snapshot/client.test.mjs','inspection-snapshot/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('scan-reference-safety/install.mjs','scan-reference-safety/core.test.mjs','scan-reference-safety/runtime.test.mjs','scan-reference-safety/release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('shipment-filing/install.mjs','shipment-filing/core.test.mjs','shipment-filing/runtime.test.mjs');
+steps.push('device-reconnect/install.mjs','device-reconnect/reconnect.test.mjs','device-reconnect/release.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")
