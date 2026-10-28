@@ -44,6 +44,12 @@ for(const name of ['updateBusinessRecord','removeBusinessRecord']){
 }
 patch(business,'  const nextRecord = cleanRecord({','  if(record.id && current[bucket]?.some(r=>r.id===record.id))throw Error("This record ID already exists. Choose the existing record or import a distinct original.");\n  const nextRecord = cleanRecord({');
 console.log('PASS — reviewed freight references, per-stop proof and unique mutation targets installed');
+// The archive resolves millions of references while opening a long logbook.
+// Do not copy the entire alias table for each blank field or event reference.
+patch(owner+'archiveEvidenceV1103.js',"  const mapping = { '178564':'424590-1', ...aliases };\n  while (mapping[ref] && !seen.has(ref)) { seen.add(ref); ref = text(mapping[ref]).toUpperCase(); }", "  if(!ref)return '';\n  const next = key => Object.hasOwn(aliases,key) ? aliases[key] : key==='178564' ? '424590-1' : null;\n  for(let target=next(ref);target&&!seen.has(ref);target=next(ref)){seen.add(ref);ref=text(target).toUpperCase();}");
+const home='source/src/modules/home/AdaptiveHomeV1038.jsx';
+patch(home,"import {loadDocumentSummaryV105}","import {hasReviewedEvidence} from '../owneros/evidenceCoreV110413.js';\nimport {loadDocumentSummaryV105}");
+patch(home,"documentSummary:currentLoad.identity==='load'?loadDocumentSummaryV105(checklistStore,currentLoad.loadNo):{}", "documentSummary:currentLoad.identity==='load'?{...loadDocumentSummaryV105(checklistStore,currentLoad.loadNo),bolPresent:(checklistStore.documents||[]).some(doc=>hasReviewedEvidence(doc,['bol','pod'],currentLoad.loadNo,checklistStore))}:{}");
 const center=owner+'EvidenceCenterV110413.jsx';
 patch(center,"import {saveReviewedFacts,", "import {reviewFieldNames} from './linkageConsistencyV1.js';\nimport {saveReviewedFacts,");
 patch(center,'CATALOG[kind].fields.map(name=>','reviewFieldNames(kind,CATALOG[kind].fields).map(name=>');
