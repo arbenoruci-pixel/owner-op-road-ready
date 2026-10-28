@@ -131,7 +131,8 @@ export function analyzeRateConfirmationV11029(input = {}) {
   let source=read(path);
   source=replaceAllChecked(source,
     'activeGuideLoadSummaryV105(state, businessStore) || activeLoadSummary(state, businessStore)',
-    'activeGuideLoadSummaryV105(state, businessStore)',2,'Home legacy active-load fallback');
+    'activeGuideLoadSummaryV105(state, businessStore)',source.includes('  const activeLoad = useMemo(() => {')?1:2,'Home legacy active-load fallback');
+  assert.ok(!source.includes('|| activeLoadSummary(state, businessStore)'), 'All legacy Home load fallbacks removed');
   source=source.replaceAll('App v110.2.8','App v'+VERSION);
   write(path,source);
 }

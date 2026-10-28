@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import {syncLegacyReleaseAssertions} from './test-support/sync-release-assertions.mjs';
+// Re-copied historic fixtures must describe the current predecessor release.
+for(const file of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs'])syncLegacyReleaseAssertions(file);
 const read = path => fs.readFileSync(path, 'utf8');
 function patch(path, before, after) {
   const source = read(path);
@@ -55,9 +58,8 @@ for (const [path, name] of [['source/src/core/update/appUpdate.js', 'FALLBACK_AP
   fs.writeFileSync(path, source);
 }
 for (const path of ['source/src/modules/home/HomeScreen.jsx', 'source/src/shared/ui/ToolsSheet.jsx']) fs.writeFileSync(path, read(path).replace(/App v\d+\.\d+\.\d+/g, 'App v' + VERSION).replace(/APP V\d+\.\d+\.\d+/g, 'APP V' + VERSION));
-patch('scripts/test-duty-graph-continuity.mjs', "assert.equal(meta.version,'110.3.65');assert.equal(meta.build,'v110365-carried-status-edit');", `assert.equal(meta.version,'${VERSION}');assert.equal(meta.build,'${BUILD}');`);
-patch('scripts/test-editor-grips-v110355.mjs', "assert.equal(meta.version,'110.3.65'); assert.equal(meta.build,'v110365-carried-status-edit');", `assert.equal(meta.version,'${VERSION}'); assert.equal(meta.build,'${BUILD}');`);
-patch('scripts/verify-log-integrity-v1051.mjs', "assert.equal(JSON.parse(read('public/app-version.json')).version, '110.3.65');", `assert.equal(JSON.parse(read('public/app-version.json')).version, '${VERSION}');`);
+// Validate the newly installed release against app, service worker and both manifests.
+for(const file of ['scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs'])syncLegacyReleaseAssertions(file);
 
 // Reviewed DayLog wiring only; core persistence and signing retain their locks.
 const reviewedDayHash = '469d3d66d4d55c3b749b66008d9f15f23488b7bedf04d0c04ea56aee6c7584c8';
