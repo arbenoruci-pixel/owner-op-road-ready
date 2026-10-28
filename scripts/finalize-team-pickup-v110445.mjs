@@ -25,7 +25,10 @@ patch(routes,'recordedRouteDayMembership, freightOriginForLeg','recordedRouteDay
 patch(routes,'  return newestRouteCopies(all)\n    .filter', '  const visible = newestRouteCopies(all)\n    .filter');
 patch(routes,"    .filter(leg => !leg.logbookExcludedDaysV110352?.includes(day))\n    .filter(leg => {", "    .filter(leg => !leg.logbookExcludedDaysV110352?.includes(day));\n  return distinctRecordedRoutes(visible, historyIndex, routeHistoryWindow)\n    .filter(leg => {");
 const day='source/src/modules/logbook/DayLogScreen.jsx',beforeDay=read(day);
-patch(day,'routeStatusForLogDay, freightOriginForLeg','routeStatusForLogDay, freightOriginForLeg, routeHistoryIndex, routeHistoryWindow');
+if(read(day).includes('routeStatusForLogDay, freightOriginForLeg'))
+ patch(day,'routeStatusForLogDay, freightOriginForLeg','routeStatusForLogDay, freightOriginForLeg, routeHistoryIndex, routeHistoryWindow');
+else
+ patch(day,'shipmentContextForEvents, routeStatusForLogDay }','shipmentContextForEvents, routeStatusForLogDay, freightOriginForLeg, routeHistoryIndex, routeHistoryWindow }');
 patch(day,"  parts.push(!leg.pickupEventId && !leg.deliveryEventId && (leg.source === 'manual_form' || /^rate_confirmation_guide/.test(leg.source||'')) ? 'Plan · no pickup recorded' : routeStatusForLogDay(leg, day, state));",`  const freight = routeHistoryWindow(leg,routeHistoryIndex(state));
   parts.push(!freight.recordedPickup && !leg.pickupEventId && !leg.deliveryEventId && (leg.source === 'manual_form' || /^rate_confirmation_guide/.test(leg.source||'')) ? 'Plan · no pickup recorded' : routeStatusForLogDay(leg, day, state));
   if (freight.recordedPickup && freight.pickupDriverId !== state.activeDriverId && freight.pickupDriverName) parts.push('Pickup by ' + freight.pickupDriverName);`);

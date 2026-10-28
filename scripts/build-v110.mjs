@@ -126,7 +126,7 @@ steps.push('finalize-gps-sign-dot-v110421.mjs','v110421/gps-sign.test.mjs','test
 steps.push('finalize-delivery-order-ai-v110422.mjs','v110422/reader.test.mjs','v110422/filing.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-team-freight-v110423.mjs','v110423/team-freight.test.mjs','reader-ai/test-runtime-credentials.mjs','test-route-delete-v110350.mjs','v110407/team-safety.test.mjs','test-duty-graph-continuity.mjs','verify-isolation-locks-v110.mjs');
 steps.push('finalize-load-attachment-v110426.mjs','v110426/attachment.test.mjs','v110426/vault.test.mjs','verify-isolation-locks-v110.mjs');
-steps.push('reader-foundation/install.mjs','delivery-closeout/install.mjs','workspace-navigation/install.mjs','reader-foundation/release.mjs','reader-foundation/verify.mjs','delivery-closeout/closeout.test.mjs','workspace-navigation/navigation.test.mjs','workspace-navigation/original.test.mjs');
+steps.push('reader-foundation/install.mjs','delivery-closeout/install.mjs','build-support/evidence-workspace.mjs','workspace-navigation/install.mjs','reader-foundation/release.mjs','reader-foundation/verify.mjs','delivery-closeout/closeout.test.mjs','workspace-navigation/navigation.test.mjs','workspace-navigation/original.test.mjs');
 steps.push('test-support/install-duty-compatibility.mjs','test-support/duty-compatibility.test.mjs','test-support/release-assertions.test.mjs','v110378/test-review-regressions.mjs');
 // This regression consumes the completed freight projection installed later in
 // the chain. Preserve every assertion and run it on the final runtime.
@@ -143,6 +143,8 @@ steps.push('date-transfer/install.mjs','date-transfer/core.test.mjs','date-trans
 steps.push('smart-import/quarterly-release.mjs','smart-import/quarterly.test.mjs','smart-import/runtime.test.mjs','verify-isolation-locks-v110.mjs');
 steps.push('import-display/install.mjs','import-display/runtime.test.mjs','import-display/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('pickup-simple/install.mjs','pickup-simple/runtime.test.mjs','test-support/duty-compatibility.test.mjs','v110378/test-review-regressions.mjs','pickup-simple/release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('linkage-consistency/install.mjs','linkage-consistency/core.test.mjs');
+steps.push('inspection-snapshot/install.mjs','inspection-snapshot/core.test.mjs','inspection-snapshot/edge.test.mjs','inspection-snapshot/client.test.mjs','inspection-snapshot/release.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")

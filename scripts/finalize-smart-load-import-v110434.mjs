@@ -1,3 +1,4 @@
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 function patch(p,b,a){const s=read(p);if(s.includes(a))return;if(s.split(b).length!==2)throw Error('Library import anchor changed: '+p+' / '+b.slice(0,80));fs.writeFileSync(p,s.replace(b,a));}
@@ -5,6 +6,12 @@ for(const name of ['libraryCore','libraryZip','libraryStorage','libraryExport','
 for(const name of ['ImportLibraryPanel','LibraryHistory'])fs.copyFileSync('scripts/v110434/'+name+'.jsx','source/src/modules/owneros/'+name+'V110434.jsx');
 fs.copyFileSync('scripts/v110434/library.css','source/src/modules/owneros/libraryV110434.css');
 const folders='source/src/modules/owneros/LoadFoldersV10969.jsx';
+// Older nested materializers can restore the pre-week document UI. Reapply its
+// complete reviewed prerequisites before attaching the import controls.
+if(!read(folders).includes('const [checksOpen,setChecksOpen]')) {
+  for(const script of ['finalize-document-weeks-v110416.mjs','finalize-clear-loads-v110417.mjs'])execFileSync(process.execPath,['scripts/'+script],{stdio:'inherit'});
+}
+
 patch(folders,"import RecoveryPanel", "import ImportLibraryPanel from './ImportLibraryPanelV110434.jsx';\nimport LibraryHistory from './LibraryHistoryV110434.jsx';\nimport RecoveryPanel");
 patch(folders,"  const [checksOpen,setChecksOpen]=useState(false);","  const [checksOpen,setChecksOpen]=useState(false);\n  const [importOpen,setImportOpen]=useState(false);");
 patch(folders,'    {moreOpen?<section',`    {!folder&&!week&&!library?<><div className="rr-library-entry-actions"><button type="button" className="rr-library-primary" onClick={()=>scan()}>Smart Scan</button><button type="button" aria-expanded={importOpen} onClick={()=>setImportOpen(v=>!v)}>Import documents</button></div>{importOpen?<ImportLibraryPanel/>:null}<LibraryHistory/></>:null}

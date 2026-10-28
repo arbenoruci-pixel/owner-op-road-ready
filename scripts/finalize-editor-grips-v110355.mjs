@@ -29,6 +29,9 @@ function patchInsert(from, to) {
   insert = insert.replace(from, to);
 }
 patchInsert('  function onEditTime(edge, minute) {', '  function onEditTime(edge, minute, gestureRange) {');
+// Both reviewed predecessors have identical gesture semantics; install the explicit free-boundary flag.
+const legacyBoundary = '      const range = insertBoundaryV110314(current, edge, minute, insertLimitV110314);';
+if (insert.includes(legacyBoundary)) patchInsert(legacyBoundary, legacyBoundary.replace('insertLimitV110314);','insertLimitV110314, true);'));
 patchInsert(
   '      const range = insertBoundaryV110314(current, edge, minute, insertLimitV110314, true);',
   `      // INSERT_GESTURE_ORIGIN_V110355: retain current details, use original gesture times.
