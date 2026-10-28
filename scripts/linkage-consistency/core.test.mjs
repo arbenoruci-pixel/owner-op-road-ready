@@ -57,6 +57,22 @@ test('duplicate document IDs cannot apply an ID-only filing overlay to different
  assert.equal(safeDocumentAssignment(docs[0],a,[docs[0]],d=>d.id,d=>d.loadNo),a);
 });
 import {componentsAfterReview,reviewFieldNames} from '../../source/src/modules/owneros/linkageConsistencyV1.js';
+import {canonicalArchiveLoad} from '../../source/src/modules/owneros/archiveEvidenceV1103.js';
+import {hasReviewedEvidence} from '../../source/src/modules/owneros/evidenceCoreV110413.js';
+test('archive resolution follows only requested references and safely stops cycles',()=>{
+ let unrelatedReads=0;
+ const aliases={A:'B',B:'C',LOOP:'BACK',BACK:'LOOP','178564':''};
+ Object.defineProperty(aliases,'UNRELATED',{enumerable:true,get(){unrelatedReads++;return 'IGNORED';}});
+ assert.equal(canonicalArchiveLoad('',aliases),'');assert.equal(canonicalArchiveLoad(' a ',aliases),'C');
+ assert.equal(canonicalArchiveLoad('LOOP',aliases),'LOOP');assert.equal(canonicalArchiveLoad('178564',aliases),'178564');
+ assert.equal(canonicalArchiveLoad('178564',{}),'424590-1');assert.equal(unrelatedReads,0);
+});
+test('Home can use reviewed BOL evidence despite an older workflow status',()=>{
+ const bol={...doc(),status:'needs_review',reviewStatus:'needs_review'};
+ assert.equal(hasReviewedEvidence(bol,['bol','pod'],'LOAD-1',{loads:[{loadNo:'LOAD-1'}]}),true);
+ bol.extracted.evidenceFactsV1.sourceSha256='b'.repeat(64);
+ assert.equal(hasReviewedEvidence(bol,['bol','pod'],'LOAD-1'),false);
+});
 test('correcting a single original updates its reviewed component while preserving packet page facts',()=>{
  const parts=[{kind:'bol',pages:[1],reviewed:true,fields:{poNumber:'OLD'}}];
  const result=componentsAfterReview(parts,'bol',{poNumber:'CORRECT'});
