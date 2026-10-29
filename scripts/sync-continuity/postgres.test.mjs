@@ -1,0 +1,57 @@
+// Run against an isolated PostgreSQL engine; never connects to the live account.
+// RR_PGLITE_MODULE points to an installed @electric-sql/pglite package.
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {pathToFileURL} from 'node:url';
+const {PGlite}=await import(pathToFileURL(process.env.RR_PGLITE_MODULE));
+const db=new PGlite();
+const baseline=fs.readFileSync(new URL('./fixtures/baseline.sql',import.meta.url),'utf8');
+const migration=fs.readFileSync('supabase/migrations/20261029203143_independent_device_verification.sql','utf8');
+const u='00000000-0000-0000-0000-000000000001',s='00000000-0000-0000-0000-000000000002',d='00000000-0000-0000-0000-000000000003',other='00000000-0000-0000-0000-000000000004',d2='00000000-0000-0000-0000-000000000005';
+const q=async(sql,args=[])=> (await db.query(sql,args)).rows;
+const claim=async(session=s,owner=u)=>q("select set_config('test.uid',$1,false),set_config('test.sid',$2,false)",[owner,session]);
+const active=async(device=d,takeover=false)=>(await q('select road_ready_private.active_device($1,$2) value',[device,takeover]))[0].value;
+const locks=async()=>Number((await q("select count(*) n from pg_locks where locktype='advisory'"))[0].n);
+try{
+ await db.exec(`create schema auth;create schema road_ready_private;
+ create table auth.sessions(id uuid primary key,user_id uuid);
+ create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
+ create function auth.jwt() returns jsonb language sql as $$select jsonb_build_object('session_id',nullif(current_setting('test.sid',true),''))$$;
+ create function public.owner_op_access_v1() returns jsonb language sql as $$select jsonb_build_object('approved',coalesce(current_setting('test.approved',true),'true')<>'false')$$;
+ create table public.road_ready_account_workspaces(user_id uuid primary key,revision bigint,device_id uuid,payload jsonb,updated_at timestamptz);
+ create table public.road_ready_account_history(user_id uuid,revision bigint,device_id uuid,payload jsonb);
+ create table public.road_ready_backup_settings(user_id uuid,record_sync_enabled boolean);
+ create table road_ready_private.active_devices(user_id uuid primary key,device_id uuid,session_id uuid,generation bigint,receive_pending boolean,activated_at timestamptz default now());
+ create table road_ready_private.device_sessions(user_id uuid,session_id uuid,device_id uuid,primary key(user_id,session_id));`);
+ await db.exec(baseline);
+ await q('insert into auth.sessions values($1,$2),($3,$2)',[s,u,other]);
+ await q('insert into road_ready_private.active_devices values($1,$2,$3,1,false,now())',[u,d,s]);
+ await q('insert into road_ready_private.device_sessions values($1,$2,$3)',[u,s,d]);
+ await q('insert into road_ready_backup_settings values($1,true)',[u]);
+ await claim();
+ await db.exec('begin');assert.equal((await active()).active,true);assert.equal(await locks(),1,'Old heartbeat takes the writer lock');await db.exec('rollback');
+ await db.exec(migration);
+ await db.exec('begin');assert.deepEqual(await active(),{active:true,generation:1,receive:false});assert.equal(await locks(),0,'Current-device verification no longer waits for the writer lock');await db.exec('rollback');
+ const config=(await q("select proconfig from pg_proc where oid='public.road_ready_account_patch_v1(uuid,bigint,jsonb,jsonb)'::regprocedure"))[0].proconfig;
+ assert.ok(config.includes('statement_timeout=25s'));assert.ok(config.includes('lock_timeout=2s'));
+ await claim(other);assert.equal((await active(d2)).active,false,'Different session cannot enter without takeover');
+ await db.exec('begin');assert.deepEqual(await active(d2,true),{active:true,generation:2,receive:true});assert.equal(await locks(),1,'Ownership changes still serialize with writes');await db.exec('commit');
+ await claim();assert.equal((await active(d,true)).active,false,'Used old session cannot reclaim ownership');
+ await claim('');await assert.rejects(()=>active(),/current approved session/i);
+ await claim(other);await q("select set_config('test.approved','false',false)");await assert.rejects(()=>active(d2),/current approved session/i);await q("select set_config('test.approved','true',false)");
+ await q('delete from auth.sessions where id=$1',[other]);await assert.rejects(()=>active(d2),/current approved session/i);await q('insert into auth.sessions values($1,$2)',[other,u]);
+ const records=Object.fromEntries(Array.from({length:1505},(_,i)=>['record-'+i,{id:i,evidence:'signed-original-'+i+' '+('archive text '.repeat(550)),status:i%2?'OFF':'D'}]));
+ await q('insert into road_ready_account_workspaces values($1,10,$2,$3,now())',[u,d2,JSON.stringify({format:'road_ready_account_v1',records})]);
+ await db.exec('create trigger road_ready_active_account_write before insert or update on public.road_ready_account_workspaces for each row execute function road_ready_private.guard_active_account()');
+ const patch=()=>q("select public.road_ready_account_patch_v1($1,10,$2,'[]') value",[d2,JSON.stringify({'record-0':{...records['record-0'],note:'reviewed edit'}})]);
+ await assert.rejects(patch,/no longer active|latest logbook/,'Receiving device cannot write before handoff');
+ assert.equal(Number((await q('select count(*) n from road_ready_account_history'))[0].n),0,'Rejected write rolls back history');
+ await q('update road_ready_private.active_devices set receive_pending=false');
+ const started=performance.now();const result=(await patch())[0].value;assert.equal(result.revision,11);
+ console.log('PASS — 1505-record / '+JSON.stringify(records).length+' byte workspace patch completed in '+Math.round(performance.now()-started)+'ms');
+ assert.deepEqual((await q("select payload->'records'->'record-1' value from road_ready_account_workspaces"))[0].value,records['record-1'],'Unrelated signed original is unchanged');
+ assert.equal((await patch())[0].value.conflict,true,'Stale revision cannot overwrite');
+ await claim(s);await assert.rejects(()=>q("select public.road_ready_account_patch_v1($1,11,'{\"x\":1}','[]')",[d]),/no longer active/);
+ assert.equal(Number((await q('select count(*) n from road_ready_account_history'))[0].n),1);
+ console.log('PASS — heartbeat lock isolation, serialized takeover, revoked/expired/unapproved denial, receive barrier, optimistic revision and atomic history');
+}finally{await db.close();}
