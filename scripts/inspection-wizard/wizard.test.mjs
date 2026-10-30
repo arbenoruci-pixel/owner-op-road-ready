@@ -7,6 +7,7 @@ import {inspectionReadiness,officerEmailLink} from '../../source/src/modules/dot
 import {createCertificationRecord} from '../../source/src/modules/logbook/certificationV110.js';
 import {captureInspection} from '../../lib/owner-op-cloud/inspectionSnapshot.js';
 import {eightDays} from '../../lib/owner-op-cloud/core.js';
+import {validInspectionUsdot,saveInspectionUsdot} from './identity.js';
 
 const at=new Date('2026-10-30T16:00:00Z');
 export function fixture(){
@@ -61,10 +62,32 @@ test('email is a direct mailto of the reviewed snapshot with the correct recipie
   assert.equal(officerEmailLink('officer@example.gov',{...share,expires_at:'invalid'},''),'');
   assert.equal(officerEmailLink('officer@example.gov',{...share,expires_at:'2020-01-01'},''),'');
 });
+test('missing USDOT can be explicitly saved without changing historic logs or signatures',()=>{
+  const state=fixture();delete state.carrierDot;
+  const before=structuredClone(state);
+  assert.ok(inspectionReadiness(state,at).missing.includes('USDOT'));
+  for(const invalid of ['', '0', 'MC12345', '123-456', '1234567890']){
+    assert.equal(validInspectionUsdot(invalid),false);
+    assert.throws(()=>saveInspectionUsdot(state,invalid),/digits only/);
+  }
+  const next=saveInspectionUsdot(state,' 7654321 ');
+  assert.equal(next.dotNumber,'7654321');
+  assert.deepEqual(state,before);
+  assert.equal(next.eventsByDay,state.eventsByDay);
+  assert.equal(next.signatureByDay,state.signatureByDay);
+  assert.equal(next.formByDay,state.formByDay);
+  const restored=JSON.parse(JSON.stringify(next));
+  assert.ok(!inspectionReadiness(restored,at).missing.includes('USDOT'));
+  assert.equal(captureInspection(restored,at).profile.usdot,'7654321');
+  const share={token:'test-token',expires_at:new Date(Date.now()+3600000).toISOString(),inspection:captureInspection(restored,at)};
+  assert.match(new URL(officerEmailLink('officer@example.gov',share,'https://test.example')).searchParams.get('body'),/USDOT 7654321/);
+});
 test('saved ON DUTY DOT activity opens preparation and all old email entry points route through it',()=>{
   const app=fs.readFileSync('source/src/app/App.jsx','utf8'),dot=fs.readFileSync('source/src/modules/dot/DotMode.jsx','utf8');
   assert.ok(app.includes("/\\bDOT Inspection\\b/i.test([reason,...reasons].join(' ')) ? 'dot'"));
   assert.ok(app.includes('Return to DOT preparation'));assert.ok(dot.includes("useState('prepare')"));
+  assert.ok(app.includes('onSaveUsdot={value=>setState(s=>saveInspectionUsdot(s,value))}'));
+  assert.ok(dot.includes('onSaveUsdot={onSaveUsdot}'));
   assert.ok(dot.includes("function emailOfficer() {setStage('prepare');}"));assert.ok(!dot.includes('window.location.href = mailto'));
   const sync=fs.readFileSync('lib/owner-op-cloud/accountSyncV110455.js','utf8');
   assert.ok(sync.includes('if(active && fresh)'));assert.ok(sync.includes('sameSyncState'));assert.ok(sync.includes('retainSyncNavigation'));

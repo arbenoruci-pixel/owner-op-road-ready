@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 const read = file => fs.readFileSync(file,'utf8');
 function patch(file,before,after){const source=read(file);if(source.includes(after))return;assert.equal(source.split(before).length,2,'Inspection wizard anchor: '+file+' '+before.slice(0,60));fs.writeFileSync(file,source.replace(before,()=>after));}
 const dir='scripts/inspection-wizard/', lib='lib/owner-op-cloud/', ui='source/src/modules/dot/';
+fs.copyFileSync(dir+'identity.js',ui+'inspectionIdentity.js');
 for(const [from,to] of [['sync.js',lib+'inspectionSync.js'],['syncState.js',lib+'inspectionSyncState.js'],['readiness.js',ui+'inspectionReadiness.js'],['InspectionWizard.jsx',ui+'InspectionWizard.jsx'],['wizard.css',ui+'inspectionWizard.css']])fs.copyFileSync(dir+from,to);
 const api='source/src/modules/logbook/public-api.js';
 if(!read(api).includes('export { validateLogForSigning }'))fs.appendFileSync(api,"\nexport { validateLogForSigning } from './signing.js';\n");
@@ -25,14 +26,14 @@ patch(sync,'   await db.app_snapshots.put({key:APP_STATE_KEY,state:next.state,up
 patch(sync,' window.dispatchEvent(new CustomEvent(APPLY_EVENT,{detail:next.state}));',' next.state=retainSyncNavigation(next.state,window.__rrAccountState?.());\n window.dispatchEvent(new CustomEvent(APPLY_EVENT,{detail:next.state}));');
 const app='source/src/app/App.jsx';
 patch(app,"view:status === 'D' ? 'driveMode' : (base.view === 'driveMode' ? 'day' : base.view),","view:status === 'ON' && /\\bDOT Inspection\\b/i.test([reason,...reasons].join(' ')) ? 'dot' : status === 'D' ? 'driveMode' : (base.view === 'driveMode' ? 'day' : base.view),");
-patch(app,"<DotMode state={state} onBack={()=>setState(s=>returnWorkspace(s,'dot','day'))} />",`<DotMode state={state} onBack={()=>setState(s=>({...returnWorkspace(s,'dot','day'),dotPreparationReturn:false}))} onReview={({view='day',day,tab='log'})=>setState(s=>({...s,view,activeDay:day||s.activeDay,sheet:null,dotPreparationReturn:true,roadGuardTabRequest:{tab,at:Date.now()}}))} />`);
+if(!read(app).includes("onSaveUsdot={value=>"))patch(app,"<DotMode state={state} onBack={()=>setState(s=>returnWorkspace(s,'dot','day'))} />",`<DotMode state={state} onBack={()=>setState(s=>({...returnWorkspace(s,'dot','day'),dotPreparationReturn:false}))} onReview={({view='day',day,tab='log'})=>setState(s=>({...s,view,activeDay:day||s.activeDay,sheet:null,dotPreparationReturn:true,roadGuardTabRequest:{tab,at:Date.now()}}))} />`);
 patch(app,'  const updateBanner = (\n    <UpdateBanner',`  const updateBanner = (<>
     {state.dotPreparationReturn && state.view!=='dot' ? <button className="inspection-return" onClick={()=>setState(s=>({...s,view:'dot',sheet:null,dotPreparationReturn:false}))}>Return to DOT preparation</button> : null}
     <UpdateBanner`);
 patch(app,'      onDismiss={dismissAppUpdate}\n    />\n  );','      onDismiss={dismissAppUpdate}\n    />\n  </>);');
 const dot=ui+'DotMode.jsx';
 patch(dot,"import { createCurrentInspectionShare } from '../../../../lib/owner-op-cloud/inspectionShare.js';","import InspectionWizard from './InspectionWizard.jsx';");
-patch(dot,'export default function DotMode({ state, onBack }) {','export default function DotMode({ state, onBack, onReview }) {');
+if(!read(dot).includes('onReview, onSaveUsdot'))patch(dot,'export default function DotMode({ state, onBack }) {','export default function DotMode({ state, onBack, onReview }) {');
 patch(dot,"const [stage, setStage] = useState('home');","const [stage, setStage] = useState('prepare');");
 patch(dot,'  function guardedBack() {',"  function guardedBack() {\n    if(stage==='prepare'){onBack?.();return;}");
 patch(dot,"    if (stage !== 'home') {\n      setStage('home');","    if (stage !== 'home') {\n      setStage('prepare');");
@@ -47,4 +48,8 @@ source=source.replace('The officer can enter an email address. Road Ready create
 const from=source.indexOf('          <section className="dot-officer-email-v11028"'),to=source.indexOf('          <div className="dot-officer-summary">',from);
 if(from>=0){assert.ok(to>from);source=source.slice(0,from)+'          <button type="button" onClick={guardedBack}>Back to DOT preparation</button>\n\n'+source.slice(to);}
 fs.writeFileSync(dot,source);
+patch(app,"import DotMode from '../modules/dot/DotMode.jsx';","import DotMode from '../modules/dot/DotMode.jsx';\nimport {saveInspectionUsdot} from '../modules/dot/inspectionIdentity.js';");
+patch(app,'<DotMode state={state} onBack=', '<DotMode state={state} onSaveUsdot={value=>setState(s=>saveInspectionUsdot(s,value))} onBack=');
+patch(dot,'export default function DotMode({ state, onBack, onReview }) {','export default function DotMode({ state, onBack, onReview, onSaveUsdot }) {');
+patch(dot,'<InspectionWizard state={state} onReview={onReview}', '<InspectionWizard state={state} onSaveUsdot={onSaveUsdot} onReview={onReview}');
 console.log('PASS — DOT preparation wizard, fresh synchronization and navigation-preserving receive installed');
