@@ -4,6 +4,7 @@ import { syncAccount } from './accountSyncV110455.js';
 import { assertActiveDevice, deviceId } from './deviceSessionV110463.js';
 import { flushAppSnapshots } from '../local-db/appState.js';
 import { captureInspection, assertArchiveCoverage, assertInspectionUnchanged } from './inspectionSnapshot.js';
+import { verifyInspectionRecords } from './inspectionSync.js';
 
 let preparing=false;
 export async function createCurrentInspectionShare({getState, walletKeys=[], onProgress=()=>{}}={}) {
@@ -16,15 +17,17 @@ export async function createCurrentInspectionShare({getState, walletKeys=[], onP
     if(!uid)throw Error('Sign in before creating an inspection link.');
     onProgress('Checking the latest saved logbook…');
     await flushAppSnapshots();
-    const synced=await syncAccount({scope:'records'});
-    if(!synced || !Number.isInteger(synced.revision) || synced.error || synced.blocked || synced.handoffPending || synced.conflicts?.length || synced.transient || synced.deferred)
-      throw Error('The latest logbook could not be verified. Review Synchronization status before creating a link.');
+    // Dismiss the email keyboard before receiving records on mobile Safari.
+    if(typeof document!=='undefined')document.activeElement?.blur?.();
+    const synced=await verifyInspectionRecords(syncAccount,onProgress,{includeDocuments:walletKeys.length>0});
     await flushAppSnapshots();
     const read=async()=>getState?.() || window.__rrAccountState?.() || await localState();
     const captured=captureInspection(await read());
     const catalog=await cloudApi({action:'catalog'});
     const archived=[], expectedArchive={};
-    for(const snapshot of captured.snapshots){
+    let next=0,completed=0;
+    async function readArchive(){while(next<captured.snapshots.length){
+      const snapshot=captured.snapshots[next++];
       const entry=catalog.days?.find(row=>row.log_date===snapshot.sourceDay);
       expectedArchive[snapshot.sourceDay]=entry?.current_file_id||null;
       if(entry?.current_file_id){
@@ -33,7 +36,9 @@ export async function createCurrentInspectionShare({getState, walletKeys=[], onP
         if(payload.sourceDay!==snapshot.sourceDay)throw Error('Saved log date verification failed.');
         archived.push(payload);
       }
-    }
+      onProgress(`Checking saved log dates · ${++completed} / 8`);
+    }}
+    await Promise.all([readArchive(),readArchive()]);
     assertArchiveCoverage(captured,archived);
     assertInspectionUnchanged(captured,await read());
     await assertActiveDevice();
@@ -46,6 +51,6 @@ export async function createCurrentInspectionShare({getState, walletKeys=[], onP
     try { assertInspectionUnchanged(captured,await read()); }
     catch(error){await cloudApi({action:'revoke_share',payload:{id:result.id}}).catch(()=>{});throw error;}
     if(result.log_count!==8 || result.captured_at!==captured.capturedAt)throw Error('Inspection snapshot verification failed.');
-    return result;
+    return {...result,inspection:captured};
   } finally {preparing=false;}
 }
