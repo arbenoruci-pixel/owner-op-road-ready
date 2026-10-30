@@ -12,7 +12,7 @@ export function inspectionSyncProblem(result) {
   return result?.reason || 'Synchronization is still busy. Close any open edit and retry.';
 }
 
-export async function verifyInspectionRecords(sync, onProgress = () => {}, {timeoutMs = 45000, includeDocuments = false, wait = ms => new Promise(r => setTimeout(r, ms))} = {}) {
+export async function verifyInspectionRecords(sync, onProgress = () => {}, {timeoutMs = 45000, includeDocuments = false, choices = null, wait = ms => new Promise(r => setTimeout(r, ms))} = {}) {
   const deadline = Date.now() + timeoutMs;
   for (let attempt = 0; attempt < 3; attempt++) {
     let timer;
@@ -21,7 +21,7 @@ export async function verifyInspectionRecords(sync, onProgress = () => {}, {time
     let result;
     try {
       result = await Promise.race([
-        sync({scope:'records', fresh:true}),
+        sync({scope:'records', fresh:true, choices}),
         new Promise((_, reject) => {timer = setTimeout(() => reject(Error('Logbook verification timed out. Your records remain saved. Retry when the connection is stable.')), remaining);}),
       ]);
     } finally {clearTimeout(timer);}
@@ -35,6 +35,8 @@ export async function verifyInspectionRecords(sync, onProgress = () => {}, {time
       await wait(250 * (attempt + 1));
       continue;
     }
-    throw Error('The latest logbook could not be verified. ' + inspectionSyncProblem(result));
+    const error=Error('The latest logbook could not be verified. ' + inspectionSyncProblem(result));
+    if(result?.conflicts?.length)error.conflicts=result.conflicts;
+    throw error;
   }
 }
