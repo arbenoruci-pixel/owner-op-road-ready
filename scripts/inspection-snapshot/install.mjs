@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const read=p=>fs.readFileSync(p,'utf8');
+fs.copyFileSync('scripts/inspection-wizard/sync.js','lib/owner-op-cloud/inspectionSync.js');
 function patch(p,b,a){const s=read(p);if(s.includes(a))return;assert.equal(s.split(b).length,2,'Inspection snapshot anchor: '+p+' '+b.slice(0,65));fs.writeFileSync(p,s.replace(b,()=>a));}
 for(const [from,to] of [['core.js','inspectionSnapshot.js'],['client.js','inspectionShare.js']])fs.copyFileSync('scripts/inspection-snapshot/'+from,'lib/owner-op-cloud/'+to);
 const dot='source/src/modules/dot/DotMode.jsx';

@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {verifyInspectionRecords} from '../inspection-wizard/sync.js';
 import {captureInspection,assertArchiveCoverage,assertInspectionUnchanged} from '../../lib/owner-op-cloud/inspectionSnapshot.js';
 const at=new Date('2026-10-28T14:39:00Z');
 class FixedDate extends Date {constructor(...args){super(...(args.length?args:[at]));}static now(){return +at;}}
 const event={id:'recorded',status:'SB',startMin:1300,endMin:1301,source:'manual',live:true};
 function setup({archive=[],syncResult={revision:7},changeDuringUpload=false}={}){
  let state={homeTerminalTimeZone:'America/New_York',eventsByDay:{'2026-10-27':[event]}},packet;const calls=[];
- const context={navigator:{onLine:true},window:{},Date:FixedDate,TextDecoder,
+ const context={navigator:{onLine:true},window:{},Date:FixedDate,TextDecoder,verifyInspectionRecords,
  captureInspection:(s,t)=>captureInspection(s,t||at),assertArchiveCoverage,assertInspectionUnchanged,
  cloudSession:async()=>({user:{id:'owner'}}),assertActiveDevice:async()=>{},deviceId:()=> 'device',flushAppSnapshots:async()=>{},
  localState:async()=>{throw Error('stale disk must not replace live state');},
