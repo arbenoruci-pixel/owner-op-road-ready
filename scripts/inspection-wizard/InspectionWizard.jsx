@@ -3,6 +3,7 @@ import {inspectionReadiness, officerEmailLink} from './inspectionReadiness.js';
 import {createCurrentInspectionShare} from '../../../../lib/owner-op-cloud/inspectionShare.js';
 import {assertInspectionUnchanged} from '../../../../lib/owner-op-cloud/inspectionSnapshot.js';
 import './inspectionWizard.css';
+import {validInspectionUsdot} from './inspectionIdentity.js';
 
 const steps = ['Driver & truck','Logs & signatures','Documents','Review package','Officer email'];
 const documents = [
@@ -12,7 +13,7 @@ const documents = [
   'I have reviewed the documents supporting my ELD exemption, when applicable.',
 ];
 
-export default function InspectionWizard({state, onReview, onLocalPreview, onExports, createShare = createCurrentInspectionShare}) {
+export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalPreview, onExports, createShare = createCurrentInspectionShare}) {
   const live = useRef(state); live.current = state;
   const mounted = useRef(true), running = useRef(false);
   useEffect(() => {mounted.current = true;return () => {mounted.current = false;};}, []);
@@ -23,6 +24,10 @@ export default function InspectionWizard({state, onReview, onLocalPreview, onExp
   const [clock, setClock] = useState(Date.now());
   useEffect(() => {const id=setInterval(()=>setClock(Date.now()),30000);return()=>clearInterval(id);}, []);
   const readiness = useMemo(() => inspectionReadiness(state, new Date(clock)), [state, clock]);
+  const savedUsdot = String(readiness.profile.usdot || '').trim();
+  const [usdotDraft, setUsdotDraft] = useState(savedUsdot);
+  useEffect(() => {setUsdotDraft(savedUsdot);}, [savedUsdot, state.activeDriverId]);
+  const usdotDirty = usdotDraft.trim() !== savedUsdot;
   const identityKey = JSON.stringify(readiness.profile);
   useEffect(() => {setIdentity(false);setLogs(false);setReviewed(false);}, [identityKey, state.activeDriverId]);
   useEffect(() => {setLogs(false);setReviewed(false);}, [state.eventsByDay, state.signatureByDay, state.formByDay]);
@@ -36,7 +41,7 @@ export default function InspectionWizard({state, onReview, onLocalPreview, onExp
   const mailto = share && !stale ? officerEmailLink(email,share,origin) : '';
   const docsReady = documents.every((_,i) => checked[i]);
   const ready = !readiness.missing.length && readiness.logsReady;
-  const canNext = step===0 ? identity && !readiness.missing.length : step===1 ? logs && readiness.logsReady : step===2 ? docsReady : step===3 ? ready && share && !stale && reviewed : false;
+  const canNext = step===0 ? identity && !readiness.missing.length && !usdotDirty : step===1 ? logs && readiness.logsReady : step===2 ? docsReady : step===3 ? ready && share && !stale && reviewed : false;
   async function prepare() {
     if(running.current)return;
     running.current=true;setBusy(true);setError('');setReviewed(false);setShare(null);
@@ -62,6 +67,10 @@ export default function InspectionWizard({state, onReview, onLocalPreview, onExp
       <p>Confirm who is driving and the equipment being inspected.</p>
       <dl>{[['Driver',readiness.profile.driverName],['Carrier / USDOT',[readiness.profile.carrierName,readiness.profile.usdot].filter(Boolean).join(' / ')],['Truck',readiness.profile.unit],['Trailer',readiness.profile.trailer||'No trailer recorded — confirm your equipment'],['Main office',readiness.profile.mainOffice],['Home time zone',readiness.zone]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Missing'}</dd></div>)}</dl>
       {readiness.missing.length>0 && <p className="inspection-error" role="alert">Complete: {readiness.missing.join(', ')}.</p>}
+      <label className="inspection-email">Carrier USDOT number<input type="text" inputMode="numeric" autoComplete="off" maxLength={9} value={usdotDraft} onChange={e=>{setUsdotDraft(e.target.value);setIdentity(false);}} placeholder="Enter your carrier's USDOT" /></label>
+      <button type="button" disabled={!onSaveUsdot || !usdotDirty || !validInspectionUsdot(usdotDraft)} onClick={()=>{onSaveUsdot(usdotDraft.trim());setIdentity(false);}}>Save USDOT</button>
+      {!savedUsdot && <p>Enter the USDOT number for the carrier shown above, tap Save USDOT, then confirm the details.</p>}
+      {usdotDirty && <p role="status">{validInspectionUsdot(usdotDraft) ? 'Tap Save USDOT before continuing.' : 'Enter a USDOT number using digits only.'}</p>}
       <button onClick={()=>onReview?.({day:readiness.today,tab:'form'})}>Edit driver / equipment details</button>
       <label className="inspection-check"><input type="checkbox" checked={identity} onChange={e=>setIdentity(e.target.checked)}/>I checked the driver, truck, trailer and carrier details.</label>
     </>}
