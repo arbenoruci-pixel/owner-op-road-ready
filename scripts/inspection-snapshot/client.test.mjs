@@ -8,8 +8,8 @@ const at=new Date('2026-10-28T14:39:00Z');
 class FixedDate extends Date {constructor(...args){super(...(args.length?args:[at]));}static now(){return +at;}}
 const event={id:'recorded',status:'SB',startMin:1300,endMin:1301,source:'manual',live:true};
 function setup({archive=[],syncResult={revision:7},changeDuringUpload=false}={}){
- let state={homeTerminalTimeZone:'America/New_York',eventsByDay:{'2026-10-27':[event]}},packet;const calls=[],syncCalls=[];
- const context={navigator:{onLine:true},window:{},Date:FixedDate,TextDecoder,verifyInspectionRecords,
+ let state={homeTerminalTimeZone:'America/New_York',eventsByDay:{'2026-10-27':[event]}},packet;const calls=[],syncCalls=[],events=[];
+ const context={navigator:{onLine:true},window:{dispatchEvent:e=>events.push(e.type)},Event,Date:FixedDate,TextDecoder,verifyInspectionRecords,
  captureInspection:(s,t)=>captureInspection(s,t||at),assertArchiveCoverage,assertInspectionUnchanged,
  cloudSession:async()=>({user:{id:'owner'}}),assertActiveDevice:async()=>{},deviceId:()=> 'device',flushAppSnapshots:async()=>{},
  localState:async()=>{throw Error('stale disk must not replace live state');},
@@ -20,7 +20,7 @@ function setup({archive=[],syncResult={revision:7},changeDuringUpload=false}={})
  if(p.action==='revoke_share')return {};throw Error('Unexpected '+p.action);}};
  const code=fs.readFileSync('scripts/inspection-snapshot/client.js','utf8').replace(/^import .*;\n/gm,'').replace('export async function createCurrentInspectionShare','async function createCurrentInspectionShare');
  vm.runInNewContext(code+'\nglobalThis.create=createCurrentInspectionShare;',context);
- return {calls,syncCalls,packet:()=>packet,create:choices=>context.create({getState:()=>state,choices})};
+ return {calls,syncCalls,events,packet:()=>packet,create:choices=>context.create({getState:()=>state,choices})};
 }
 test('share captures current live state after synchronization and binds exact eight snapshots',async()=>{
  const t=setup(),r=await t.create();assert.equal(r.log_count,8);const p=t.packet();assert.equal(p.inspection.profile.driverName,'Latest driver');assert.equal(p.inspection.profile.usdot,'12345');assert.equal(p.inspection.snapshots.length,8);assert.equal(p.expected_revision,7);assert.equal(Object.keys(p.expected_archive).length,8);assert.equal(p.inspection.snapshots[6].dayData.events[0].id,'recorded');
@@ -35,8 +35,8 @@ test('an edit while uploading revokes the new snapshot and never returns an outd
 
 test('inline conflict selection reaches the fresh synchronization pass before sharing',async()=>{
  const t=setup(),choices={'["state","loadInfo"]':'local'};await t.create(choices);
- assert.equal(t.syncCalls[0].choices,choices);assert.equal(t.packet().expected_revision,7);
+ assert.deepEqual(t.events,['road-ready-inspection-sync-complete']);assert.equal(t.syncCalls[0].choices,choices);assert.equal(t.packet().expected_revision,7);
  const conflicts=[{key:'["state","loadInfo"]',local:{bol:'123'},remote:{bol:''}}];
  const blocked=setup({syncResult:{conflicts}});
- await assert.rejects(blocked.create(choices),error=>error.conflicts===conflicts);assert.ok(!blocked.packet());
+ await assert.rejects(blocked.create(choices),error=>error.conflicts===conflicts);assert.ok(!blocked.packet());assert.deepEqual(blocked.events,[]);
 });

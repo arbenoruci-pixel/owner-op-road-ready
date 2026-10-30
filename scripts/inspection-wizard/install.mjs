@@ -54,3 +54,9 @@ patch(app,'<DotMode state={state} onBack=', '<DotMode state={state} onSaveUsdot=
 patch(dot,'export default function DotMode({ state, onBack, onReview }) {','export default function DotMode({ state, onBack, onReview, onSaveUsdot }) {');
 patch(dot,'<InspectionWizard state={state} onReview={onReview}', '<InspectionWizard state={state} onSaveUsdot={onSaveUsdot} onReview={onReview}');
 console.log('PASS — DOT preparation wizard, fresh synchronization and navigation-preserving receive installed');
+
+// An inline resolution must release the background queue's conflict pause too.
+const gate='source/src/modules/cloud/AccountSyncGateV110455.jsx';
+patch(gate, '    const wake = () => queue.wake(), reconnect = () => queue.wake({ reconnect: true });', "    const inspectionDone = () => {if(queue.inspect().blocked)queue.wake({reconnect:true});};\n    const wake = () => queue.wake(), reconnect = () => queue.wake({ reconnect: true });");
+patch(gate, "    window.addEventListener(ACCOUNT_EVENT, update);", "    window.addEventListener(ACCOUNT_EVENT, update);\n    window.addEventListener('road-ready-inspection-sync-complete', inspectionDone);");
+patch(gate, "      window.removeEventListener(ACCOUNT_EVENT, update);", "      window.removeEventListener(ACCOUNT_EVENT, update);\n      window.removeEventListener('road-ready-inspection-sync-complete', inspectionDone);");
