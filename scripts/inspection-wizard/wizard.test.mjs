@@ -92,3 +92,14 @@ test('saved ON DUTY DOT activity opens preparation and all old email entry point
   const sync=fs.readFileSync('lib/owner-op-cloud/accountSyncV110455.js','utf8');
   assert.ok(sync.includes('if(active && fresh)'));assert.ok(sync.includes('sameSyncState'));assert.ok(sync.includes('retainSyncNavigation'));
 });
+
+// A conflict must remain reviewable inside inspection; choices are still checked
+// against the exact retained versions by syncAccount before any write.
+test('inspection returns exact conflicts and forwards explicit choices on retry',async()=>{
+  const conflicts=[{key:'["state","loadInfo"]',local:{bol:'38977989'},remote:{bol:''}}];
+  await assert.rejects(verifyInspectionRecords(async()=>({conflicts})),error=>{assert.equal(error.conflicts,conflicts);return true;});
+  const choices={[conflicts[0].key]:'local'};let received;
+  const receipt=await verifyInspectionRecords(async options=>{received=options;return {revision:9};},()=>{},{choices});
+  assert.equal(received.choices,choices);assert.equal(received.scope,'records');assert.equal(receipt.revision,9);
+  await assert.rejects(verifyInspectionRecords(async()=>({conflicts}),()=>{},{choices}),error=>error.conflicts===conflicts);
+});

@@ -7,7 +7,7 @@ import { captureInspection, assertArchiveCoverage, assertInspectionUnchanged } f
 import { verifyInspectionRecords } from './inspectionSync.js';
 
 let preparing=false;
-export async function createCurrentInspectionShare({getState, walletKeys=[], onProgress=()=>{}}={}) {
+export async function createCurrentInspectionShare({getState, walletKeys=[], choices=null, onProgress=()=>{}}={}) {
   if(preparing)throw Error('An inspection link is already being prepared.');
   if(navigator.onLine===false)throw Error('Connect to the internet to create the current inspection link.');
   preparing=true;
@@ -19,7 +19,7 @@ export async function createCurrentInspectionShare({getState, walletKeys=[], onP
     await flushAppSnapshots();
     // Dismiss the email keyboard before receiving records on mobile Safari.
     if(typeof document!=='undefined')document.activeElement?.blur?.();
-    const synced=await verifyInspectionRecords(syncAccount,onProgress,{includeDocuments:walletKeys.length>0});
+    const synced=await verifyInspectionRecords(syncAccount,onProgress,{includeDocuments:walletKeys.length>0,choices});
     await flushAppSnapshots();
     const read=async()=>getState?.() || window.__rrAccountState?.() || await localState();
     const captured=captureInspection(await read());

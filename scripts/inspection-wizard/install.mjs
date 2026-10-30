@@ -6,6 +6,7 @@ function patch(file,before,after){const source=read(file);if(source.includes(aft
 const dir='scripts/inspection-wizard/', lib='lib/owner-op-cloud/', ui='source/src/modules/dot/';
 fs.copyFileSync(dir+'identity.js',ui+'inspectionIdentity.js');
 for(const [from,to] of [['sync.js',lib+'inspectionSync.js'],['syncState.js',lib+'inspectionSyncState.js'],['readiness.js',ui+'inspectionReadiness.js'],['InspectionWizard.jsx',ui+'InspectionWizard.jsx'],['wizard.css',ui+'inspectionWizard.css']])fs.copyFileSync(dir+from,to);
+fs.copyFileSync(dir+'InspectionConflicts.jsx',ui+'InspectionConflicts.jsx');
 const api='source/src/modules/logbook/public-api.js';
 if(!read(api).includes('export { validateLogForSigning }'))fs.appendFileSync(api,"\nexport { validateLogForSigning } from './signing.js';\n");
 const locks=JSON.parse(read('module-locks.v1.json'));locks.files[api]=createHash('sha256').update(read(api)).digest('hex');fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
