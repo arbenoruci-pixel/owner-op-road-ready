@@ -42,6 +42,17 @@ patch(day, 'onToggleSelected={onToggleSelectedId} onOpenEdit={onOpenEdit} />', '
 
 const list = 'source/src/modules/logbook/EventList.jsx';
 patch(list, 'onToggleSelected, onOpenEdit })', 'onToggleSelected, onOpenEdit, onCorrectCarry })');
+const legacyRowTap = 'onClick={() => continuityOnly ? undefined : (selectMode ? onToggleSelected(event.id) : onOpenEdit(event.id))}';
+if (read(list).includes(legacyRowTap)) patch(list, legacyRowTap,
+  'onClick={() => continuityOnly ? undefined : (selectMode ? onToggleSelected(event.id) : onSelect?.(event.id))}');
+const legacyEditButton = `            ) : (
+              <button className="blue-edit" onClick={(e)=>{ e.stopPropagation(); onOpenEdit(event.id); }}>Edit</button>
+            )}`;
+if (read(list).includes(legacyEditButton)) patch(list, legacyEditButton, `            ) : selected ? (
+              <button className="blue-edit motive-edit-reveal-v11027" aria-label="Edit selected event" onClick={(e)=>{ e.stopPropagation(); onOpenEdit(event.id); }}>Edit</button>
+            ) : (
+              <span className="event-edit-placeholder-v11027" aria-hidden="true" />
+            )}`);
 patch(list,
   'onClick={() => continuityOnly ? undefined : (selectMode ? onToggleSelected(event.id) : onSelect?.(event.id))}',
   'onClick={() => selectMode ? (!continuityOnly && onToggleSelected(event.id)) : onSelect?.(event.id)}');

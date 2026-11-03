@@ -127,7 +127,7 @@ for (const changed of [editedForm, { ...certifiedState, eventsByDay:{ [day]:even
 }
 const movedTerminal = { ...certifiedState, homeTerminalTimeZone:'America/Los_Angeles' };
 const historicalHtml = report.dayReportHtml(movedTerminal, day);
-assert.ok(historicalHtml.includes('America/New_York') && historicalHtml.includes('Start (EDT)'), 'historical report keeps the certified home-terminal zone');
+assert.ok(historicalHtml.includes('America/New_York') && historicalHtml.includes(`Start (${timeZoneShortLabel('America/New_York', new Date(`${day}T12:00:00Z`))})`), 'historical report keeps the certified home-terminal zone');
 assert.ok(historicalHtml.includes('<small>Signed</small>'), 'changing the current terminal does not invalidate historical facts');
 assert.doesNotMatch(historicalHtml, /America\/Los_Angeles/);
 assert.match(source, /<DailyPaper state=\{state\} day=\{selectedDay\}/, 'officer view shares the daily report');

@@ -1,0 +1,83 @@
+function assertBackgroundIndexVisible(){if(document.visibilityState==='hidden')throw Object.assign(Error('Record indexing will continue when this app is open.'),{deferred:true});}
+async function capture(){
+ const db=getOwnerOpDb();if(!db)throw Error('Device storage is unavailable.');
+ if(window.__OWNER_OP_BUSINESS_STORE_VOLATILE_V10963__)throw Error('Some load changes are not saved yet. Resolve device storage before synchronizing.');
+ const raw=localStorage.getItem(BUSINESS_STORE_KEY),localRows=[];
+ for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(/^(owner-op-|road-ready)/.test(key)&&key!==BUSINESS_STORE_KEY&&!/(auth|session|token|password|secret|cloud-|record-sync)/i.test(key))localRows.push({key,value:localStorage.getItem(key)});}
+ const state=(await db.app_snapshots.get('owner-op-road-ready-state-v1'))?.state;
+ if(!state)throw Error('Open your saved logbook before synchronizing this device.');
+ if(raw!==localStorage.getItem(BUSINESS_STORE_KEY))throw Error('Records changed during the scan. Synchronization will retry.');
+ return {db,state,business:raw?JSON.parse(raw):{},localRows};
+}
+export function syncRecords({force=false,changed=false}={}){
+ if(active)return active;
+ const run=async()=>{
+  let uid,runId,started=false;
+  try{
+   if(recordSyncPaused()){show({phase:'paused',message:'Record synchronization paused.'});return {paused:true};}
+   assertBackgroundIndexVisible();
+   if(!navigator.onLine){show({phase:'offline',message:'Offline · local changes will synchronize when connected.'});return {offline:true};}
+   // Account reconciliation always owns the foreground lane. A running index
+   // yields between bounded batches and retains pending work when interrupted.
+   const check=async()=>{
+    assertBackgroundIndexVisible();
+    if(recordSyncPaused())throw Object.assign(Error('Record synchronization paused.'),{deferred:true});
+    if(!navigator.onLine)throw Object.assign(Error('Offline · saved records remain on this device.'),{deferred:true});
+    if(accountStatus().phase==='syncing'||document.activeElement?.matches('input,textarea,select,[contenteditable=true]')||window.__rrAccountState?.()?.sheet)
+     throw Object.assign(Error('Logbook and document synchronization take priority. The record index will continue later.'),{deferred:true});
+   };
+   await check();
+   uid=await account();if(!await enabled(uid)){show({phase:'disabled',message:'Record synchronization is not enabled for this account.'});return {disabled:true};}
+   const db=getOwnerOpDb(),cacheKey=PREFIX+uid+':'+recordDeviceId(),cache=(await db.sync_meta.get(cacheKey))?.value||{};
+   if(!force&&!changed&&cache.completedAt&&Date.now()-cache.completedAt<60000){const pending=await listCorrections();show({phase:'current',message:'Saved records synchronized.',pending:pending.filter(r=>r.status==='pending').length,completedAt:new Date(cache.completedAt).toISOString()});return;}
+   const pacer=createSyncPacer({check}),bundle=await capture(),hashes={},summary={};
+   let batch=[],bytes=0,done=0,count=0,unchangedPrefix=[];
+   runId=crypto.randomUUID();
+   const rpc=(action,args={})=>checked(cloudClient().rpc('road_ready_record_sync_v1',{p_device:recordDeviceId(),p_run:runId,p_action:action,p_version:'110.4.97',...args}));
+   const begin=async()=>{
+    await check();if(await account()!==uid)throw Error('Account changed. Synchronization stopped.');
+    const result=await rpc('begin');if(result?.busy)throw Object.assign(Error('Another record sync is finishing. This device will retry.'),{busy:true});started=true;
+   };
+   const send=async()=>{
+    if(!batch.length)return;
+    await pacer.file();if(await account()!==uid)throw Error('Account changed. Synchronization stopped.');
+    await rpc('batch',{p_records:batch});done+=batch.length;
+    show({phase:'running',message:`Updating saved record index in the background · ${done}`});batch=[];bytes=0;
+   };
+   const enqueue=async item=>{
+    const size=new TextEncoder().encode(JSON.stringify(item)).length;
+    if(batch.length>=80||bytes+size>160000)await send();batch.push(item);bytes+=size;
+   };
+   const flushPrefix=async()=>{for(const item of unchangedPrefix)await enqueue(item);unchangedPrefix=[];};
+   show({phase:'running',message:'Checking saved records in the background…'});
+   for await(const record of streamRecordInventory({...bundle,project:projectRecords,checkpoint:()=>pacer.yield()})){
+    const payload_hash=await sha256(new TextEncoder().encode(canonical(record)));
+    hashes[record.record_key]=payload_hash;summary[record.kind]=(summary[record.kind]||0)+1;count++;
+    const cached=cache.hashes?.[record.record_key]===payload_hash;
+    const item=cached?{record_key:record.record_key,payload_hash}:{...record,payload_hash};
+    if(!started&&(force||!cached)){await begin();await flushPrefix();}
+    if(started)await enqueue(item);else unchangedPrefix.push(item);
+   }
+   // Removed identities still require a complete inventory/finish. An unchanged
+   // pass only keeps hashes in memory and performs no cloud write at all.
+   if(!started&&Object.keys(cache.hashes||{}).length===count&&cache.completedAt){
+    const pending=await listCorrections();show({phase:'current',message:'Saved records synchronized.',summary,pending:pending.filter(r=>r.status==='pending').length,completedAt:new Date(cache.completedAt).toISOString()});return {unchanged:true,records:count,summary};
+   }
+   if(!started){await begin();await flushPrefix();}
+   await send();await check();if(await account()!==uid)throw Error('Account changed. Synchronization stopped.');
+   await rpc('finish',{p_count:count,p_summary:summary});
+   await db.sync_meta.put({key:cacheKey,value:{hashes,completedAt:Date.now()},updated_at:new Date().toISOString()});
+   const pending=await listCorrections();show({phase:'current',message:`${count} saved records synchronized.`,summary,pending:pending.filter(r=>r.status==='pending').length,completedAt:new Date().toISOString()});return {records:count,summary};
+  }catch(error){
+   const message=error?.message||String(error);
+   // Release our lease on interruption; never finish, tombstone unseen records,
+   // or acknowledge a partially uploaded inventory.
+   if(started)await checked(cloudClient().rpc('road_ready_record_sync_v1',{p_device:recordDeviceId(),p_run:runId,p_action:'error',p_summary:{message:message.slice(0,700)}})).catch(()=>{});
+   if(error.deferred||error.busy){show({phase:'waiting',message});return error.busy?{busy:true}:{deferred:true};}
+   show({phase:'error',message});
+   if(uid&&/Cached record/.test(message))await getOwnerOpDb()?.sync_meta.delete(PREFIX+uid+':'+recordDeviceId()).catch(()=>{});
+   return {error:message};
+  }
+ };
+ active=(navigator.locks?.request?navigator.locks.request('road-ready-record-sync-v1',{ifAvailable:true},lock=>lock?run():{busy:true}):run()).finally(()=>{active=null;});return active;
+}

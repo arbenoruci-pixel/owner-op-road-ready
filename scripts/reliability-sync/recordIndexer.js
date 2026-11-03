@@ -2,12 +2,12 @@
 // Only durable saves require a new full index; idle checks fetch corrections.
 export function createRecordIndexer({sync, corrections, onError = () => {},
   available = () => true, setTimer = setTimeout, clearTimer = clearTimeout,
-  initialMs = 15000, debounceMs = 30000, pollMs = 90000} = {}) {
+  initialMs = 45000, debounceMs = 30000, pollMs = 90000, now = Date.now} = {}) {
   let stopped = false, running = false, dirty = 1, acknowledged = 0;
-  let timer = null, failures = 0, blocked = false;
+  let timer = null, failures = 0, blocked = false, quietUntil = now() + initialMs;
   function schedule(delay) {
     if (stopped || blocked || timer !== null || !available()) return;
-    timer = setTimer(() => {timer = null; void run();}, delay);
+    timer = setTimer(() => {timer = null; void run();}, Math.max(delay, quietUntil - now()));
   }
   async function run() {
     if (stopped || blocked || running || !available()) return;
@@ -35,8 +35,8 @@ export function createRecordIndexer({sync, corrections, onError = () => {},
   }
   return {
     start() {schedule(initialMs);},
-    saved() {dirty++; blocked = false; failures = 0; if (!running) {if (timer !== null) clearTimer(timer); timer = null; schedule(debounceMs);}},
-    wake({retry = false} = {}) {if (retry) {blocked = false; failures = 0;} if (timer !== null) clearTimer(timer); timer = null; schedule(0);},
+    saved() {quietUntil = now() + debounceMs; dirty++; blocked = false; failures = 0; if (!running) {if (timer !== null) clearTimer(timer); timer = null; schedule(debounceMs);}},
+    wake({retry = false} = {}) {if (retry) {blocked = false; failures = 0; quietUntil = now(); if (timer !== null) clearTimer(timer); timer = null;} schedule(0);},
     stop() {stopped = true; if (timer !== null) clearTimer(timer); timer = null;},
     inspect() {return {running, dirty, acknowledged, failures, blocked};},
   };
