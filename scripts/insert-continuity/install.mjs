@@ -7,6 +7,15 @@ fs.copyFileSync('scripts/insert-continuity/projectDutyView.js','source/src/modul
 const api='source/src/modules/logbook/public-api.js';
 if(!read(api).includes("export {projectLogbookDutyView}"))fs.appendFileSync(api,"\nexport {projectLogbookDutyView} from './projectDutyView.js';\n");
 const editor='source/src/modules/editor/InsertEditEventSheet.jsx';
+// Historical sheet materializers can restore the pre-paper-log time cap.
+// Keep Now as the initial suggestion while retaining the already reviewed
+// explicit midnight input required by the continuity regression below.
+if(read(editor).includes('const insertLimitV110314 = insertDayLimitV110314(logbookContext, clockV110);'))patch(editor,'const insertLimitV110314 = insertDayLimitV110314(logbookContext, clockV110);',
+  'const insertLimitV110314 = 1440;\n  const defaultInsertLimitV110315 = logbookContext.activeDay === clockV110.day ? Math.max(1, clockV110.minute) : 1440;');
+patch(editor,'initialInsertRangeV110314(insertLimitV110314, defaults.startMin, defaults.endMin)',
+  'initialInsertRangeV110314(defaultInsertLimitV110315, defaults.startMin, defaults.endMin)');
+patch(editor,'quickInsertRangeV110314(insertLimitV110314, minAgo)',
+  'quickInsertRangeV110314(defaultInsertLimitV110315, minAgo)');
 patch(editor,'editorRangeError, projectLogbookEvents, previewLogbookInsertOverride','editorRangeError, projectLogbookEvents, projectLogbookDutyView, previewLogbookInsertOverride');
 if(!read(editor).includes('const continuityPreviewEvents =')) {
   patch(editor,"const previewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookEvents(","const previewEvents = mode === 'insert' ? (insertResultV11023.ok ? projectLogbookDutyView(");

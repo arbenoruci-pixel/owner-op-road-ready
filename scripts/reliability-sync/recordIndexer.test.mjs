@@ -4,7 +4,7 @@ import {createRecordIndexer} from './recordIndexer.js';
 function fixture(options={}){
  let now=0,serial=0,available=true,syncs=0,polls=0;const timers=new Map();
  const queue=createRecordIndexer({sync:async()=>{syncs++;return {};},corrections:async()=>{polls++;},available:()=>available,
-  setTimer:(fn,delay)=>{timers.set(++serial,{fn,at:now+delay});return serial;},clearTimer:id=>timers.delete(id),...options});
+  initialMs:15000, now:()=>now, setTimer:(fn,delay)=>{timers.set(++serial,{fn,at:now+delay});return serial;},clearTimer:id=>timers.delete(id),...options});
  async function advance(ms){const target=now+ms;for(let i=0;i<100;i++){const first=[...timers].filter(([,t])=>t.at<=target).sort((a,b)=>a[1].at-b[1].at)[0];if(!first)break;now=first[1].at;timers.delete(first[0]);first[1].fn();for(let j=0;j<8;j++)await Promise.resolve();}now=target;}
  return {queue,advance,timers,available:v=>{available=v;},counts:()=>({syncs,polls})};
 }
@@ -37,4 +37,13 @@ test('disabled indexing stops correction polls until an explicit retry rechecks 
 test('an interrupted pass retains its dirty generation and cleanup stops timers',async()=>{
  let n=0;const f=fixture({sync:async()=>++n===1?{deferred:true}:{}});f.queue.start();await f.advance(15000);assert.equal(f.queue.inspect().acknowledged,0);
  await f.advance(5000);assert.equal(f.queue.inspect().acknowledged,1);f.queue.stop();await f.advance(500000);assert.equal(n,2);assert.equal(f.timers.size,0);
+});
+
+test('account status and page wakes cannot bypass startup or durable-save quiet periods',async()=>{
+ const f=fixture({initialMs:45000});f.queue.start();
+ for(let i=0;i<44;i++){f.queue.wake();await f.advance(1000);}
+ assert.equal(f.counts().syncs,0);await f.advance(1000);assert.equal(f.counts().syncs,1);
+ f.queue.saved();await f.advance(20000);f.queue.saved();
+ for(let i=0;i<29;i++){f.queue.wake();await f.advance(1000);}
+ assert.equal(f.counts().syncs,1);await f.advance(1000);assert.equal(f.counts().syncs,2);f.queue.stop();
 });

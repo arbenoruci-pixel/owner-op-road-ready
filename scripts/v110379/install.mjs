@@ -6,7 +6,14 @@ const hash=text=>createHash('sha256').update(text).digest('hex');
 const prepared=[];
 for(const [file,change] of Object.entries(JSON.parse(fs.readFileSync('scripts/v110379/ui-edits.json','utf8')))) {
  assert.ok(['source/src/app/App.jsx','source/src/modules/status/StatusWorkflowSheet.jsx'].includes(file));
- const source=fs.readFileSync(file,'utf8');if(hash(source)===change.after)continue;
+ let source=fs.readFileSync(file,'utf8');if(hash(source)===change.after)continue;
+ // Earlier snapshot materializers may restore the ten-second Undo notice.
+ // Accept only the exact reviewed predecessor after restoring its 110.2.7
+ // presentation duration; every other source difference still fails below.
+ if(file==='source/src/app/App.jsx'&&hash(source)!==change.before){
+  const restored=source.replace('window.setTimeout(() => setUndoNotice(null), 10000)', 'window.setTimeout(() => setUndoNotice(null), 2400)');
+  if(hash(restored)===change.before)source=restored;
+ }
  assert.equal(hash(source),change.before,'Unexpected 110.3.78 handoff baseline: '+file);
  const lines=source.match(/[^\n]*\n|[^\n]+$/g)||[];let cursor=lines.length;
  for(const edit of [...change.edits].sort((a,b)=>b.from-a.from)) {

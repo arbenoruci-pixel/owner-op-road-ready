@@ -6,7 +6,7 @@ function fixture(handler = async () => ({}), overrides = {}) {
   let tick = 0, id = 0, connected = true; const timers = new Map(), calls = [], retries = [];
   const queue = createSyncScheduler({
     sync: async options => { calls.push({ at: tick, ...options }); return handler(options); },
-    now: () => tick, random: () => 0, online: () => connected,
+    archiveQuietMs:1200, now: () => tick, random: () => 0, online: () => connected,
     setTimer: (fn, ms) => { timers.set(++id, { fn, at: tick + ms }); return id; },
     clearTimer: key => timers.delete(key), onRetry: item => retries.push(item), ...overrides,
   });
@@ -91,4 +91,16 @@ test('closing a view disposes timers and late results cannot restart it', async 
   let release; const f = fixture(() => new Promise(r => { release = r; }));
   f.queue.start(); await f.advance(0); f.queue.stop(); release({}); await f.flush(); await f.advance(600000);
   assert.equal(f.calls.length, 1);
+});
+
+test('production queue opens the logbook first and preserves document quiet time through focus events', async () => {
+ const f=fixture(async()=>({}),{archiveQuietMs:15000});f.queue.start();await f.advance(0);
+ assert.deepEqual(f.calls.map(c=>c.scope),['records']);
+ for(let i=0;i<14;i++){f.queue.wake();await f.advance(1000);}
+ assert.deepEqual(f.calls.map(c=>c.scope),['records']);await f.advance(1000);
+ assert.deepEqual(f.calls.map(c=>c.scope),['records','all']);
+ f.calls.length=0;f.queue.saved({scope:'all'});await f.advance(10000);f.queue.saved();await f.advance(600);
+ assert.deepEqual(f.calls.map(c=>c.scope),['records']);await f.advance(14999);
+ assert.deepEqual(f.calls.map(c=>c.scope),['records']);await f.advance(1);
+ assert.deepEqual(f.calls.map(c=>c.scope),['records','all']);f.queue.stop();
 });

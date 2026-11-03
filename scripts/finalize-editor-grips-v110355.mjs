@@ -39,6 +39,11 @@ patchInsert(
         ? gestureRange : current;
       const range = insertBoundaryV110314(origin, edge, minute, insertLimitV110314, true);`
 );
+// Some reviewed predecessors rematerialize the sheet after 110.3.16. Restore
+// its draft-only boundary prop before extending the panel contract.
+if (!insert.includes("        freeInsertBoundaries={mode === 'insert'}")) {
+  patchInsert('      <EditorGraphPanel\n        events={previewEvents}', "      <EditorGraphPanel\n        freeInsertBoundaries={mode === 'insert'}\n        events={previewEvents}");
+}
 patchInsert("        freeInsertBoundaries={mode === 'insert'}", "        freeInsertBoundaries={mode === 'insert'}\n        maxMinute={mode === 'insert' ? insertLimitV110314 : 1440}");
 fs.writeFileSync(insertPath, insert);
 // Presentation/draft interaction and release markers only; no persisted state or stable-module locks.

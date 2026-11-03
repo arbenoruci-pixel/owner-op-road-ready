@@ -6,11 +6,12 @@ export function createSyncScheduler({
   online = () => true, canRun = () => true,
   now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout,
   random = Math.random, pollMs = 60000, archivePollMs = 300000,
-  debounceMs = 600, onRetry = () => {},
+  debounceMs = 600, archiveQuietMs = 15000, onRetry = () => {},
 } = {}) {
   let stopped = false, running = false, timer = null, dueAt = Infinity;
   let first = true, attempted = false, recordsVersion = 1, recordsAck = 0;
   let archiveVersion = 1, archiveAck = 0, recordsDue = 0, archiveDue = 0;
+  let archiveNotBefore = 0;
   let retryAt = 0, failures = 0, blocked = false, choices = null;
   const pending = () => recordsVersion > recordsAck || archiveVersion > archiveAck;
   function schedule(delay = 0) {
@@ -32,8 +33,8 @@ export function createSyncScheduler({
     if (stopped || running || blocked || !online() && attempted) return;
     if (now() < retryAt) return schedule(retryAt - now());
     let scope = recordsVersion > recordsAck || now() >= recordsDue ? 'records' :
-      archiveVersion > archiveAck || now() >= archiveDue ? 'all' : null;
-    if (!scope) return schedule(Math.max(0, Math.min(recordsDue, archiveDue) - now()));
+      (archiveVersion > archiveAck || now() >= archiveDue) && now() >= archiveNotBefore ? 'all' : null;
+    if (!scope) return schedule(Math.max(0, Math.min(recordsDue, Math.max(archiveVersion > archiveAck ? 0 : archiveDue, archiveNotBefore)) - now()));
     if (!canRun({ scope, initial: first, dirty: pending() })) return schedule(2000);
     const capturedRecords = recordsVersion, capturedArchive = archiveVersion;
     const initial = first, selected = choices; choices = null; running = true; attempted = true;
@@ -54,15 +55,15 @@ export function createSyncScheduler({
     first = false; failures = 0; retryAt = 0; onRetry({ failures: 0, retryAt: 0 });
     recordsAck = Math.max(recordsAck, capturedRecords); recordsDue = now() + pollMs;
     if (scope === 'all') { archiveAck = Math.max(archiveAck, capturedArchive); archiveDue = now() + archivePollMs; }
-    else if (result?.archivePending || result?.handoffPending) archiveVersion++;
+    else { archiveNotBefore = now() + archiveQuietMs; if (result?.archivePending || result?.handoffPending) archiveVersion++; }
     // Exactly one follow-up captures edits committed during the preceding run.
-    schedule(pending() ? (recordsVersion > recordsAck ? debounceMs : 1200) : Math.min(recordsDue, archiveDue) - now());
+    schedule(pending() ? (recordsVersion > recordsAck ? debounceMs : Math.max(0, archiveNotBefore - now())) : Math.min(recordsDue, Math.max(archiveVersion > archiveAck ? 0 : archiveDue, archiveNotBefore)) - now());
   }
   return {
     start() { schedule(0); },
     saved({ scope = 'records', immediate = false } = {}) {
       if (scope === 'records') { recordsVersion++; prioritize(); }
-      archiveVersion++;
+      archiveVersion++; archiveNotBefore = now() + archiveQuietMs;
       schedule(immediate ? 0 : debounceMs);
     },
     wake({ reconnect = false } = {}) {
