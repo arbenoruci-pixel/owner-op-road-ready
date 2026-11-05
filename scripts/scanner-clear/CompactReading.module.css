@@ -1,0 +1,16 @@
+.card {padding:16px;border:1px solid #cedbd7;border-radius:16px;background:#fff;margin:12px 0;color:#173330;}
+.card h3 {margin:0 0 8px;font-size:18px;}
+.card p {font-size:14px;line-height:1.5;margin:8px 0;}
+.fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.fields label {display:flex;flex-direction:column;gap:6px;font-size:14px;min-width:0;}
+.fields input,.card select {box-sizing:border-box;width:100%;min-height:46px;padding:10px;border:1px solid #a9c0b7;border-radius:10px;background:#fff;color:#173330;font-size:16px;}
+.card button {min-height:44px;white-space:normal;font-size:15px;margin:6px 6px 6px 0;padding:10px 14px;}
+.card button:disabled {opacity:.55;}
+.primary {background:#143e35!important;color:white!important;border:0;border-radius:12px;}
+.values {display:grid;gap:8px;margin:10px 0;}
+.value {display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px;}
+.value span {overflow-wrap:anywhere;}
+.original {max-height:360px;overflow:auto;border:1px solid #dce5e1;border-radius:10px;margin:12px 0;background:#eef2f0;}
+.original img {width:100%;height:auto;display:block;}
+.card details {margin-top:12px;}
+@media(max-width:370px){.fields{grid-template-columns:1fr;}}
