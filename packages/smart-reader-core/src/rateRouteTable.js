@@ -3,6 +3,7 @@
 // OCR additionally needs explicit, strong confidence for every supporting cell.
 import {hasRateStructure,hasRateTitle,totalRateLabel,totalRateSignal,pickupLabel,deliveryLabel,loadNumberLabel,amountValue,dateValue} from './rateVocabulary.js';
 import {isDocumentParty} from './fieldGuards.js';
+import {nativeFooterMatches} from './nativeRouteFooter.js';
 const strong=l=>l.confidence==null||l.confidence>=.8;
 const strongOcr=l=>Number.isFinite(l?.confidence)&&l.confidence>=.8;
 const ocrSource=source=>/(?:^|[-_: ])(?:ocr|tesseract)(?:$|[-_: ])/i.test(source);
@@ -22,7 +23,7 @@ const city=/(?:\b(?:St(?:reet)?|Rd|Road|Ave(?:nue)?|Dr(?:ive)?|Blvd|Boulevard|Wa
 const one=list=>list.length===1?list[0]:null;
 
 export function rateRouteMatches(page,spec){
- const key=spec.rateVocabulary,matches=[];if(!key)return matches;
+ const key=spec.rateVocabulary,matches=nativeFooterMatches(page,spec);if(!key)return matches;
  for(const observation of page.observations){
   const native=observation.source==='pdf-text-layer';
   if((!native&&!ocrSource(observation.source))||!hasRateTitle(observation.lines))continue;
@@ -68,6 +69,10 @@ export function rateRouteMatches(page,spec){
    if(value)add(value,label,{supportMethod:'native_rate_reference'});
   }
   if(!complete)continue;
+  if(key==='documentDate'){
+   const dates=lines.filter(l=>l.box.y<.1&&dateValue.test(l.text.trim()));
+   const date=one(dates);if(date)add(date,title,{supportMethod:'native_rate_header'});
+  }
   if(['broker','carrier','equipment'].includes(key))for(const line of observation.lines){
    const m=new RegExp('^\\s*'+key+'\\s+(.+?)\\s*$','id').exec(line.text);if(!m)continue;
    const value=m[1];
@@ -109,11 +114,6 @@ export function rateRouteMatches(page,spec){
     const m=city.exec(location.text);if(m)add(location,label,{start:m.indices[1][0],end:m.indices[1][1],...extra});
    }
   }
-  if(key==='documentDate'){
-   // The issue date is a distinct header cell, outside the two stop blocks.
-   const dates=lines.filter(l=>l.box.y<.1&&dateValue.test(l.text.trim()));
-   const date=one(dates);if(date)add(date,lines.find(l=>hasRateTitle([l])),{supportMethod:'native_rate_header'});
-  }
  }
  return matches;
 }
@@ -122,12 +122,14 @@ export function rateHeaderContinuation(previousPages,page,identity){
  if(identity.kind!=='unknown'||identity.status==='conflicting')return false;
  const all=[...previousPages,page];
  const refs=all.map(p=>rateRouteMatches(p,{rateVocabulary:'loadNumber'}));
- if(refs.some(rows=>!rows.length||rows.some(r=>r.issue||!strong(r.line)||!strong(r.labelLine))))return false;
+ // A weak OCR pass of the same identifier cannot invalidate the PDF's exact
+ // native header. Different identifiers still block the join below.
+ if(refs.some(rows=>!rows.some(r=>!r.issue&&strong(r.line)&&strong(r.labelLine))))return false;
  if(new Set(refs.flat().map(r=>r.line.text.slice(r.start,r.end))).size!==1)return false;
  const pageNumbers=all.map(p=>p.observations.flatMap(o=>o.lines.slice(0,12).filter(l=>!l.box||l.box.y<.1).flatMap(l=>{
   const m=/^Page\s+(\d+)(?:\s+of\s+\d+)?$/i.exec(l.text.trim());return m&&(o.source==='pdf-text-layer'?strong(l):strongOcr(l))?[Number(m[1])]:[];
  })));
  if(pageNumbers.some((values,i)=>!values.length||values.some(n=>n!==i+1)))return false;
  if(page.observations.some(o=>hasRateStructure(o.lines)||o.lines.some(l=>pickup.test(l.text)||delivery.test(l.text)||totalLabel.test(l.text))))return false;
- return page.observations.some(o=>hasRateTitle(o.lines)&&o.lines.some(l=>(o.source==='pdf-text-layer'?strong(l):strongOcr(l))&&/\b(?:terms and conditions|billing packet|carrier.*(?:payment|compliance)|transport refrigeration)\b/i.test(l.text)));
+ return page.observations.some(o=>hasRateTitle(o.lines)&&o.lines.some(l=>(o.source==='pdf-text-layer'?strong(l):strongOcr(l))&&/\b(?:terms and conditions|billing packet|carrier.*(?:payment|compliance)|transport refrigeration|PODs? must be received within|Driver must be on tracking in order for detention)\b/i.test(l.text)));
 }
