@@ -83,3 +83,21 @@ test('scanner migration retains reviewed alias evidence and reaches the same ope
  assert.equal(rows[0].active,true);
  assert.equal(operationalCandidateContext(state,migrated,at).current,null);
 });
+
+test('completed guide closes a stale business load and is included when no business row exists',()=>{
+ const state={loadInfo:{loadNo:'OLD-73001'},loadGuidesById:{g:{id:'g',loadNo:'OLD-73001',status:'completed'}}};
+ const store={loads:[{loadNo:'OLD-73001',status:'booked'}]};
+ for(const saved of [store,{loads:[]}]){
+  const context=operationalCandidateContext(state,saved,at);
+  const rows=loadPickerCandidates([{loadNo:'OLD-73001',status:'open',active:true}],state,saved,context);
+  assert.equal(rows[0].status,'completed');assert.equal(rows[0].active,false);
+ }
+});
+test('explicit delivery event link closes its load even when the event has only a shipment reference',()=>{
+ const state={eventsByDay:{'2026-10-12':[{id:'unload',status:'ON',startMin:500,note:'Delivery / Unloading',shippingDocs:'BOL-ONLY'}]},
+  routeLegsByDay:{'2026-10-08':[{id:'route',loadNo:'BROKER-1',deliveryEventId:'unload',deliveryDay:'2026-10-12',status:'delivered'}]}};
+ const store={loads:[{loadNo:'BROKER-1',status:'booked'},{loadNo:'OTHER',status:'booked'}]};
+ assert.equal(operationalLoadStatus(state,store,store.loads[0],at),'delivered');
+ assert.equal(operationalLoadStatus(state,store,store.loads[1],at),'booked');
+ assert.equal(operationalLoadStatus(state,store,store.loads[0],{day:'2026-10-11',minute:500}),'booked');
+});

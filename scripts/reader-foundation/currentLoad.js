@@ -37,20 +37,25 @@ export function operationalLoadStatus(state={},store={},load={},context={}){
  if(hidden(load.status))return 'removed';
  const no=number(load);if(!no)return 'booked';
  const scoped=context.scoped||scope(state,store),index=context.index||routeHistoryIndex(scoped),at=clock(context);
+ const guide=Object.values(state.loadGuidesById||{}).find(g=>ref(g.loadNo||g.orderNo)===ref(no));
+ const legs=index.routes.filter(leg=>!hidden(leg.status)&&(sameFreightReference(leg,{loadNo:no},index)||guide?.id&&leg.loadGroupId===guide.id));
  const actions=index.events.filter(({day,event})=>day<at.day||day===at.day&&Number(event.startMin)<=at.minute)
-  .filter(({event})=>event.status==='ON'&&sameFreightReference(event,{loadNo:no},index))
+  .filter(({event})=>event.status==='ON'&&(sameFreightReference(event,{loadNo:no},index)||legs.some(leg=>leg.deliveryEventId===event.id||leg.pickupEventId===event.id)))
   .map(entry=>({...entry,kind:/\b(delivery|unloading|drop|dropped|unhook)\b/i.test([entry.event.note,entry.event.description,...list(entry.event.reasons)].join(' '))?'delivery':
     /\b(pickup|pick up|loading|hook)\b/i.test([entry.event.note,entry.event.description,...list(entry.event.reasons)].join(' '))?'pickup':''}))
   .filter(entry=>entry.kind);
+ // A guide's explicit closeout also survives when older duty events are not
+ // loaded. Planned delivery dates alone never count as completion.
+ const futureAction=index.events.some(({day,event})=>(day>at.day||day===at.day&&Number(event.startMin)>at.minute)&&
+  (sameFreightReference(event,{loadNo:no},index)||legs.some(leg=>leg.deliveryEventId===event.id)));
+ if(closed(guide?.status)&&!futureAction)return 'delivered';
  const last=actions.at(-1);
  if(last?.kind==='pickup')return 'in_transit';
  if(last?.kind==='delivery'){
-  const guide=Object.values(state.loadGuidesById||{}).find(g=>ref(g.loadNo||g.orderNo)===ref(no));
   const deliveries=list(guide?.stops).filter(stop=>stop.type==='delivery');
   const expected=Math.max(deliveries.length,Number(guide?.deliveryCount)||0);
   if(expected>1&&!closed(guide?.status)){
    const done=list(guide?.completedStopIds).length;
-   const legs=index.routes.filter(leg=>leg.loadGroupId===guide.id);
    if(done<expected&&legs.filter(leg=>closed(leg.status)).length<expected)return 'in_transit';
   }
   return 'delivered';
@@ -80,7 +85,14 @@ export function currentOperationalLoad(state={},store={},context={}){
 }
 export function operationalCandidateContext(state={},store={},context={}){
  const scoped=scope(state,store),at=clock(context),index=routeHistoryIndex(scoped),statuses={};
- for(const load of list(store.loads))statuses[text(number(load)).toUpperCase()]=operationalLoadStatus(state,store,load,{...at,scoped,index});
+ const loads=[...list(store.loads)];
+ // Guides can be the only saved record for an older load. They need the same
+ // completion check as business rows in the document picker.
+ for(const guide of Object.values(state.loadGuidesById||{})){
+  const loadNo=text(guide.loadNo||guide.orderNo);
+  if(loadNo&&!loads.some(load=>ref(number(load))===ref(loadNo)))loads.push({...guide,loadNo});
+ }
+ for(const load of loads)statuses[text(number(load)).toUpperCase()]=operationalLoadStatus(state,store,load,{...at,scoped,index});
  return {current:currentOperationalLoad(state,store,at),statuses,aliases:reviewedLoadAliases(store)};
 }
 export function businessLoadRows(store={},context={}){

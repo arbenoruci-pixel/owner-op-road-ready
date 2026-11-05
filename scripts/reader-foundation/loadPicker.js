@@ -36,7 +36,9 @@ export function loadPickerCandidates(base=[],state={},store={},context={}){
  for(const load of array(store.loads))add(load,'load');
  for(const doc of array(store.documents))add({...doc,...doc.fields,...doc.extracted,canonicalLoadNo:doc.canonicalLoadNo||doc.loadNo||doc.extracted?.canonicalLoadNo||doc.extracted?.loadNo},'document');
  const hasContext=Object.hasOwn(context,'current');
- const activeNo=hasContext?(context.current?.identity==='load'?no(context.current.loadNo):''):no(state.loadInfo?.loadNo||state.loadInfo?.shippingDocs);
+ const recordedShipment=[...rows.values()].filter(row=>row.shipmentFiling&&!row.shipmentAmbiguous&&!closed(row.status)).sort((a,b)=>at(b.latestPickupAt)-at(a.latestPickupAt))[0];
+ const currentNo=hasContext?(context.current?.identity==='load'?no(context.current.loadNo):context.current?.identity==='reference'?no(context.current.shipmentReference):''):no(state.loadInfo?.loadNo||state.loadInfo?.shippingDocs);
+ const activeNo=hasContext&&context.current?.recorded!==true&&recordedShipment?recordedShipment.loadNo:currentNo;
  const activeGuide=state.loadGuidesById?.[state.activeLoadGuideId];
  return [...rows.values()].map(candidate=>{
   const operation=context.statuses?.[candidate.loadNo];

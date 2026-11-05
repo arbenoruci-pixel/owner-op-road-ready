@@ -26,7 +26,7 @@ const picker=scan+'loadPickerV110472.js';
 patch(picker,"const referenceOnly=hasContext&&context.current?.identity==='reference'", "const referenceOnly=candidate.shipmentFiling||hasContext&&context.current?.identity==='reference'");
 const ui=scan+'LoadFolderPicker.jsx';
 patch(ui,'disabled={item.referenceOnly}','disabled={item.referenceOnly&&!item.shipmentFiling}');
-patch(ui,"item.referenceOnly?'Needs a load link'", "item.shipmentFiling?'Recorded pickup':item.referenceOnly?'Needs a load link'");
+patch(ui,"item.referenceOnly?'Needs a load link'", "item.shipmentFiling?'In progress':item.referenceOnly?'Needs a load link'");
 patch(ui,"value?'Load '+value:'Choose a load'", "value?(chosen?.shipmentFiling?'Shipment / BOL ':'Load ')+value:'Choose a load'");
 patch(ui,'<h3>Unlinked references</h3>','<h3>Recorded shipments</h3>');
 const badge=scan+'scanAssignmentSafety.js';
