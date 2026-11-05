@@ -64,6 +64,10 @@ bolParties.consignee.rightLabel=/^\s*(?:TO\s+CONSIGNEE|SHIP\s*TO|CONSIGNEE|CONSI
 bolParties.shipper.blockLabel=/^[\s|\[\]{}]*(?:FROM\s*:?\s+SHIPPER|SHIP\s*FROM|SHIPPER)\s*[:.]*\s*$/i;
 bolParties.consignee.blockLabel=/^[\s|\[\]{}]*(?:TO\s+CONSIGNEE|SHIP\s*TO|CONSIGNEE|TO)\s*[:.]*\s*$/i;
 bolParties.documentDate.rightLabel=/^\s*(?:SHIP\s+DATE|DOCUMENT\s+DATE|DATE)\s*:?\s*$/i;
+// A label-only OCR line must not backtrack into a company value of 'Name'.
+// Trailer identifiers may be separate cells on the same physical baseline.
+bolParties.carrier.excludePattern=/^\s*CARRIER(?:\s+NAME)?\s*$/i;
+bolParties.trailerNumber.rightLabel=/^\s*TRAILER\s*(?:NO\.?|NUMBER|#)\s*[:#]*\s*$/i;
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').variants=[{heading:/^\s*LUMPER\s+(?:RECEIPT|PAYMENT\s+RECEIPT)\s*$/i,signals:[/^\s*(?:TOTAL|NET\s+TOTAL)\s*:?\s*[$€£]?\s*\d/i,/^\s*(?:RECEIPT|CARRIER|LOAD|PO|DATE)\b/i]}];
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').filingType='lumper_receipt';
 BASE_PROFILES.find(p=>p.id==='unloading_receipt').refines=['other_expense'];
