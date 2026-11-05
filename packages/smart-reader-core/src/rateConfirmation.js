@@ -4,6 +4,7 @@
 import {isDocumentParty} from './fieldGuards.js';
 import {nativeStopEvidence} from './nativeStopEvidence.js';
 import {numberedRateSignals} from './numberedRate.js';
+import {nativeFooterStops} from './nativeRouteFooter.js';
 import {rateHeading,totalRatePattern,totalRateSignal,pickupLabel,deliveryLabel,loadNumberLabel} from './rateVocabulary.js';
 
 const pickup=/^\s*(?:PICK(?:\s*UP)?|SHIPPER)(?:\s*[:#]?\s*\d+)?\s*:?\s*$/i;
@@ -55,10 +56,13 @@ const range=(line,end=line.text.length)=>{
 
 export function rateSectionMatches(page,spec){
   const matches=[];
+  if(!spec.rateSection)return matches;
+  const footers=new Set(nativeFooterStops(page).map(stop=>stop.label.text.replace(/\s/g,'').toUpperCase()));
   for(const observation of page.observations){
     const blocks=sections(observation.lines);
     for(const section of blocks){
     if(section.kind!==spec.rateSection)continue;
+    if(footers.has(section.line.text.replace(/\s/g,'').toUpperCase()))continue;
     const proof=nativeStopEvidence(observation,section,blocks);
     const support=line=>proof&&[proof.address,proof.time,proof.name].includes(line)
       ?{supportMethod:'native_stop_block',extraLabelLines:proof.labels}
