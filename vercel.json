@@ -5,7 +5,8 @@
     "deploymentEnabled": {
       "fix/dot-single-logbook-review": false,
       "fix/dot-wizard-wallet": false,
-      "fix/dot-package-confirmation": false
+      "fix/dot-package-confirmation": false,
+      "chore/lock-approved-dot-workflow": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
