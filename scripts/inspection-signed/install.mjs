@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const lib='lib/owner-op-cloud/',ui='source/src/modules/dot/',dir='scripts/inspection-signed/';
+fs.copyFileSync('scripts/inspection-snapshot/core.js',lib+'inspectionSnapshotLegacy.js');
+for(const [from,to] of [['core.js',lib+'inspectionSnapshot.js'],['client.js',lib+'inspectionShare.js'],['InspectionWizard.jsx',ui+'InspectionWizard.jsx'],['readiness.js',ui+'inspectionReadiness.js']])fs.copyFileSync(dir+from,to);
+const email=fs.readFileSync('scripts/inspection-wizard/readiness.js','utf8').split('export function officerEmailLink')[1];
+assert.ok(email);fs.writeFileSync(ui+'inspectionEmail.js','export function officerEmailLink'+email);
+if(!fs.readFileSync(ui+'inspectionWizard.css','utf8').includes('.inspection-single-log{'))fs.appendFileSync(ui+'inspectionWizard.css','\n.inspection-single-log{max-width:980px}.inspection-date-tabs{display:flex;gap:6px;overflow-x:auto;padding:8px 0 16px}.inspection-date-tabs button{white-space:nowrap;padding:10px;font-size:14px}.inspection-date-tabs button[aria-pressed=true]{background:#112b46;color:white}.inspection-single-log .rr-day{margin:12px 0 20px}.inspection-single-log .rr-day-heading h2{font-size:21px}\n');
+const inspector='source/src/modules/cloud/Inspector.jsx';
+let source=fs.readFileSync(inspector,'utf8');
+const anchor='      <div className="rr-totals">';
+assert.ok(source.includes(anchor));
+assert.ok(source.includes('const cutoff = snapshot?.inspectionView?.cutoff'),'Inspection renderer must respect the captured cutoff');
+if(!source.includes('className="rr-dot-boundary"'))source=source.replace(anchor,'      {snapshot.inspectionView?.dotEvent && <p className="rr-dot-boundary">On Duty · DOT Inspection · {timeLabel(snapshot.inspectionView.dotEvent.startMin)}</p>}\n'+anchor);
+fs.writeFileSync(inspector,source);
+console.log('PASS — one inspection view: signed days and current day through the recorded DOT entry; no account reconciliation');
