@@ -160,6 +160,7 @@ steps.push('inspection-package/install.mjs','inspection-package/core.test.mjs','
 steps.push('inspection-package/confirmation-release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('scanner-clear/install.mjs','scanner-clear/core.test.mjs','scanner-clear/ui.test.mjs','scanner-clear/email.test.mjs','scanner-clear/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('../packages/smart-reader-core/test/carrier-label-only.test.mjs','reader-labels-release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('current-load-picker/ui.test.mjs','current-load-picker/release.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")

@@ -29,7 +29,7 @@ export function collectShipmentScanCandidates(state={},store={}){
   shipments.set(ref,{id:'shipment_'+ref,loadNo:ref,broker:'',carrierName:'',origin,destination,pickupDate:day,deliveryDate:deliveries.at(-1)?.day||'',
    status:completed?'completed':'open',active:!completed,referenceOnly:true,shipmentFiling:true,shipmentReference:ref,shipmentEventId:event.id,shipmentDay:day,
    sourceKinds:['recorded_pickup'],aliases:[{kind:'bol_number',value:ref,source:'recorded_pickup'}],stops:[],routeLegs:[],
-   latestPickupAt:Date.parse(day+'T12:00:00Z'),latestActivityAt:Date.parse((deliveries.at(-1)?.day||day)+'T12:00:00Z'),updatedAt:Number(event.shippingDocsUpdatedAt)||0,
+   latestPickupAt:Date.parse(day+'T00:00:00Z')+Number(event.startMin||0)*60000,latestActivityAt:Date.parse((deliveries.at(-1)?.day||day)+'T12:00:00Z'),updatedAt:Number(event.shippingDocsUpdatedAt)||0,
    ...(ambiguous?{shipmentAmbiguous:true,shipmentEventId:'',shipmentDay:''}:{})});
  }
  return [...rows,...shipments.values()];

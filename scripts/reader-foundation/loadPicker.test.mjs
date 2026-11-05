@@ -26,3 +26,23 @@ test('POD choice is described distinctly from uncertain or verified source evide
  assert.match(podReadingMessage('pod',{groups:[{kind:'unknown'}]}),/could not verify delivery evidence/);
  assert.equal(podReadingMessage('bol',{groups:[{kind:'bol'}]}),'');
 });
+
+test('the current shipment reference leads the picker and keeps its separate filing identity',()=>{
+ const rows=loadPickerCandidates([
+  {loadNo:'OLD-73001',status:'open',active:true},
+  {loadNo:'SHIP-NEW-82002',shipmentFiling:true,shipmentReference:'SHIP-NEW-82002',status:'open',pickupDate:'2026-11-04',origin:'Example City, NY',destination:'Example Town, KY'}
+ ],{loadInfo:{loadNo:'OLD-73001'}},{},{current:{identity:'reference',shipmentReference:'SHIP-NEW-82002',recorded:true},statuses:{'OLD-73001':'delivered'}});
+ assert.equal(rows[0].loadNo,'SHIP-NEW-82002');assert.equal(rows[0].active,true);
+ assert.equal(rows[1].status,'completed');assert.equal(rows[1].active,false);
+ assert.equal(rows[0].shipmentReference,'SHIP-NEW-82002');
+});
+test('latest recorded pickup leads a stale form even without a route plan, and completed shipments stay closed',()=>{
+ const rows=loadPickerCandidates([
+  {loadNo:'STALE',status:'open'},
+  {loadNo:'FIRST',shipmentFiling:true,status:'open',latestPickupAt:100},
+  {loadNo:'CURRENT',shipmentFiling:true,status:'open',latestPickupAt:200},
+  {loadNo:'DONE',shipmentFiling:true,status:'completed',latestPickupAt:300}
+ ],{},{},{current:{identity:'load',loadNo:'STALE',recorded:false}});
+ assert.equal(rows[0].loadNo,'CURRENT');assert.equal(rows.filter(row=>row.active).length,1);
+ assert.equal(rows.find(row=>row.loadNo==='DONE').active,false);
+});
