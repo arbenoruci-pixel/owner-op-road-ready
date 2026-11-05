@@ -155,6 +155,7 @@ steps.push('inspection-wizard/install.mjs','inspection-wizard/wizard.test.mjs','
 steps.push('background-sync/install.mjs','background-sync/runtime.test.mjs','background-sync/pacing.test.mjs','background-sync/account.test.mjs','background-sync/release.mjs','sync-continuity/runtime.test.mjs','verify-isolation-locks-v110.mjs');
 steps.push('inspection-signed/install.mjs','inspection-signed/core.test.mjs','inspection-signed/client.test.mjs','inspection-signed/rendered.test.mjs','inspection-signed/release.mjs');
 steps.push('inspection-package/install.mjs','inspection-package/core.test.mjs','inspection-package/client.test.mjs','inspection-package/rendered.test.mjs','inspection-package/release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('inspection-package/confirmation-release.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")

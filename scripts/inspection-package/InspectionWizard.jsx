@@ -17,7 +17,7 @@ export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalP
   const [step, setStep] = useState(0), [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(''), [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
-  const [share, setShare] = useState(null), [reviewed, setReviewed] = useState(false), [opened,setOpened] = useState(false), [email, setEmail] = useState('');
+  const [share, setShare] = useState(null), [reviewed, setReviewed] = useState(false), [email, setEmail] = useState('');
   const [clock, setClock] = useState(Date.now());
   useEffect(() => {const id=setInterval(()=>setClock(Date.now()),30000);return()=>clearInterval(id);}, []);
   const readiness = useMemo(() => inspectionReadiness(state, new Date(clock)), [state, clock]);
@@ -28,12 +28,14 @@ export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalP
   const usdotDirty = usdotDraft.trim() !== savedUsdot;
   const identityKey = JSON.stringify(readiness.profile);
   useEffect(() => {setConfirmed(false);setReviewed(false);}, [identityKey, state.activeDriverId]);
-  useEffect(() => {setConfirmed(false);setReviewed(false);}, [state.eventsByDay, state.signatureByDay, state.formByDay, state.dotWallet]);
+  useEffect(() => {setConfirmed(false);}, [state.eventsByDay, state.signatureByDay, state.formByDay, state.dotWallet]);
   const stale = useMemo(() => {
     if(!share)return false;
     try {assertInspectionUnchanged(share.inspection,state);assertWalletUnchanged(share.wallet,state);return Date.parse(share.expires_at)<=clock || readiness.today!==share.inspection.endDay;}
     catch {return true;}
   }, [share, state, clock, readiness.today]);
+  // Background receives may replace objects without changing the captured package.
+  useEffect(() => {if(stale)setReviewed(false);}, [stale]);
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   const url = share ? origin + '/inspection#' + share.token : '';
   const mailto = share && !stale ? officerEmailLink(email,share,origin) : '';
@@ -41,7 +43,7 @@ export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalP
   const canNext = step===0 ? confirmed && ready && !usdotDirty : step===1 ? ready && share && !stale && reviewed : false;
   async function prepare() {
     if(running.current || !ready || usdotDirty )return;
-    running.current=true;setBusy(true);setError('');setOpened(false);setReviewed(false);setShare(null);
+    running.current=true;setBusy(true);setError('');setReviewed(false);setShare(null);
     document.activeElement?.blur?.();
     try {
       const result=await createShare({getState:()=>live.current,onProgress:message=>{if(mounted.current)setProgress(message);}});
@@ -105,8 +107,8 @@ export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalP
       {!share || stale ? <button className="primary" disabled={busy || !ready} onClick={()=>prepare()}>{busy?'Preparing…':stale?'Refresh changed package':'Prepare inspection link'}</button> : <>
         <p className="inspection-success">8 / 8 dates · {share.inspection.snapshots[0].sourceDay} – {share.inspection.endDay} · {share.document_count} wallet documents</p>
         <p>Captured {new Date(share.inspection.capturedAt).toLocaleString()} · {share.inspection.timeZone}</p>
-        <a className="inspection-primary" href={url} target="_blank" rel="noopener noreferrer" onClick={()=>setOpened(true)}>Open officer package</a>
-        <label className="inspection-check"><input type="checkbox" checked={reviewed} disabled={!opened} onChange={e=>setReviewed(e.target.checked)}/>I opened the package and checked the logs and Digital Wallet documents.</label>
+        <a className="inspection-primary" href={url} target="_blank" rel="noopener noreferrer">Open officer package</a>
+        <label className="inspection-check"><input type="checkbox" checked={reviewed} disabled={busy} onChange={e=>setReviewed(e.target.checked)}/>I opened the package and checked the logs and Digital Wallet documents.</label>
       </>}
       {stale && <p className="inspection-error">Records changed or the link expired. Prepare a fresh link.</p>}
       <button onClick={()=>{setPreview(share&&!stale?share.inspection:captureInspection(live.current));setPreviewDay('');}}>View logs on this device</button>

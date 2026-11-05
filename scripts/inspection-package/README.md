@@ -12,6 +12,8 @@ The published package is an immutable capture from the active phone:
 
 The UI preview uses the same capture as the share. Email text states that Digital Wallet is included. The message opens in the driver's email application, which remains responsible for Send.
 
+The package-review checkbox is available as soon as the verified link is ready. It does not depend on tracking an external-tab click. Equivalent background state refreshes preserve this acknowledgement; changed package contents, expiry or preparing a new link require review again.
+
 After materialization:
 
 ```sh
