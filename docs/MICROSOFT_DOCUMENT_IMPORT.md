@@ -9,7 +9,7 @@ only GET requests. It does not connect an account or run in production yet.
 
 Production environment metadata was inspected without decrypting values on
 2026-11-05. It has reader AI configuration and no Microsoft app registration or
-OAuth configuration. ChatGPT's connected Outlook account cannot supply an
+OAuth configuration. The live `/api/billing/outlook-config` also reports `ready:false`. The existing invoice connection requests Mail.Send and has no Mail.Read import grant; its scopes and behavior stay unchanged. ChatGPT's connected Outlook account cannot supply an
 application-owned grant to Road Ready.
 
 ## Required setup to activate

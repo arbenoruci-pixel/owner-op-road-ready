@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readDocument,textObservation} from '../../packages/smart-reader-core/src/index.js';
-import {admitAiExtractionCandidates} from '../../lib/reader-ai/extraction.js';
+import {admitAiExtractionCandidates,validateAiExtractionResponse,extractionFields} from '../../lib/reader-ai/extraction.js';
+import {PROFILES} from '../../packages/smart-reader-core/src/profiles.js';
 import {createAiExtraction} from '../../lib/reader-ai/extract.js';
 import {keyReadingFields,pageProposals,confirmReadingBatch} from '../../source/src/modules/scan/compactReadingV1104101.js';
 import {captureRank,canAutoDeliver,sameCapturePage} from './captureQuality.js';
@@ -83,4 +84,13 @@ test('conflicting AI values stay out of the single checked batch',()=>{
   const f=fixture(),stage=admitAiExtractionCandidates(f.raw,{...f.options,allowVisual:true});
   stage.candidates.push({...stage.candidates[0],rawValue:'PO-OTHER'});f.result.aiExtraction=stage;
   assert.deepEqual(pageProposals(f.result,f.group,'p1').map(c=>c.field),['documentDate']);
+});
+test('compact details use real fields across receipts, shipping and wallet document types',()=>{
+  for(const profile of PROFILES){const keys=keyReadingFields({...profile,kind:profile.id});assert.ok(keys.length<=4);assert.ok(keys.every(key=>profile.fields[key]));}
+  for(const kind of ['meal_receipt','washout_receipt','toll_parking_receipt']){
+    const profile=PROFILES.find(p=>p.id===kind);assert.ok(keyReadingFields({...profile,kind:profile.id}).includes('total'));
+    const value=validateAiExtractionResponse({kind,quality:'readable',candidates:[{field:'total',rawValue:'$35.00',quote:'Total $35.00',location:'bottom'}]},{kind,fields:['total']});assert.equal(value.candidates[0].rawValue,'$35.00');
+  }
+  for(const kind of ['delivery_order','packing_list'])assert.ok(extractionFields(kind,keyReadingFields({...PROFILES.find(p=>p.id===kind),kind})).includes('date'));
+  for(const kind of ['driver_license','registration','insurance'])assert.ok(extractionFields(kind,keyReadingFields({...PROFILES.find(p=>p.id===kind),kind})).includes('expirationDate'));
 });

@@ -2,11 +2,18 @@ import {confirmPageField} from '../../../../packages/smart-reader-core/src/recov
 
 const primary={
   bol:['bolNumber','documentDate','poNumber'],pod:['bolNumber','deliveryDate','documentDate'],
-  rate_confirmation:['loadNumber','pickupDate','deliveryDate','totalRate'],delivery_order:['loadNumber','documentDate','poNumber'],
+  rate_confirmation:['loadNumber','pickupDate','deliveryDate','totalRate'],delivery_order:['loadNumber','date','poNumber'],delivery_receipt:['loadNumber','bolNumber','deliveryDate','date'],load_tender:['loadNumber','date'],
   fuel_receipt:['date','receiptNumber','total','gallons'],receipt:['date','receiptNumber','total'],
-  unloading_receipt:['receiptDate','receiptNumber','total'],invoice:['invoiceNumber','invoiceDate','total'],packing_list:['poNumber','documentDate'],
+  unloading_receipt:['receiptDate','receiptNumber','total'],invoice:['invoiceNumber','invoiceDate','total'],packing_list:['packingSlipNumber','poNumber','date'],
 };
-export const keyReadingFields=group=>(primary[group?.kind]||[]).filter(key=>group.fields?.[key]);
+export function keyReadingFields(group){
+  if(primary[group?.kind])return primary[group.kind].filter(key=>group.fields?.[key]);
+  const fields=group?.fields||{};
+  const identity=['receiptNumber','invoiceNumber','loadNumber','bolNumber','poNumber','licenseNumber','policyNumber','vin','unitNumber','documentReference'].filter(key=>fields[key]).slice(0,2);
+  const dates=['date','documentDate','expirationDate','effectiveDate'].filter(key=>fields[key]);
+  const required=Object.entries(fields).filter(([,field])=>field.required).map(([key])=>key);
+  return [...new Set([...identity,...dates,...(fields.total?['total']:[]),...required,...Object.keys(fields)])].slice(0,4);
+}
 export function pageProposals(result,group,pageId){
   const allowed=keyReadingFields(group),seen=new Set();
   return (result.aiExtraction?.candidates||[]).filter(c=>{

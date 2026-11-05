@@ -4,19 +4,30 @@ export const AI_EXTRACTION_VERSION='document-extraction-candidates-v1';
 export const AI_EXTRACTION_LIMITS=Object.freeze({maxCandidates:8,maxEvidencePerCandidate:3,maxQuoteCharacters:240,maxValueCharacters:180});
 export const AI_EXTRACTION_FIELDS=Object.freeze({
   bolNumber:'identifier',loadNumber:'identifier',poNumber:'identifier',trailerNumber:'identifier',
+  licenseNumber:'identifier',policyNumber:'identifier',vin:'identifier',unitNumber:'identifier',plate:'identifier',driverName:'party',insured:'party',owner:'party',expirationDate:'date',effectiveDate:'date',
   invoiceNumber:'identifier',receiptNumber:'identifier',documentDate:'date',date:'date',receiptDate:'date',invoiceDate:'date',pickupDate:'date',deliveryDate:'date',
   shipper:'party',consignee:'party',carrier:'party',vendor:'party',merchant:'party',total:'amount',totalRate:'amount',weight:'quantity',gallons:'quantity',
 });
 export const AI_EXTRACTION_KIND_FIELDS=Object.freeze({
   bol:['bolNumber','poNumber','trailerNumber','documentDate','shipper','consignee','carrier','weight'],
   pod:['bolNumber','poNumber','trailerNumber','documentDate','deliveryDate','shipper','consignee','carrier','weight'],
-  delivery_order:['loadNumber','poNumber','documentDate','shipper','consignee','carrier','weight'],
+  delivery_order:['loadNumber','poNumber','date','documentDate','shipper','consignee','carrier','weight'],
   rate_confirmation:['loadNumber','poNumber','pickupDate','deliveryDate','shipper','consignee','carrier','totalRate'],
   fuel_receipt:['receiptNumber','date','documentDate','merchant','vendor','total','gallons'],
   unloading_receipt:['receiptNumber','poNumber','trailerNumber','receiptDate','documentDate','carrier','vendor','total'],
   receipt:['receiptNumber','date','documentDate','merchant','vendor','total'],
-  packing_list:['poNumber','documentDate','shipper','consignee','weight'],
+  packing_list:['poNumber','date','documentDate','shipper','consignee','weight'],
   invoice:['invoiceNumber','invoiceDate','documentDate','vendor','total'],
+  ...Object.fromEntries(['meal_receipt','grocery_receipt','lodging_receipt','shower_receipt','laundry_receipt','rental_receipt','toll_parking_receipt','washout_receipt','truck_wash_receipt','tire_receipt','parts_receipt','roadside_service','weigh_station_receipt','other_expense'].map(kind=>[kind,['receiptNumber','date','merchant','vendor','total']])),
+  delivery_receipt:['loadNumber','bolNumber','date','deliveryDate','poNumber','carrier'],
+  load_tender:['loadNumber','bolNumber','date','poNumber','carrier'],
+  load_invoice:['invoiceNumber','date','vendor','total','loadNumber'],
+  repair_invoice:['invoiceNumber','date','vendor','total','vin','unitNumber'],
+  driver_license:['licenseNumber','driverName','expirationDate'],medical_card:['driverName','expirationDate'],
+  registration:['vin','unitNumber','expirationDate','effectiveDate','plate','owner'],
+  irp_cab_card:['vin','unitNumber','expirationDate','effectiveDate','plate','owner'],
+  insurance:['policyNumber','insured','effectiveDate','expirationDate'],certificate_of_insurance:['policyNumber','insured','effectiveDate','expirationDate'],
+
 });
 const evidenceSchema={type:'object',additionalProperties:false,required:['pageId','pageNumber','sourceImageId','observationId','lineId','quote'],properties:{
   pageId:{type:'string',minLength:1},pageNumber:{type:'integer',minimum:1,maximum:200},sourceImageId:{type:'string',minLength:1},
