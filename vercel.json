@@ -10,7 +10,8 @@
       "docs/scanner-reader-strategy": false,
       "feat/scanner-clear-review": false,
       "fix/reader-form-labels": false,
-      "fix/current-load-picker": false
+      "fix/current-load-picker": false,
+      "fix/shipment-completion-links": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
