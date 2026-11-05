@@ -3,7 +3,8 @@
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
-      "fix/dot-single-logbook-review": false
+      "fix/dot-single-logbook-review": false,
+      "fix/dot-wizard-wallet": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
