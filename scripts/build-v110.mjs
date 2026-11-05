@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { verifyDotWorkflowLock } from './verify-dot-workflow-lock.mjs';
+verifyDotWorkflowLock({phase:'source'});
 const path='scripts/build-v109718.mjs';
 const original=fs.readFileSync(path,'utf8');
 const anchor="run('npx',['next','build']);";
@@ -159,7 +161,7 @@ steps.push('inspection-package/confirmation-release.mjs','verify-isolation-locks
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")
- .replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+'\n'+anchor);
+ .replace(anchor,steps.map(script=>`run(process.execPath,['scripts/${script}']);`).join('\n')+"\nrun(process.execPath,['scripts/test-dot-workflow-lock.mjs']);\nrun(process.execPath,['scripts/verify-dot-workflow-lock.mjs','runtime']);\n"+anchor);
 fs.mkdirSync('.release',{recursive:true});fs.writeFileSync('.release/build-v110.generated.mjs',"import {syncLegacyReleaseAssertions} from '../scripts/test-support/sync-release-assertions.mjs';\n"+program);
 const result=spawnSync(process.execPath,['.release/build-v110.generated.mjs'],{stdio:'inherit'});
 if(result.error)throw result.error;if(result.status!==0)console.error('Materialization process ended:',result.status,result.signal);process.exit(result.status??1);
