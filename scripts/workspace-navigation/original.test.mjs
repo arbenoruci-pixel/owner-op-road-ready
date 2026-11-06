@@ -28,3 +28,8 @@ test('authentication failures remain explicit and never fall back to caller-sele
  await assert.rejects(readDocumentOriginal({clientDocumentId:'client'},deps),/Sign in/);assert.equal(calls,0);
  for(const status of [401,403])await assert.rejects(readDocumentOriginal({clientDocumentId:'client',storage_path:'foreign/file.pdf'},{...deps,getAccessToken:async()=> 'synthetic',fetch:async url=>{assert.equal(url,'/api/documents/read-original');return {ok:false,status};}}),/Sign in/);
 });
+test('active account originals do not use the separate legacy sign-in',async()=>{
+ const blob=new Blob(['POD']);
+ assert.equal(await readDocumentOriginal({clientDocumentId:'account-pod'},{readLocal:async()=>null,getAccountOriginal:async id=>{assert.equal(id,'account-pod');return {signedIn:true,blob};},getAccessToken:()=>assert.fail('legacy token must not be needed'),fetch:()=>assert.fail()}),blob);
+ await assert.rejects(readDocumentOriginal({clientDocumentId:'account-pod'},{readLocal:async()=>null,getAccountOriginal:async()=>({signedIn:true,blob:null}),getAccessToken:async()=>null,fetch:()=>assert.fail()}),/has not synced/);
+});

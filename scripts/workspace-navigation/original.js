@@ -1,12 +1,14 @@
 // Read only. The authenticated server resolves ownership and storage location.
-export async function readDocumentOriginal(record,{readLocal,getAccessToken,fetch:request}){
+export async function readDocumentOriginal(record,{readLocal,getAccessToken,getAccountOriginal,fetch:request}){
   const clientId=String(record.client_document_id||record.clientDocumentId||'').trim();
   const local=clientId?await readLocal(clientId):null;
   if(local?.size)return local;
   if(typeof record.dataUrl==='string'&&/^data:(application\/pdf|image\/(png|jpeg|webp));base64,/.test(record.dataUrl))return (await request(record.dataUrl)).blob();
   if(!/^[a-zA-Z0-9_-]{1,160}$/.test(clientId))return null;
+  const account=getAccountOriginal?await getAccountOriginal(clientId):null;
+  if(account?.blob?.size)return account.blob;
   const token=await getAccessToken();
-  if(!token)throw Error('Sign in to retrieve the cloud original.');
+  if(!token)throw Error(account?.signedIn?'The original has not synced to this account yet. Open Road Ready on the phone where it was scanned and let Documents finish syncing.':'Sign in to retrieve the cloud original.');
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
   try{
     // Legacy business metadata may omit cloud flags. Its stable client ID is
