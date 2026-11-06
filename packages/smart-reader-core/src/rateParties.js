@@ -1,4 +1,5 @@
 import {isDocumentParty} from './fieldGuards.js';
+import {nativeRateBrokerMatches} from './nativeRateBroker.js';
 
 const company=/\b(?:LLC|L\.?L\.?C\.?|INC\.?|LTD\.?|CORP\.?|CORPORATION|LIMITED)\s*$/i;
 const range=(line,text)=>({line,start:line.text.indexOf(text),end:line.text.indexOf(text)+text.length});
@@ -8,7 +9,7 @@ const carrierLetter=text=>/^\s*([CARIE])\s*$/.exec(text)?.[1]
 // Require the complete vertical CARRIER label and its adjacent company.
 // A flattened label or an unlabeled billing company remains a review proposal.
 export function ratePartyMatches(page,spec){
-  const matches=[];
+  const matches=nativeRateBrokerMatches(page,spec);
   for(const observation of page.observations){
     const stop=observation.lines.findIndex(l=>/^\s*(?:SIZE\s*&\s*TYPE|EQUIPMENT|CHARGES|PICK\s*\d)\b/i.test(l.text));
     if(stop<0)continue;
