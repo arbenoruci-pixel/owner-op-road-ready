@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+const root='source/src/modules/scan/';
+for(const file of ['EmailInbox.jsx','EmailInbox.module.css'])fs.copyFileSync('scripts/email-connect/'+file,root+file);
+function patch(file,from,to){const value=fs.readFileSync(file,'utf8');if(value.includes(to))return;if(value.split(from).length!==2)throw Error('Email integration anchor changed: '+file+' '+from.slice(0,70));fs.writeFileSync(file,value.replace(from,to));}
+const sheet=root+'SmartScanSheetV105.jsx',intake=root+'ScanIntakeV110328.jsx';
+patch(sheet,"import SmartDocumentCaptureV100 from './SmartDocumentCaptureV100.jsx';","import SmartDocumentCaptureV100 from './SmartDocumentCaptureV100.jsx';\nimport EmailInbox from './EmailInbox.jsx';\nimport {acknowledgeEmailDocument} from '../../../../lib/email-import/client.js';");
+patch(sheet,"  const [saved, setSaved] = useState(null);","  const [saved, setSaved] = useState(null);\n  const [emailOpen,setEmailOpen]=useState(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('emailImport')==='connected');");
+patch(sheet,'  function reset(keepPages = false) {','  function reset(keepPages = false) {\n    setEmailOpen(false);');
+patch(sheet,"    return <SmartDocumentCaptureV100 onClose={onClose} onReady={chooseFile} initialDraft={intakeDraftV110328}/>;","    if(emailOpen)return <EmailInbox onClose={()=>setEmailOpen(false)} onReady={(file,type,meta)=>{setEmailOpen(false);chooseFile(file,type,meta);}}/>;\n    return <SmartDocumentCaptureV100 onClose={onClose} onReady={chooseFile} initialDraft={intakeDraftV110328} onImportEmail={()=>setEmailOpen(true)}/>;");
+patch(sheet,'      const analysisForSaveV10964 = compactRateConAnalysisV10964(sourceAnalysisV110393 || {}, storageFieldsV10964);','      if(analysis?.scanMeta?.emailImport)storageFieldsV10964.emailImport=analysis.scanMeta.emailImport;\n      const analysisForSaveV10964 = compactRateConAnalysisV10964(sourceAnalysisV110393 || {}, storageFieldsV10964);');
+patch(sheet,'      Object.assign(record,shipmentFields);','      Object.assign(record,shipmentFields);\n      if(storageFieldsV10964.emailImport)record.emailImport=storageFieldsV10964.emailImport;');
+patch(sheet,'      setSaved(savedViewV10964);','      setSaved(savedViewV10964);\n      if(record.emailImport)void acknowledgeEmailDocument(record).catch(()=>{});');
+patch(intake,'export default function ScanIntakeV110328({onReady,onClose,initialDraft}) {','export default function ScanIntakeV110328({onReady,onClose,initialDraft,onImportEmail}) {');
+patch(intake,'        <div className="scan-import-actions-v328">','        {onImportEmail&&<button type="button" className="scan-email-import-v107" disabled={busy} onClick={onImportEmail} style={{width:\'100%\',minHeight:54,marginBottom:12,padding:14,border:\'1px solid #cbd5e1\',borderRadius:16,background:\'#fff\',color:\'#184bd1\',fontWeight:750,fontSize:17}}>Import from email</button>}\n        <div className="scan-import-actions-v328">');
+const route='app/api/email-import/[action]/route.js';fs.mkdirSync('app/api/email-import/[action]',{recursive:true});
+fs.writeFileSync(route,"import {createEmailHandlers} from '../../../../lib/email-import/server.js';\nexport const runtime='nodejs';\nexport const dynamic='force-dynamic';\nexport const maxDuration=60;\nconst handler=createEmailHandlers();\nexport const GET=handler.handle;\nexport const POST=handler.handle;\n");
+console.log('PASS — read-only Outlook document connection installed');
