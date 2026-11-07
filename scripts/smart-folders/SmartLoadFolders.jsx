@@ -46,7 +46,7 @@ export default function SmartLoadFolders(props){
    <section className="rr-smart-section" aria-label="Fuel receipts"><h3>Fuel receipts <span>Optional</span></h3>{folder.documents.filter(d=>documentType(d)==='fuel_receipt').map(d=>fileRow(d))}<button type="button" className="rr-smart-add" onClick={()=>scan('fuel_receipt')}>+ Add fuel receipt</button></section>
    {folder.documents.some(d=>!['rate_confirmation','bol','pod','fuel_receipt'].includes(documentType(d)))?<section className="rr-smart-section"><h3>Other load documents</h3>{folder.documents.filter(d=>!['rate_confirmation','bol','pod','fuel_receipt'].includes(documentType(d))).map(d=>fileRow(d))}</section>:null}
    <div className="rr-smart-actions"><button type="button" onClick={()=>scan()}>+ Add document</button><button type="button" disabled={sharing||!folder.documents.length} onClick={prepareShare}>{sharing?'Preparing…':'Share documents'}</button></div>
-   {share?<div className="rr-smart-section" aria-label="Share load documents"><h3>Original files</h3>{share.map(({file,url},i)=><a key={i} href={url} download={file.name}>Save {file.name}</a>)}</div>:null}
+   {share?<div className="rr-smart-section" role="region" aria-label="Share load documents"><h3>Original files</h3>{share.map(({file,url},i)=><a key={i} href={url} download={file.name}>Save {file.name}</a>)}</div>:null}
   </>:<>
    <h2>Load folders</h2><p className="rr-smart-muted">One trip. All its paperwork.</p>
    <label className="rr-smart-search"><span>Find a load</span><input type="search" placeholder="Load, BOL, broker or destination" value={query} onChange={e=>setQuery(e.target.value)}/></label>

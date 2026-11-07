@@ -25,7 +25,26 @@ export function originalSyncLabel(d={}){
  const state=text(d.sync_state||d.syncState||d.cloud?.status).toLowerCase();
  return ['signed_out','local_only','pending','pending_upload','queued','error','failed'].includes(state)?'Original sync pending':'';
 }
-function unique(docs){const seen=new Set();return docs.filter(d=>{const k=text(d.sha256||d.content_hash)||documentIdentity(d);if(!k||seen.has(k))return false;seen.add(k);return true;});}
+function unique(docs){
+ const hashOf=d=>text(d.sha256||d.content_hash).toLowerCase(),hashesByIdentity=new Map();
+ // Local and business projections can carry the same stable ID while only one
+ // carries its checksum. Resolve that link before deduping so order cannot split
+ // one original into two. Conflicting known checksums stay separate for review.
+ for(const d of docs){const id=documentIdentity(d),hash=hashOf(d);if(!id||!hash)continue;const hashes=hashesByIdentity.get(id)||new Set();hashes.add(hash);hashesByIdentity.set(id,hashes);}
+ const saved=new Map();
+ for(const d of docs){
+  const id=documentIdentity(d),hash=hashOf(d),known=hashesByIdentity.get(id);
+  const resolvedHash=hash||(known?.size===1?[...known][0]:'');
+  const key=resolvedHash?'hash:'+resolvedHash:id?'id:'+id:'';if(!key)continue;
+  const previous=saved.get(key);
+  if(!previous){saved.set(key,d);continue;}
+  // Keep checksum-bearing metadata authoritative. Do not combine unrelated
+  // records just because they contain identical bytes.
+  if(id&&id===documentIdentity(previous))saved.set(key,hash?{...previous,...d}:{...d,...previous});
+  else if(!hashOf(previous)&&hash)saved.set(key,d);
+ }
+ return [...saved.values()];
+}
 function closed(source={}){
  return Boolean(source.shipmentCompletionReview)||[source.operationalStatus,source.documentWorkflowStage,source.serviceStatus,source.status]
   .some(v=>/^(delivered|completed|closed|invoice_ready|invoiced|submitted|paid|cancelled|canceled|tonu|archived)$/i.test(text(v)));

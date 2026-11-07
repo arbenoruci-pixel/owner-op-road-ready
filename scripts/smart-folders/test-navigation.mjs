@@ -104,6 +104,70 @@ const files=[
   "scripts/v110453/browser-workspace.mjs",
   "scripts/workspace-navigation/browser-navigation.mjs"
 ];
+
+
+// Current compact reader opens detailed source review through this visible button.
+// Keep every cancellation, confirmation and persisted-source assertion unchanged.
+patch('scripts/reader-foundation/browser-pending-readings.mjs',
+ "await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();",
+ "await page.getByRole('button',{name:'All reading details',exact:true}).click();");
+
+// Detailed pending explanations live inside the current document-information
+// disclosure. Open that outer section; retain the test that the inner coverage
+// disclosure stays closed and every pending/cancel/confirm/persistence assertion.
+patch('scripts/reader-foundation/browser-pending-readings.mjs',
+ "const pending=page.getByRole('region',{name:'Readings needing confirmation',exact:true});await pending.waitFor();",
+ "await page.getByText('Document reading information',{exact:true}).click();const pending=page.getByRole('region',{name:'Readings needing confirmation',exact:true});await pending.waitFor();");
+
+// The locked DOT wizard already opens at Review; no preparation or sending is needed.
+patch('scripts/workspace-navigation/browser-navigation.mjs',
+ "await page.getByRole('button',{name:button,exact:true}).click();await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();",
+ "await page.getByRole('button',{name:button,exact:true}).click();if(button==='DOT Mode'){const wizard=page.getByRole('main',{name:'DOT inspection preparation'});await wizard.getByRole('heading',{name:'Review',exact:true}).waitFor();assert.deepEqual(await wizard.getByLabel('Preparation steps',{exact:true}).locator('li span').allTextContents(),['Review','Inspection link','Officer email']);}else await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();");
+
+// Reload may restore the phone day or its Home/list entry. Navigate visibly back
+// to the recorded day before the existing exact persisted-event comparison.
+patch('scripts/v110421/browser-gps-sign.mjs',
+ "await page.reload();await page.locator('.logbook-home-screen-v988, .logbook-ui-v110').first().waitFor();",
+ "await page.reload();await page.locator('.inspection-wizard, .phone-day-v435, .adaptive-home-v1038, .logbook-home-screen-v988, .logbook-ui-v110').first().waitFor();if(await page.getByRole('main',{name:'DOT inspection preparation'}).isVisible())await page.getByRole('button',{name:'Back',exact:true}).click();if(await page.getByRole('button',{name:'Open logbook',exact:true}).isVisible())await page.getByRole('button',{name:'Open logbook',exact:true}).click();if(await page.getByRole('button',{name:'Open today',exact:true}).isVisible())await page.getByRole('button',{name:'Open today',exact:true}).click();await page.locator('.phone-day-v435').waitFor();");
+
+// Keep this historical editor fixture independent of wall-clock/current-day
+// initialization. Seed the intentional current empty day before taking the
+// baseline; the existing full eventsByDay equality after Cancel stays exact.
+patch('scripts/browser-modern-editor-v11027.mjs',
+ "await setup(page,context);const before=await stored(page);",
+ "await page.clock.setFixedTime(new Date('2026-07-11T16:00:00Z'));fixture.eventsByDay['2026-07-11']=[];await setup(page,context);const before=await stored(page);");
+
+// Capture failure diagnostics only. Keep live auto-capture, its fixture and all
+// timing/data assertions unchanged. Record analysis sampling cadence so slow CI
+// can be distinguished from detector, readiness or page-transition failures.
+patch('scripts/browser-scanner-capture-v110329.mjs',
+ "window.__capturePreviews=[];",
+ `window.__capturePreviews=[];
+      window.__captureAnalysisReads=[];
+      const nativeRead=CanvasRenderingContext2D.prototype.getImageData;
+      CanvasRenderingContext2D.prototype.getImageData=function(...args){
+        const result=nativeRead.apply(this,args);
+        if(this.canvas.width===465&&this.canvas.height===640){
+          const reads=window.__captureAnalysisReads;
+          reads.push({at:performance.now(),guidance:document.querySelector('[data-smart-camera] [role=status]')?.textContent||'',hidden:document.hidden});
+          if(reads.length>120)reads.shift();
+        }
+        return result;
+      };`);
+patch('scripts/browser-scanner-capture-v110329.mjs',
+ "}catch(error){await page.screenshot({path:`${output}/${name}-FAILED.png`}).catch(()=>{});throw error;}",
+ `}catch(error){
+    const diagnostics=await page.evaluate(()=>{
+      const video=document.querySelector('[data-smart-camera] video');
+      return {analysisReads:window.__captureAnalysisReads,postedPhotos:window.__postedPhotos,photoJobs:window.__photoJobs,changedWhileProcessing:window.__changedWhileProcessing,cameraCalls:window.__cameraCalls,hidden:document.hidden,video:video?{width:video.videoWidth,height:video.videoHeight,readyState:video.readyState,paused:video.paused,currentTime:video.currentTime}:null,body:document.body.innerText,fixturePng:window.__scannerCanvas?.toDataURL('image/png')};
+    }).catch(cause=>({diagnosticError:cause.message}));
+    if(diagnostics.fixturePng){fs.writeFileSync(\`\${output}/\${name}-FAILED-fixture.png\`,Buffer.from(diagnostics.fixturePng.split(',')[1],'base64'));delete diagnostics.fixturePng;}
+    fs.writeFileSync(\`\${output}/\${name}-FAILED.json\`,JSON.stringify({error:error.message,errors,diagnostics},null,2));
+    console.log('Capture failure diagnostics: '+JSON.stringify(diagnostics));
+    await page.screenshot({path:\`\${output}/\${name}-FAILED.png\`}).catch(()=>{});throw error;
+  }`);
+
+// Reinsert archive entry last: guarded patches above normalize our helper calls.
 for(const file of files){
  let source=read(file);
  const entry=/(await (?:page|workspace|target)\.getByRole\('navigation',\{name:'Records views'\}\)\.getByRole\('button',\{name:'Loads',exact:true\}\)\.click\(\);)(?!await openLegacyLoadArchive\((?:page|target)\);)/g;
@@ -117,20 +181,3 @@ for(const file of files){
  fs.writeFileSync(file,source);
 }
 console.log('PASS — final smart-folder browser navigation adapter (legacy safety assertions preserved)');
-
-// Current compact reader opens detailed source review through this visible button.
-// Keep every cancellation, confirmation and persisted-source assertion unchanged.
-patch('scripts/reader-foundation/browser-pending-readings.mjs',
- "await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();",
- "await page.getByRole('button',{name:'All reading details',exact:true}).click();");
-
-// The locked DOT wizard already opens at Review; no preparation or sending is needed.
-patch('scripts/workspace-navigation/browser-navigation.mjs',
- "await page.getByRole('button',{name:button,exact:true}).click();await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();",
- "await page.getByRole('button',{name:button,exact:true}).click();if(button==='DOT Mode'){const wizard=page.getByRole('main',{name:'DOT inspection preparation'});await wizard.getByRole('heading',{name:'Review',exact:true}).waitFor();assert.deepEqual(await wizard.getByLabel('Preparation steps',{exact:true}).locator('li span').allTextContents(),['Review','Inspection link','Officer email']);}else await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();");
-
-// Reload may restore the phone day or its Home/list entry. Navigate visibly back
-// to the recorded day before the existing exact persisted-event comparison.
-patch('scripts/v110421/browser-gps-sign.mjs',
- "await page.reload();await page.locator('.logbook-home-screen-v988, .logbook-ui-v110').first().waitFor();",
- "await page.reload();await page.locator('.phone-day-v435, .adaptive-home-v1038, .logbook-home-screen-v988, .logbook-ui-v110').first().waitFor();if(await page.getByRole('button',{name:'Open logbook',exact:true}).isVisible())await page.getByRole('button',{name:'Open logbook',exact:true}).click();if(await page.getByRole('button',{name:'Open today',exact:true}).isVisible())await page.getByRole('button',{name:'Open today',exact:true}).click();await page.locator('.phone-day-v435').waitFor();");

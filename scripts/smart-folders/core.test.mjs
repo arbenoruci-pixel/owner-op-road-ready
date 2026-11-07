@@ -136,3 +136,24 @@ test('save revalidation rejects new source ambiguity while allowing newly establ
  assert.equal(revalidate([{loadNo:'MANUAL-1'},{loadNo:'MANUAL1'}]),'');
  assert.equal(revalidate([{loadNo:'MANUAL-1',shipmentFiling:true}]),'');
 });
+
+test('same stable original with partial checksum metadata appears once in either projection order',()=>{
+ const local={local_id:'existing-local',client_document_id:'existing-client',type:'other',load_no:'A',original_file_name:'existing.pdf'};
+ const business={id:'existing-local',clientDocumentId:'existing-client',type:'rate_confirmation',loadNo:'A',sha256:'a'.repeat(64),title:'Verified Ratecon'};
+ const before=structuredClone({local,business});
+ for(const documents of [[local,business],[business,local]]){
+  const folders=buildSmartFolders({folders:[{loadNo:'A'}],documents}).folders;
+  assert.equal(folders[0].documents.length,1);assert.equal(folders[0].documents[0].sha256,business.sha256);
+  assert.equal(folders[0].documents[0].title,'Verified Ratecon');assert.equal(folders[0].documents[0].original_file_name,'existing.pdf');
+ }
+ assert.deepEqual({local,business},before);
+});
+test('conflicting checksums for one stable original remain distinct and never hide another folder association',()=>{
+ const one=doc('same','pod','A',{clientDocumentId:'stable',sha256:'a'.repeat(64)}),two={...one,sha256:'b'.repeat(64)};
+ for(const documents of [[one,two],[two,one]]){
+  const model=buildSmartFolders({folders:[{loadNo:'A'},{loadNo:'B'}],documents:[...documents,{...one,loadNo:'B'}]});
+  assert.equal(model.folders.find(f=>f.reference==='A').documents.length,2);assert.equal(model.folders.find(f=>f.reference==='B').documents.length,1);
+ }
+ const unknown={...one};delete unknown.sha256;
+ assert.equal(buildSmartFolders({folders:[{loadNo:'A'}],documents:[one,two,unknown]}).folders[0].documents.length,3,'an ambiguous checksum-free projection is not silently assigned to either conflicting original');
+});

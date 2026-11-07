@@ -20,6 +20,8 @@ test('completed folder opens its POD directly and adds fuel to the chosen folder
  await renderer.act(async()=>button(/Load DONE-1/).props.onClick());
  assert.match(JSON.stringify(tree.toJSON()),/Missing: Ratecon/);assert.match(JSON.stringify(tree.toJSON()),/Fuel receipts/);
  await renderer.act(async()=>button(/^✓POD/).props.onClick());assert.equal(globalThis.__openedDocument.id,'p1');
+ await renderer.act(async()=>button(/^Share documents$/).props.onClick());
+ const share=tree.root.find(node=>node.props['aria-label']==='Share load documents');assert.equal(share.props.role,'region');
  await renderer.act(async()=>button(/Add fuel receipt/).props.onClick());assert.equal(context.loadNo,'DONE-1');assert.equal(context.kind,'fuel_receipt');
  await renderer.act(async()=>tree.unmount());
 });
