@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import {mock} from 'node:test';
 import {analyzeLinkedHos,calculateHosClocks,violationRangesForDay} from '../../source/src/core/hos/hosEngine.js';
+import {HOME_TERMINAL_TIMEZONE_STORAGE_KEY} from '../../source/src/core/time/homeTerminalTime.js';
 import {overnightFixture,row} from './fixture.js';
 
 const day='2026-11-06',nextDay='2026-11-07';
+// Historical APIs read the driver's persisted terminal zone; live clocks read
+// the same setting from state. Set both explicitly for these Eastern fixtures.
+const originalWindow=globalThis.window;
+globalThis.window={localStorage:{getItem:key=>key===HOME_TERMINAL_TIMEZONE_STORAGE_KEY?'America/New_York':null}};
 const at=minute=>new Date(Date.UTC(2026,10,6,5,minute));
 function stateFor(rows) {
   const eventsByDay={};
@@ -83,4 +88,8 @@ try {
     assert.ok(calculateHosClocks(state,at(1470)).warnings.some(w=>w.severity==='high'));
   });
   console.log(`PASS — ${passed} integrated HOS contracts on the materialized application`);
-} finally {mock.timers.reset();}
+} finally {
+  mock.timers.reset();
+  if(originalWindow===undefined)delete globalThis.window;
+  else globalThis.window=originalWindow;
+}
