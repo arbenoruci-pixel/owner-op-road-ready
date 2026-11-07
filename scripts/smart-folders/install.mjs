@@ -33,8 +33,11 @@ patch(phone,".includes(m.id)&&enabled(m.id));", ".includes(m.id)&&enabled(m.id))
 const adaptive='source/src/modules/home/AdaptiveHomeV1038.jsx';
 patch(adaptive,"onClick={()=>currentLoad?.identity==='reference'?onShipment?.(loadNo):onSection('load_documents')}>{currentLoad?.identity==='reference'?'Open shipment log':'Open load'}","onClick={()=>onSection('load_documents')}>Open load folder");
 const scan='source/src/modules/scan/SmartScanSheetV105.jsx';
-patch(scan,"import { matchScanDocumentToLoadV11037", "import {requestedScanFolder} from '../owneros/smartFolders.js';\nimport { matchScanDocumentToLoadV11037");
-patch(scan,"    const loadNo = result.typeEvidenceV110334", "    const requestedFolder=!preserveLoadChoice&&!resumed?requestedScanFolder(evidenceContextV110413,typeId,collectLoadCandidatesV105(state,businessStore)):'';\n    const loadNo = requestedFolder || (result.typeEvidenceV110334");
+// Upgrade earlier installs without introducing duplicate imports on replay.
+if(read(scan).includes("import {requestedScanFolder} from '../owneros/smartFolders.js';"))fs.writeFileSync(scan,read(scan).replace("import {requestedScanFolder} from '../owneros/smartFolders.js';","import {requestedScanFolder,explicitFolderScanCandidates} from '../owneros/smartFolders.js';"));
+patch(scan,"import { matchScanDocumentToLoadV11037", "import {requestedScanFolder,explicitFolderScanCandidates} from '../owneros/smartFolders.js';\nimport { matchScanDocumentToLoadV11037");
+if(read(scan).includes('requestedScanFolder(evidenceContextV110413,typeId,collectLoadCandidatesV105(state,businessStore))'))patch(scan,'requestedScanFolder(evidenceContextV110413,typeId,collectLoadCandidatesV105(state,businessStore))','requestedScanFolder(evidenceContextV110413,typeId,explicitFolderScanCandidates(evidenceContextV110413,typeId,collectLoadCandidatesV105(state,businessStore),businessStore))');
+patch(scan,"    const loadNo = result.typeEvidenceV110334", "    const requestedFolder=!preserveLoadChoice&&!resumed?requestedScanFolder(evidenceContextV110413,typeId,explicitFolderScanCandidates(evidenceContextV110413,typeId,collectLoadCandidatesV105(state,businessStore),businessStore)):'';\n    const loadNo = requestedFolder || (result.typeEvidenceV110334");
 patch(scan,'initialScanLoadV11037(result, nextMatch, preferredLoadNo, preserveLoadChoice);','initialScanLoadV11037(result, nextMatch, preferredLoadNo, preserveLoadChoice));');
 patch(scan,'setLoadSelectionSourceV11037((retainedScanChoice(resumed)?',"setLoadSelectionSourceV11037((requestedFolder?'driver_selected':'') || (retainedScanChoice(resumed)?");
 patch(scan,'const requiresLoad = loadDocumentType(selectedType);',"const requiresLoad = loadDocumentType(selectedType)||Boolean(requestedScanFolder(evidenceContextV110413,selectedType,candidates));");
@@ -44,7 +47,14 @@ patch(scan,'Find this file in <strong>Documents → Browse all saved files</stro
 patch(scan,"onOpenBusiness?.('documents');", "onOpenBusiness?.('load_documents');");
 
 patch(scan,"try { finishSavedScanV110312(saved,onClose); }", "try { rememberSavedFolder(saved);finishSavedScanV110312(saved,onClose); }");
-patch(scan,"import {requestedScanFolder}","function rememberSavedFolder(saved){const r=saved?.record||{},ref=r.canonicalLoadNo||r.loadNo||r.shipmentReference;if(ref)try{sessionStorage.setItem('road-ready-open-load-folder',(r.canonicalLoadNo||r.loadNo?'load:':'shipment:')+String(ref).trim().toUpperCase());}catch{}}\nimport {requestedScanFolder}");
+patch(scan,"import {requestedScanFolder,explicitFolderScanCandidates}","function rememberSavedFolder(saved){const r=saved?.record||{},ref=r.canonicalLoadNo||r.loadNo||r.shipmentReference;if(ref)try{sessionStorage.setItem('road-ready-open-load-folder',(r.canonicalLoadNo||r.loadNo?'load:':'shipment:')+String(ref).trim().toUpperCase());}catch{}}\nimport {requestedScanFolder,explicitFolderScanCandidates}");
 patch(scan,"}}>Open Documents</button>","}}>Open load folders</button>");
 patch(scan,"onClose?.();onOpenBusiness?.('loads');}}>Done · Open load", "rememberSavedFolder(saved);onClose?.();onOpenBusiness?.('load_documents');}}>Done · Open load folder");
+patch(scan,'shipmentPickerDetails(loadPickerCandidates(collectLoadCandidatesV105(state, store),state,store,operationalCandidateContext(state,store)),analysis||{}), [state, store, analysis]','shipmentPickerDetails(explicitFolderScanCandidates(evidenceContextV110413,selectedType,loadPickerCandidates(collectLoadCandidatesV105(state, store),state,store,operationalCandidateContext(state,store)),store),analysis||{}), [state, store, analysis, selectedType, evidenceContextV110413]');
+patch(scan,'      const currentStore = migrateBusinessStoreV105(readBusinessStore(), state);',`      const currentStore = migrateBusinessStoreV105(readBusinessStore(), state);
+      if(selectedLoad?.evidenceFolderOnly || evidenceContextV110413?.loadNo && !selectedLoad && filingSelectedLoadNo){
+        const currentFolder=explicitFolderScanCandidates(evidenceContextV110413,selectedType,[],currentStore).find(candidate=>candidate.loadNo===filingSelectedLoadNo && (!selectedLoad || candidate.id===selectedLoad.id));
+        const freshCandidates=collectLoadCandidatesV105(state,currentStore);
+        if(!currentFolder || requestedScanFolder(evidenceContextV110413,selectedType,freshCandidates.some(candidate=>candidate.loadNo===filingSelectedLoadNo)?freshCandidates:[currentFolder,...freshCandidates])!==filingSelectedLoadNo)throw new Error('This load folder changed or is no longer available. Reopen the folder and choose where to save this original.');
+      }`);
 console.log('PASS — smart folders, completed trips, visible PODs and account original access installed');

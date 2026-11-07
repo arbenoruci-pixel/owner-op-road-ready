@@ -106,9 +106,9 @@ const files=[
 ];
 for(const file of files){
  let source=read(file);
- const entry=/(await (?:page|workspace)\.getByRole\('navigation',\{name:'Records views'\}\)\.getByRole\('button',\{name:'Loads',exact:true\}\)\.click\(\);)(?!await openLegacyLoadArchive\(page\);)/g;
+ const entry=/(await (?:page|workspace|target)\.getByRole\('navigation',\{name:'Records views'\}\)\.getByRole\('button',\{name:'Loads',exact:true\}\)\.click\(\);)(?!await openLegacyLoadArchive\((?:page|target)\);)/g;
  assert.ok(source.includes("name:'Records views'"),'Missing archive navigation: '+file);
- source=source.replace(entry,'$1await openLegacyLoadArchive(page);');
+ source=source.replace(entry,(_,navigation)=>navigation+'await openLegacyLoadArchive('+ (navigation.startsWith('await target.')?'target':'page') +');');
  const filesEntry=['scripts/import-display/browser.mjs','scripts/workspace-navigation/browser-navigation.mjs','scripts/v110453/browser-workspace.mjs'].includes(file);
  let helper=path.relative(path.dirname(file),'scripts/test-support/legacy-load-archive.mjs');
  if(!helper.startsWith('.'))helper='./'+helper;
@@ -117,3 +117,20 @@ for(const file of files){
  fs.writeFileSync(file,source);
 }
 console.log('PASS — final smart-folder browser navigation adapter (legacy safety assertions preserved)');
+
+// Current compact reader opens detailed source review through this visible button.
+// Keep every cancellation, confirmation and persisted-source assertion unchanged.
+patch('scripts/reader-foundation/browser-pending-readings.mjs',
+ "await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).click();",
+ "await page.getByRole('button',{name:'All reading details',exact:true}).click();");
+
+// The locked DOT wizard already opens at Review; no preparation or sending is needed.
+patch('scripts/workspace-navigation/browser-navigation.mjs',
+ "await page.getByRole('button',{name:button,exact:true}).click();await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();",
+ "await page.getByRole('button',{name:button,exact:true}).click();if(button==='DOT Mode'){const wizard=page.getByRole('main',{name:'DOT inspection preparation'});await wizard.getByRole('heading',{name:'Review',exact:true}).waitFor();assert.deepEqual(await wizard.getByLabel('Preparation steps',{exact:true}).locator('li span').allTextContents(),['Review','Inspection link','Officer email']);}else await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();");
+
+// Reload may restore the phone day or its Home/list entry. Navigate visibly back
+// to the recorded day before the existing exact persisted-event comparison.
+patch('scripts/v110421/browser-gps-sign.mjs',
+ "await page.reload();await page.locator('.logbook-home-screen-v988, .logbook-ui-v110').first().waitFor();",
+ "await page.reload();await page.locator('.phone-day-v435, .adaptive-home-v1038, .logbook-home-screen-v988, .logbook-ui-v110').first().waitFor();if(await page.getByRole('button',{name:'Open logbook',exact:true}).isVisible())await page.getByRole('button',{name:'Open logbook',exact:true}).click();if(await page.getByRole('button',{name:'Open today',exact:true}).isVisible())await page.getByRole('button',{name:'Open today',exact:true}).click();await page.locator('.phone-day-v435').waitFor();");

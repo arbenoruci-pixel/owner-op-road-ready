@@ -6,12 +6,13 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {fixtureCloudOrigin,fixtureCorsHeaders} from '../test-support/cloud-fixture.mjs';
-import {baseState,seed,setupRoutes,simplePdf,snapshot,protectedData,origin} from '../v110434/browserFixture.mjs';
+import {baseState,seed,setupRoutes,simplePdf,snapshot,protectedData as protectedBaseData,origin} from '../v110434/browserFixture.mjs';
 const {chromium,webkit}=await import(process.env.PLAYWRIGHT_MODULE?pathToFileURL(process.env.PLAYWRIGHT_MODULE).href:'playwright');
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(origin).hostname),'Synthetic browser tests require a loopback TEST_ORIGIN');
 const syntheticUserId='00000000-0000-4000-8000-000000000029';
 const out='browser-test-results/smart-folders';fs.mkdirSync(out,{recursive:true});
 const savedInputs=new Map();
+const protectedData=state=>({...protectedBaseData(state),...Object.fromEntries(['routeLegsByDay','teamLogbooksByDriverId','teamDrivers','activeDriverId','loadGuidesById','activeLoadGuideId','loadInfo'].map(key=>[key,state[key]]))});
 const original=simplePdf('SYNTHETIC RATE CONFIRMATION\nLoad 82002\nOriginal bytes must remain unchanged');
 async function stored(page){return page.evaluate(async()=>new Promise((resolve,reject)=>{const q=indexedDB.open('owner-op-road-ready-offline-v1');q.onerror=()=>reject(q.error);q.onsuccess=()=>{const db=q.result,tables=['documents_local','document_blobs','capture_asset_blobs'],tx=db.transaction(tables),result={business:JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')||'{}')};for(const table of tables){const r=tx.objectStore(table).getAll();r.onsuccess=()=>result[table]=r.result;}tx.oncomplete=async()=>{try{for(const table of ['document_blobs','capture_asset_blobs'])result[table]=await Promise.all(result[table].map(async r=>({...r,blob:undefined,file:undefined,bytes:r.blob||r.file?Array.from(new Uint8Array(await window.__rrFixtureBlob(r.blob||r.file).arrayBuffer())):null})));resolve(result);}catch(e){reject(e);}finally{db.close();}};};}));}
 async function folders(page){await page.getByRole('button',{name:/^Documents/}).first().click();await page.getByRole('region',{name:'Smart load folders',exact:true}).waitFor();}
@@ -42,6 +43,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
  const page=await context.newPage();page.setDefaultTimeout(45000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
   const state=baseState();state.eventsByDay['2026-09-07'][0].loadNo='82002';state.signatureByDay={'2026-09-06':{name:'Synthetic signed day',data:'do-not-change'}};
+  state.teamLogbooksByDriverId={synthetic_secondary:{eventsByDay:{'2026-09-06':[{id:'synthetic-secondary-off',status:'OFF',startMin:0,endMin:1440,source:'manual',note:'Secondary driver protected day'}]},signatureByDay:{'2026-09-06':{name:'Synthetic second driver',data:'unchanged-secondary-signature'}},certifyStatus:{'2026-09-06':'Certified'},formByDay:{'2026-09-06':{shippingDocs:'82002'}},inspectionByDay:{},routeLegsByDay:{}}};
   state.testInstructionStore={loads:[{id:'active',loadNo:'82002',status:'booked',origin:'Albany, NY',destination:'Madison, WI',broker:'Example Active Broker'},{id:'done',loadNo:'82003',status:'delivered',origin:'Chicago, IL',destination:'Cleveland, OH',broker:'Example Finished Broker'}],documents:[{id:'existing-local',localDocumentId:'existing-local',clientDocumentId:'existing-client',loadNo:'82002',type:'rate_confirmation',title:'Original ratecon',original_file_name:'existing.pdf',sha256:createHash('sha256').update(original).digest('hex')},{id:'missing-local',clientDocumentId:'missing-client',loadNo:'82003',type:'pod',title:'Missing POD original',sync_state:'pending'}],fuel:[],expenses:[],maintenance:[],settlements:[]};
   await seed(page,state,[{id:'existing',bytes:[...original]}]);const protectedBefore=protectedData(await snapshot(page));const before=await stored(page);
   await folders(page);let root=page.getByRole('region',{name:'Smart load folders',exact:true});
@@ -58,7 +60,12 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
    const text=kind==='pod'?'PROOF OF DELIVERY\nLoad 82002\nDELIVERED 09/07/2026\nReceiver: Example Receiver\nSigned by: Synthetic Receiver':'EXAMPLE FUEL RECEIPT\nDATE: 09/07/2026\nTOTAL: $55.00\nGALLONS: 12.00\nDIESEL FUEL\nEXAMPLE FUEL STATION';
    const bytes=simplePdf(text);savedInputs.set(kind,bytes);
    await page.locator('input[type=file][multiple]').first().setInputFiles({name:`synthetic-${kind}.pdf`,mimeType:'application/pdf',buffer:bytes});await page.getByRole('button',{name:'Read document',exact:true}).click();
-   await page.getByLabel('Document type',{exact:true}).waitFor();if(await page.getByLabel('Document type',{exact:true}).inputValue()!==kind)await page.getByLabel('Document type',{exact:true}).selectOption(kind);
+   await page.getByLabel('Document type',{exact:true}).waitFor();
+   // Source review is asynchronous after the initial type/load form renders.
+   // Wait for its completion before changing type or acknowledging the review.
+   await page.getByRole('button',{name:'All reading details',exact:true}).waitFor();
+   if(await page.getByLabel('Document type',{exact:true}).inputValue()!==kind)await page.getByLabel('Document type',{exact:true}).selectOption(kind);
+   await page.getByRole('button',{name:'All reading details',exact:true}).waitFor();
    assert.match(await page.getByRole('button',{name:'Choose load folder',exact:true}).innerText(),/82002/,'folder context carries into review');
    const logLink=page.getByLabel('Also show under Logbook supporting documents',{exact:false});if(await logLink.count())assert.equal(await logLink.isChecked(),false);
    await page.getByLabel('Document date',{exact:true}).fill('2026-09-07');

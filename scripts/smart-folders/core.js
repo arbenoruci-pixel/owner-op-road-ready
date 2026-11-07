@@ -109,8 +109,33 @@ export function folderSummary(rows){
  const missing=rows.filter(r=>['missing','partial'].includes(r.status)).map(r=>r.label);
  return missing.length?'Missing: '+missing.join(', '):rows.some(r=>r.status==='review')?'Documents saved · details to check':rows.some(r=>r.status==='later')?'Ready for the next stop':'Load paperwork saved';
 }
+const evidenceScanTypes=new Set(['bol','pod','delivery_receipt','fuel_receipt','expense_receipt','other_expense','invoice','load_invoice','toll_receipt','toll_parking_receipt']);
+// A folder explicitly opened by the driver may exist without a Ratecon. Keep
+// that filing choice local to this evidence scan; never grant dispatch authority.
+export function explicitFolderScanCandidates(context,type,candidates=[],businessStore={}){
+ if(!context?.loadNo||context.shipmentReference||!evidenceScanTypes.has(type))return candidates;
+ const wanted=match(context.loadNo);if(!wanted)return candidates;
+ // Existing shipment/source-backed candidates retain their original identity.
+ if(candidates.some(c=>match(c.loadNo)===wanted||list(c.aliases).some(a=>a?.source!=='load_info'&&match(typeof a==='string'?a:a?.value)===wanted)))return candidates;
+ const matches=list(businessStore.loads).filter(l=>match(l.loadNo||l.canonicalLoadNo)===wanted);
+ if(matches.length!==1)return candidates;
+ const load=matches[0];
+ if(load.deleted||load.deletedAt||/^(deleted|removed|superseded)$/i.test(text(load.status))||load.shipmentFiling||load.shipmentAmbiguous)return candidates;
+ const loadNo=ref(load.loadNo||load.canonicalLoadNo);
+ const candidate={id:text(load.id)||'saved-folder:'+loadNo,loadNo,
+  ...Object.fromEntries(['broker','origin','destination','pickupDate','deliveryDate'].map(k=>[k,text(load[k])])),
+  status:closed(load)?'completed':'open',active:false,stops:list(load.stops).map(stop=>({...stop})),
+  sourceKinds:['explicit_saved_folder'],aliases:[{kind:'load_number',value:loadNo,source:'explicit_saved_folder'}],
+  evidenceFolderOnly:true};
+ return [...candidates,candidate];
+}
 export function requestedScanFolder(context,type,candidates=[]){
- if(!context?.loadNo||!['bol','pod','delivery_receipt','fuel_receipt','expense_receipt','other_expense','invoice','load_invoice','toll_receipt','toll_parking_receipt'].includes(type))return '';
- const candidate=candidates.find(c=>match(c.loadNo)===match(context.loadNo));
- return candidate&&!candidate.shipmentAmbiguous?candidate.loadNo:'';
+ if(!context?.loadNo||!evidenceScanTypes.has(type))return '';
+ const matches=candidates.filter(c=>match(c.loadNo)===match(context.loadNo));
+ const candidate=matches.length===1?matches[0]:null;
+ if(!candidate||candidate.shipmentAmbiguous)return '';
+ if(Boolean(context.shipmentReference)!==Boolean(candidate.shipmentFiling))return '';
+ if(context.shipmentReference&&match(candidate.shipmentReference||candidate.loadNo)!==match(context.shipmentReference))return '';
+ if(candidates.some(c=>c!==candidate&&list(c.aliases).some(a=>a?.source!=='load_info'&&match(typeof a==='string'?a:a?.value)===match(context.loadNo))))return '';
+ return candidate.loadNo;
 }
