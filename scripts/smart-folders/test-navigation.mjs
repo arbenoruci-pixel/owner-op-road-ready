@@ -85,6 +85,11 @@ patch(phone,countBefore,countAfter);
 patch(phone,
  "  await seed(page,state);const before=protectedData(await snapshot(page));",
  "  await page.clock.setFixedTime(new Date('2026-09-07T22:00:00Z'));await seed(page,state);const before=protectedData(await snapshot(page));");
+// Profile-change notification schedules a React render; More tools is already
+// present before that update, so wait for the changed navigation itself.
+patch(phone,
+ "  await page.getByRole('button',{name:'More tools',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Open logbook',exact:true}).count(),0);",
+ "  await page.getByRole('button',{name:'Open logbook',exact:true}).waitFor({state:'hidden'});await page.getByRole('button',{name:'More tools',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Open logbook',exact:true}).count(),0);");
 const files=[
   "scripts/browser-fullscreen-reader-v110369.mjs",
   "scripts/browser-owned-reader.mjs",
@@ -163,6 +168,15 @@ for(const file of ['scripts/v110411/browser-filing.mjs','scripts/v110410/browser
   "    await page.getByRole('button',{name:/^Extracted details/}).click();\n    const displayed=page.locator('.scan-details-v105 > div');",
   "    await page.getByText('Document reading information',{exact:true}).click();\n    await page.getByRole('button',{name:/^Extracted details/}).click();\n    const displayed=page.locator('.scan-details-v105 > details > div');");
 }
+
+// Home coverage requires a separate source-hash-bound evidence-facts review.
+// Preserve the final no-warning assertion after that real UI confirmation.
+patch('scripts/v110411/browser-filing.mjs',
+ "import {readDocument} from '../../packages/smart-reader-core/src/index.js';",
+ "import {readDocument} from '../../packages/smart-reader-core/src/index.js';\nimport {reviewFixturePodEvidence} from '../test-support/review-pod-evidence.mjs';");
+patch('scripts/v110411/browser-filing.mjs',
+ "    assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),0,'Saved POD covers current load BOL after reload without a duty link');",
+ "    assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),1,'Reader-only save does not certify reviewed delivery evidence');\n    await reviewFixturePodEvidence(page,{loadNo:'00654321',date:'2026-09-24',reference:'00654321',output:output+'/'+name});\n    assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),0,'Saved POD covers current load BOL after reload without a duty link');");
 
 // The locked DOT wizard already opens at Review; no preparation or sending is needed.
 patch('scripts/workspace-navigation/browser-navigation.mjs',
