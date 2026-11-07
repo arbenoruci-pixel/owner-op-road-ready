@@ -80,6 +80,11 @@ const phone='scripts/v110435/browser-phone-home.mjs';
 const countBefore="assert.equal(await page.getByRole('navigation',{name:'Apps'}).getByRole('button').count(),11);assert.equal(await page.getByRole('navigation',{name:'Apps'}).getByRole('button',{name:'My month',exact:true}).count(),1);";
 const countAfter="assert.equal(await page.getByRole('navigation',{name:'Apps'}).getByRole('button').count(),12);assert.equal(await page.getByRole('navigation',{name:'Apps'}).getByRole('button',{name:'My month',exact:true}).count(),1);";
 patch(phone,countBefore,countAfter);
+// Keep navigation within one synthetic home-terminal day. Opening today's log
+// must not create a real-wall-clock day after the protected-state snapshot.
+patch(phone,
+ "  await seed(page,state);const before=protectedData(await snapshot(page));",
+ "  await page.clock.setFixedTime(new Date('2026-09-07T22:00:00Z'));await seed(page,state);const before=protectedData(await snapshot(page));");
 const files=[
   "scripts/browser-fullscreen-reader-v110369.mjs",
   "scripts/browser-owned-reader.mjs",
@@ -150,6 +155,14 @@ patch('scripts/reader-ai/browser.mjs',
     await page.getByLabel('AI type suggestion',{exact:true}).getByText(/AI suggests POD/).waitFor();
     assert.equal(aiCalls,1);
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'other','suggestion must not silently change filing type');`);
+
+// Extracted source fields now live inside the compact scanner information disclosure.
+// Preserve every field/source assertion and open that disclosure before its toggle.
+for(const file of ['scripts/v110411/browser-filing.mjs','scripts/v110410/browser-bol-columns.mjs','scripts/v110394/browser-bol-form.mjs','scripts/v110393/browser-bol-source.mjs']){
+ patch(file,
+  "    await page.getByRole('button',{name:/^Extracted details/}).click();\n    const displayed=page.locator('.scan-details-v105 > div');",
+  "    await page.getByText('Document reading information',{exact:true}).click();\n    await page.getByRole('button',{name:/^Extracted details/}).click();\n    const displayed=page.locator('.scan-details-v105 > details > div');");
+}
 
 // The locked DOT wizard already opens at Review; no preparation or sending is needed.
 patch('scripts/workspace-navigation/browser-navigation.mjs',
