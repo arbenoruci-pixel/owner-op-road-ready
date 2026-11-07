@@ -38,4 +38,16 @@ ${indent}await ${name}.waitFor();
 ${indent}if(await ${name}.getAttribute('aria-expanded')==='false')await ${name}.click();`);
 }
 
+// Compact key details also offers type recovery. Exercise the expanded
+// document's explicit recovery action, not an arbitrary first matching button.
+for(const choice of ["'bol'","{label:'Carrier invoice'}"]){
+  const select=`    await review.getByLabel('Document type in reader',{exact:true}).selectOption(${choice});`;
+  patch('scripts/browser-owned-reader.mjs',
+    "    await review.getByRole('button',{name:'Choose document type',exact:true}).click();\n"+select,
+    `    await review.locator('article.owned-reader-document').waitFor();
+    assert.equal(await review.locator('article.owned-reader-document').count(),1,'Type recovery targets exactly one source document');
+    await review.locator('article.owned-reader-document').getByRole('button',{name:'Choose document type',exact:true}).click();
+${select}`);
+}
+
 console.log('PASS — reader-preview test disclosures adapted; source and evidence assertions preserved');
