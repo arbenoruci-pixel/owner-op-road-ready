@@ -119,6 +119,25 @@ patch('scripts/reader-foundation/browser-pending-readings.mjs',
  "const pending=page.getByRole('region',{name:'Readings needing confirmation',exact:true});await pending.waitFor();",
  "await page.getByText('Document reading information',{exact:true}).click();const pending=page.getByRole('region',{name:'Readings needing confirmation',exact:true});await pending.waitFor();");
 
+// Scanner review now uses the compact reader's All reading details toggle.
+// Saved-document review can still render the noncompact Reader preview toggle.
+// Both labels expose the same detailed source/correction controls; preserve all
+// assertions and close/reopen actions rather than skipping these regressions.
+for(const file of [
+ 'scripts/browser-fullscreen-reader-v110369.mjs','scripts/browser-owned-reader.mjs',
+ 'scripts/browser-native-pdf-v110363.mjs','scripts/v110373/browser-reader-evidence.mjs',
+ 'scripts/v110384/browser-rows.mjs','scripts/v110382/browser-bol.mjs',
+ 'scripts/v110411/browser-filing.mjs','scripts/v110411/browser-rate.mjs',
+ 'scripts/v110464/browser-rate.mjs','scripts/v110466/browser-rate.mjs',
+ 'scripts/v110393/browser-bol-source.mjs','scripts/contract-rate/browser.mjs',
+ 'scripts/reader-ai/browser.mjs','scripts/reader-ai/browser-extraction.mjs',
+ 'scripts/v110410/browser-bol-columns.mjs','scripts/v110394/browser-bol-form.mjs'
+]){
+ const source=read(file),before="name:'Reader preview · Check source',exact:true",after="name:/^(?:All reading details|Reader preview · Check source)$/";
+ assert.ok(source.includes(before)||source.includes(after),'Reader toggle anchor: '+file);
+ fs.writeFileSync(file,source.replaceAll(before,after).replaceAll("name:'Reader preview · Close',exact:true","name:/^(?:All reading details|Reader preview · Close)$/"));
+}
+
 // The locked DOT wizard already opens at Review; no preparation or sending is needed.
 patch('scripts/workspace-navigation/browser-navigation.mjs',
  "await page.getByRole('button',{name:button,exact:true}).click();await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();",
@@ -136,6 +155,38 @@ patch('scripts/v110421/browser-gps-sign.mjs',
 patch('scripts/browser-modern-editor-v11027.mjs',
  "await setup(page,context);const before=await stored(page);",
  "await page.clock.setFixedTime(new Date('2026-07-11T16:00:00Z'));fixture.eventsByDay['2026-07-11']=[];await setup(page,context);const before=await stored(page);");
+
+// Historical duty replay audits its three original installation stages in a
+// disposable copy. Invert only our byte-exact clock setup there, not in the
+// shipped browser test; unknown edits still reach the strict historical checks.
+patch('scripts/v110378/test-review-regressions.mjs',
+ "import {spawnSync} from 'node:child_process';",
+ "import {spawnSync} from 'node:child_process';\nimport {createHash} from 'node:crypto';");
+patch('scripts/v110378/test-review-regressions.mjs',
+ "  return dir;\n}",
+ `  const editor=path.join(dir,'scripts/browser-modern-editor-v11027.mjs');
+  const adapted=fs.readFileSync(editor,'utf8');
+  const hash=text=>createHash('sha256').update(text).digest('hex');
+  if(hash(adapted)==='8eac9767ddd110da66d9a715c328ead1a18fa2ea3dca3c4112444443383e8b33'){
+    const historical=adapted.replace("await page.clock.setFixedTime(new Date('2026-07-11T16:00:00Z'));fixture.eventsByDay['2026-07-11']=[];await setup(page,context);const before=await stored(page);","await setup(page,context);const before=await stored(page);");
+    assert.equal(hash(historical),'de3b88d0929b034f97971129462a179e74d167bc2f26fc750cc94688ece963f0','Exact historical editor fixture after clock inversion');
+    fs.writeFileSync(editor,historical);
+  }
+  return dir;
+}`);
+
+// Synthetic canvas drawing must not compete with production analysis on CI.
+// Cache only identical raster states, including the legacy mutable line width.
+// Every newly cached state verifies all RGBA bytes against its original render.
+patch("scripts/browser-scanner-capture-v110329.mjs",
+ "window.__scanPage=1;function draw(show=window.__paperVisible!==false){",
+ "window.__scanPage=1;function renderFrame(show=window.__paperVisible!==false){");
+patch("scripts/browser-scanner-capture-v110329.mjs",
+ "      draw();window.__scannerDraw=draw;window.__scannerCanvas=c;",
+ "      const cachedFrame=document.createElement('canvas');cachedFrame.width=c.width;cachedFrame.height=c.height;\n      const cachedContext=cachedFrame.getContext('2d');let cachedKey=null;\n      const cacheStats=window.__cameraRasterCache={checks:[],renders:0,renderMs:0,blits:0,blitMs:0};\n      function draw(show=window.__paperVisible!==false){\n        // The legacy renderer changes lineWidth on page two. Preserve both the\n        // first transient frame and the subsequent stable frame exactly.\n        const key=JSON.stringify([window.__scanPage,show,window.__paperShiftX||0,window.__paperShiftY||0,ctx.lineWidth]);\n        let expected=null;\n        if(key!==cachedKey){\n          const started=performance.now();renderFrame(show);cacheStats.renderMs+=performance.now()-started;cacheStats.renders++;\n          expected=ctx.getImageData(0,0,c.width,c.height).data;\n          cachedContext.drawImage(c,0,0);cachedKey=key;\n        }\n        const started=performance.now();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(cachedFrame,0,0);cacheStats.blitMs+=performance.now()-started;cacheStats.blits++;\n        if(expected){\n          const actual=ctx.getImageData(0,0,c.width,c.height).data;\n          if(actual.length!==expected.length||actual.some((value,index)=>value!==expected[index]))throw new Error('Cached synthetic camera frame changed pixels: '+key);\n          cacheStats.checks.push({key,bytes:actual.length});\n        }\n      }\n      draw();window.__scannerDraw=draw;window.__scannerCanvas=c;");
+patch("scripts/browser-scanner-capture-v110329.mjs",
+ "assert.equal(await page.evaluate(()=>window.__cameraCalls),1,'same camera stream remains open');",
+ "assert.equal(await page.evaluate(()=>window.__cameraCalls),1,'same camera stream remains open');const rasterCache=await page.evaluate(()=>window.__cameraRasterCache);assert.ok(rasterCache.checks.length>=4&&rasterCache.checks.every(check=>check.bytes===1600*2200*4),'each page, shift and visibility cache rebuild preserves all original RGBA bytes');assert.ok(rasterCache.blits>rasterCache.renders,'repeated synthetic frames reuse the exact cached raster');console.log(name+' synthetic raster cache: '+JSON.stringify(rasterCache));");
 
 // Capture failure diagnostics only. Keep live auto-capture, its fixture and all
 // timing/data assertions unchanged. Record analysis sampling cadence so slow CI
@@ -159,7 +210,7 @@ patch('scripts/browser-scanner-capture-v110329.mjs',
  `}catch(error){
     const diagnostics=await page.evaluate(()=>{
       const video=document.querySelector('[data-smart-camera] video');
-      return {analysisReads:window.__captureAnalysisReads,postedPhotos:window.__postedPhotos,photoJobs:window.__photoJobs,changedWhileProcessing:window.__changedWhileProcessing,cameraCalls:window.__cameraCalls,hidden:document.hidden,video:video?{width:video.videoWidth,height:video.videoHeight,readyState:video.readyState,paused:video.paused,currentTime:video.currentTime}:null,body:document.body.innerText,fixturePng:window.__scannerCanvas?.toDataURL('image/png')};
+      return {rasterCache:window.__cameraRasterCache,analysisReads:window.__captureAnalysisReads,postedPhotos:window.__postedPhotos,photoJobs:window.__photoJobs,changedWhileProcessing:window.__changedWhileProcessing,cameraCalls:window.__cameraCalls,hidden:document.hidden,video:video?{width:video.videoWidth,height:video.videoHeight,readyState:video.readyState,paused:video.paused,currentTime:video.currentTime}:null,body:document.body.innerText,fixturePng:window.__scannerCanvas?.toDataURL('image/png')};
     }).catch(cause=>({diagnosticError:cause.message}));
     if(diagnostics.fixturePng){fs.writeFileSync(\`\${output}/\${name}-FAILED-fixture.png\`,Buffer.from(diagnostics.fixturePng.split(',')[1],'base64'));delete diagnostics.fixturePng;}
     fs.writeFileSync(\`\${output}/\${name}-FAILED.json\`,JSON.stringify({error:error.message,errors,diagnostics},null,2));
