@@ -27,6 +27,9 @@ patch(core,"return rows.sort((a,b)=>b.date.localeCompare(a.date)||a.name.localeC
 patch(core,'[r.name,r.loadNo,r.unit,r.merchant,r.notes,CATEGORIES[r.category]]','[r.name,r.loadNo,r.source?.shipmentReference,documentLabel(r.source),r.unit,r.merchant,r.notes,CATEGORIES[r.category]]');
 const phone='source/src/modules/home/PhoneHomeToolsV110435.jsx';
 patch(phone,"['loads','Loads',()=>onSection('loads')]","['loads','Loads',()=>onSection('load_documents')]");
+// Keep the existing operational editor reachable after Loads becomes folders.
+patch(phone,"const extra=MODULE_CATALOG.filter", "const extra=[...(enabled('loads')?[{id:'loads',label:'Manage load details'}]:[]),...MODULE_CATALOG.filter");
+patch(phone,".includes(m.id)&&enabled(m.id));", ".includes(m.id)&&enabled(m.id))];");
 const adaptive='source/src/modules/home/AdaptiveHomeV1038.jsx';
 patch(adaptive,"onClick={()=>currentLoad?.identity==='reference'?onShipment?.(loadNo):onSection('load_documents')}>{currentLoad?.identity==='reference'?'Open shipment log':'Open load'}","onClick={()=>onSection('load_documents')}>Open load folder");
 const scan='source/src/modules/scan/SmartScanSheetV105.jsx';
@@ -39,9 +42,9 @@ patch(scan,'const needsReview = Boolean(analysis?', 'const needsReview = Boolean
 patch(scan,'    setLinkToLogbook(Boolean(resumed ?', '    setLinkToLogbook(!evidenceContextV110413 && Boolean(resumed ?');
 patch(scan,'Find this file in <strong>Documents → Browse all saved files</strong>.','Find this file in <strong>Loads → its load folder</strong>, or <strong>Documents → Files</strong> if it has no load link.');
 patch(scan,"onOpenBusiness?.('documents');", "onOpenBusiness?.('load_documents');");
-patch(scan,"onClose?.();onOpenBusiness?.('load_documents');", "rememberSavedFolder(saved);onClose?.();onOpenBusiness?.('load_documents');");
+
 patch(scan,"try { finishSavedScanV110312(saved,onClose); }", "try { rememberSavedFolder(saved);finishSavedScanV110312(saved,onClose); }");
 patch(scan,"import {requestedScanFolder}","function rememberSavedFolder(saved){const r=saved?.record||{},ref=r.canonicalLoadNo||r.loadNo||r.shipmentReference;if(ref)try{sessionStorage.setItem('road-ready-open-load-folder',(r.canonicalLoadNo||r.loadNo?'load:':'shipment:')+String(ref).trim().toUpperCase());}catch{}}\nimport {requestedScanFolder}");
 patch(scan,"}}>Open Documents</button>","}}>Open load folders</button>");
-patch(scan,"onOpenBusiness?.('loads');}}>Done · Open load", "onOpenBusiness?.('load_documents');}}>Done · Open load folder");
+patch(scan,"onClose?.();onOpenBusiness?.('loads');}}>Done · Open load", "rememberSavedFolder(saved);onClose?.();onOpenBusiness?.('load_documents');}}>Done · Open load folder");
 console.log('PASS — smart folders, completed trips, visible PODs and account original access installed');

@@ -50,3 +50,27 @@ test('adding POD or fuel inside a chosen folder carries that explicit choice; ra
  assert.equal(requestedScanFolder({loadNo:'BOL1'},'pod',[{...candidates[0],shipmentAmbiguous:true}]),'');
  assert.equal(requestedScanFolder(null,'fuel_receipt',candidates),'');
 });
+test('duplicate bytes cannot hide explicit filing and stay deduplicated within each destination',()=>{
+ const documents=[doc('unfiled','pod','',{sha256:'same'}),doc('filed-a','pod','A',{sha256:'same'}),doc('copy-a','pod','A',{sha256:'same'}),doc('filed-b','pod','B',{sha256:'same'})];
+ const before=structuredClone(documents);
+ for(const ordered of [documents,[...documents].reverse()]){
+  const result=buildSmartFolders({folders:[{loadNo:'A'},{loadNo:'B'}],documents:ordered});
+  assert.equal(result.unfiled.length,1);
+  assert.equal(result.unfiled[0].id,'unfiled');
+  for(const f of result.folders){assert.equal(f.documents.length,1);assert.equal(f.documents[0].loadNo,f.reference);}
+ }
+ assert.deepEqual(documents,before);
+});
+test('form-only logbooks remain available without changing driver selection or saved signatures',()=>{
+ const state={activeDriverId:'d1',formByDay:{'2026-11-01':{loadNo:'A'}},signatureByDay:{'2026-10-31':{value:'signed'}},teamLogbooksByDriverId:{d2:{formByDay:{'2026-11-02':{loadNo:'A'}},signatureByDay:{'2026-11-02':{value:'other-signed'}}}}};
+ const before=structuredClone(state),folder=buildSmartFolders({folders:[{loadNo:'A'}],state}).folders[0];
+ const own=folder.logs.find(l=>l.driverId==='d1'),other=folder.logs.find(l=>l.driverId==='d2');
+ assert.equal(own.day,'2026-11-01');assert.equal(own.available,true);assert.equal(own.canOpen,true);assert.equal(own.signed,false);
+ assert.equal(other.available,true);assert.equal(other.canOpen,false);assert.equal(other.signed,true);
+ assert.deepEqual(state,before);
+});
+test('shipment originals without evaluated evidence remain reviewable, never falsely complete',()=>{
+ const input={candidates:[{shipmentFiling:true,shipmentReference:'SHIP-44',status:'completed'}],documents:[doc('unsigned','pod','',{shipmentReference:'SHIP-44',podSigned:false,needs_review:true})]};
+ const before=structuredClone(input),folder=buildSmartFolders(input).folders[0],pod=folderChecklist(folder).find(r=>r.kind==='pod');
+ assert.equal(pod.status,'review');assert.equal(pod.detail,'Saved · check details');assert.equal(pod.files[0].id,'unsigned');assert.deepEqual(input,before);
+});

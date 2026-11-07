@@ -32,8 +32,10 @@ scanner assignment installer anchors to the stable sync field, and the angled
 reader restores the .329 boundary-detector export if a historical materializer
 has copied the original gradient detector back over it.
 
-Release status: feature tests and the materialized Next production build pass.
-A clean replay of the historical build is blocked before this feature installs:
-one replay restores a stale timeline and another fails the legacy scanner-version
-anchor. No protected hashes or behavioral assertions were relaxed. Keep this PR
-as a draft until the clean build is reproducible; production has not changed.
+Release validation: clean historical materialization and Next production build pass
+locally, with all 48 DOT source and 32 DOT runtime locks unchanged. The scanner
+save navigation installer now targets the original button in one operation.
+Regression coverage protects filing-aware duplicate display, equivalent Blob and
+DataURL originals, form-only log links, and fail-closed account/byte checks.
+Shipment documents without evaluated evidence remain marked for review.
+Publication still requires passing GitHub checks and browser save/reopen coverage.

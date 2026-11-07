@@ -5,9 +5,12 @@ export async function readDocumentOriginal(record,{readLocal,getAccessToken,getA
   if(local?.size)return local;
   if(typeof record.dataUrl==='string'&&/^data:(application\/pdf|image\/(png|jpeg|webp));base64,/.test(record.dataUrl))return (await request(record.dataUrl)).blob();
   if(!/^[a-zA-Z0-9_-]{1,160}$/.test(clientId))return null;
-  const account=getAccountOriginal?await getAccountOriginal(clientId):null;
+  let account=null,accountError=null;
+  try {account=getAccountOriginal?await getAccountOriginal(clientId):null;}
+  catch(error){if(error?.code!=='ACCOUNT_ORIGINAL_UNAVAILABLE')throw error;accountError=error;}
   if(account?.blob?.size)return account.blob;
   const token=await getAccessToken();
+  if(!token&&accountError)throw accountError;
   if(!token)throw Error(account?.signedIn?'The original has not synced to this account yet. Open Road Ready on the phone where it was scanned and let Documents finish syncing.':'Sign in to retrieve the cloud original.');
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
   try{
@@ -15,7 +18,7 @@ export async function readDocumentOriginal(record,{readLocal,getAccessToken,getA
     // sufficient for an authenticated, owner-scoped lookup on this endpoint.
     const response=await request('/api/documents/read-original',{method:'POST',cache:'no-store',signal:controller.signal,
       headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({client_document_id:clientId})});
-    if(response.status===404)return null;
+    if(response.status===404){if(accountError)throw accountError;return null;}
     if(response.status===401||response.status===403)throw Error('Sign in to retrieve this account’s cloud original.');
     if(!response.ok)throw Error('Cloud original could not be retrieved. Connect and try again.');
     return response.blob();

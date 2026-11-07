@@ -12,7 +12,13 @@ export function findAccountOriginal(records,clientId){
  }
  for(const d of metadata)if(d.dataUrl?.__rrAccountFile===1)blobs.push(d.dataUrl);
  const refs=blobs.filter(v=>v?.__rrAccountFile===1);
- const distinct=new Map(refs.map(r=>[JSON.stringify(r),r]));
+ // Blob and DataURL encodings can describe exactly the same verified bytes.
+ // Representation metadata is not evidence of a different original.
+ const distinct=new Map();
+ for(const r of refs){
+  const identity=JSON.stringify([r.size,Array.isArray(r.chunks)?r.chunks.map(c=>[c?.sha256,c?.bytes]):r.chunks]);
+  if(!distinct.has(identity))distinct.set(identity,r);
+ }
  if(distinct.size>1)throw Error('This document has conflicting saved originals. Open it on the phone where it was saved.');
  return [...distinct.values()][0]||null;
 }

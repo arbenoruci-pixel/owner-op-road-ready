@@ -50,7 +50,9 @@ export function buildSmartFolders({folders=[],candidates=[],documents=[],state={
   else add(c,true);
  }
  const unfiled=[];
- for(const d of unique(documents)){
+ // Assign each saved association before deduplicating bytes within its folder.
+ // A duplicate in another folder (or unfiled) must not hide an explicit link.
+ for(const d of documents){
   const number=docLoad(d),shipment=ref(d.shipmentReference||d.extracted?.shipmentReference);
   let f;
   if(number){const owners=aliases.get(match(number));f=owners?.size===1?map.get([...owners][0]):map.get('load:'+number);}
@@ -61,11 +63,11 @@ export function buildSmartFolders({folders=[],candidates=[],documents=[],state={
   if(f)f.documents.push(d);else unfiled.push(d);
  }
  for(const f of map.values()){
-  f.documents.sort((a,b)=>savedTime(b)-savedTime(a));
+  f.documents=unique(f.documents).sort((a,b)=>savedTime(b)-savedTime(a));
   f.updatedAt=Math.max(Number(f.source.latestActivityAt)||0,Number(f.source.updatedAt)||0,Date.parse(f.source.deliveryDate||f.source.pickupDate)||0,...f.documents.map(savedTime));
   f.logs=linkedLogbooks(f,state);
  }
- return {folders:[...map.values()].sort((a,b)=>b.updatedAt-a.updatedAt||a.reference.localeCompare(b.reference)),unfiled:unfiled.sort((a,b)=>savedTime(b)-savedTime(a))};
+ return {folders:[...map.values()].sort((a,b)=>b.updatedAt-a.updatedAt||a.reference.localeCompare(b.reference)),unfiled:unique(unfiled).sort((a,b)=>savedTime(b)-savedTime(a))};
 }
 export function linkedLogbooks(folder,state={}){
  const source=folder.source,aliases=new Set([folder.reference,...list(source.aliases).filter(a=>a.source!=='load_info').map(a=>a.value)].map(match));
@@ -85,7 +87,7 @@ export function linkedLogbooks(folder,state={}){
    for(let t=Date.parse(first+'T12:00:00Z');t<=Date.parse(last+'T12:00:00Z');t+=86400000)days.add(new Date(t).toISOString().slice(0,10));
   }
   for(const day of [...days].sort())out.push({day,driverId,driverName:state.teamDrivers?.find(d=>d.id===driverId)?.name||book.driverProfile?.name||'Driver',
-   available:Boolean(book.eventsByDay?.[day]?.length||book.signatureByDay?.[day]),signed:Boolean(book.signatureByDay?.[day]),canOpen:driverId===active});
+   available:Boolean(book.eventsByDay?.[day]?.length||book.signatureByDay?.[day]||Object.hasOwn(book.formByDay||{},day)),signed:Boolean(book.signatureByDay?.[day]),canOpen:driverId===active});
  }
  return out;
 }
@@ -97,7 +99,7 @@ export function folderChecklist(folder,existingRows=[]){
   const knownSources=existing.flatMap(r=>r.sources||[]);
   const sources=knownSources.length?knownSources:files.map(doc=>({doc,pages:[]}));
   const docs=unique(sources.map(s=>s.doc));
-  const missing=existing.some(r=>r.status==='missing'),review=existing.some(r=>r.status==='review');
+  const missing=existing.some(r=>r.status==='missing'),review=existing.some(r=>r.status==='review')||Boolean(folder.shipment&&existing.length===0);
   const status=!docs.length?(due?'missing':'later'):missing?'partial':review?'review':'saved';
   const syncPending=docs.some(d=>originalSyncLabel(d));
   return {kind,label,due,sources,files:docs,status,detail:status==='missing'?'Missing':status==='later'?(kind==='pod'?'Add after delivery':'Add at pickup'):status==='partial'?'More documents needed':status==='review'?'Saved · check details':syncPending?'Saved · original sync pending':`${docs.length===1?'Saved':docs.length+' files saved'}`};

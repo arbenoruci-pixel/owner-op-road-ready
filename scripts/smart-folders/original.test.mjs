@@ -24,3 +24,20 @@ test('does not follow caller-selected URLs, filenames, hashes, or another docume
  assert.equal(findAccountOriginal(records,'other-id'),null);
  assert.equal(findAccountOriginal({'["business-array","documents"]':[{clientDocumentId:'client-a',url:'https://foreign.invalid',storagePath:'other/file'}]},'client-a'),null);
 });
+test('identical Blob and DataURL bytes are one original despite encoding metadata',async()=>{
+ const dataUrl={chunks:file.chunks.map(c=>({bytes:c.bytes,sha256:c.sha256})),prefix:'data:image/jpeg;base64,',mime:file.mime,size:file.size,kind:'DataURL',__rrAccountFile:1};
+ const copies={...records,'["business","documents","a"]':{clientDocumentId:'client-a',dataUrl}};
+ const before=structuredClone(copies);
+ assert.deepEqual(findAccountOriginal(copies,'client-a'),file);
+ const blob=new Blob(['pod']);
+ const result=await readAccountDocumentOriginal('client-a',{getSession:async()=>({user:{id:'owner'}}),getWorkspace:async uid=>({user_id:uid,payload:{records:copies}}),readFile:async ref=>{assert.deepEqual(ref,file);return blob;}});
+ assert.equal(result.blob,blob);assert.deepEqual(copies,before);
+});
+test('same size originals with different bytes or chunk ordering remain conflicting',()=>{
+ const chunk=(hash,bytes)=>({sha256:hash.repeat(64),bytes});
+ for(const changed of [{...file,chunks:[chunk('b',3)]},{...file,chunks:[chunk('a',2),chunk('b',1)]}]){
+  assert.throws(()=>findAccountOriginal({...records,'["business","documents","a"]':{clientDocumentId:'client-a',dataUrl:changed}},'client-a'),/conflicting/);
+ }
+ const split={...file,chunks:[chunk('a',1),chunk('b',2)]};
+ assert.throws(()=>findAccountOriginal({'["table","document_blobs","a"]':{client_document_id:'client-a',blob:split},'["table","document_blobs","b"]':{client_document_id:'client-a',blob:{...split,chunks:[...split.chunks].reverse()}}},'client-a'),/conflicting/);
+});
