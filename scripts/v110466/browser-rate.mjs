@@ -24,9 +24,8 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]].filter(([na
   await page.getByRole('button',{name:/Smart Scan/}).first().click();
   await page.locator('input[type=file][multiple]').first().setInputFiles({name:`synthetic-${variant}-rate-agreement.pdf`,mimeType:'application/pdf',buffer});
   await page.getByRole('button',{name:'Read document',exact:true}).click();
-  // Certificate review finishes after the local fields; wait for that final
-  // analysis before opening a preview that its completion would remount.
-  if(certificate)await page.getByText('Page 3: AI assistance is not enabled. Check the original page.',{exact:true}).waitFor();
+  // Compact review omits the legacy AI status banner. The ready review is
+  // rendered after analysis; verify the same certificate outcome in its export.
   await page.getByRole('button',{name:'Reader preview · Check source',exact:true}).press('Enter');
   const review=page.locator('.owned-reader-preview');await review.getByRole('heading',{name:'Rate confirmation · 1, 2',exact:true}).waitFor();
   assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'rate_confirmation');
@@ -35,6 +34,12 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]].filter(([na
   const [download]=await Promise.all([page.waitForEvent('download'),review.getByRole('button',{name:'Export reading review',exact:true}).click()]);
   const result=JSON.parse(fs.readFileSync(await download.path(),'utf8'));fs.writeFileSync(`${output}/${label}-review.json`,JSON.stringify(result,null,2));
   assert.equal(result.engineVersion,'0.3.38');
+  if(certificate){
+   const certificateCheck=result.aiClassification.pages.find(page=>page.pageNumber===3);
+   assert.ok(certificateCheck,'certificate page retains its AI availability diagnostic');
+   assert.equal(certificateCheck.status,'not_configured');
+   assert.equal(result.aiClassification.attemptedPageCount,0,'certificate availability check must not invoke paid AI');
+  }
   assert.deepEqual(result.documents.map(d=>[d.kind,d.pageIds,d.role]),[['rate_confirmation',['page-1','page-2'],'primary'],...(certificate?[['signing_certificate',['page-3'],'supporting']]:[])]);
   for(const doc of result.documents)for(const field of Object.values(doc.fields))for(const c of field.candidates)for(const e of [...c.evidence,...c.labelEvidence||[],...c.continuationEvidence||[]])resolveEvidence(result,e);
   const fields=result.documents[0].fields;

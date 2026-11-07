@@ -14,7 +14,13 @@ const schemas=Object.assign({},...[...fs.readFileSync('lib/local-db/dexie.js','u
 const user={id:'00000000-0000-4000-8000-000000000028',email:'dot-share-fixture@example.test',email_confirmed_at:'2026-01-01T00:00:00Z',aud:'authenticated',app_metadata:{provider:'email'}};
 const exp=Math.floor(Date.now()/1000)+86400,b64=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
 const session={access_token:b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:user.id,email:user.email,exp,aud:'authenticated',session_id:'synthetic-officer-session'})+'.synthetic',refresh_token:'synthetic',token_type:'bearer',expires_in:86400,expires_at:exp,user};
-function fixture(){return {...signedFixture(),view:'dot',sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,routeLegsByDay:{},loadGuidesById:{},inspectionByDay:{},dotWallet:{documents:{}}};}
+function fixture(){
+ const state=signedFixture();
+ // Seed today's unsigned rows in the same explicit shape the app hydrates.
+ // Keep historical records/signatures untouched and retain exact packet checks.
+ state.eventsByDay[state.activeDay]=state.eventsByDay[state.activeDay].map(event=>({note:'',description:'',reasons:[],...event}));
+ return {...state,view:'dot',sheet:null,selectedEventId:null,selectedIds:[],selectMode:false,routeLegsByDay:{},loadGuidesById:{},inspectionByDay:{},dotWallet:{documents:{}}};
+}
 let packets=[],actions=[],liveBefore;
 
 async function setup(page,context,state){

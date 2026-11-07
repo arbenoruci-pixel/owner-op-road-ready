@@ -42,11 +42,13 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]]){
     const review=page.locator('.owned-reader-preview');
     await review.getByRole('heading',{name:'Bill of lading · 1',exact:true}).waitFor();
     assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
-    const checks=page.getByRole('region',{name:'Document reading checks',exact:true});
+    // Reading checks are mounted inside a collapsed information disclosure.
+    const checks=page.getByRole('region',{name:'Document reading checks',exact:true,includeHidden:true});
     assert.equal(await checks.getByText('BOL number was not verified from its label. Check the original.',{exact:true}).count(),1);
     await page.getByRole('button',{name:/^Extracted details/}).click();
     const displayed=page.locator('.scan-details-v105 > div');
     await displayed.getByText(expectedWeight,{exact:true}).waitFor();
+    await checks.getByText('BOL number was not verified from its label. Check the original.',{exact:true}).waitFor({state:'visible'});
     await page.getByRole('button',{name:/^Extracted details/}).click();
     await review.getByRole('button',{name:caseName==='short-form'?'20,188 · Page 1':'2377.44 Ibs · Page 1',exact:true}).click();
     const dialog=page.getByRole('dialog',{name:'Check source',exact:true});await dialog.waitFor();
