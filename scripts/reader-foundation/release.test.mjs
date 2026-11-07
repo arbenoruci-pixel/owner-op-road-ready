@@ -137,9 +137,15 @@ test('an unrecognized predecessor build is rejected before writes',t=>{
 test('CI runs pending-reading browser coverage first and retains its failure artifacts',()=>{
   const workflow=read('.github/workflows/owned-reader.yml').split('  app-integration:')[1];
   assert.ok(workflow,'App integration job exists');
-  const command='          node scripts/reader-foundation/browser-pending-readings.mjs\n';
+  const command='          run_reader_test node scripts/reader-foundation/browser-pending-readings.mjs\n';
   assert.equal(workflow.split(command).length,2,'Pending-reading regression is an unconditional, gating command');
-  assert.ok(workflow.indexOf(command)<workflow.indexOf('          node scripts/v110404/browser.mjs\n'));
+  assert.ok(workflow.includes('          reader_test_status=0\n'));
+  assert.ok(workflow.includes('          run_reader_test() { "$@" || reader_test_status=1; }\n'));
+  assert.ok(workflow.includes('          exit "$reader_test_status"\n'));
+  assert.ok(workflow.indexOf('          exit "$reader_test_status"')>workflow.indexOf(command));
+  assert.equal(workflow.split('reader_test_status=0').length,2,'Failures must never be reset');
+
+  assert.ok(workflow.indexOf(command)<workflow.indexOf('          run_reader_test node scripts/v110404/browser.mjs\n'));
   assert.match(workflow,/uses: actions\/upload-artifact@v4\s+if: always\(\)/);
   assert.ok(workflow.includes('            browser-test-results/pending-reader/\n'));
 });

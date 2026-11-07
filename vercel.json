@@ -15,7 +15,8 @@
       "fix/native-pdf-route-reading": false,
       "fix/native-rate-broker": false,
       "feat/outlook-document-import": false,
-      "feat/smart-load-folders": false
+      "feat/smart-load-folders": false,
+      "fix/hos-split-midnight": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
