@@ -44,16 +44,18 @@ test('capture coordinates require the same file, orientation and final boundary'
   }
 });
 test('a printed border across a blue shadow cannot crop off the header',()=>{
+  for(const [upper,lower] of [[[237,239,244],[171,181,226]],[[195,206,231],[156,179,224]],[[170,183,212],[120,144,196]]]){
   const width=300,height=420,data=new Uint8ClampedArray(width*height*4);
   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
     let rgb=[45,47,43];
-    if(x>30&&x<270&&y>25&&y<395){rgb=y<210?[237,239,244]:[171,181,226];if(y>80&&y<370&&y%25<2&&x>45&&x<255)rgb=[40,40,40];if(y>205&&y<210)rgb=[20,20,20];}
+    if(x>30&&x<270&&y>25&&y<395){rgb=y<210?upper:lower;if(y>80&&y<370&&y%25<2&&x>45&&x<255)rgb=[40,40,40];if(y>205&&y<210)rgb=[20,20,20];}
     data.set([...rgb,255],(y*width+x)*4);
   }
   const input={width,height,data},inner=[{x:.12,y:.49},{x:.88,y:.49},{x:.88,y:.92},{x:.12,y:.92}];
   assert.ok(paperContinuation(input,inner,{shadows:true})[0]>=.82);
   const result=detectSafeDocumentBoundary(input,{maxSide:640});
   assert.ok(!result.found||Math.max(result.corners[0].y,result.corners[1].y)<.12,'header must remain inside or retain full photo');
+  }
 });
 test('existing paper scenes still distinguish forms from upholstery and desks',async()=>{
   const safeUrl=url(fs.readFileSync('scripts/scanner-paper/safeDocumentBoundary.js','utf8').replaceAll("'./documentBoundaryV110329.js'",JSON.stringify(coreUrl)));
