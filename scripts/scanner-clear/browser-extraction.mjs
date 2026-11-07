@@ -22,9 +22,11 @@ const lines=['BILL OF LADING','BOL No: B-4321','SHIP FROM: EXAMPLE MILL',
 const value='PO-7401',quote='Order reference: PO-7401',loadNo='KEEP-9001';
 const scenarios=(process.env.AI_EXTRACTION_CASES||'confirm,malformed,wrong_image,wrong_page,missing_quote,offline,timeout,cancel').split(',');
 
+let latestReviewExport=null;
 async function exportReview(page){
   const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Export reading review',exact:true}).click()]);
-  return JSON.parse(fs.readFileSync(await download.path(),'utf8'));
+  latestReviewExport=JSON.parse(fs.readFileSync(await download.path(),'utf8'));
+  return latestReviewExport;
 }
 async function savedRows(page){
   return page.evaluate(()=>new Promise((resolve,reject)=>{
@@ -35,6 +37,7 @@ async function savedRows(page){
 }
 
 for(const scenario of scenarios){
+  latestReviewExport=null;
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'ai-extraction-'));
   const context=await chromium.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
   const page=await context.newPage(),errors=[],requests=[],external=[];
@@ -99,6 +102,7 @@ for(const scenario of scenarios){
     const suggestions=page.getByRole('region',{name:'Key details for Bill of lading',exact:true});
     await suggestions.waitFor();
     const initialType=await page.getByLabel('Document type',{exact:true}).inputValue();
+    assert.equal(initialType,'bol','local supported BOL determines filing type before AI proposals');
     const initialFolder=await selectedLoadFolder(page);
     const before=await exportReview(page),doc=before.documents[0];
     assert.equal(doc.kind,'bol');assert.equal(doc.fields.poNumber.status,'missing');assert.equal(doc.fields.poNumber.value,null);
@@ -165,7 +169,9 @@ for(const scenario of scenarios){
       assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),initialType);
       assert.equal(await selectedLoadFolder(page),initialFolder);
       assert.equal((await savedRows(page)).length,0,'human reading confirmation does not itself save');
-      await page.getByLabel('Document type',{exact:true}).selectOption('bol');
+      // Re-selecting the identical option dispatches a synthetic change event
+      // and intentionally reanalyzes the document. Keep the supported type.
+      assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'bol');
       await chooseLoadFolder(page,loadNo);
       assert.equal(await selectedLoadFolder(page),loadNo);
       const check=page.locator('.scan-driver-check-v105 input');if(await check.count())await check.check();
@@ -198,7 +204,7 @@ for(const scenario of scenarios){
     console.log(`PASS chromium ${scenario}: bounded automatic one-page proposal, source binding, unchanged type/load and no automatic writes${['confirm','missing_quote'].includes(scenario)?', manual confirmation and saved/reopened diagnostics':''}; ${requests.length} mocked inference, ${gets} availability checks, ${external.length} blocked/stubbed external requests`);
   }catch(error){
     await page.screenshot({path:`${output}/chromium-${scenario}-failure.png`,fullPage:true}).catch(()=>{});
-    fs.writeFileSync(`${output}/chromium-${scenario}-failure.json`,JSON.stringify({error:String(error),errors,requests:requests.map(({image,...request})=>request),body:await page.locator('body').innerText().catch(()=>''),url:page.url()},null,2));
+    fs.writeFileSync(`${output}/chromium-${scenario}-failure.json`,JSON.stringify({error:String(error),errors,latestReviewExport,savedRows:await savedRows(page).catch(()=>[]),requests:requests.map(({image,...request})=>request),body:await page.locator('body').innerText().catch(()=>''),url:page.url()},null,2));
     throw error;
   }finally{releaseResponse();await releaseRequest?.();await context.close();fs.rmSync(profile,{recursive:true,force:true});}
 }

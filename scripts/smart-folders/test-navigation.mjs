@@ -188,11 +188,17 @@ patch('scripts/v110378/test-review-regressions.mjs',
   return dir;
 }`);
 
+// Save confirmation now describes the agreed load-folder and Files destinations.
+// Keep the original-link, PDF page-count and exact capture-byte checks unchanged.
+patch('scripts/browser-scanner-workflow-v110328.mjs',
+ "assert.match(await savedLocation.innerText(),/Documents \u2192 Browse all saved files/);",
+ "assert.match(await savedLocation.innerText(),/Find this file in Loads \u2192 its load folder, or Documents \u2192 Files if it has no load link\\./);");
+
 // Persist the selected recorded day before reload. The prior immediate reload
 // could restore the delivery day before the final Back-day navigation was saved.
 patch('scripts/browser-shipment-carryover-v110367.mjs',
  "await page.reload();await openLog(page);await section(page,'Log').click();\n   assert.match(await eventRow(page,'driving').locator('.event-route-meta').innerText(),/BOL 123.*Trailer UNIT-A/);",
- "await eventRow(page,'driving').waitFor();await waitState(page,s=>s.activeDay===middleDay);await page.reload();await openLog(page);await section(page,'Log').click();\n   assert.match(await eventRow(page,'driving').locator('.event-route-meta').innerText(),/BOL 123.*Trailer UNIT-A/);");
+ "await waitState(page,s=>s.activeDay===middleDay);await page.reload();await openLog(page);await section(page,'Log').click();\n   assert.match(await eventRow(page,'driving').locator('.event-route-meta').innerText(),/BOL 123.*Trailer UNIT-A/);");
 
 // Inventory mounts asynchronously above Export Everything. Wait for the exact
 // seeded inventory before clicking; keep cancellation and all binary checks.
