@@ -326,3 +326,12 @@ for(const file of files){
  fs.writeFileSync(file,source);
 }
 console.log('PASS — final smart-folder browser navigation adapter (legacy safety assertions preserved)');
+
+// Image metadata changes after React replaces the preview source. Await decode
+// before the same strict crop/full-original dimension assertions.
+patch('scripts/browser-scanner-capture-v110329.mjs',
+ "    const dimensions=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));",
+ "    await page.waitForFunction(()=>{const img=document.querySelector('.scan-paper-preview-v328 img');return img?.complete&&img.naturalWidth>0&&img.naturalHeight>0;});\n    const dimensions=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));");
+patch('scripts/browser-scanner-capture-v110329.mjs',
+ "    const full=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));assert.ok(full.w>dimensions.w,'Full page restores the original scene');",
+ "    await page.waitForFunction(previousWidth=>{const img=document.querySelector('.scan-paper-preview-v328 img');return img?.complete&&img.naturalWidth>previousWidth;},dimensions.w);\n    const full=await page.locator('.scan-paper-preview-v328 img').evaluate(img=>({w:img.naturalWidth,h:img.naturalHeight}));assert.ok(full.w>dimensions.w,'Full page restores the original scene');");

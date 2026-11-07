@@ -24,4 +24,18 @@ patch('scripts/browser-ratecon-structure-v110388.mjs',
   "const previewToggle=page.getByRole('button',{name:/^Reader preview · (?:Check source|Close)$/});",
   "const previewToggle=page.getByRole('button',{name:/^(?:All reading details|Reader preview · (?:Check source|Close))$/});");
 
+// The preview wrapper can mount before the disclosure button. Never use an
+// instantaneous isVisible() result to decide whether source details need opening.
+for(const [name,indent,previous] of [
+  ['openDetail','    ','await openDetail.waitFor();await openDetail.click();'],
+  ['joinedOpen','    ',"await page.locator('.owned-reader-preview').waitFor();if(await joinedOpen.isVisible())await joinedOpen.click();"],
+  ['open','      ',"await page.locator('.owned-reader-preview').waitFor();if(await open.isVisible())await open.click();"]
+]){
+  patch('scripts/browser-owned-reader.mjs',
+    `${indent}const ${name}=page.getByRole('button',{name:/^(?:All reading details|Reader preview · Check source)$/});\n${indent}${previous}`,
+    `${indent}const ${name}=page.getByRole('button',{name:/^(?:All reading details|Reader preview · (?:Check source|Close))$/});
+${indent}await ${name}.waitFor();
+${indent}if(await ${name}.getAttribute('aria-expanded')==='false')await ${name}.click();`);
+}
+
 console.log('PASS — reader-preview test disclosures adapted; source and evidence assertions preserved');
