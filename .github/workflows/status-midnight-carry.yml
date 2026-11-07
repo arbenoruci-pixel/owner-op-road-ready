@@ -46,6 +46,7 @@ jobs:
           BROWSER_ENGINE=chromium node scripts/browser-status-midnight-carry-v11032.mjs
           BROWSER_ENGINE=webkit node scripts/browser-status-midnight-carry-v11032.mjs
           node scripts/hos-rest-review/browser.mjs
+          BROWSER_ENGINE=chromium,webkit node scripts/hos-midnight/browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -59,6 +60,7 @@ jobs:
             browser-test-results/paper-log-*/
             browser-test-results/insert-interaction-*/
             browser-test-results/hos-rest-review/
+            browser-test-results/hos-midnight/
             /tmp/status-carry-build.log
             /tmp/status-carry-server.log
           retention-days: 7

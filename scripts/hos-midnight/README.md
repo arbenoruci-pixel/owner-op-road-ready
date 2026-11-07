@@ -32,6 +32,12 @@ identity, coordinates, signature image or uploaded backup. They cover the
 violations, and unchanged input records. Rendered component checks verify that
 pending guidance and actual limit alerts are visible.
 
+The older long-first pending fixture originally included an earlier 16h45
+sleeper period. That earlier rest can be a completed partner under the current
+guidance. The final-runtime fixture therefore starts at its first recorded
+work period, with no earlier eligible partner. Every existing assertion,
+including the 209-minute driving and 309-minute shift allowances, is retained.
+
 ## Rule references
 
 - [FMCSA hours of service summary](https://www.fmcsa.dot.gov/regulations/hours-service/summary-hours-service-regulations)

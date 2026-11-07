@@ -42,7 +42,6 @@ async function openHome(page) {
     await button.waitFor({timeout:30000});await button.click();
   }
   await home.waitFor({timeout:30000});
-  await page.locator('.hos-compact-card').first().waitFor();
 }
 
 for(const name of (process.env.BROWSER_ENGINE||'chromium').split(',')) {
@@ -56,30 +55,32 @@ for(const name of (process.env.BROWSER_ENGINE||'chromium').split(',')) {
     await page.clock.install({time:new Date('2026-11-07T10:58:00Z')});
     await seed(page,makeState(358),[],{navigateHome:false});
     await openHome(page);
+    await page.getByRole('button',{name:'Drive',exact:true}).click();
+    await page.locator('.drive-mode-screen').waitFor();
     const before=await snapshot(page);
-    const pending=page.locator('[data-hos-guidance="pending"]').first();
-    await pending.waitFor();
-    assert.match(await pending.innerText(),/still required/);
-    assert.equal(await page.locator('[data-hos-guidance="limit"]').count(),0);
+    const summary=page.locator('.drive-mode-split-summary');
+    await summary.getByText('Split SB pending',{exact:true}).waitFor();
+    assert.match(await summary.innerText(),/partner still needed: 00:01 SB/);
+    assert.equal(await page.locator('.drive-mode-warnings.hard').count(),0);
     await page.screenshot({path:`${output}/${name}-pending.png`,fullPage:true});
 
-    // Crossing the exact 7h26 threshold must refresh an unchanged open status.
-    // The existing read-only clock hook runs every ten seconds.
+    // The full Drive screen recalculates its open status on the existing
+    // one-minute timer; the compact component has a separate hook regression.
     await page.clock.runFor(70000);
-    await page.waitForFunction(()=>!document.querySelector('[data-hos-guidance="pending"]'));
-    assert.equal(await page.locator('[data-hos-guidance="limit"]').count(),0);
+    await summary.getByText('Split SB complete',{exact:true}).waitFor();
+    assert.equal(await page.locator('.drive-mode-warnings.hard').count(),0);
     await page.screenshot({path:`${output}/${name}-complete.png`,fullPage:true});
 
-    await page.getByRole('button',{name:'Open logbook',exact:true}).click();
-    await page.locator('.logbook-ui-v110, .logbook-home-screen-v988').first().waitFor();
-    const previousDay=page.getByRole('button',{name:'‹ Day',exact:true});
-    if(await previousDay.isVisible())await previousDay.click();
+    await page.locator('.drive-mode-log-btn').click();
+    await page.locator('.logbook-ui-v110').waitFor();
+    if(!await page.locator('[data-log-event-id="hos-fixture-9"]').count())
+      await page.getByRole('button',{name:'‹ Day',exact:true}).click();
+    await page.locator('[data-log-event-id="hos-fixture-9"]').waitFor();
     const review=page.locator('.logcheck-summary');
-    if(await review.count()) {
-      await review.click();
-      const text=await page.locator('.logcheck-compact').innerText();
-      assert.doesNotMatch(text,/14h window violation|Driving after the limit/);
-    }
+    await review.click();
+    const text=await page.locator('.logcheck-compact').innerText();
+    assert.doesNotMatch(text,/14h window violation|Driving after the limit/);
+    assert.match(text,/Split OK|Complete/);
     const after=await snapshot(page);
     assert.deepEqual(after.eventsByDay[day],before.eventsByDay[day],
       'Reviewing a past day preserves its recorded events');
