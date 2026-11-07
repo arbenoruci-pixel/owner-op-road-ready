@@ -178,6 +178,28 @@ patch('scripts/v110411/browser-filing.mjs',
  "    assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),0,'Saved POD covers current load BOL after reload without a duty link');",
  "    assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),1,'Reader-only save does not certify reviewed delivery evidence');\n    await reviewFixturePodEvidence(page,{loadNo:'00654321',date:'2026-09-24',reference:'00654321',output:output+'/'+name});\n    assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),0,'Saved POD covers current load BOL after reload without a duty link');");
 
+// Recorded shipments are selectable evidence destinations, never broker loads.
+// Exercise that explicit choice and prove it creates no canonical identity.
+patch('scripts/reader-foundation/browser-current-load.mjs',
+ "   if(await unlinked.count())assert.equal(await unlinked.isDisabled(),true,'unlinked shipment references cannot silently become filing folders');",
+ `   if(await unlinked.count()){
+    const storeBeforeShipment=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')));
+    assert.equal(await unlinked.isDisabled(),false,'recorded shipment evidence has an explicitly selectable destination');
+    await unlinked.click();
+    assert.equal(await page.getByRole('button',{name:'Choose load folder',exact:true}).locator('strong').innerText(),'Shipment / BOL '+shipperRef,'shipment selection is not presented as a broker load');
+    const storeAfterShipment=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')));
+    assert.deepEqual(storeAfterShipment.loads,storeBeforeShipment.loads,'selecting a shipment never creates a broker folder');
+    assert.deepEqual(storeAfterShipment.evidenceAliases||[],storeBeforeShipment.evidenceAliases||[],'selection never invents a reviewed load link');
+    await page.getByRole('button',{name:'Choose load folder',exact:true}).click();
+   }`);
+
+// This scenario deliberately seeds two loads with the same legacy record ID.
+// Existing linkage normalization repairs identity only; compare every other
+// original field and exact repair provenance, rather than masking differences.
+patch('scripts/browser-load-guide-v110322.mjs',
+ "    assert.deepEqual(repaired.loads.find(l=>l.loadNo==='91001'),unrelated);",
+ "    assert.deepEqual(repaired.loads.find(l=>l.loadNo==='91001'),{...unrelated,id:'collision:identity:91001',recordIdentityRepairV1:{previousId:'collision',loadNo:'91001',reason:'duplicate_record_id'}});\n    assert.equal(repaired.loads.find(l=>l.loadNo==='82002').id,'collision:identity:82002');");
+
 // The locked DOT wizard already opens at Review; no preparation or sending is needed.
 patch('scripts/workspace-navigation/browser-navigation.mjs',
  "await page.getByRole('button',{name:button,exact:true}).click();await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();",
