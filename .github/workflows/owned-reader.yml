@@ -34,7 +34,7 @@ jobs:
           python -m unittest discover -s experiments/owned-ocr -p 'test_*.py' -v
   app-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -64,37 +64,38 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/app-version.json >/dev/null; then break; fi
             sleep 1
           done
+          reader_test_status=0
+          run_reader_test() { "$@" || reader_test_status=1; }
           # Run the repaired pending-reading flow before unrelated browser suites.
           # Cancel, explicit confirmation and saved reload must pass in Chromium.
-          node scripts/reader-foundation/browser-pending-readings.mjs
+          run_reader_test node scripts/reader-foundation/browser-pending-readings.mjs
           # Check document navigation and saved originals next for early diagnostics.
           # The complete suite still gates success.
-          node scripts/v110404/browser.mjs
-          node scripts/browser-fullscreen-reader-v110369.mjs
-          node scripts/browser-saved-documents-v110344.mjs
-          node scripts/reader-ai/browser.mjs
+          run_reader_test node scripts/v110404/browser.mjs
+          run_reader_test node scripts/browser-fullscreen-reader-v110369.mjs
+          run_reader_test node scripts/browser-saved-documents-v110344.mjs
+          run_reader_test node scripts/reader-ai/browser.mjs
           # Current compact scanner uses bounded automatic proposals; legacy manual suite is retained.
-          node scripts/scanner-clear/browser-extraction.mjs
-          node scripts/v110411/browser-filing.mjs
-          node scripts/reader-foundation/browser-current-load.mjs
-          node scripts/v110411/browser-rate.mjs
-          node scripts/v110466/browser-rate.mjs
-          node scripts/v110464/browser-rate.mjs
-          node scripts/contract-rate/browser.mjs
-          node scripts/v110410/browser-bol-columns.mjs
-          node scripts/v110394/browser-bol-form.mjs
-          node scripts/v110393/browser-bol-source.mjs
-          node scripts/browser-owned-reader.mjs
-          node scripts/v110384/browser-rows.mjs
-          node scripts/browser-ratecon-structure-v110388.mjs
-          reader_test_status=0
-          node scripts/v110373/browser-reader-evidence.mjs || reader_test_status=1
-          node scripts/v110382/browser-bol.mjs || reader_test_status=1
-          TEST_DAMAGED_BOL=1 node scripts/v110382/browser-bol.mjs || reader_test_status=1
-          node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
-          TEST_NATIVE_CELLS=1 node scripts/browser-native-pdf-v110363.mjs || reader_test_status=1
-          node scripts/browser-scanner-capture-v110329.mjs || reader_test_status=1
-          node scripts/browser-scanner-workflow-v110328.mjs || reader_test_status=1
+          run_reader_test node scripts/scanner-clear/browser-extraction.mjs
+          run_reader_test node scripts/v110411/browser-filing.mjs
+          run_reader_test node scripts/reader-foundation/browser-current-load.mjs
+          run_reader_test node scripts/v110411/browser-rate.mjs
+          run_reader_test node scripts/v110466/browser-rate.mjs
+          run_reader_test node scripts/v110464/browser-rate.mjs
+          run_reader_test node scripts/contract-rate/browser.mjs
+          run_reader_test node scripts/v110410/browser-bol-columns.mjs
+          run_reader_test node scripts/v110394/browser-bol-form.mjs
+          run_reader_test node scripts/v110393/browser-bol-source.mjs
+          run_reader_test node scripts/browser-owned-reader.mjs
+          run_reader_test node scripts/v110384/browser-rows.mjs
+          run_reader_test node scripts/browser-ratecon-structure-v110388.mjs
+          run_reader_test node scripts/v110373/browser-reader-evidence.mjs
+          run_reader_test node scripts/v110382/browser-bol.mjs
+          run_reader_test env TEST_DAMAGED_BOL=1 node scripts/v110382/browser-bol.mjs
+          run_reader_test node scripts/browser-native-pdf-v110363.mjs
+          run_reader_test env TEST_NATIVE_CELLS=1 node scripts/browser-native-pdf-v110363.mjs
+          run_reader_test node scripts/browser-scanner-capture-v110329.mjs
+          run_reader_test node scripts/browser-scanner-workflow-v110328.mjs
           exit "$reader_test_status"
       - uses: actions/upload-artifact@v4
         if: always()

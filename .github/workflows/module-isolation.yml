@@ -12,7 +12,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     defaults:
       run:
         shell: bash
@@ -62,37 +62,37 @@ jobs:
             sleep 1
           done
           failed=0
-          node scripts/v110433/documents-export.test.mjs
-          node scripts/v110450/mirror.test.mjs
-          node scripts/v110450/browser-mirror.mjs
-          node scripts/v110434/core.test.mjs
-          node scripts/v110434/scan-match.test.mjs
-          node scripts/v110434/browser-import.mjs
-          node scripts/v110435/browser-phone-home.mjs
-          node scripts/v110431/large-backup.test.mjs
-          node scripts/v110431/browser-large.mjs 2>&1 | tee /tmp/browser-large-v110431.log
-          node scripts/v110430/zip.test.mjs
-          node scripts/v110430/browser-export.mjs 2>&1 | tee /tmp/browser-export-v110430.log
-          node scripts/v110420/browser-bol-filing.mjs 2>&1 | tee /tmp/browser-bol-filing-v110420.log
-          node scripts/v110419/browser-source-copies.mjs 2>&1 | tee /tmp/browser-source-copies-v110419.log
-          node scripts/v110418/browser-identity.mjs 2>&1 | tee /tmp/browser-identity-v110418.log
-          node scripts/v110417/browser-loads.mjs 2>&1 | tee /tmp/browser-loads-v110417.log
-          node scripts/v110416/browser-weeks.mjs 2>&1 | tee /tmp/browser-weeks-v110416.log
-          node scripts/v110415/browser-documents.mjs 2>&1 | tee /tmp/browser-documents-v110415.log
-          node scripts/v110414/browser-recovery.mjs 2>&1 | tee /tmp/browser-recovery-v110414.log
-          node scripts/v110413/browser-evidence.mjs 2>&1 | tee /tmp/browser-evidence-v110413.log
-          node scripts/v110412/browser-transfer.mjs 2>&1 | tee /tmp/browser-transfer-v110412.log
-          node scripts/v110409/browser-edit-gps.mjs 2>&1 | tee /tmp/browser-edit-gps-v110409.log
-          node scripts/v110408/browser-sleeper-midnight.mjs 2>&1 | tee /tmp/browser-sleeper-midnight-v110408.log
-          node scripts/v110429/browser-portable.mjs 2>&1 | tee /tmp/browser-portable-v110429.log
-          node scripts/v110407/browser-team-import.mjs 2>&1 | tee /tmp/browser-team-import-v110407.log
-          node scripts/v110402/browser-backup.mjs 2>&1 | tee /tmp/browser-backup-v110402.log
-          node scripts/browser-scanner-capture-v110329.mjs 2>&1 | tee /tmp/browser-scanner-capture-v110329.log
-          node scripts/browser-scanner-workflow-v110328.mjs 2>&1 | tee /tmp/browser-scanner-workflow-v110328.log
-          node scripts/browser-smart-scan-v110323.mjs 2>&1 | tee /tmp/browser-smart-scan-v110323.log
-          node scripts/browser-load-guide-v110322.mjs 2>&1 | tee /tmp/browser-load-guide-v110322.log
-          node scripts/browser-invoice-send-v110320.mjs 2>&1 | tee /tmp/browser-invoice-send-v110320.log
-          for test in browser-midnight-prefix-v110319 browser-smart-scan-recovery-v110318 browser-wizard-midnight-v110317 browser-insert-interaction-v110316 browser-paper-log-v110315 browser-saved-scan-recovery-v110312 browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-resize-grabbers-v111 browser-logbook-followup-v11021 browser-motive-override-v11023 browser-canonical-continuity-v11026 browser-duty-graph-continuity browser-modern-editor-v11027 browser-dot-officer-email-v11028 browser-ratecon-one-way-v11029 browser-persistent-guide-v110311 browser-service-worker-v110; do
+          if ! node scripts/v110433/documents-export.test.mjs; then failed=1; fi
+          if ! node scripts/v110450/mirror.test.mjs; then failed=1; fi
+          if ! node scripts/v110450/browser-mirror.mjs; then failed=1; fi
+          if ! node scripts/v110434/core.test.mjs; then failed=1; fi
+          if ! node scripts/v110434/scan-match.test.mjs; then failed=1; fi
+          if ! node scripts/v110434/browser-import.mjs; then failed=1; fi
+          if ! node scripts/v110435/browser-phone-home.mjs; then failed=1; fi
+          if ! node scripts/v110431/large-backup.test.mjs; then failed=1; fi
+          if ! node scripts/v110431/browser-large.mjs 2>&1 | tee /tmp/browser-large-v110431.log; then failed=1; fi
+          if ! node scripts/v110430/zip.test.mjs; then failed=1; fi
+          if ! node scripts/v110430/browser-export.mjs 2>&1 | tee /tmp/browser-export-v110430.log; then failed=1; fi
+          if ! node scripts/v110420/browser-bol-filing.mjs 2>&1 | tee /tmp/browser-bol-filing-v110420.log; then failed=1; fi
+          if ! node scripts/v110419/browser-source-copies.mjs 2>&1 | tee /tmp/browser-source-copies-v110419.log; then failed=1; fi
+          if ! node scripts/v110418/browser-identity.mjs 2>&1 | tee /tmp/browser-identity-v110418.log; then failed=1; fi
+          if ! node scripts/v110417/browser-loads.mjs 2>&1 | tee /tmp/browser-loads-v110417.log; then failed=1; fi
+          if ! node scripts/v110416/browser-weeks.mjs 2>&1 | tee /tmp/browser-weeks-v110416.log; then failed=1; fi
+          if ! node scripts/v110415/browser-documents.mjs 2>&1 | tee /tmp/browser-documents-v110415.log; then failed=1; fi
+          if ! node scripts/v110414/browser-recovery.mjs 2>&1 | tee /tmp/browser-recovery-v110414.log; then failed=1; fi
+          if ! node scripts/v110413/browser-evidence.mjs 2>&1 | tee /tmp/browser-evidence-v110413.log; then failed=1; fi
+          if ! node scripts/v110412/browser-transfer.mjs 2>&1 | tee /tmp/browser-transfer-v110412.log; then failed=1; fi
+          if ! node scripts/v110409/browser-edit-gps.mjs 2>&1 | tee /tmp/browser-edit-gps-v110409.log; then failed=1; fi
+          if ! node scripts/v110408/browser-sleeper-midnight.mjs 2>&1 | tee /tmp/browser-sleeper-midnight-v110408.log; then failed=1; fi
+          if ! node scripts/v110429/browser-portable.mjs 2>&1 | tee /tmp/browser-portable-v110429.log; then failed=1; fi
+          if ! node scripts/v110407/browser-team-import.mjs 2>&1 | tee /tmp/browser-team-import-v110407.log; then failed=1; fi
+          if ! node scripts/v110402/browser-backup.mjs 2>&1 | tee /tmp/browser-backup-v110402.log; then failed=1; fi
+          if ! node scripts/browser-scanner-capture-v110329.mjs 2>&1 | tee /tmp/browser-scanner-capture-v110329.log; then failed=1; fi
+          if ! node scripts/browser-scanner-workflow-v110328.mjs 2>&1 | tee /tmp/browser-scanner-workflow-v110328.log; then failed=1; fi
+          if ! node scripts/browser-smart-scan-v110323.mjs 2>&1 | tee /tmp/browser-smart-scan-v110323.log; then failed=1; fi
+          if ! node scripts/browser-load-guide-v110322.mjs 2>&1 | tee /tmp/browser-load-guide-v110322.log; then failed=1; fi
+          if ! node scripts/browser-invoice-send-v110320.mjs 2>&1 | tee /tmp/browser-invoice-send-v110320.log; then failed=1; fi
+          for test in browser-midnight-prefix-v110319 browser-smart-scan-recovery-v110318 browser-wizard-midnight-v110317 browser-insert-interaction-v110316 browser-paper-log-v110315 browser-saved-scan-recovery-v110312 browser-isolation-v110 browser-logbook-editor-v110 browser-compact-editor-v111 browser-resize-grabbers-v111 browser-logbook-followup-v11021 browser-motive-override-v11023 browser-canonical-continuity-v11026 browser-duty-graph-continuity browser-modern-editor-v11027 browser-dot-officer-email-current browser-ratecon-one-way-v11029 browser-persistent-guide-v110311 browser-service-worker-v110; do
             if ! node scripts/$test.mjs 2>&1 | tee /tmp/$test.log; then failed=1; fi
           done
           exit "$failed"
@@ -106,7 +106,7 @@ jobs:
           TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-canonical-continuity-v11026.mjs
           TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-duty-graph-continuity.mjs
           TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-modern-editor-v11027.mjs
-          TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-dot-officer-email-v11028.mjs
+          TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-dot-officer-email-current.mjs
           TEST_ORIGIN=https://owner-op-road-ready.vercel.app node scripts/browser-ratecon-one-way-v11029.mjs
       - uses: actions/upload-artifact@v4
         if: always()

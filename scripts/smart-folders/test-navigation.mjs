@@ -169,6 +169,12 @@ for(const file of ['scripts/v110411/browser-filing.mjs','scripts/v110410/browser
   "    await page.getByText('Document reading information',{exact:true}).click();\n    await page.getByRole('button',{name:/^Extracted details/}).click();\n    const displayed=page.locator('.scan-details-v105 > details > div');");
 }
 
+// Rate-source warnings share the same collapsed information disclosure.
+// Open it without changing the source-supported carrier-pay assertion.
+patch('scripts/v110411/browser-rate.mjs',
+ "  assert.ok(!(await page.getByRole('region',{name:'Document reading checks',exact:true}).innerText())",
+ "  await page.getByText('Document reading information',{exact:true}).click();\n  assert.ok(!(await page.getByRole('region',{name:'Document reading checks',exact:true}).innerText())");
+
 // Home coverage requires a separate source-hash-bound evidence-facts review.
 // Preserve the final no-warning assertion after that real UI confirmation.
 patch('scripts/v110411/browser-filing.mjs',
@@ -192,6 +198,14 @@ patch('scripts/reader-foundation/browser-current-load.mjs',
     assert.deepEqual(storeAfterShipment.evidenceAliases||[],storeBeforeShipment.evidenceAliases||[],'selection never invents a reviewed load link');
     await page.getByRole('button',{name:'Choose load folder',exact:true}).click();
    }`);
+
+// Saved evidence opens its current folder through the renamed completion action.
+patch('scripts/browser-smart-scan-recovery-v110318.mjs',
+ "name:kind==='resume'?'Done · Open guide':'Done · Open load',exact:true",
+ "name:kind==='resume'?'Done · Open guide':'Done · Open load folder',exact:true");
+patch('scripts/browser-smart-scan-recovery-v110318.mjs',
+ "    await done.click();\n    if(kind==='resume')await expectMission(page);",
+ "    await done.click();\n    if(kind==='resume')await expectMission(page);\n    else {await page.getByRole('heading',{name:'76543210',exact:true}).waitFor();await page.getByRole('button',{name:'‹ Home',exact:true}).click();await page.locator('.adaptive-home-v1038.active-load').waitFor();}");
 
 // This scenario deliberately seeds two loads with the same legacy record ID.
 // Existing linkage normalization repairs identity only; compare every other
