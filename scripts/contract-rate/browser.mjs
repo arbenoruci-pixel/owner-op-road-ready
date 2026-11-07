@@ -26,7 +26,7 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]].filter(([na
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'contract-rate-'));
   const context=await browser.launchPersistentContext(profile,{headless:true,viewport:{width:390,height:844},hasTouch:true,serviceWorkers:'block'});
   const page=await context.newPage(),errors=[],aiCalls=[];page.setDefaultTimeout(45000);page.on('pageerror',error=>errors.push(error.message));
-  page.on('request',request=>{if(request.url().includes('/api/reader/classify'))aiCalls.push(request.url());});
+  page.on('request',request=>{if(request.url().includes('/api/reader/classify'))aiCalls.push({url:request.url(),method:request.method()});});
   try{
     await setupRoutes(context);
     const state=baseState();state.view='logbook';state.testInstructionStore={loads:[],documents:[]};await seed(page,state);
@@ -42,9 +42,9 @@ for(const [name,browser]of [['chromium',chromium],['webkit',webkit]].filter(([na
     assert.equal(result.documents.length,1);assert.equal(result.documents[0].kind,'rate_confirmation');
     assert.equal(result.documents[0].reference,process.env.CONTRACT_RATE_REFERENCE||'654321-0');
     assert.equal(result.documents[0].fields.totalRate.value,'4400.00');assert.equal(result.documents[0].canAutoFile,false);
-    assert.deepEqual(aiCalls,[],'source-supported contract pages do not need paid AI calls');assert.deepEqual(errors,[]);
+    assert.deepEqual(aiCalls.filter(call=>call.method!=='GET'),[],'only unpaid availability GETs are allowed; contract pages must never send classification POSTs');assert.deepEqual(errors,[]);
     await page.screenshot({path:`${output}/${name}-contract.png`,fullPage:true});
-    console.log(`PASS ${name}: native three-page contract → RateCon selector, one document, exact reference/total, zero AI requests`);
+    console.log(`PASS ${name}: native three-page contract → RateCon selector, one document, exact reference/total, zero paid AI requests`);
   }catch(error){
     await page.screenshot({path:`${output}/${name}-failure.png`,fullPage:true}).catch(()=>{});
     fs.writeFileSync(`${output}/${name}-failure.txt`,JSON.stringify({error:String(error),errors,aiCalls,body:await page.locator('body').innerText()},null,2));throw error;

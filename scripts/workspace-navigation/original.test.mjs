@@ -28,3 +28,20 @@ test('authentication failures remain explicit and never fall back to caller-sele
  await assert.rejects(readDocumentOriginal({clientDocumentId:'client'},deps),/Sign in/);assert.equal(calls,0);
  for(const status of [401,403])await assert.rejects(readDocumentOriginal({clientDocumentId:'client',storage_path:'foreign/file.pdf'},{...deps,getAccessToken:async()=> 'synthetic',fetch:async url=>{assert.equal(url,'/api/documents/read-original');return {ok:false,status};}}),/Sign in/);
 });
+test('active account originals do not use the separate legacy sign-in',async()=>{
+ const blob=new Blob(['POD']);
+ assert.equal(await readDocumentOriginal({clientDocumentId:'account-pod'},{readLocal:async()=>null,getAccountOriginal:async id=>{assert.equal(id,'account-pod');return {signedIn:true,blob};},getAccessToken:()=>assert.fail('legacy token must not be needed'),fetch:()=>assert.fail()}),blob);
+ await assert.rejects(readDocumentOriginal({clientDocumentId:'account-pod'},{readLocal:async()=>null,getAccountOriginal:async()=>({signedIn:true,blob:null}),getAccessToken:async()=>null,fetch:()=>assert.fail()}),/has not synced/);
+});
+test('temporary account lookup failure permits independent owner-scoped legacy original',async()=>{
+ const unavailable=Object.assign(new Error('Account unavailable'),{code:'ACCOUNT_ORIGINAL_UNAVAILABLE'}),blob=new Blob(['legacy']);
+ const deps={readLocal:async()=>null,getAccountOriginal:async()=>{throw unavailable;},getAccessToken:async()=> 'synthetic',fetch:async url=>{assert.equal(url,'/api/documents/read-original');return {ok:true,status:200,blob:async()=>blob};}};
+ assert.equal(await readDocumentOriginal({clientDocumentId:'client'},deps),blob);
+ await assert.rejects(readDocumentOriginal({clientDocumentId:'client'},{...deps,getAccessToken:async()=>null}),/Account unavailable/);
+ await assert.rejects(readDocumentOriginal({clientDocumentId:'client'},{...deps,fetch:async()=>({status:404})}),/Account unavailable/);
+});
+test('account identity and original integrity failures never fall back',async()=>{
+ for(const message of ['Account changed','Different account','Conflicting originals','Invalid hash']){
+  await assert.rejects(readDocumentOriginal({clientDocumentId:'client'},{readLocal:async()=>null,getAccountOriginal:async()=>{throw Error(message);},getAccessToken:()=>assert.fail('must not fall back'),fetch:()=>assert.fail()}),new RegExp(message));
+ }
+});

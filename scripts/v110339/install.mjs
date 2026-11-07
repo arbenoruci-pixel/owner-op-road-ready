@@ -2,6 +2,12 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 export function installAngledReaderV110339(){
   const root='source/src/modules/scan/v3/';
+  // Some historic scanner materializers restore the original gradient detector.
+  // The angled-reader checkpoint requires the boundary detector installed in .329.
+  const edge=root+'EdgeDetectorV3.js';
+  const edgeSource=fs.readFileSync(edge,'utf8');
+  if(edgeSource.includes('outer-paper-gradient-segmentation-v3'))
+    fs.writeFileSync(edge,"export {detectDocumentBoundary as detectDocumentEdgesV3} from './documentBoundaryV110329.js';\n");
   fs.copyFileSync('scripts/v110339/cornerOrder.js',root+'cornerOrderV110339.js');
   fs.copyFileSync('scripts/v110339/processDocument.js',root+'processDocumentV110330.js');
   const path=root+'scannerTypesV3.js';let source=fs.readFileSync(path,'utf8');

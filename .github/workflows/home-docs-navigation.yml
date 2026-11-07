@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'scripts/workspace-navigation/**'
+      - 'scripts/smart-folders/**'
       - 'scripts/smart-import/**'
       - 'scripts/reliability-sync/**'
       - 'scripts/import-display/**'
@@ -39,7 +40,8 @@ jobs:
           node scripts/verify-isolation-locks-v110.mjs
       - name: Install browser engines
         run: |
-          npm install --no-save --package-lock=false playwright@1.55.1
+          npm install --no-save --package-lock=false playwright@1.55.1 react-test-renderer@18.3.1
+          TEST_RENDERER=$PWD/node_modules/react-test-renderer node scripts/smart-folders/ui.test.mjs
           npx playwright install --with-deps chromium webkit
       - name: Phone, iPad, shared records and filing flows
         run: |
@@ -51,7 +53,7 @@ jobs:
             sleep 1
           done
           failed=0
-          for test in reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
+          for test in smart-folders/browser-flow.mjs reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
             if ! node "scripts/$test"; then failed=1; fi
           done
           exit "$failed"

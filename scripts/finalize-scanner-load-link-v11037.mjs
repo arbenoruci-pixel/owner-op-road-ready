@@ -41,7 +41,10 @@ patch(sheet,'            <input type="date" value={documentDate', '            <
 const storage='source/src/modules/scan/rateConSaveStabilityV10964.js';
 patch(storage,"    'type','title','loadNo','canonicalLoadNo','orderNo'", "    'loadAssignmentStatusV11037','type','title','loadNo','canonicalLoadNo','orderNo'");
 const foundation='source/src/modules/documents/documentFoundationV105.js';
-patch(foundation,'    originalPreserved:analysis?.scanMeta?.originalPreserved !== false,',"    loadAssignmentStatusV11037:fields.loadAssignmentStatusV11037 || '',\n    originalPreserved:analysis?.scanMeta?.originalPreserved !== false,");
+// The v109 baseline preserves originals unconditionally. Anchor to the record's
+// sync field so the separate legacy migration record remains unchanged.
+patch(foundation,"    syncState:textV105(stored.cloud?.status || local.sync_state || existing?.syncState || 'local_only'),",
+ "    syncState:textV105(stored.cloud?.status || local.sync_state || existing?.syncState || 'local_only'),\n    loadAssignmentStatusV11037:fields.loadAssignmentStatusV11037 || '',");
 patch(foundation,'function cleanLegacyDocumentV105(document = {}, state = {}, businessStore = {}) {',"function cleanLegacyDocumentV105(document = {}, state = {}, businessStore = {}) {\n  document = {...document, loadAssignmentStatusV11037:document.loadAssignmentStatusV11037 || document.extracted?.loadAssignmentStatusV11037 || document.metadata?.loadAssignmentStatusV11037 || ''};");
 patch(foundation,"    if (migrated.status === 'needs_review' && LOAD_DOCUMENT_TYPES_V105.has(migrated.type) && !migrated.canonicalLoadNo) {", "    if (migrated.loadAssignmentStatusV11037 !== 'unassigned' && migrated.status === 'needs_review' && LOAD_DOCUMENT_TYPES_V105.has(migrated.type) && !migrated.canonicalLoadNo) {");
 const archive='source/src/modules/owneros/archiveEvidenceV1103.js';

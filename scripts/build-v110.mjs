@@ -166,6 +166,8 @@ steps.push('native-pdf-route/release.mjs','../packages/smart-reader-core/test/na
 steps.push('native-rate-broker/release.mjs','../packages/smart-reader-core/test/native-rate-broker.test.mjs','verify-isolation-locks-v110.mjs');
 steps.push('email-connect/install.mjs','email-connect/server.test.mjs','scanner-clear/email.test.mjs','email-connect/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('hos-midnight/install.mjs','hos-midnight/core.test.mjs','hos-midnight/integration.test.mjs','hos-midnight/legacy-fixture.mjs','verify-split-sleeper-v966.mjs','hos-midnight/ui-install.mjs','hos-midnight/rendered.test.mjs','hos-midnight/release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('smart-folders/install.mjs','smart-folders/test-navigation.mjs','test-support/adapt-reader-preview-tests.mjs','smart-folders/core.test.mjs','smart-folders/original.test.mjs','smart-folders/ui.test.mjs','workspace-navigation/original.test.mjs','smart-folders/release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('camera-performance/install.mjs','camera-performance/equivalence.test.mjs','v110428/boundary.test.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")

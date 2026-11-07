@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {optimizeBoundarySource} from './transform.mjs';
+const historical=fs.readFileSync('scripts/v110334/documentBoundary.js','utf8');
+assert.equal(createHash('sha256').update(historical).digest('hex'),'1ae9e6b43b09a9ea1be057f431012b6cc0252cf8f99fe8b226a9155a00ca97b3','Historical detector remains unchanged');
+const optimized=optimizeBoundarySource(historical);
+const target='source/src/modules/scan/v3/documentBoundaryV110329.js';
+const current=fs.readFileSync(target,'utf8');
+assert.ok(current===historical||current===optimized,'Unexpected final detector; do not overwrite unknown changes');
+assert.equal(fs.readFileSync('source/src/modules/scan/v3/EdgeDetectorV3.js','utf8'),"export {detectSafeDocumentBoundary as detectDocumentEdgesV3} from './safeDocumentBoundaryV110428.js';\n",'Keep framed-page guard');
+assert.ok(fs.readFileSync('source/src/modules/scan/v3/safeDocumentBoundaryV110428.js','utf8').includes("from './documentBoundaryV110329.js'"),'Guard must use this detector');
+if(current!==optimized)fs.writeFileSync(target,optimized);
+console.log('PASS — allocation-only camera detector optimization; guard and gate unchanged');
