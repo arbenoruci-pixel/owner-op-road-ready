@@ -188,6 +188,12 @@ patch('scripts/v110378/test-review-regressions.mjs',
   return dir;
 }`);
 
+// Persist the selected recorded day before reload. The prior immediate reload
+// could restore the delivery day before the final Back-day navigation was saved.
+patch('scripts/browser-shipment-carryover-v110367.mjs',
+ "await page.reload();await openLog(page);await section(page,'Log').click();\n   assert.match(await eventRow(page,'driving').locator('.event-route-meta').innerText(),/BOL 123.*Trailer UNIT-A/);",
+ "await eventRow(page,'driving').waitFor();await waitState(page,s=>s.activeDay===middleDay);await page.reload();await openLog(page);await section(page,'Log').click();\n   assert.match(await eventRow(page,'driving').locator('.event-route-meta').innerText(),/BOL 123.*Trailer UNIT-A/);");
+
 // Inventory mounts asynchronously above Export Everything. Wait for the exact
 // seeded inventory before clicking; keep cancellation and all binary checks.
 patch("scripts/v110431/browser-large.mjs",

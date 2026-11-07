@@ -142,7 +142,17 @@ for(const scenario of scenarios){
       const img=suggestions.getByRole('img',{name:'Original document page for checking the reading',exact:true});
       await img.waitFor();
       const originalBytes=await img.evaluate(async img=>Array.from(new Uint8Array(await(await fetch(img.src)).arrayBuffer())));
-      assert.deepEqual(Buffer.from(originalBytes),Buffer.from(bytes,'base64'),'human review shows exact uploaded original bytes');
+      // Photo intake retains the immutable upload and a perspective-corrected
+      // review page separately. Verify the provider saw this exact review source.
+      const preparedImage=await img.evaluate(async(img,maxDimension)=>{
+        const file=await(await fetch(img.src)).blob(),source=await createImageBitmap(file,{imageOrientation:'from-image'});
+        const scale=Math.min(1,Math.max(900,maxDimension)/Math.max(source.width,source.height));
+        const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(source.width*scale));canvas.height=Math.max(1,Math.round(source.height*scale));
+        const x=canvas.getContext('2d',{alpha:false,willReadFrequently:true});x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.fillStyle='#fff';x.fillRect(0,0,canvas.width,canvas.height);x.drawImage(source,0,0,canvas.width,canvas.height);source.close();
+        const encoded=document.createElement('canvas');encoded.width=canvas.width;encoded.height=canvas.height;encoded.getContext('2d',{alpha:false}).putImageData(x.getImageData(0,0,canvas.width,canvas.height),0,0);
+        const blob=await new Promise(resolve=>encoded.toBlob(resolve,'image/jpeg',.85));return new Promise(resolve=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.readAsDataURL(blob);});
+      },AI_READER_LIMITS.maxImageDimension);
+      assert.equal(preparedImage,requests[0].image,'provider input is encoded from the exact displayed retained review page');
       await suggestions.screenshot({path:`${output}/chromium-${scenario}-source-confirmation.png`});
       await suggestions.getByRole('button',{name:'Close',exact:true}).click();
       assert.equal((await exportReview(page)).documents[0].fields.poNumber.value,null,'opening and closing review is not confirmation');
@@ -172,8 +182,10 @@ for(const scenario of scenarios){
       assert.ok(serialized.includes(AI_EXTRACTION_VERSION),'saved snapshot retains extraction version diagnostics');
       assert.ok(serialized.includes(scenario==='missing_quote'?'visual_candidates':'source_linked_candidates'),'saved snapshot retains extraction outcome');
       assert.equal(requests.length,1,'human confirmation and filing never repeat inference');
-      const blobs=await page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction('document_blobs'),q=tx.objectStore('document_blobs').getAll();tx.oncomplete=async()=>{try{resolve(await Promise.all(q.result.map(async row=>{const b=row.blob||row.file;if(!b)return null;const blob=window.__rrFixtureBlob?window.__rrFixtureBlob(b):b;return Array.from(new Uint8Array(await blob.arrayBuffer()));})));}catch(e){reject(e);}finally{db.close();}};};}));
-      assert.ok(blobs.some(b=>b&&Buffer.from(b).equals(Buffer.from(bytes,'base64'))),'exact original bytes persist after reload');
+      const assets=await page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction('capture_asset_blobs'),q=tx.objectStore('capture_asset_blobs').getAll();tx.oncomplete=async()=>{try{resolve(await Promise.all(q.result.map(async row=>{const b=row.blob||row.file;if(!b)return null;const blob=window.__rrFixtureBlob?window.__rrFixtureBlob(b):b;return {...row,blob:undefined,file:undefined,bytes:Array.from(new Uint8Array(await blob.arrayBuffer()))};})));}catch(e){reject(e);}finally{db.close();}};};}));
+      const ownedAssets=assets.filter(row=>row?.client_document_id===saved.client_document_id&&row.current);
+      assert.ok(ownedAssets.some(row=>row.variants?.some(v=>v.kind==='original')&&Buffer.from(row.bytes).equals(Buffer.from(bytes,'base64'))),'immutable uploaded PNG bytes persist in original capture asset after reload');
+      assert.ok(ownedAssets.some(row=>row.variants?.some(v=>v.kind==='perspective-corrected')&&Buffer.from(row.bytes).equals(Buffer.from(originalBytes))),'human review bytes exactly match retained perspective-corrected source after reload');
       fs.writeFileSync(`${output}/chromium-saved-analysis.json`,JSON.stringify(snapshot,null,2));
     }else if(scenario==='cancel'){
       assert.equal((proposed.aiExtraction?.candidates||[]).length,0);
