@@ -138,6 +138,19 @@ for(const file of [
  fs.writeFileSync(file,source.replaceAll(before,after).replaceAll("name:'Reader preview · Close',exact:true","name:/^(?:All reading details|Reader preview · Close)$/"));
 }
 
+// Compact scanner keeps the same AI classification evidence inside detailed
+// source review rather than the former noncompact summary banner. Preserve the
+// exact call count, unassigned filing type and human-confirmed provenance checks.
+patch('scripts/reader-ai/browser.mjs',
+ `    await page.getByLabel('AI document check',{exact:true}).getByText(/AI suggests POD/).waitFor();
+    assert.equal(aiCalls,1);
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'other','suggestion must not silently change filing type');
+    await page.getByRole('button',{name:/^(?:All reading details|Reader preview · Check source)$/}).click();`,
+ `    await page.getByRole('button',{name:/^(?:All reading details|Reader preview · Check source)$/}).click();
+    await page.getByLabel('AI type suggestion',{exact:true}).getByText(/AI suggests POD/).waitFor();
+    assert.equal(aiCalls,1);
+    assert.equal(await page.getByLabel('Document type',{exact:true}).inputValue(),'other','suggestion must not silently change filing type');`);
+
 // The locked DOT wizard already opens at Review; no preparation or sending is needed.
 patch('scripts/workspace-navigation/browser-navigation.mjs',
  "await page.getByRole('button',{name:button,exact:true}).click();await page.getByRole('button',{name:arrival,exact:true}).waitFor();await page.getByRole('button',{name:'Back',exact:true}).click();await home();",
@@ -147,7 +160,7 @@ patch('scripts/workspace-navigation/browser-navigation.mjs',
 // to the recorded day before the existing exact persisted-event comparison.
 patch('scripts/v110421/browser-gps-sign.mjs',
  "await page.reload();await page.locator('.logbook-home-screen-v988, .logbook-ui-v110').first().waitFor();",
- "await page.reload();await page.locator('.inspection-wizard, .phone-day-v435, .adaptive-home-v1038, .logbook-home-screen-v988, .logbook-ui-v110').first().waitFor();if(await page.getByRole('main',{name:'DOT inspection preparation'}).isVisible())await page.getByRole('button',{name:'Back',exact:true}).click();if(await page.getByRole('button',{name:'Open logbook',exact:true}).isVisible())await page.getByRole('button',{name:'Open logbook',exact:true}).click();if(await page.getByRole('button',{name:'Open today',exact:true}).isVisible())await page.getByRole('button',{name:'Open today',exact:true}).click();await page.locator('.phone-day-v435').waitFor();");
+ "await page.reload();const phoneDay=page.locator('.phone-day-v435');const reopenDeadline=Date.now()+30000;while(!(await phoneDay.isVisible())&&Date.now()<reopenDeadline){const wizard=page.getByRole('main',{name:'DOT inspection preparation'});if(await wizard.isVisible()){await page.getByRole('button',{name:'Back',exact:true}).click();await wizard.waitFor({state:'hidden'});}else if(await page.getByRole('button',{name:'Open logbook',exact:true}).isVisible()){await page.getByRole('button',{name:'Open logbook',exact:true}).click();}else if(await page.getByRole('button',{name:'Open today',exact:true}).isVisible()){await page.getByRole('button',{name:'Open today',exact:true}).click();}await page.waitForTimeout(100);}await phoneDay.waitFor();");
 
 // Keep this historical editor fixture independent of wall-clock/current-day
 // initialization. Seed the intentional current empty day before taking the
@@ -174,6 +187,12 @@ patch('scripts/v110378/test-review-regressions.mjs',
   }
   return dir;
 }`);
+
+// Inventory mounts asynchronously above Export Everything. Wait for the exact
+// seeded inventory before clicking; keep cancellation and all binary checks.
+patch("scripts/v110431/browser-large.mjs",
+ "await page.getByRole('button',{name:/Export & Backup/}).click();await page.getByRole('button',{name:'Export Everything',exact:true}).click();",
+ "await page.getByRole('button',{name:/Export & Backup/}).click();await page.locator('.backup-mini-grid div').filter({hasText:'saved files'}).getByText('194',{exact:true}).waitFor();await page.getByRole('button',{name:'Export Everything',exact:true}).click();");
 
 // Synthetic canvas drawing must not compete with production analysis on CI.
 // Cache only identical raster states, including the legacy mutable line width.

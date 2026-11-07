@@ -73,7 +73,8 @@ jobs:
           node scripts/browser-fullscreen-reader-v110369.mjs
           node scripts/browser-saved-documents-v110344.mjs
           node scripts/reader-ai/browser.mjs
-          node scripts/reader-ai/browser-extraction.mjs
+          # Current compact scanner uses bounded automatic proposals; legacy manual suite is retained.
+          node scripts/scanner-clear/browser-extraction.mjs
           node scripts/v110411/browser-filing.mjs
           node scripts/reader-foundation/browser-current-load.mjs
           node scripts/v110411/browser-rate.mjs
