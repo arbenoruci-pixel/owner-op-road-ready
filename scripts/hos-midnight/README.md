@@ -18,6 +18,13 @@ continuity is retained; manual bounded rests and explicitly saved ends do not
 gain unrecorded rest time. Actual driving,
 shift, break and cycle violations retain their separate checks.
 
+ON-only time after an unfinished partner can exhaust current driving
+availability while earlier driving remains provisionally valid. Pending review
+checks the driving that occurred; current expired clocks still show zero
+available driving time and the interrupted rest still needs a qualifying partner.
+A recorded minute of work separates rest blocks for the ten-hour reset; only
+the fresh continuous rest contributes to that reset.
+
 The compact clock panel refreshes from the existing read-only clock hook and
 shows the pending requirement or highest-priority limit warning. The build
 installs this correction after the existing materializers, validates the exact

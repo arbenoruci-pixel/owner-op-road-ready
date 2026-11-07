@@ -235,6 +235,8 @@ function completedPairs(rows,blocks,periods,scoring) {
 function pendingPairs(rows,blocks,periods,pairs,nowAbs,scoring) {
   if(!rows.length||rows.at(-1).endAbs<nowAbs)return [];
   const pending=[];
+  const lastDrivingEnd=rows.reduce((end,event)=>event.status==='D'
+    ?Math.max(end,event.endAbs):end,-Infinity);
   for(const first of periods) {
     // Long completed resets already provide standard clocks; do not show an
     // unnecessary provisional condition for a fresh, unrestricted shift.
@@ -260,9 +262,16 @@ function pendingPairs(rows,blocks,periods,pairs,nowAbs,scoring) {
         partnerRemainingMinutes:minimum-progress,
         summary:`${label(first.duration)} ${first.longEligible?'SB':'OFF/SB'} · ${label(minimum-progress)} ${role==='long'?'SB':'OFF/SB'} still required`};
       const current=usage(rows,candidate,nowAbs);
-      if(current.driveExpired||current.shiftExpired)continue;
+      // The14h limit prohibits driving after the window. ON-only time after
+      // an interrupted rest can exhaust current allowance while a future
+      // partner still validates earlier driving. Shift usage is monotonic,
+      // so its value at the latest observed Driving end checks every drive.
+      const drovePastWindow=lastDrivingEnd>first.endAbs
+        &&usage(rows,candidate,lastDrivingEnd).shiftExpired;
+      if(current.driveExpired||drovePastWindow)continue;
       // A missing minute or ended short attempt cannot be assumed to be the
-      // continuing partner. Its elapsed time remains on the shift clock.
+      // continuing partner. Its elapsed time remains on the shift clock,
+      // including the unchanged expired/zero current allowance below.
       pending.push({...candidate,...current,lineage:[...context.lineage,candidate]});
     }
   }

@@ -87,6 +87,60 @@ try {
     assert.ok(violationRangesForDay(state.eventsByDay,nextDay).some(r=>r.type==='window14'&&r.startMin===0&&r.endMin===30));
     assert.ok(calculateHosClocks(state,at(1470)).warnings.some(w=>w.severity==='high'));
   });
+
+  check('ON-only time after an interrupted partner keeps earlier driving pending and live availability at zero',()=>{
+    mock.timers.setTime(at(1799).getTime());
+    const rows=overnightFixture({live:false,restEnd:1798});
+    rows.push(row('on-after-interruption','ON',1798,1799));
+    const state=stateFor(rows);state.currentStatus='ON';state.activeDay=nextDay;
+    freeze(state);const before=structuredClone(state);
+    const review=analyzeLinkedHos(state.eventsByDay,day,state.certifyStatus);
+    assert.equal(review.split?.pending,true);
+    assert.equal(review.split.partnerRemainingMinutes,446,'the interrupted attempt requires a new qualifying partner');
+    assert.ok(!review.violationRanges.some(r=>r.type==='window14'));
+    const live=calculateHosClocks(state,at(1799));
+    assert.equal(live.splitSleeper.pending,true);
+    assert.equal(live.shift.remainingMinutes,0);
+    assert.equal(live.effectiveDrive.remainingMinutes,0);
+    assert.deepEqual(state,before);
+    const drivingRows=structuredClone(rows);drivingRows.at(-1).status='D';
+    const driving=stateFor(drivingRows);driving.currentStatus='D';
+    assert.ok(violationRangesForDay(driving.eventsByDay,nextDay).some(r=>r.type==='window14'),
+      'driving after the conditional deadline is still a real violation');
+  });
+
+  check('one ON minute breaks a ten-hour reset and only fresh continuous rest earns the reset',()=>{
+    for(const minute of [1954,2245,2399]) {
+      mock.timers.setTime(at(minute).getTime());
+      const rows=overnightFixture({live:false,restEnd:1798});
+      rows.push(row('interruption','ON',1798,1799),
+        row('fresh-sleeper','SB',1799,minute,{source:'live_status'}));
+      const state=stateFor(rows);state.activeDay=nextDay;
+      freeze(state);const before=structuredClone(state);
+      const live=calculateHosClocks(state,at(minute));
+      const review=analyzeLinkedHos(state.eventsByDay,day,state.certifyStatus);
+      assert.equal(live.reset.currentRest.durationMinutes,minute-1799,
+        'the earlier interrupted sleeper is never added to the fresh block');
+      assert.ok(!review.violationRanges.some(r=>r.type==='window14'));
+      if(minute===1954) {
+        assert.equal(review.split?.pending,true);
+        assert.equal(review.split.partnerRemainingMinutes,291);
+        assert.equal(live.splitSleeper.pending,true);
+        assert.equal(live.reset.fullReset,null);
+        assert.equal(live.shift.remainingMinutes,0);
+        assert.equal(live.effectiveDrive.remainingMinutes,0);
+      } else if(minute===2245) {
+        assert.equal(review.split?.complete,true);
+        assert.equal(live.reset.fullReset,null);
+        assert.equal(live.shift.remainingMinutes,0);
+      } else {
+        assert.ok(live.reset.fullReset);
+        assert.equal(live.drive.remainingMinutes,660);
+        assert.equal(live.shift.remainingMinutes,840);
+      }
+      assert.deepEqual(state,before);
+    }
+  });
   console.log(`PASS — ${passed} integrated HOS contracts on the materialized application`);
 } finally {
   mock.timers.reset();

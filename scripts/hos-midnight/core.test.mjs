@@ -98,15 +98,55 @@ test('independent reset-separated histories retain their earlier completed split
   assert.deepEqual(result.ranges,[],'a later10h reset and new split must not undo earlier history');
 });
 
-test('ended short partner, OFF-only partner and a one-minute ON interruption preserve real violations',()=>{
+test('unfinished partners remain provisional when later elapsed time contains no driving',()=>{
   const abandoned=overnightFixture({live:false,restEnd:1500});
   abandoned.push(row('resumed-work','ON',1500,1800));
-  assert.ok(review(abandoned,1800).ranges.some(r=>r.type==='window14'));
+  const ended=review(abandoned,1800);
+  assert.deepEqual(ended.ranges,[]);assert.equal(ended.split.pending,true);
+  assert.equal(ended.split.partnerRemainingMinutes,446,'an ended attempt gives no credit toward the next partner');
   const off=overnightFixture();off.at(-1).status='OFF';
-  assert.ok(review(off,1799).ranges.some(r=>r.type==='window14'));
+  const offOnly=review(off,1799);
+  assert.deepEqual(offOnly.ranges,[]);assert.equal(offOnly.split.pending,true);
+  assert.equal(offOnly.split.partnerRemainingMinutes,446,'OFF-only time cannot complete the required long sleeper');
   const interrupted=overnightFixture({live:false,restEnd:1563});
   interrupted.push(row('one-minute-work','ON',1563,1564),row('later-sb','SB',1564,1799));
-  assert.ok(review(interrupted,1799).ranges.some(r=>r.type==='window14'));
+  const restarted=review(interrupted,1799);
+  assert.deepEqual(restarted.ranges,[]);assert.equal(restarted.split.pending,true);
+  assert.equal(restarted.split.partnerProgressMinutes,235);
+  assert.equal(restarted.split.partnerRemainingMinutes,211,'one minute of ON breaks sleeper continuity');
+});
+
+test('actual later driving beyond the conditional window keeps the real violation',()=>{
+  for(const kind of ['ended','off-only','interrupted']) {
+    const rows=overnightFixture({live:false,restEnd:1798});
+    if(kind==='off-only')rows.at(-1).status='OFF';
+    if(kind==='interrupted') {
+      rows.at(-1).endAbs=1563;
+      rows.push(row('one-minute-work','ON',1563,1564),row('later-sb','SB',1564,1798));
+    }
+    rows.push(row('late-drive','D',1798,1799));
+    const actual=range('window14',1798,1799);
+    const result=review(rows,1799,[range('window14',1261,1353),actual],1799);
+    assert.ok(result.ranges.some(r=>r.type==='window14'&&r.startMin===1798&&r.endMin===1799),kind);
+    assert.equal(result.pending.length,0,kind);
+  }
+});
+
+test('05:58 interrupted sleeper then ON preserves earlier pending review with zero current shift allowance',()=>{
+  const rows=overnightFixture({live:false,restEnd:1798});
+  rows.push(row('on-after-short-sleeper','ON',1798,1799));
+  const before=structuredClone(rows);
+  const provisional=review(rows,1799),live=evaluateSplitSleeperReview(rows,1799);
+  assert.deepEqual(provisional.ranges,[]);assert.equal(provisional.split.pending,true);
+  assert.equal(live.pending,true);assert.equal(live.partnerRemainingMinutes,446);
+  assert.equal(live.shiftUsedMinutes,1224);assert.equal(live.shiftExpired,true);
+  assert.equal(live.shiftRemainingMinutes,0);assert.equal(live.driveRemainingMinutes,6);
+  assert.deepEqual(rows,before);
+  const future=[...rows,row('new-qualifying-sleeper','SB',1799,2245)];
+  const oneShort=review(future,2244),complete=review(future,2245);
+  assert.equal(oneShort.split.pending,true);assert.equal(oneShort.split.partnerRemainingMinutes,1);
+  assert.deepEqual(oneShort.ranges,[]);assert.equal(complete.split.complete,true);
+  assert.deepEqual(complete.ranges,[],'a later actual partner confirms the same earlier driving');
 });
 
 test('an interrupted attempt may still await a later partner while combined clocks are feasible',()=>{

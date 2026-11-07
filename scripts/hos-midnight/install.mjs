@@ -6,7 +6,7 @@ const hos='source/src/core/hos/hosEngine.js';
 const helper='source/src/core/hos/splitReviewV110.js';
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const predecessor='9642937cef8c840a1eb7a20d438dfb11ed66120ba9ebea0522101b5d67480470';
-const installed='55299293caa5fc4eb0ea6b8a397c8ec27815c736e7a496332aefc8202fabc091';
+const installed='e5d5ad9f8ac10209fb89daf8332aa4b2f0f6a11da99a7e09931d333455d0e1f7';
 const marker='SPLIT_REVIEW_FOLLOWS_OBSERVED_PARTNER';
 let source=fs.readFileSync(hos,'utf8');
 const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));
@@ -21,6 +21,10 @@ if(!source.includes(marker)) {
   assert.equal(locks.files[hos],predecessor,'HOS midnight predecessor lock changed');
   patch("import { evaluateSplitSleeper, SPLIT_DRIVE_LIMIT_MINUTES, SPLIT_SHIFT_LIMIT_MINUTES } from './splitSleeper.js';",
     "import { evaluateSplitSleeper, SPLIT_DRIVE_LIMIT_MINUTES, SPLIT_SHIFT_LIMIT_MINUTES } from './splitSleeper.js';\nimport { evaluateSplitSleeperReview, reviewSplitHosRanges } from './splitReviewV110.js';");
+  // A recorded minute of ON/D or missing time interrupts consecutive rest.
+  // The standard10h reset must use the same strict continuity as split review.
+  patch('if (last && e.startAbs <= last.endAbs + 1 && isRestStatus(e.status)) {',
+    'if (last && e.startAbs <= last.endAbs && isRestStatus(e.status)) {');
   const begin=source.indexOf('function splitAdjustedViolationRanges(');
   const end=source.indexOf('\nexport function violationRangesForDay(',begin);
   assert.ok(begin>=0&&end>begin,'HOS midnight range evaluator bounds');
