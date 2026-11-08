@@ -3,3 +3,8 @@ body:has(.rr-business-shell) .owner-auth-account-button{bottom:calc(82px + env(s
 body:has(.rr-business-shell) .owner-auth-account-menu{bottom:calc(134px + env(safe-area-inset-bottom))!important;background:#132132!important;color:#edf3fa!important;border:1px solid #37516d!important;border-radius:12px!important}
 body:has(.rr-business-shell) .owner-auth-account-menu span{color:#acbbce!important}
 body:has(.rr-business-shell) .owner-auth-offline-badge{bottom:calc(82px + env(safe-area-inset-bottom))!important;background:#132132!important;color:#acbbce!important}
+
+/* Selection must follow aria state, not legacy first-button rules. */
+.rr-business-shell .rr-smart-tabs button{background:transparent!important;color:var(--rr-muted)!important;transition:none!important}
+.rr-business-shell .rr-smart-tabs button[aria-pressed=true]{background:#153d6e!important;color:#e8f4ff!important}
+body:has(.rr-business-shell) .owner-auth-account-button{transition:none!important;background-image:none!important}

@@ -1,5 +1,6 @@
-import React from 'react';
+import React,{useEffect} from 'react';
 export default function BusinessNav({active='overview',onDashboard,onLoads,onScan,onBilling}) {
+ useEffect(()=>{window.scrollTo({top:0,left:0,behavior:'instant'});},[active]);
  const icons={overview:<><path d="M4 20V10m6 10V4m6 16v-7m6 7H2"/></>,loads:<><path d="M2 6h12v11H2zm12 4h4l4 4v3h-8"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></>,scan:<><path d="M4 8V4h4m8 0h4v4m0 8v4h-4m-8 0H4v-4M12 8v8m-4-4h8"/></>,billing:<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6m-6 4h6m-6 4h3"/></>};
  return <nav className="rr-business-nav" aria-label="Business navigation">{[['overview','Dashboard',onDashboard],['loads','Loads',onLoads],['scan','Scan',onScan],['billing','Billing',onBilling]].map(([key,label,action])=><button type="button" key={key} aria-label={{overview:'Open dashboard',loads:'Open load inbox',scan:'Scan document',billing:'Open billing'}[key]} aria-current={active===key?'page':undefined} onClick={action} disabled={!action}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icons[key]}</svg><span>{label}</span></button>)}</nav>;
 }
