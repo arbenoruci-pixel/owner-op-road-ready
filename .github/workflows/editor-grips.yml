@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -50,3 +50,4 @@ jobs:
             browser-test-results/
             /tmp/editor-grips-build.log
             /tmp/editor-grips-server.log
+

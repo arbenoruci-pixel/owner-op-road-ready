@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify-date-transfer:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       READER_OFFLINE_BUILD: '1'
@@ -67,3 +67,4 @@ jobs:
             /tmp/date-transfer-build.log
             /tmp/date-transfer-server.log
           retention-days: 3
+

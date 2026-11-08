@@ -33,7 +33,7 @@ jobs:
           python -m pip install -r experiments/owned-ocr/requirements.txt
           python -m unittest discover -s experiments/owned-ocr -p 'test_*.py' -v
   app-integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -126,3 +126,4 @@ jobs:
             /tmp/owned-reader-build.log
             /tmp/owned-reader-server.log
           retention-days: 7
+
