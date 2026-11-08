@@ -33,7 +33,7 @@ async function setup(){
   cloudClient:()=>cloud,cloudSession:()=>getSession(),getOwnerOpDb:()=>db,flushAppSnapshots:async()=>{},structuredClone,crypto:{randomUUID:()=> 'test-device'},atob,btoa,AbortController,Date:ClockDate,
   CustomEvent:class{constructor(type,options){this.type=type;this.detail=options?.detail;}},setTimeout:(fn,ms)=>timer(fn,ms),clearTimeout:key=>timers.delete(key),setInterval:(fn,ms)=>timer(fn,ms,true),clearInterval:key=>timers.delete(key)};
  window.__rrAccountState=()=>({eventsByDay:{'2026-10-28':[{id:'retained-original',status:'SB'}]}});
- vm.createContext(context);vm.runInContext(clientCode+'\nglobalThis.api={verifyDeviceSession,invalidateDeviceSession,deviceSessionStatus,assertActiveDevice,HANDOFF_KEY};',context);
+ vm.createContext(context);vm.runInContext(clientCode+'\nglobalThis.api={verifyDeviceSession,invalidateDeviceSession,deviceSessionStatus,assertActiveDevice,acknowledgeHandoff,HANDOFF_KEY};',context);
  vm.runInContext(gateCode+'\nglobalThis.Gate=DeviceSessionGate;',context);
  const render=()=>{cursor=0;tree=context.Gate({children:{type:'button',props:{children:'Edit log'}}});mounted=true;return tree;};
  const flush=async()=>{for(let n=0;n<25;n++)await Promise.resolve();render();};
@@ -112,4 +112,51 @@ test('a server response older than the retained handoff cannot downgrade it or r
  const f=await setup();f.meta.set(f.api.HANDOFF_KEY,{value:{uid:'test-owner',generation:3,records:true,archive:true}});
  f.rpc(()=>({data:{active:true,generation:2,receive:true}}));await f.advance(4000);
  assert.equal(f.locked(),true);assert.equal(f.meta.get(f.api.HANDOFF_KEY).value.generation,3);assert.match(f.message(),/handoff changed/);f.cleanup();
+});
+test('signing in again on the same device resumes its unfinished receive using the current generation',async()=>{
+ const f=await setup();
+ f.meta.set(f.api.HANDOFF_KEY,{value:{uid:'test-owner',generation:54,records:true,archive:true}});
+ f.changeSession('new-session');
+ f.rpc((name,args)=>({data:name==='road_ready_ack_device_v1'?{active:args.p_generation===55}:{active:true,generation:55,receive:false}}));
+ await f.advance(4000);
+ const handoff=f.meta.get(f.api.HANDOFF_KEY).value;
+ assert.equal(handoff.generation,55);
+ assert.equal(handoff.records,true);assert.equal(handoff.archive,true);
+ await f.api.acknowledgeHandoff(handoff.generation);
+ assert.equal(f.calls.at(-1).args.p_generation,55);
+ assert.equal(f.locked(),false);assert.equal(f.signouts.length,0);assert.equal(f.snapshots.length,0);
+ f.cleanup();
+});
+test('same-device reauthentication preserves completed records while the archive is still pending',async()=>{
+ const f=await setup();f.meta.set(f.api.HANDOFF_KEY,{value:{uid:'test-owner',generation:4,records:false,archive:true}});
+ f.rpc(()=>({data:{active:true,generation:5,receive:false}}));await f.advance(4000);
+ const handoff=f.meta.get(f.api.HANDOFF_KEY).value;
+ assert.equal(handoff.generation,5);assert.equal(handoff.records,false);assert.equal(handoff.archive,true);
+ f.cleanup();
+});
+test('a completed same-device receive never starts again after a new sign-in',async()=>{
+ const f=await setup(),saved={value:{uid:'test-owner',generation:4,records:false,archive:false}};
+ f.meta.set(f.api.HANDOFF_KEY,saved);f.rpc(()=>({data:{active:true,generation:5,receive:false}}));await f.advance(4000);
+ assert.equal(f.meta.get(f.api.HANDOFF_KEY),saved);assert.equal(f.locked(),false);f.cleanup();
+});
+test('another-device receive still requests both records and originals in the new generation',async()=>{
+ const f=await setup();f.meta.set(f.api.HANDOFF_KEY,{value:{uid:'test-owner',generation:4,records:false,archive:true}});
+ f.rpc(()=>({data:{active:true,generation:5,receive:true}}));await f.advance(4000);
+ const handoff=f.meta.get(f.api.HANDOFF_KEY).value;
+ assert.equal(handoff.generation,5);assert.equal(handoff.records,true);assert.equal(handoff.archive,true);f.cleanup();
+});
+test('handoff recovery cannot retag another account or an inactive device',async()=>{
+ const f=await setup(),other={value:{uid:'another-owner',generation:4,records:true,archive:true}};
+ f.meta.set(f.api.HANDOFF_KEY,other);f.rpc(()=>({data:{active:true,generation:5,receive:false}}));await f.advance(4000);
+ assert.equal(f.meta.get(f.api.HANDOFF_KEY),other);
+ const saved={value:{uid:'test-owner',generation:4,records:true,archive:true}};f.meta.set(f.api.HANDOFF_KEY,saved);
+ f.rpc(()=>({data:{active:false}}));await f.advance(4000);
+ assert.equal(f.meta.get(f.api.HANDOFF_KEY),saved);assert.equal(f.locked(),true);assert.equal(f.signouts.length,1);f.cleanup();
+});
+test('failed persistence keeps the gate locked and retains the unfinished receive for retry',async()=>{
+ const f=await setup(),saved={value:{uid:'test-owner',generation:4,records:true,archive:true}};
+ f.meta.set(f.api.HANDOFF_KEY,saved);const table=f.context.getOwnerOpDb().sync_meta,put=table.put;
+ table.put=async()=>{throw Error('Device storage full');};f.rpc(()=>({data:{active:true,generation:5,receive:false}}));await f.advance(4000);
+ assert.equal(f.locked(),true);assert.equal(f.meta.get(f.api.HANDOFF_KEY),saved);assert.match(f.message(),/Device storage full/);
+ table.put=put;await f.retry();await f.flush();assert.equal(f.locked(),false);assert.equal(f.meta.get(f.api.HANDOFF_KEY).value.generation,5);f.cleanup();
 });
