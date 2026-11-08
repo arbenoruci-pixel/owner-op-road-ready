@@ -25,3 +25,18 @@ test('completed folder opens its POD directly and adds fuel to the chosen folder
  await renderer.act(async()=>button(/Add fuel receipt/).props.onClick());assert.equal(context.loadNo,'DONE-1');assert.equal(context.kind,'fuel_receipt');
  await renderer.act(async()=>tree.unmount());
 });
+
+test('searching a reviewed BOL opens the canonical folder with its saved Ratecon',{skip:!renderer},async()=>{
+ globalThis.window={addEventListener(){},removeEventListener(){}};globalThis.sessionStorage={getItem(){return '';},removeItem(){},setItem(){}};
+ const load={loadNo:'31450-11788',status:'completed'},shipment={loadNo:'SH045061',shipmentReference:'SH045061',shipmentFiling:true,status:'completed'};
+ const documents=[{id:'rate',type:'rate_confirmation',loadNo:load.loadNo},{id:'pod',type:'pod',shipmentReference:'SH045061'}];
+ let tree,context;await renderer.act(async()=>{tree=renderer.create(React.createElement(Folders,{loads:[load],documents,state:{testCandidates:[shipment]},businessStore:{loads:[load],evidenceAliases:[{from:'SH045061',to:load.loadNo}]},onScan:c=>context=c}));});
+ const label=node=>node.children.map(c=>typeof c==='string'?c:typeof c==='object'?label(c):'').join('');
+ await renderer.act(async()=>tree.root.findByProps({type:'search'}).props.onChange({target:{value:'SH045061'}}));
+ const cards=tree.root.findAllByProps({className:'rr-smart-card'});assert.equal(cards.length,1);assert.match(label(cards[0]),/Load 31450-11788/);
+ await renderer.act(async()=>cards[0].props.onClick());
+ const rate=tree.root.findByProps({'aria-label':'Ratecon'});assert.match(label(rate),/Saved/);assert.doesNotMatch(label(rate),/Missing/);
+ const add=tree.root.findAllByType('button').find(b=>label(b)==='+ Add document');await renderer.act(async()=>add.props.onClick());
+ assert.equal(context.loadNo,'31450-11788');assert.equal(context.shipmentReference,'');
+ await renderer.act(async()=>tree.unmount());
+});

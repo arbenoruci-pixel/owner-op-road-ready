@@ -16,6 +16,9 @@ export function loadPickerCandidates(base=[],state={},store={},context={}){
   const record=array(store.loads).find(load=>no(load.canonicalLoadNo||load.loadNo)===canonical);
   const previous=rows.get(canonical);
   const row={...(previous||candidate),loadNo:canonical};
+  // The reviewed alias changes the filing identity as well as its label. Keeping
+  // shipmentFiling here would silently save to the old BOL instead of this load.
+  if(canonical!==original){row.shipmentFiling=false;row.referenceOnly=false;}
   if(record&&canonical!==original){row.id=record.id||row.id;for(const key of fields)if(text(record[key]))row[key]=text(record[key]);}
   for(const key of fields)if(!text(row[key])&&text(candidate[key]))row[key]=text(candidate[key]);
   rows.set(canonical,row);

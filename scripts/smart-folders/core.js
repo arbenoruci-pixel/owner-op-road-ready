@@ -50,7 +50,7 @@ function closed(source={}){
   .some(v=>/^(delivered|completed|closed|invoice_ready|invoiced|submitted|paid|cancelled|canceled|tonu|archived)$/i.test(text(v)));
 }
 function docLoad(d){return ref(d.workspaceFilingAppliedV110477&&!d.repairOverlayApplied?d.evidenceFilingV1?.loadNo:d.canonicalLoadNo||d.load_no||d.loadNo);}
-export function buildSmartFolders({folders=[],candidates=[],documents=[],state={},businessStore={}}={}){
+export function buildSmartFolders({folders=[],candidates=[],documents=[],state={},businessStore={},reviewedAliases={}}={}){
  const map=new Map(),aliases=new Map();
  function addAlias(value,key){const normalized=match(value);if(!normalized)return;const keys=aliases.get(normalized)||new Set();keys.add(key);aliases.set(normalized,keys);}
  function add(source,shipment=false){
@@ -63,6 +63,11 @@ export function buildSmartFolders({folders=[],candidates=[],documents=[],state={
  for(const f of folders)add(f);
  for(const c of candidates.filter(c=>!c.shipmentFiling))add(c);
  for(const stored of list(businessStore.loads)){const id='load:'+ref(stored.loadNo||stored.canonicalLoadNo);if(map.has(id))add(stored);}
+ // Reuse the reviewed identity resolver used by document reconciliation. Add
+ // owners before joining shipments so conflicting references stay separate.
+ for(const [from,to] of Object.entries(reviewedAliases)){
+  const id='load:'+ref(to);if(map.has(id))addAlias(from,id);
+ }
  for(const c of candidates.filter(c=>c.shipmentFiling)){
   const owners=aliases.get(match(c.shipmentReference));
   if(owners?.size===1){const f=map.get([...owners][0]);f.source={...c,...f.source};f.completed=f.completed||closed(c);addAlias(c.shipmentReference,f.id);}
@@ -82,6 +87,11 @@ export function buildSmartFolders({folders=[],candidates=[],documents=[],state={
   if(f)f.documents.push(d);else unfiled.push(d);
  }
  for(const f of map.values()){
+  if(!f.shipment){
+   const reviewed=Object.entries(reviewedAliases).filter(([from,to])=>ref(to)===f.reference&&aliases.get(match(from))?.size===1)
+    .map(([value])=>({kind:'bol_number',value,source:'reviewed_folder_alias'}));
+   if(reviewed.length)f.source={...f.source,aliases:[...list(f.source.aliases),...reviewed]};
+  }
   f.documents=unique(f.documents).sort((a,b)=>savedTime(b)-savedTime(a));
   f.updatedAt=Math.max(Number(f.source.latestActivityAt)||0,Number(f.source.updatedAt)||0,Date.parse(f.source.deliveryDate||f.source.pickupDate)||0,...f.documents.map(savedTime));
   f.logs=linkedLogbooks(f,state);

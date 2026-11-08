@@ -2,6 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildSmartFolders,folderChecklist,folderSummary,documentLabel,savedTime,requestedScanFolder,explicitFolderScanCandidates} from './core.js';
 const doc=(id,type,load='',extra={})=>({id,type,loadNo:load,createdAt:1793813639097,...extra});
+test('reviewed BOL aliases combine the saved Ratecon and shipment evidence without changing originals or logs',()=>{
+ const input={folders:[{loadNo:'31450-11788',status:'completed'}],
+  candidates:[{loadNo:'SH045061',shipmentReference:'SH045061',shipmentFiling:true,status:'completed'}],
+  reviewedAliases:{SH045061:'31450-11788'},
+  documents:[doc('rate','rate_confirmation','31450-11788'),doc('bol','bol','',{shipmentReference:'SH045061'}),doc('pod','pod','',{shipmentReference:'SH045061'})],
+  state:{eventsByDay:{'2026-11-04':[{shippingDocs:'SH045061',status:'ON'}],'2026-11-06':[{loadNo:'31450-11788',status:'ON'}]},signatureByDay:{'2026-11-04':{value:'saved-signature'}}}};
+ const before=structuredClone(input),result=buildSmartFolders(input),folder=result.folders[0];
+ assert.equal(result.folders.length,1);assert.equal(folder.reference,'31450-11788');assert.equal(folder.shipment,false);
+ assert.equal(folder.documents.length,3);assert.equal(result.unfiled.length,0);
+ assert.deepEqual(folderChecklist(folder).map(row=>row.files.length),[1,2,1]);
+ assert.deepEqual(folder.logs.map(l=>l.day),['2026-11-04','2026-11-05','2026-11-06']);
+ assert.equal(folder.logs[0].signed,true);assert.deepEqual(input,before);
+});
+test('conflicting folder ownership or an absent canonical target cannot merge a shipment',()=>{
+ const input={folders:[{loadNo:'A'},{loadNo:'B',aliases:[{value:'SHIP',source:'rate_confirmation'}]}],candidates:[{shipmentReference:'SHIP',shipmentFiling:true}],reviewedAliases:{SHIP:'A'},documents:[doc('pod','pod','',{shipmentReference:'SHIP'})]};
+ assert.equal(buildSmartFolders(input).folders.find(f=>f.shipment).documents.length,1);
+ assert.equal(buildSmartFolders({...input,folders:[],reviewedAliases:{SHIP:'MISSING'}}).folders[0].shipment,true);
+});
 test('a recorded shipment keeps its POD and folder after completion, without a fabricated broker ID',()=>{
  const documents=[doc('pod','pod','',{documentScope:'shipment',shipmentReference:'39047434'})];
  const candidates=[{shipmentFiling:true,shipmentReference:'39047434',status:'completed',shipmentEventId:'pickup',origin:'Stow, OH',destination:'Marcy, NY'}];

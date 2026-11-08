@@ -18,7 +18,8 @@
       "feat/smart-load-folders": false,
       "fix/hos-split-midnight": false,
       "fix/scanner-paper-capture": false,
-      "fix/device-handoff-session": false
+      "fix/device-handoff-session": false,
+      "fix/reviewed-folder-filing": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",

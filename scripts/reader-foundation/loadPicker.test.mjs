@@ -46,3 +46,19 @@ test('latest recorded pickup leads a stale form even without a route plan, and c
  assert.equal(rows[0].loadNo,'CURRENT');assert.equal(rows.filter(row=>row.active).length,1);
  assert.equal(rows.find(row=>row.loadNo==='DONE').active,false);
 });
+
+test('a reviewed BOL alias uses canonical filing fields regardless of candidate order',()=>{
+ const shipment={loadNo:'SH045061',shipmentReference:'SH045061',shipmentFiling:true,referenceOnly:true,status:'completed',shipmentEventId:'pickup'};
+ const canonical={loadNo:'31450-11788',broker:'Vektor',status:'completed'};
+ const store={loads:[canonical]},context={aliases:{SH045061:'31450-11788'},current:null};
+ for(const base of [[shipment],[shipment,canonical],[canonical,shipment]]){
+  const before=structuredClone({base,store,context});
+  const rows=loadPickerCandidates(base,{},store,context);
+  assert.equal(rows.length,1);assert.equal(rows[0].loadNo,'31450-11788');
+  assert.equal(Boolean(rows[0].shipmentFiling),false,'the save path must use the displayed load identity');
+  assert.equal(rows[0].referenceOnly,false);assert.equal(rows[0].status,'completed');
+  assert.deepEqual({base,store,context},before);
+ }
+ const unreviewed=loadPickerCandidates([shipment],{},store,{current:null});
+ assert.equal(unreviewed.find(r=>r.loadNo==='SH045061').shipmentFiling,true);
+});
