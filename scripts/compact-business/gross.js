@@ -19,12 +19,25 @@ function dayKey(value) {
   const date = new Date(s + 'T12:00:00Z');
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === s ? s : '';
 }
-export function recordedGrossDate(load = {}) {
-  const explicit = dayKey(load.actualDeliveryDate) || dayKey(load.deliveryDate);
-  if (explicit) return explicit;
-  return statuses(load).includes('tonu') ? dayKey(load.serviceDate) || dayKey(load.pickupDate) || dayKey(load.date) : '';
+function completionDay(value, timezone) {
+  const exact = dayKey(value); if (exact) return exact;
+  if (value === null || value === undefined || value === '') return '';
+  const raw = text(value);
+  if (typeof value !== 'number' && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw) || !dayKey(raw.slice(0,10)))) return '';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  // A wall-clock timestamp without an offset already carries its recorded calendar day.
+  if (typeof value !== 'number' && !/(Z|[+-]\d{2}:?\d{2})$/i.test(raw)) return dayKey(raw.slice(0,10));
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date).map(p=>[p.type,p.value]));
+  return dayKey(`${parts.year}-${parts.month}-${parts.day}`);
 }
-export function grossSummary(loads = [], today) {
+export function recordedGrossDate(load = {}, timezone = 'UTC') {
+  const first = fields => fields.map(key=>completionDay(load[key],timezone)).find(Boolean) || '';
+  // TONU occurs at the recorded service/pickup, regardless of a retained planned delivery.
+  if (statuses(load).includes('tonu')) return first(['serviceDate','pickupDate','pickupDay','date']);
+  return first(['actualDeliveryDate','deliveredDate','completedDate','deliveredAt','completedAt','deliveryDate','deliveryDay']);
+}
+export function grossSummary(loads = [], today, timezone = 'UTC') {
   if (!dayKey(today)) throw new TypeError('A valid home-terminal calendar date is required');
   const end = new Date(today + 'T12:00:00Z');
   end.setUTCDate(end.getUTCDate() - (end.getUTCDay() + 6) % 7);
@@ -34,15 +47,15 @@ export function grossSummary(loads = [], today) {
   for (const load of Array.isArray(loads) ? loads : []) {
     if (!load || load.deleted || load.isTest || load.testOnly) continue;
     const state = statuses(load);
-    if (state.some(s => /^(cancelled|canceled|void|voided|test)$/.test(s))) continue;
-    if (!state.some(s => /^(delivered|completed|closed|invoice_ready|invoiced|submitted|paid|archived|tonu|completed_per_owner)$/.test(s)) && !load.shipmentCompletionReview) continue;
+    if (state.some(s => /^(void|voided|test)$/.test(s)) || (!state.includes('tonu') && state.some(s => /^(cancelled|canceled)$/.test(s)))) continue;
+    if (!state.some(s => /^(delivered|complete|completed|closed|invoice_ready|invoiced|submitted|paid|archived|tonu|completed_per_owner)$/.test(s)) && !load.shipmentCompletionReview) continue;
     const identity = text(load.canonicalLoadNo || load.loadNo || load.load_no).toUpperCase() || text(load.id);
     if (!identity) continue;
     const rows = groups.get(identity) || []; rows.push(load); groups.set(identity, rows);
   }
   for (const rows of groups.values()) {
     const amounts = [...new Set(rows.map(grossValue).filter(v => v !== null).map(v => Math.round(v * 100)))];
-    const days = [...new Set(rows.map(recordedGrossDate).filter(Boolean))];
+    const days = [...new Set(rows.map(row=>recordedGrossDate(row,timezone)).filter(Boolean))];
     if (amounts.length > 1 || days.length > 1) {result.conflicts++; continue;}
     if (!amounts.length) {result.missingAmount++; continue;}
     const cents = amounts[0], day = days[0] || '';
