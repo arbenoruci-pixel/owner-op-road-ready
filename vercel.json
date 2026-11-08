@@ -17,7 +17,8 @@
       "feat/outlook-document-import": false,
       "feat/smart-load-folders": false,
       "fix/hos-split-midnight": false,
-      "fix/scanner-paper-capture": false
+      "fix/scanner-paper-capture": false,
+      "fix/local-document-originals": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",

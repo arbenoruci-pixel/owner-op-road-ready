@@ -22,6 +22,9 @@ export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalP
   useEffect(() => {const id=setInterval(()=>setClock(Date.now()),30000);return()=>clearInterval(id);}, []);
   const readiness = useMemo(() => inspectionReadiness(state, new Date(clock)), [state, clock]);
   const wallet=useMemo(()=>captureInspectionWallet(state),[state.dotWallet]);
+  const [excludedWalletKeys,setExcludedWalletKeys]=useState([]);
+  const selectedWalletKeys=wallet.filter(row=>!excludedWalletKeys.includes(row.key)).map(row=>row.key);
+  const selectionKey=JSON.stringify(selectedWalletKeys);
   const savedUsdot = String(readiness.profile.usdot || '').trim();
   const [usdotDraft, setUsdotDraft] = useState(savedUsdot);
   useEffect(() => {setUsdotDraft(savedUsdot);}, [savedUsdot, state.activeDriverId]);
@@ -31,9 +34,9 @@ export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalP
   useEffect(() => {setConfirmed(false);}, [state.eventsByDay, state.signatureByDay, state.formByDay, state.dotWallet]);
   const stale = useMemo(() => {
     if(!share)return false;
-    try {assertInspectionUnchanged(share.inspection,state);assertWalletUnchanged(share.wallet,state);return Date.parse(share.expires_at)<=clock || readiness.today!==share.inspection.endDay;}
+    try {assertInspectionUnchanged(share.inspection,state);assertWalletUnchanged(share.wallet,state);return JSON.stringify(share.selectedWalletKeys)!==selectionKey || Date.parse(share.expires_at)<=clock || readiness.today!==share.inspection.endDay;}
     catch {return true;}
-  }, [share, state, clock, readiness.today]);
+  }, [share, state, clock, readiness.today,selectionKey]);
   // Background receives may replace objects without changing the captured package.
   useEffect(() => {if(stale)setReviewed(false);}, [stale]);
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
@@ -46,8 +49,8 @@ export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalP
     running.current=true;setBusy(true);setError('');setReviewed(false);setShare(null);
     document.activeElement?.blur?.();
     try {
-      const result=await createShare({getState:()=>live.current,onProgress:message=>{if(mounted.current)setProgress(message);}});
-      if(mounted.current){setShare(result);setProgress('Your inspection link is ready.');}
+      const result=await createShare({getState:()=>live.current,walletKeys:selectedWalletKeys,onProgress:message=>{if(mounted.current)setProgress(message);}});
+      if(mounted.current){setShare({...result,selectedWalletKeys:[...selectedWalletKeys]});setProgress('Your inspection link is ready.');}
     } catch(e) {if(mounted.current){setError(e?.message || 'Could not prepare the link. Retry.');setProgress('');}}
     finally {running.current=false;if(mounted.current)setBusy(false);}
   }
@@ -95,8 +98,8 @@ export default function InspectionWizard({state, onReview, onSaveUsdot, onLocalP
       </details>
       {!readiness.logsReady && <p className="inspection-error">Open the marked day to review missing time or its signature. Record only what actually happened.</p>}
       <details className="inspection-card"><summary>Digital Wallet · {wallet.length} saved documents</summary>
-        <p>All saved Digital Wallet files on this phone are included in the inspection link.</p>
-        {wallet.length?<ul>{wallet.map(row=><li key={row.key}>{row.metadata.title}</li>)}</ul>:<p>No document files are saved in Digital Wallet on this phone.</p>}
+        <p>Choose the documents for this link. Selected originals upload when you prepare the link. Originals stay on this device if uploading fails.</p>
+        {wallet.length?<ul>{wallet.map(row=><li key={row.key}><label><input type="checkbox" data-wallet-key={row.key} aria-label={'Include '+row.metadata.title} checked={!excludedWalletKeys.includes(row.key)} disabled={busy} onChange={e=>{setExcludedWalletKeys(keys=>e.target.checked?keys.filter(key=>key!==row.key):[...keys,row.key]);setConfirmed(false);setReviewed(false);}}/>{row.metadata.title}</label></li>)}</ul>:<p>No document files are saved in Digital Wallet on this phone.</p>}
         <button onClick={()=>onReview?.({view:'wallet'})}>Open document wallet</button>
       </details>
       <label className="inspection-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>I reviewed the driver, equipment, logs and Digital Wallet documents.</label>

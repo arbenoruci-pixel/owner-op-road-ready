@@ -10,10 +10,10 @@ const {default:Wizard}=await import('../../source/src/modules/dot/InspectionWiza
 const content=node=>typeof node==='string'?node:(node.children||[]).map(content).join('');
 test('Ready package can be confirmed without an external-tab gate; equivalent state and clock updates preserve confirmation',async t=>{
  let state=fixture(),creates=0;state.dotWallet={documents:{driver_license:{attachmentDataUrl:'data:image/png;base64,dGVzdA=='}}};
- const createShare=async args=>{creates++;assert.equal(args.walletKeys,undefined);return {id:'share',token:'test-token',log_count:8,document_count:1,expires_at:new Date(+at+3600000).toISOString(),inspection:captureInspection(args.getState(),at),wallet:captureInspectionWallet(args.getState())};};
+ const createShare=async args=>{creates++;assert.deepEqual(args.walletKeys,['driver_license']);return {id:'share',token:'test-token',log_count:8,document_count:1,expires_at:new Date(+at+3600000).toISOString(),inspection:captureInspection(args.getState(),at),wallet:captureInspectionWallet(args.getState())};};
  let root;await act(async()=>{root=Renderer.create(React.createElement(Wizard,{state,createShare}));});
  t.after(async()=>{await act(async()=>root.unmount());});
- const button=label=>root.root.findAllByType('button').find(n=>content(n)===label),check=()=>root.root.findAllByType('input').find(n=>n.props.type==='checkbox');
+ const button=label=>root.root.findAllByType('button').find(n=>content(n)===label),check=()=>root.root.findAllByType('input').find(n=>n.props.type==='checkbox'&&!n.props['data-wallet-key']);
  assert.equal(button('Prepare inspection link').props.disabled,true);
  await act(async()=>check().props.onChange({target:{checked:true}}));assert.equal(button('Prepare inspection link').props.disabled,false);
  await act(async()=>button('Prepare inspection link').props.onClick());assert.equal(creates,1);assert.match(content(root.toJSON()),/STEP 2 OF 3/);
