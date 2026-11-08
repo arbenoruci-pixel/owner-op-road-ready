@@ -29,3 +29,5 @@ Explain the exact proposed behavior or design change to Arben and obtain explici
 ## Approval record
 
 - **2026-11-04:** Arben approved release 110.4.100 as working and requested this lock. Scope: repository instructions, a fixed baseline manifest, verification tests, and build checks. No product behavior or user records changed.
+
+- **2026-11-08:** After the confirmed sign-in stalled at “Opening your logbook” with “This account was opened on another device,” Arben instructed “zgjidhe problemin.” Scope: resume an unfinished same-device handoff under its freshly verified session generation, preserving completed phases and the existing active-device/session checks. Update only the device-session runtime hash and this approval record after regression checks. No logbook restoration, record edits, document deletion, offline-policy change, or inspection workflow redesign is authorized.

@@ -59,6 +59,13 @@ export function verifyDeviceSession(){
    // Never downgrade a newer receive generation after a suspended request.
    if(data.receive&&(!handoff?.value||handoff.value.uid!==session.user.id||Number(handoff.value.generation)<data.generation)){
     await checkedWait(db.sync_meta.put({key:HANDOFF_KEY,value:{uid:session.user.id,generation:data.generation,records:true,archive:true},updated_at:new Date().toISOString()}),job,10000,'Saved device handoff');
+   }else if(!data.receive&&handoff?.value?.uid===session.user.id&&Number(handoff.value.generation)<data.generation&&
+    (handoff.value.records===true||handoff.value.archive===true)){
+    // A fresh sign-in on the same device advances the server lease without
+    // requesting another transfer. Resume its unfinished receive under that
+    // verified lease so acknowledgement does not retry an obsolete generation.
+    // Preserve each completed phase; never restart a completed phone restore.
+    await checkedWait(db.sync_meta.put({key:HANDOFF_KEY,value:{...handoff.value,generation:data.generation},updated_at:new Date().toISOString()}),job,10000,'Saved device handoff');
    }
    connected();if(takeover)localStorage.removeItem(REQUEST);
   }

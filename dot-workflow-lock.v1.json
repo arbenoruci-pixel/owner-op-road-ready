@@ -9,7 +9,7 @@
   "source": {
     "AGENTS.md": "2913d5296123c8cd160e6fd8a8c27a2a7568ce29d510aaee3cc05d90e6e11171",
     "app/inspection/page.jsx": "449886bd34c6d6bcdaf55d0936b0665c7d71220eaaf453db0b6962a34a2224f1",
-    "docs/DOT_WORKFLOW_LOCK.md": "f2b7595c9e9769e1b8c1c320406babfd49f89c02731b928abd5ad75f19f3ac6c",
+    "docs/DOT_WORKFLOW_LOCK.md": "58f6dae39f634537cfa9b148e8287b6ce649c2cfe7c39fd97d865402534ac808",
     "scripts/inspection-package/InspectionWizard.jsx": "c030659dc4876f5c4b2a0b22c22aa7aa6b2ae3c6e90ae76f3d9684a855ec5264",
     "scripts/inspection-package/README.md": "4ff35309729cfa0aa5bf673e6c6352dea487c928982b7e123086e0549fb212c7",
     "scripts/inspection-package/client.js": "2dc9beefaa5ccf51cde7562910dc144e1488c1d94ea8f42a32f792cbb48c7ca2",
@@ -61,7 +61,7 @@
     "lib/local-db/appState.js": "53e5e04d6e62dec04fae9d7ffb65d2fb65e46be277a17f37f7979600a048da68",
     "lib/owner-op-cloud/client.js": "0752502f6da35a856762477cc8267b6a925787f0732044005da78b58fae1d708",
     "lib/owner-op-cloud/core.js": "a9cbe466afc303594c7c9cfbd1ae25a876e8a597cb3ba1d0126e265c2982112a",
-    "lib/owner-op-cloud/deviceSessionV110463.js": "ef9127e5ef8d2be2d6e1b34f239b3fec9457d19516d2900a86da54024be47533",
+    "lib/owner-op-cloud/deviceSessionV110463.js": "8f6e76e7a14342c787f59a339ea827c07b55c93e92528468c0f1aa5835048fe8",
     "lib/owner-op-cloud/inspectionShare.js": "2dc9beefaa5ccf51cde7562910dc144e1488c1d94ea8f42a32f792cbb48c7ca2",
     "lib/owner-op-cloud/inspectionSignedLegacy.js": "68f4804af410cbfaea52ef3543d9dada5fb7948ca1db921dd9ea3d183ee5b8b4",
     "lib/owner-op-cloud/inspectionSnapshot.js": "d6f270853171ce62e4b035875d49938ee80060c58e6eb5dba758ef37e15b8076",
