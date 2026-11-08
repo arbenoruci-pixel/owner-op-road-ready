@@ -108,5 +108,9 @@
   "engines": {
     "node": "24.x"
   },
-  "packageManager": "npm@10.9.2"
+  "packageManager": "npm@10.9.2",
+  "devDependencies": {
+    "fake-indexeddb": "6.2.4",
+    "react-test-renderer": "18.3.1"
+  }
 }

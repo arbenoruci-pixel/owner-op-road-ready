@@ -46,8 +46,17 @@ async function scenario(name,run){
    installBinaryStorage(db,Dexie);await db.open();
    const f=window.fixture={db,core,uid:'00000000-0000-4000-8000-000000000001',workspace:null,fail:null,calls:[],objects:new Map(),downloads:new Map(),brokenPath:null};
    f.session={user:{id:f.uid}};
+   // Seed historical cloud objects independently of today's upload guard.
+   // The production encoder must continue rejecting document originals.
+   f.uploads=0;
+   f.legacyOriginal=async(id,text)=>{
+    const blob=new Blob([text],{type:'application/pdf'}),bytes=await blob.arrayBuffer();
+    const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),n=>n.toString(16).padStart(2,'0')).join('');
+    f.objects.set(f.uid+'/temporary-backup/'+sha256+'.bin',blob);
+    return {local_blob_id:id,blob:{__rrAccountFile:1,kind:'Blob',size:blob.size,mime:blob.type,prefix:'',chunks:[{sha256,bytes:blob.size}]}};
+   };
    f.storage={
-    upload:async(key,bytes)=>{f.objects.set(key,new Blob([bytes]));return {};},
+    upload:async(key,bytes)=>{f.uploads++;f.objects.set(key,new Blob([bytes]));return {};},
     download:async key=>{f.downloads.set(key,(f.downloads.get(key)||0)+1);return key===f.brokenPath?{error:Error('Synthetic interrupted download')}:{data:f.objects.get(key)};},
    };
    f.cloud={storage:{from:()=>f.storage},rpc:async()=>{throw Error('Unexpected cloud write');},from:table=>{
@@ -72,26 +81,29 @@ async function scenario(name,run){
  finally{await context.close();}
 }
 try{
- await scenario('device handoff receives iPad logbook without uploading stale phone records and retains original local copies',async page=>{
+ await scenario('device handoff receives the logbook while same-ID phone originals remain authoritative',async page=>{
   const result=await page.evaluate(async()=>{
-   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
+   const f=window.fixture;
    const local={...f.state,currentLocation:{city:'stale phone'},loadInfo:{loadNo:'old-phone'}};
    const remote={...f.state,currentLocation:{city:'latest iPad'},loadInfo:{loadNo:'latest-ipad'}};
    await f.db.app_snapshots.put({key:f.key,state:local});
    await f.db.document_blobs.put({local_blob_id:'same-id',blob:new Blob(['unsent phone original'])});
-   const original=await encode({local_blob_id:'same-id',blob:new Blob(['saved iPad original'])},{storage:f.storage,uid:f.uid,known:new Set()});
-   f.workspace={revision:25,payload:{format:f.core.FORMAT,records:{...f.core.recordsFrom({state:remote}),'["table","document_blobs","same-id"]':original}}};
+   const original=await f.legacyOriginal('same-id','saved iPad original');
+   const key='["table","document_blobs","same-id"]';
+   f.workspace={revision:25,payload:{format:f.core.FORMAT,records:{...f.core.recordsFrom({state:remote}),[key]:original}}};
    await f.db.sync_meta.put({key:'road-ready-device-handoff-v1',value:{uid:f.uid,generation:2,records:true,archive:true}});
    const logbook=await f.sync.syncAccount({initial:true,scope:'records'});
    const opened=(await f.db.app_snapshots.get(f.key)).state;
    const backup=(await f.db.sync_meta.get('single-device-before-handoff:2')).value;
    const archived=await f.sync.syncAccount();
-   const retained=await f.db.sync_meta.get('single-device-retained:2:document_blobs:same-id');
-   return {logbook,archived,opened,backup,ack:f.ack,oldText:await retained.value.blob.text(),newText:await(await f.db.document_blobs.get('same-id')).blob.text(),pending:(await f.db.sync_meta.get('road-ready-device-handoff-v1')).value};
+   return {logbook,archived,opened,backup,ack:f.ack,original,cloud:f.workspace.payload.records[key],
+    uploads:f.uploads,downloads:f.downloads.size,text:await(await f.db.document_blobs.get('same-id')).blob.text(),
+    pending:(await f.db.sync_meta.get('road-ready-device-handoff-v1')).value};
   });
   assert.equal(result.logbook.error,undefined);assert.equal(result.archived.error,undefined);
   assert.equal(result.opened.loadInfo.loadNo,'latest-ipad');assert.equal(result.backup.state.loadInfo.loadNo,'old-phone');
-  assert.equal(result.ack,2);assert.equal(result.oldText,'unsent phone original');assert.equal(result.newText,'saved iPad original');
+  assert.equal(result.ack,2);assert.equal(result.text,'unsent phone original');assert.deepEqual(result.cloud,result.original);
+  assert.equal(result.uploads,0);assert.equal(result.downloads,0);
   assert.equal(result.pending.records,false);assert.equal(result.pending.archive,false);
  });
  await scenario('conflict review stops when its recovery journal cannot be saved',async page=>{
@@ -149,107 +161,93 @@ try{
   });
   assert.ok(result.sync.error);assert.equal(result.sync.blocked,true);assert.equal(result.sync.canOpenLocal,false);assert.equal(result.pending.records,true);assert.ok(result.state.eventsByDay['2026-10-07']);
  });
- await scenario('a verified records handoff can open while unavailable originals remain in the archive queue',async page=>{
+ await scenario('unavailable historical originals cannot block a verified logbook handoff',async page=>{
   const result=await page.evaluate(async()=>{
-   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
+   const f=window.fixture;
    await f.db.app_snapshots.put({key:f.key,state:{...f.state,loadInfo:{loadNo:'stale-device'}}});
    const remote={...f.state,loadInfo:{loadNo:'verified-account'}};
-   const original=await encode({local_blob_id:'archive-pending',blob:new Blob(['pending original'])},{storage:f.storage,uid:f.uid});
+   const original=await f.legacyOriginal('archive-pending','pending original');
    f.workspace={revision:2,payload:{format:f.core.FORMAT,records:{...f.core.recordsFrom({state:remote}),'["table","document_blobs","archive-pending"]':original}}};
    await f.db.sync_meta.put({key:'road-ready-device-handoff-v1',value:{uid:f.uid,generation:1,records:true,archive:true}});
    f.brokenPath=[...f.objects.keys()][0];
    const first=await f.sync.syncAccount({initial:true,scope:'records'}),archive=await f.sync.syncAccount({scope:'all'});
-   return {first,archive,state:(await f.db.app_snapshots.get(f.key)).state,pending:(await f.db.sync_meta.get('road-ready-device-handoff-v1')).value};
+   return {first,archive,state:(await f.db.app_snapshots.get(f.key)).state,pending:(await f.db.sync_meta.get('road-ready-device-handoff-v1')).value,
+    uploads:f.uploads,downloads:f.downloads.size,installed:await f.db.document_blobs.count()};
   });
   assert.equal(result.first.recordsReady,true);assert.equal(result.first.handoffPending,true);
-  assert.match(result.archive.error,/interrupted download/);assert.equal(result.archive.blocked,false);assert.equal(result.archive.canOpenLocal,true);
-  assert.equal(result.state.loadInfo.loadNo,'verified-account');assert.equal(result.pending.records,false);assert.equal(result.pending.archive,true);
+  assert.equal(result.archive.error,undefined);
+  assert.equal(result.state.loadInfo.loadNo,'verified-account');assert.equal(result.pending.records,false);assert.equal(result.pending.archive,false);
+  assert.equal(result.uploads,0);assert.equal(result.downloads,0);assert.equal(result.installed,0);
  });
- await scenario('logbook opens and uploads before unavailable archive originals; both baselines survive reload',async page=>{
+ await scenario('logbook and expense saves preserve independent phone and cloud originals across reload',async page=>{
   const result=await page.evaluate(async()=>{
-   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
-   const key='["table","document_blobs","cloud-original"]';
-   const original=await encode({local_blob_id:'cloud-original',blob:new Blob(['cloud original'])},{storage:f.storage,uid:f.uid,known:new Set()});
+   const f=window.fixture,key='["table","document_blobs","cloud-original"]';
+   const original=await f.legacyOriginal('cloud-original','cloud original');
    const remoteState={...f.state,dotWallet:{documents:{cloud:{title:'Saved wallet'}}}};
    f.workspace={revision:1,payload:{format:f.core.FORMAT,records:{...f.core.recordsFrom({state:remoteState}),[key]:original}}};
-   const remoteOriginal=structuredClone(original);
+   const remoteOriginal=structuredClone(original),remoteWallet=structuredClone(f.workspace.payload.records['["state","dotWallet"]']);
    f.cloud.rpc=async(name,p)=>{
     if(name!=='road_ready_account_patch_v1'||p.p_expected!==f.workspace.revision)throw Error('Unexpected commit');
     const records={...f.workspace.payload.records,...p.p_patch};for(const k of p.p_deleted)delete records[k];
     f.workspace={...f.workspace,revision:f.workspace.revision+1,payload:{...f.workspace.payload,records}};return {data:{revision:f.workspace.revision}};
    };
-   f.downloads.clear();f.brokenPath=[...f.objects.keys()][0];
+   f.brokenPath=[...f.objects.keys()][0];
    await f.db.document_blobs.put({local_blob_id:'local-only',blob:new Blob(['unsent local original'])});
    const first=await f.sync.syncAccount({initial:true,scope:'records'});
    const opened=(await f.db.app_snapshots.get(f.key)).state;
-   const readsBeforeArchive=[...f.downloads.values()].reduce((a,b)=>a+b,0);
    localStorage.setItem('owner-op-road-ready-business-v1',JSON.stringify({expenses:[{id:'new-expense',amount:12}]}));
-   // A new module instance represents reopening with only the persisted baseline.
    const reopened=await import('/lib/owner-op-cloud/accountSyncV110455.js?reopened');
-   const saved=await reopened.syncAccount({scope:'records'});
-   const remoteAfterSave=structuredClone(f.workspace.payload.records);
-   const archive=await reopened.syncAccount();
-   const stateAfterFailure=(await f.db.app_snapshots.get(f.key)).state;
-   f.brokenPath=null;
-   const resumed=await reopened.syncAccount();
-   return {first,saved,archive,resumed,readsBeforeArchive,opened,stateAfterFailure,remoteOriginal,remoteAfterSave,
-    cloudText:await(await f.db.document_blobs.get('cloud-original')).blob.text(),
-    localText:await(await f.db.document_blobs.get('local-only')).blob.text(),
-    wallet:(await f.db.app_snapshots.get(f.key)).state.dotWallet};
+   const saved=await reopened.syncAccount({scope:'records'}),archive=await reopened.syncAccount();
+   const stateAfterArchive=(await f.db.app_snapshots.get(f.key)).state;
+   f.brokenPath=null;const resumed=await reopened.syncAccount();
+   return {first,saved,archive,resumed,opened,stateAfterArchive,remoteOriginal,remoteWallet,remoteAfterSave:f.workspace.payload.records,
+    uploads:f.uploads,downloads:f.downloads.size,installedCloud:!!await f.db.document_blobs.get('cloud-original'),
+    localText:await(await f.db.document_blobs.get('local-only')).blob.text(),wallet:stateAfterArchive.dotWallet};
   });
-  assert.equal(result.first.error,undefined);assert.equal(result.saved.error,undefined);
-  assert.equal(result.readsBeforeArchive,0,'Opening and saving a logbook must not download archive originals');
+  for(const r of [result.first,result.saved,result.archive,result.resumed])assert.equal(r.error,undefined);
   assert.ok(result.opened.eventsByDay['2026-10-07'].length);
-  assert.deepEqual(result.remoteAfterSave['["table","document_blobs","cloud-original"]'],result.remoteOriginal,'Scoped commits preserve remote originals');
+  assert.deepEqual(result.remoteAfterSave['["table","document_blobs","cloud-original"]'],result.remoteOriginal);
+  assert.deepEqual(result.remoteAfterSave['["state","dotWallet"]'],result.remoteWallet);
   assert.equal(result.remoteAfterSave['["business","expenses","new-expense"]'].amount,12);
-  assert.match(result.archive.error,/interrupted download/);assert.deepEqual(result.stateAfterFailure,result.opened);
-  assert.equal(result.resumed.error,undefined);assert.equal(result.cloudText,'cloud original');assert.equal(result.localText,'unsent local original');
-  assert.equal(result.wallet.documents.cloud.title,'Saved wallet');
+  assert.deepEqual(result.stateAfterArchive,result.opened);assert.equal(result.installedCloud,false);
+  assert.equal(result.localText,'unsent local original');assert.equal(result.wallet,undefined);
+  assert.equal(result.uploads,0);assert.equal(result.downloads,0);
  });
- await scenario('a new logbook save preempts an archive receive without replacing live work',async page=>{
+ await scenario('new logbook work remains writable while historical originals are unavailable',async page=>{
   const result=await page.evaluate(async()=>{
-   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
-   const original=await encode({local_blob_id:'pending',blob:new Blob(['pending original'])},{storage:f.storage,uid:f.uid,known:new Set()});
+   const f=window.fixture,original=await f.legacyOriginal('pending','pending original');
    f.workspace={revision:1,payload:{format:f.core.FORMAT,records:{...f.core.recordsFrom({state:f.state}),'["table","document_blobs","pending"]':original}}};
    f.cloud.rpc=async(name,p)=>{const records={...f.workspace.payload.records,...p.p_patch};for(const k of p.p_deleted||[])delete records[k];f.workspace={...f.workspace,revision:f.workspace.revision+1,payload:{...f.workspace.payload,records}};return {data:{revision:f.workspace.revision}};};
    await f.sync.syncAccount({scope:'records',initial:true});
-   let release,reached;const barrier=new Promise(r=>release=r),started=new Promise(r=>reached=r),download=f.storage.download;
-   f.storage.download=async key=>{reached();await barrier;return download(key);};
-   const archive=f.sync.syncAccount();await started;
+   f.brokenPath=[...f.objects.keys()][0];const archive=await f.sync.syncAccount();
    const state=structuredClone((await f.db.app_snapshots.get(f.key)).state);state.eventsByDay['2026-10-07'][0].note='new phone edit';
-   await f.db.app_snapshots.put({key:f.key,state});
-   const records=f.sync.syncAccount({scope:'records'});release();
-   const deferred=await archive,finished=await records;
-   return {deferred,finished,local:(await f.db.app_snapshots.get(f.key)).state,remote:f.workspace.payload.records,
-    staging:await f.db.account_receive_staging.count(),installed:await f.db.document_blobs.count()};
+   await f.db.app_snapshots.put({key:f.key,state});const finished=await f.sync.syncAccount({scope:'records'});
+   return {archive,finished,local:(await f.db.app_snapshots.get(f.key)).state,remote:f.workspace.payload.records,
+    uploads:f.uploads,downloads:f.downloads.size,staging:await f.db.account_receive_staging.count(),installed:await f.db.document_blobs.count()};
   });
-  assert.equal(result.deferred.deferred,true);assert.equal(result.finished.error,undefined);
+  assert.equal(result.archive.error,undefined);assert.equal(result.finished.error,undefined);
   assert.equal(result.local.eventsByDay['2026-10-07'][0].note,'new phone edit');
   assert.equal(result.remote['["day","driver_primary","2026-10-07"]'].eventsByDay[0].note,'new phone edit');
-  assert.equal(result.installed,0);assert.ok(result.staging>0,'Verified interrupted originals remain resumable');
+  assert.equal(result.installed,0);assert.equal(result.staging,0);assert.equal(result.uploads,0);assert.equal(result.downloads,0);
  });
- await scenario('receive reuses verified bytes across duplicate records and metadata changes',async page=>{
+ await scenario('duplicate cloud originals and metadata changes cannot overwrite phone files',async page=>{
   const result=await page.evaluate(async()=>{
-   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
-   const records=f.core.recordsFrom({state:f.state}),key=id=>JSON.stringify(['table','document_blobs',id]);
-   f.cloud.rpc=async(name,p)=>{
-    if(name!=='road_ready_account_patch_v1'||p.p_expected!==f.workspace.revision)throw Error('Unexpected account commit');
-    const next={...f.workspace.payload.records,...p.p_patch};for(const k of p.p_deleted)delete next[k];
-    f.workspace={revision:f.workspace.revision+1,payload:{format:f.core.FORMAT,records:next}};return {data:{revision:f.workspace.revision}};
-   };
-   const opts={storage:f.storage,uid:f.uid,known:new Set()};
-   for(const id of ['original','copy'])records[key(id)]=await encode({local_blob_id:id,blob:new Blob(['shared original'],{type:'application/pdf'}),label:id},opts);
-   f.downloads.clear();f.workspace={revision:1,payload:{format:f.core.FORMAT,records}};
-   const first=await f.sync.syncAccount({initial:true}),firstReads=[...f.downloads.values()].reduce((a,b)=>a+b,0);
-   const nextRecords={...f.workspace.payload.records,[key('original')]:{...f.workspace.payload.records[key('original')],label:'Updated filing only'}};
-   f.workspace={revision:f.workspace.revision+1,payload:{format:f.core.FORMAT,records:nextRecords}};
-   const second=await f.sync.syncAccount(),totalReads=[...f.downloads.values()].reduce((a,b)=>a+b,0);
-   return {first,second,firstReads,totalReads,texts:await Promise.all(['original','copy'].map(async id=>await (await f.db.document_blobs.get(id)).blob.text())),label:(await f.db.document_blobs.get('original')).label,staging:await f.db.account_receive_staging.count()};
+   const f=window.fixture,records=f.core.recordsFrom({state:f.state}),key=id=>JSON.stringify(['table','document_blobs',id]);
+   for(const id of ['original','copy']){
+    records[key(id)]={...await f.legacyOriginal(id,'shared cloud original'),label:id};
+    await f.db.document_blobs.put({local_blob_id:id,blob:new Blob(['phone '+id]),label:'Phone label'});
+   }
+   f.workspace={revision:1,payload:{format:f.core.FORMAT,records}};
+   const first=await f.sync.syncAccount({initial:true});
+   records[key('original')].label='Updated cloud filing only';f.workspace.revision++;
+   const second=await f.sync.syncAccount();
+   return {first,second,uploads:f.uploads,downloads:f.downloads.size,
+    texts:await Promise.all(['original','copy'].map(async id=>await(await f.db.document_blobs.get(id)).blob.text())),
+    label:(await f.db.document_blobs.get('original')).label,cloudLabel:f.workspace.payload.records[key('original')].label};
   });
   assert.equal(result.first.error,undefined);assert.equal(result.second.error,undefined);
-  assert.equal(result.firstReads,1,'Duplicate document rows must share one download');
-  assert.equal(result.totalReads,1,'Changing filing metadata must reuse the saved original');
-  assert.deepEqual(result.texts,['shared original','shared original']);assert.equal(result.label,'Updated filing only');assert.equal(result.staging,0);
+  assert.equal(result.uploads,0);assert.equal(result.downloads,0);
+  assert.deepEqual(result.texts,['phone original','phone copy']);assert.equal(result.label,'Phone label');assert.equal(result.cloudLabel,'Updated cloud filing only');
  });
  for(const step of [
   'road_ready_backup_settings:record_sync_enabled',
@@ -280,39 +278,25 @@ try{
   });
   assert.equal(result.empty.canOpenLocal,false);assert.equal(result.mismatch.blocked,true);assert.equal(result.phase,'account_mismatch');
  });
- for(const change of ['changed','removed'])await scenario('interrupted receive with remote record '+change,async page=>{
+ for(const change of ['changed','removed'])await scenario('cloud original '+change+' cannot remove or replace a local original',async page=>{
   const result=await page.evaluate(async change=>{
-   const f=window.fixture,{encode}=await import('/lib/owner-op-cloud/accountFilesV110455.js');
-   const records=f.core.recordsFrom({state:f.state});
-   const tableKey=id=>JSON.stringify(['table','document_blobs',id]);
-   for(const id of ['stale','reused','blocked'])records[tableKey(id)]=await encode({local_blob_id:id,blob:new Blob([id+' original'],{type:'application/pdf'})},{storage:f.storage,uid:f.uid});
-   const pathFor=id=>f.uid+'/temporary-backup/'+records[tableKey(id)].blob.chunks[0].sha256+'.bin';
-   const reusedPath=pathFor('reused');f.brokenPath=pathFor('blocked');
-   f.workspace={revision:1,payload:{format:f.core.FORMAT,records}};
+   const f=window.fixture,records=f.core.recordsFrom({state:f.state}),key='["table","document_blobs","saved"]';
+   records[key]=await f.legacyOriginal('saved','old cloud original');
+   await f.db.document_blobs.put({local_blob_id:'saved',blob:new Blob(['phone original'])});
    await f.db.account_receive_staging.put({key:'other-user-checkpoint',user_id:'other-user',decoded:{blob:new Blob(['other'])}});
-   const interrupted=await f.sync.syncAccount({initial:true});
-   const checkpoints=await f.db.account_receive_staging.where('user_id').equals(f.uid).primaryKeys();
-   const downloads=f.downloads.get(reusedPath),before=(await f.db.app_snapshots.get(f.key)).state;
-   if(change==='changed')records[tableKey('stale')]=await encode({local_blob_id:'stale',blob:new Blob(['replacement'],{type:'application/pdf'})},{storage:f.storage,uid:f.uid});
-   else delete records[tableKey('stale')];
-   f.workspace.revision++;f.brokenPath=null;
-   // Abort after the installation has written all records and attempted cleanup.
-   const failBase=(_key,row)=>{if(row.key==='account-sync-v110455:base')throw Error('Synthetic install abort');};
-   f.db.sync_meta.hook('creating',failBase);
-   const aborted=await f.sync.syncAccount({initial:true});f.db.sync_meta.hook('creating').unsubscribe(failBase);
-   const afterAbort=await f.db.account_receive_staging.where('user_id').equals(f.uid).primaryKeys();
-   const installedAfterAbort=await f.db.document_blobs.count();
-   const retried=await f.sync.syncAccount({initial:true});
-   const stale=await f.db.document_blobs.get('stale');
-   return {interrupted,checkpoints,before,aborted,afterAbort,installedAfterAbort,retried,remaining:await f.db.account_receive_staging.where('user_id').equals(f.uid).count(),other:!!await f.db.account_receive_staging.get('other-user-checkpoint'),reusedDownloads:f.downloads.get(reusedPath),downloads,staleText:stale?await stale.blob.text():null,installed:await f.db.document_blobs.count()};
+   f.workspace={revision:1,payload:{format:f.core.FORMAT,records}};
+   const first=await f.sync.syncAccount({initial:true});
+   if(change==='changed')f.workspace.payload.records[key]=await f.legacyOriginal('saved','replacement cloud original');
+   else delete f.workspace.payload.records[key];
+   f.workspace.revision++;
+   const remoteBefore=structuredClone(f.workspace.payload.records),second=await f.sync.syncAccount();
+   return {first,second,remoteBefore,remoteAfter:f.workspace.payload.records,text:await(await f.db.document_blobs.get('saved')).blob.text(),
+    local:(await f.db.app_snapshots.get(f.key)).state,expected:f.state,uploads:f.uploads,downloads:f.downloads.size,
+    other:!!await f.db.account_receive_staging.get('other-user-checkpoint')};
   },change);
-  assert.match(result.interrupted.error,/interrupted download/);assert.equal(result.interrupted.canOpenLocal,false);
-  assert.equal(result.checkpoints.length,2);assert.deepEqual(result.before,{});
-  assert.match(result.aborted.error,/Synthetic install abort/);assert.equal(result.installedAfterAbort,0);
-  for(const key of result.checkpoints)assert.ok(result.afterAbort.includes(key),'Rollback must preserve earlier checkpoints');
-  assert.equal(result.retried.error,undefined);assert.equal(result.remaining,0);assert.equal(result.other,true);
-  assert.equal(result.reusedDownloads,result.downloads,'Unchanged checkpoint must resume without another download');
-  assert.equal(result.staleText,change==='changed'?'replacement':null);assert.equal(result.installed,change==='changed'?3:2);
+  assert.equal(result.first.error,undefined);assert.equal(result.second.error,undefined);assert.equal(result.text,'phone original');
+  assert.deepEqual(result.remoteAfter,result.remoteBefore);assert.deepEqual(result.local.eventsByDay,result.expected.eventsByDay);
+  assert.equal(result.uploads,0);assert.equal(result.downloads,0);assert.equal(result.other,true);
  });
  await scenario('safety, full JSON and ZIP exports exclude staging without reading it',async page=>{
   const result=await page.evaluate(async()=>{

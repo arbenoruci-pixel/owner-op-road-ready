@@ -31,6 +31,12 @@ if(process.env.READER_OFFLINE_BUILD==='1'){
   console.log('SKIP LIVE — offline build; only static project-isolation assertions ran. No backend requests made.');
 }else{
 const auth=await fetchReadOnlyWithRetry(base+'/auth/v1/settings',{headers:{apikey:key}},'Auth settings');
+if(auth?.status===402){
+  // Billing restrictions prevent the service probes from reaching Auth/RLS.
+  // Keep the explicit health failure visible while allowing local-only fixes
+  // to be compiled; this does not certify authentication or bucket access.
+  console.warn('BLOCKED LIVE — Supabase HTTP 402 quota restriction. Cloud links/auth are unavailable; live isolation checks are unverified. Existing cloud files are retained.');
+}else{
 if (auth) {
   assert.equal(auth.status,200,'Supabase Auth settings endpoint returned an unexpected status');
   const authSettings=await auth.json();
@@ -52,5 +58,6 @@ if (storage) {
 
 const reached=[auth,access,storage].filter(Boolean).length;
 console.log(`${reached}/3 live read-only isolation/auth checks reached the service; static project-isolation checks remain mandatory`);
+}
 
 }

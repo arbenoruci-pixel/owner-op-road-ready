@@ -29,3 +29,5 @@ Explain the exact proposed behavior or design change to Arben and obtain explici
 ## Approval record
 
 - **2026-11-04:** Arben approved release 110.4.100 as working and requested this lock. Scope: repository instructions, a fixed baseline manifest, verification tests, and build checks. No product behavior or user records changed.
+
+- **2026-11-07:** Arben explicitly requested local device originals and uploads only when creating links, limited to selected documents: “dokumentet origjinale të ruhen lokalisht në pajisje dhe të ngarkohen në Supabase vetëm kur krijoj link për t’i shpërndarë” and “krijimi i linkut ngarkon vetëm dokumentet e zgjedhura.” Authorized scope: remove wallet originals from the older backup API, add explicit Wallet document selection inside the existing Review step, and wait for verified local document persistence. Preserve the three-step wizard, signed/current log contents, immutable share verification, all existing cloud files, and all historical originals. Corresponding hashes: backup client, wizard, updated selection regression, this approval record. No record restoration, cloud deletion, or logbook mutation is authorized.
