@@ -1,6 +1,7 @@
 'use client';
 import React,{useEffect,useMemo,useState} from 'react';
 import {reconcileLoadFoldersV10974} from './loadFolderReconciliationV10974.js';
+import {reviewedFreightAliases} from './loadAliasesV110416.js';
 import {collectShipmentScanCandidates} from '../scan/shipmentFiling.js';
 import {loadView} from './driverDocumentsV110415.js';
 import {openSource,prepareLoadFiles} from './documentActionsV110415.js';
@@ -14,12 +15,12 @@ export default function SmartLoadFolders(props){
  useEffect(()=>{const refresh=()=>setRevision(v=>v+1);window.addEventListener('road-ready-repair-applied',refresh);window.addEventListener('road-ready-evidence-filed',refresh);return()=>{window.removeEventListener('road-ready-repair-applied',refresh);window.removeEventListener('road-ready-evidence-filed',refresh);};},[]);
  useEffect(()=>()=>share?.forEach(f=>URL.revokeObjectURL(f.url)),[share]);
  const model=useMemo(()=>reconcileLoadFoldersV10974({loads,documents,state,businessStore}),[loads,documents,state,businessStore,revision]);
- const smart=useMemo(()=>buildSmartFolders({folders:model.folders,documents:model.allDocuments,candidates:collectShipmentScanCandidates(state,businessStore),state,businessStore}),[model,state,businessStore]);
+ const smart=useMemo(()=>buildSmartFolders({folders:model.folders,documents:model.allDocuments,candidates:collectShipmentScanCandidates(state,businessStore),state,businessStore,reviewedAliases:reviewedFreightAliases(businessStore,model.allDocuments,model.repairOverlay)}),[model,state,businessStore]);
  const views=useMemo(()=>new Map(smart.folders.map(f=>[f.id,f.shipment?null:loadView(f.source,f.documents,businessStore)])),[smart,businessStore]);
  const checks=useMemo(()=>new Map(smart.folders.map(f=>[f.id,folderChecklist(f,views.get(f.id)?.rows)])),[smart,views]);
  const folder=smart.folders.find(f=>f.id===selected),rows=folder?checks.get(folder.id):[];
  const needle=query.trim().toLowerCase();
- const shown=smart.folders.filter(f=>(needle||filter==='all'||(filter==='completed'?f.completed:!f.completed))&&(!needle||[f.reference,f.origin,f.destination,f.broker,...f.documents.map(documentLabel)].join(' ').toLowerCase().includes(needle)));
+ const shown=smart.folders.filter(f=>(needle||filter==='all'||(filter==='completed'?f.completed:!f.completed))&&(!needle||[f.reference,f.origin,f.destination,f.broker,...(f.source.aliases||[]).map(a=>a.value),...f.documents.map(documentLabel)].join(' ').toLowerCase().includes(needle)));
  const go=id=>{setSelected(id);setError('');setShare(null);};
  const scan=(kind='auto')=>{if(folder)try{sessionStorage.setItem('road-ready-open-load-folder',folder.id);}catch{}onScan?.({kind,loadNo:folder?.reference||'',shipmentReference:folder?.shipment?folder.reference:'',date:''});};
  async function open(doc,pages=[]){if(opening)return;setError('');setOpening(documentIdentity(doc));try{await openSource(doc,pages);}catch(e){setError(e.message||'Could not open this document.');}finally{setOpening('');}}
