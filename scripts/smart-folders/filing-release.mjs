@@ -13,3 +13,8 @@ for(const file of ['package.json','package-lock.json']){const value=JSON.parse(r
 const locks=JSON.parse(read('module-locks.v1.json'));locks.release=version;fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 for(const file of ['source/src/core/update/appUpdate.js','public/sw.js','source/src/modules/home/HomeScreen.jsx','source/src/shared/ui/ToolsSheet.jsx','lib/owner-op-cloud/cloudMirrorV110450.js','scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs'])fs.writeFileSync(file,read(file).replaceAll(previous.version,version).replaceAll(previous.build,build));
 console.log('PASS — reviewed folder filing release '+version+' '+sha);
+
+// Owner-approved presentation layer follows the stable filing behavior.
+await import('../compact-business/install.mjs');
+await import('../compact-business/core.test.mjs');
+await import('../compact-business/release.mjs');
