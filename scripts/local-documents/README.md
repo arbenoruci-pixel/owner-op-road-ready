@@ -55,3 +55,8 @@ and readback, real account receive with missing/different cloud originals, HTTP
 402, serialized-file redaction, retired upload entry points, selected-only uploads,
 and the actual three-step React workflow. Approved DOT and module locks run
 before the production compiler. Preview deployment is disabled for this branch.
+
+The live backend probe explicitly reports HTTP 402 as blocked/unverified, so the
+quota incident cannot prevent compilation of this local-only fix. It makes no
+claim that Auth or private-bucket checks passed while the project is restricted.
+Reachable Auth, anonymous-RPC, and private-bucket assertions remain strict.
