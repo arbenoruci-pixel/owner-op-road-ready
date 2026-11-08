@@ -10,7 +10,7 @@ patch(owner,'<section className="screen owner-os-screen-v102">', '<section class
 patch(owner,'initialTab={\'loads\'} unlinkedShipment=',"onDashboard={()=>setTab('overview')} onBilling={()=>setTab('billing')} initialTab={'loads'} unlinkedShipment=");
 const source=read(owner), hero=source.indexOf('          <section className="owner-os-hero-v102">'), heroEnd=source.indexOf('          <SectionHead eyebrow="Action center"',hero);
 if(!source.includes('<GrossBoard store={businessStore} state={state}/>')){assert.ok(hero>0&&heroEnd>hero,'Overview presentation bounds');fs.writeFileSync(owner,source.slice(0,hero)+'          <GrossBoard store={businessStore} state={state}/>\n'+source.slice(heroEnd));}
-patch(owner,'<form className="billing-profile-v102" onSubmit={saveProfile}>','<details className="rr-billing-setup" open={!profileDraft.carrierName || undefined}><summary>Carrier, billing &amp; factoring setup</summary><form className="billing-profile-v102" onSubmit={saveProfile}>');
+patch(owner,'<form className="billing-profile-v102" onSubmit={saveProfile}>','<details className="rr-billing-setup" open={!ownerStore.billingProfile?.carrierName || undefined}><summary>Carrier, billing &amp; factoring setup</summary><form className="billing-profile-v102" onSubmit={saveProfile}>');
 patch(owner,'Save billing setup</button></form>','Save billing setup</button></form></details>');
 patch(owner,'      </main>\n      <input ref={mileageRef}',"      </main>\n      {tab!=='audit'?<BusinessNav active={tab} onDashboard={()=>setTab('overview')} onLoads={()=>setTab('documents')} onScan={()=>onScan?.({kind:'auto'})} onBilling={()=>setTab('billing')}/>:null}\n      <input ref={mileageRef}");
 const workspace=root+'EvidenceWorkspaceV110453.jsx';
