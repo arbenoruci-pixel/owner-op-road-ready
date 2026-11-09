@@ -29,7 +29,10 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
   await page.setViewportSize({width:1024,height:850});await fit('Split inbox');assert.ok(await page.locator('.rr-inbox-list').isVisible());await page.screenshot({path:out+'/'+name+'-split.png'});
   await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Open billing ›',exact:true}).click();await page.locator('.billing-checklist-v102').waitFor();
   await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
-  assert.equal(await page.evaluate(()=>scrollY),0,'Billing opens at the top');assert.match(await page.locator('.owner-os-load-picker-v102').innerText(),/82011/,'Billing keeps selected folder');
+  assert.equal(await page.evaluate(()=>scrollY),0,'Billing opens at the top');
+  // Native select innerText is empty in WebKit and includes all options in Chromium.
+  // Assert the selected value, so both engines verify the actual billing target.
+  assert.equal(await page.locator('.owner-os-load-picker-v102 select').inputValue(),'82011','Billing keeps selected folder');
   assert.ok(await page.getByRole('button',{name:'Invoice & packet PDF',exact:true}).isDisabled(),'Missing originals must still block packet generation');
   const contrast=await page.locator('.billing-checklist-v102 b').first().evaluate(el=>{const rgb=v=>v.match(/[\d.]+/g).slice(0,3).map(Number);const lum=rgb=>rgb.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);const a=lum(rgb(getComputedStyle(el).color)),b=lum(rgb(getComputedStyle(el.closest('.billing-checklist-v102')).backgroundColor));return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);});assert.ok(contrast>=4.5,'Billing text contrast >= 4.5');
   for(const width of [320,390,820]){await page.setViewportSize({width,height:844});await fit('Billing '+width);}
