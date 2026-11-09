@@ -24,7 +24,7 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -73,3 +73,4 @@ jobs:
             /tmp/route-cleanup-build.log
             /tmp/route-cleanup-server.log
           retention-days: 3
+

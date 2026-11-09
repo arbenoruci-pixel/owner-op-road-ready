@@ -4,6 +4,7 @@ on:
     paths:
       - 'scripts/workspace-navigation/**'
       - 'scripts/smart-folders/**'
+      - 'scripts/compact-business/**'
       - 'scripts/smart-import/**'
       - 'scripts/reliability-sync/**'
       - 'scripts/import-display/**'
@@ -19,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -34,7 +35,7 @@ jobs:
         run: node scripts/build-v110.mjs > /tmp/home-docs-build.log 2>&1 || { tail -n 120 /tmp/home-docs-build.log; exit 1; }
       - name: Connected records and existing delivery regression
         run: |
-          node --test scripts/workspace-navigation/*.test.mjs scripts/delivery-closeout/closeout.test.mjs scripts/reader-foundation/currentLoad.test.mjs
+          node --test scripts/workspace-navigation/*.test.mjs scripts/delivery-closeout/closeout.test.mjs scripts/reader-foundation/currentLoad.test.mjs scripts/compact-business/core.test.mjs
           node scripts/v110453/test-packet.mjs
           node scripts/test-duty-graph-continuity.mjs
           node scripts/verify-isolation-locks-v110.mjs
@@ -53,10 +54,16 @@ jobs:
             sleep 1
           done
           failed=0
-          for test in smart-folders/browser-flow.mjs reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
+          for test in compact-business/browser.mjs smart-folders/browser-flow.mjs reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
             if ! node "scripts/$test"; then failed=1; fi
           done
           exit "$failed"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: compact-business-screenshots
+          path: browser-test-results/compact-business/
+          retention-days: 3
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
@@ -66,3 +73,4 @@ jobs:
             /tmp/home-docs-server.log
             browser-test-results/
           retention-days: 3
+
