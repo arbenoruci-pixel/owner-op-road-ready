@@ -98,6 +98,7 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,un
   }else{
    await page.getByRole('region',{name:'Automatic reading for Bill of lading'}).waitFor({timeout:60000});
    if(['ambiguous','manual_type'].includes(scenario))await page.getByText('Read and checked automatically',{exact:true}).waitFor();
+   else if(scenario==='unquoted_reference')await page.getByRole('button',{name:'Check unclear details',exact:true}).waitFor();
    else await page.getByRole('button',{name:'Read again',exact:true}).waitFor();
    const store=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')));assert.equal(store.documents.length,0);
   }
