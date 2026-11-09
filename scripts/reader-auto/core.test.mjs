@@ -177,3 +177,39 @@ test('source-verified BOL is ready in its folder without a human confirmation or
  }
  assert.equal(folderChecklist({reference:'BROKER-100',source:{},logs:[],documents:[doc]},[{kind:'bol',status:'missing',sources:[{doc}]}]).find(r=>r.kind==='bol').status,'partial');
 });
+
+test('invalid optional quotes never erase verified shipment fields or become saved values',async()=>{
+ const {scanWithSourceFields}=await import('../../packages/smart-reader-core/src/scanFields.js');
+ const first=read(),second=read();
+ for(const r of [first,second])r.fields.push({field:'weight',value:'44120 LB',quote:'Weight: 44120',location:'middle',clear:true});
+ const original=JSON.stringify([first,second]);
+ const reading={...response(),...reconcileSmartReadings(first,second)};
+ assert.equal(JSON.stringify([first,second]),original,'provider readings stay unchanged');
+ const result=applyAutomaticReading(initial(),reading,context);
+ assert.equal(result.automaticReading.ready,true);assert.equal(automaticFolder(result,candidates).loadNo,'BROKER-100');
+ assert.deepEqual(result.automaticReading.fieldIssues,[{field:'weight',issue:'value_not_in_quote',passes:[1,2]}]);
+ assert.equal(result.documents[0].fields.weight.value,null);
+ const analysis={},projection=scanWithSourceFields(analysis,{analysis,result},'bol');
+ assert.equal(projection.fields.weight,undefined);assert.equal(projection.fields.bolNo,'SH045061');
+});
+test('unsupported required values stay unconfirmed even when both AI passes repeat them',()=>{
+ for(const key of ['bolNumber','shipper','consignee','documentDate'])for(const badPasses of [[1],[2],[1,2]]){
+  const readings=[read(),read()];for(const pass of badPasses)readings[pass-1].fields.find(f=>f.field===key).quote='Unrelated text';
+  const reading={...response(),...reconcileSmartReadings(...readings)};
+  const result=applyAutomaticReading(initial(),reading,context);
+  assert.equal(result.automaticReading.ready,false);assert.equal(automaticFolder(result,candidates),null);
+  assert.equal(result.documents[0].fields[key].value,null);
+  assert.equal(result.documents[0].fields.carrier.value,values.carrier,'other agreed fields survive');
+  assert.deepEqual(result.automaticReading.fieldIssues,[{field:key,issue:'value_not_in_quote',passes:badPasses}]);
+ }
+});
+test('quote matching ignores capitalization while preserving every digit and punctuation mark',()=>{
+ const first=read(),second=read();first.fields.find(f=>f.field==='shipper').quote='SHIPPER: EXAMPLE WAREHOUSE';
+ const result=applyAutomaticReading(initial(),{...response(),...reconcileSmartReadings(first,second)},context);
+ assert.equal(result.automaticReading.ready,true);
+ for(const quote of ['SH045067','SH-045061','SH045 061']){
+  first.fields[0].quote=quote;
+  const next=applyAutomaticReading(initial(),{...response(),...reconcileSmartReadings(first,second)},context);
+  assert.equal(next.automaticReading.ready,false);
+ }
+});
