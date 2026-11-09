@@ -171,6 +171,7 @@ steps.push('camera-performance/install.mjs','camera-performance/equivalence.test
 steps.push('scanner-paper/install.mjs','scanner-paper/core.test.mjs','v110428/boundary.test.mjs','scanner-paper/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('device-handoff/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('smart-folders/filing.test.mjs','smart-folders/filing-release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('driver-dashboard/install.mjs','driver-dashboard/core.test.mjs','verify-isolation-locks-v110.mjs','driver-dashboard/release.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")

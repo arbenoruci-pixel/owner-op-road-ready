@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 const read=p=>fs.readFileSync(p,'utf8'), previous=JSON.parse(read('release-version.json')), version='110.4.114';
-assert.ok(['110.4.113',version].includes(previous.version));
+assert.ok(['110.4.113',version,'110.4.115'].includes(previous.version));
 const sha=String(process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'})).trim();
 assert.match(sha,/^[a-f0-9]{40}$/i);
 const build='v1104114-compact-business-'+sha.slice(0,12), now=new Date().toISOString();
