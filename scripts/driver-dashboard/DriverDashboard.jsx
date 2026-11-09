@@ -110,14 +110,14 @@ function MissionScreen(props){
  const liveGuide=getActiveLoadGuideV103(state);
  return <section className="screen rr-driver-mission rr-business-shell">
   <header className="rrd-mission-header"><button type="button" onClick={onBack} aria-label="Back to Home"><Glyph name="back"/></button><span className="rrd-mission-name"><span className="rrd-mini-active"><Glyph name="active" size={19}/></span><b>Active Load</b></span><button type="button" onClick={()=>onSection('load_documents')} aria-label="Open load folders"><Glyph name="menu"/></button></header>
-  <>
+  {(activeLoad||liveGuide)?<>
    <AdaptiveHomeV1038 state={state} summary={summary} activeLoad={activeLoad} operatorProfile={operatorProfile} logbookEnabled={logbookEnabled}
     savedScan={savedScan} savedScanBusy={savedScanBusy} savedScanMessage={savedScanMessage} onContinueSavedScan={onContinueSavedScan}
     onOpenStatus={onOpenStatus} onOpenTrailer={onOpenTrailer} onOpenDay={onOpenLog} onOpenLogbook={onOpenLogbook}
     onOpenShipment={onOpenShipment} onOpenDot={onOpenDot} onOpenWallet={onOpenWallet}
     onOpenScan={onScan} onOpenGuide={onGuide} onOpenBackup={onOpenBackup} onOpenDrive={onDrive} onOpenSection={onSection}/>
-   {(activeLoad||liveGuide)?<section className="rrd-mission-doc-actions"><h2>Load paperwork</h2><p>Keep the original Rate Con, pickup BOL, signed POD and receipts linked to the load. Missing documents stay marked for review.</p><div><button type="button" onClick={()=>onScan('auto')}>Scan / add document</button><button type="button" onClick={()=>onSection('load_documents')}>Open load folder</button></div></section>:null}
-  </>
+   <section className="rrd-mission-doc-actions"><h2>Load paperwork</h2><p>Keep the original Rate Con, pickup BOL, signed POD and receipts linked to the load. Missing documents stay marked for review.</p><div><button type="button" onClick={()=>onScan('auto')}>Scan / add document</button><button type="button" onClick={()=>onSection('load_documents')}>Open load folder</button></div></section>
+  </>:<section className="rrd-mission-empty"><Glyph name="active" size={40}/><h1>No active load</h1><p>Add a rate confirmation or select the correct load from your saved folders. Road Ready will show the next recorded step here.</p><button type="button" onClick={()=>onScan('auto')}>Scan Rate Confirmation</button><button type="button" onClick={()=>onSection('load_documents')}>Choose saved load</button></section>}
  </section>;
 }
 export default function DriverDashboard(props){

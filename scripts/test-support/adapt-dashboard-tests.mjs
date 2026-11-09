@@ -10,7 +10,9 @@ for(const file of files('scripts').filter(p=>/browser[^/]*\.mjs$/.test(p)&&!p.in
  if(s.includes('// Dashboard navigation adapted'))continue;
  // Home waits follow the actual Home, while mission assertions enter Active Load.
  s=s.replace(/(page|target)\.locator\('(\.adaptive-(?:mission|no-load)[^']*|\.adaptive-home-v1038\.(?:active-load|no-load))'\)/g,"(await missionPage($1)).locator('$2')");
- s=s.replaceAll('.adaptive-home-v1038,','.rr-driver-home,');
+ s=s.replaceAll('.adaptive-home-v1038,','.rr-driver-home,').replaceAll(', .adaptive-home-v1038',', .rr-driver-home');
+ s=s.replaceAll("locator('.adaptive-home-v1038.no-load')","locator('.rrd-mission-empty')");
+ if(file==='scripts/browser-ratecon-one-way-v11029.mjs')s=s.replace("page.locator('.phone-app-grid').innerText()","(await homeControl(page,'Smart Scan')).innerText()");
  s=s.replaceAll("'.adaptive-home-v1038'","'.rr-driver-home'").replaceAll("'.phone-app-grid'","'.rrd-icon-grid'").replaceAll("'.phone-app-grid>button'","'.rrd-icon-grid>button'");
  s=s.replace(/(page|target)\.getByRole\('button',\{name:'(Full mission|Open shipment log)',exact:true\}\)/g,"(await missionPage($1)).getByRole('button',{name:'$2',exact:true})");
  for(const name of ['Documents','Smart Scan','Continue saved scan','Open logbook','Import','Export & Backup','Drive','Billing','More tools'])s=s.replaceAll(`page.getByRole('button',{name:'${name}',exact:true})`,`(await homeControl(page,'${name}'))`);
@@ -20,6 +22,7 @@ for(const file of files('scripts').filter(p=>/browser[^/]*\.mjs$/.test(p)&&!p.in
   s=s.replace("card=(await missionPage(page)).locator('.adaptive-mission-v1038');\n  await seed(page,state);", "await seed(page,state);card=(await missionPage(page)).locator('.adaptive-mission-v1038');\n  ");
  }
  if(file==='scripts/workspace-navigation/browser-navigation.mjs')s=s.replace("await page.getByRole('button',{name:'Open load folder',exact:true}).click();","await missionPage(page);await page.getByRole('button',{name:'Open load folder',exact:true}).click();");
+ if(['scripts/v110427/browser.mjs','scripts/v110428/browser.mjs'].includes(file))s=s.replace("page.locator('.rr-driver-home').getByRole('button',{name:'Add',exact:true})","(await missionPage(page)).locator('.adaptive-home-v1038').getByRole('button',{name:'Add',exact:true})");
  if(file==='scripts/v110411/browser-filing.mjs')s=s.replace('await reviewFixturePodEvidence(page',"await (await homeControl(page,'Documents')).waitFor();await reviewFixturePodEvidence(page").replace("    assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),0,'Saved POD covers","    await missionPage(page);assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),0,'Saved POD covers");
  if(file==='scripts/compact-business/browser.mjs')s=s.replace("name:'Open load inbox'","name:'Loads'").replaceAll("'.rr-business-nav button'","'.rrd-icon-grid button'");
  if(file==='scripts/v110435/browser-phone-home.mjs'){
