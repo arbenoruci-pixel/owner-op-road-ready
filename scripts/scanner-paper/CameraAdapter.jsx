@@ -3,7 +3,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {trackBoundary} from './documentBoundaryV110329.js';
 import {canvasToFileV3} from './imageUtilsV3.js';
 import {captureRank,sameCapturePage,canAutoDeliver} from './captureQualityV1104101.js';
-import {updateCaptureWindow} from './captureWindowV110331.js';
+import {updateCaptureWindow,LIVE_ANALYSIS_INTERVAL_MS} from './captureWindowV110331.js';
 import {lockCapturedPage,observePageTransition} from './pageTransitionV110333.js';
 import {bindCapture} from './captureGeometryV1104110.js';
 import {createCameraAnalyzer} from './cameraAnalysisClientV1104110.js';
@@ -28,6 +28,13 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
     if(video){try{video.pause()}catch{}video.srcObject=null;}
     stopCameraStream(streamRef.current);streamRef.current=null;
   }
+  function resetObservations(){
+    observation.current=null;tracking.current=null;captureWindow.current=null;
+    setCorners(null);setReady(false);
+  }
+  function startLiveScanner(){
+    autoRef.current=true;setAuto(true);setLiveMode(true);setRetryKey(n=>n+1);setError('');
+  }
   useEffect(()=>{
     if(!lastPage)return;const url=URL.createObjectURL(lastPage);setThumbnail(url);
     if(previousPage.current!==lastPage){
@@ -39,11 +46,15 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
   },[lastPage]);
   useEffect(()=>{
     alive.current=true;
+    resetObservations();
     if(!liveMode){
       setGuidance('For a reliable scan, take photos using your iPhone camera.');
       setOpened(false);
       return()=>{alive.current=false;stop();};
     }
+    // Native capture has no live signature to compare with the next sheet.
+    // Preserve identifiable live-page locks across retry to avoid duplicates.
+    if(!pageLock.current?.signature)pageLock.current=null;
     let cancelled=false,recovering=false,wasHidden=false;
     analyzer.current=createCameraAnalyzer();
     setOpened(false);setGuidance('Opening live camera…');setError('');
@@ -65,7 +76,7 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
     }})();
     function resume(){
       if(cancelled||!alive.current)return;
-      if(document.hidden){wasHidden=true;return;}
+      if(document.hidden){wasHidden=true;resetObservations();return;}
       if(!wasHidden||recovering||!streamRef.current)return;
       wasHidden=false;recovering=true;
       const stream=streamRef.current,video=videoRef.current;
@@ -107,18 +118,19 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
         const ctx=sample.getContext('2d',{alpha:false,willReadFrequently:true});ctx.drawImage(video,0,0,sample.width,sample.height);const pixels=ctx.getImageData(0,0,sample.width,sample.height);
         const {detection,signature,quality}=await analyzer.current.analyze(pixels,video.videoWidth,video.videoHeight,{allowMainThread:false}),now=performance.now();
         if(cancelled||finishRequested.current)return;
+        if(document.hidden){resetObservations();timer=setTimeout(tick,LIVE_ANALYSIS_INTERVAL_MS);return;}
         observation.current={detection,signature};
         pageLock.current=observePageTransition(pageLock.current,detection,signature);
         // Watch page transitions even while the captured photo is in the worker.
         // The driver often moves to the next sheet before that job completes.
-        if(busy.current){timer=setTimeout(tick,Math.max(180,450-(performance.now()-started)));return;}
+        if(busy.current){timer=setTimeout(tick,Math.max(180,LIVE_ANALYSIS_INTERVAL_MS-(performance.now()-started)));return;}
         tracking.current=trackBoundary(tracking.current,detection,now);setCorners(detection.found?tracking.current.corners:null);
         captureWindow.current=updateCaptureWindow(captureWindow.current,detection,quality,now);
         setReady(captureWindow.current.ready);
         setGuidance(limit.current?'All pages captured. Tap Done.':pageLock.current?.locked?'Page captured · Done or show the next sheet':quality.issues[0]||(autoRef.current?'Hold steady…':'Ready to capture'));
         if(!finishRequested.current&&!limit.current&&!pageLock.current?.locked&&autoRef.current&&captureWindow.current.ready)captureRef.current?.({automatic:true});
       }catch{if(cancelled)return;tracking.current=null;captureWindow.current=null;setReady(false);setCorners(null);}}
-      timer=setTimeout(tick,Math.max(180,450-(performance.now()-started)));
+      timer=setTimeout(tick,Math.max(180,LIVE_ANALYSIS_INTERVAL_MS-(performance.now()-started)));
     };
     timer=setTimeout(tick,150);return()=>{cancelled=true;clearTimeout(timer);sample.width=sample.height=1;};
   },[liveMode,retryKey]);
@@ -209,7 +221,7 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
       <div className="scan-camera-guidance-v333" role="status">{error||guidance}</div>
              {(!opened||!liveMode||error)&&<div className="scan-camera-recovery-v1104117">
          <button type="button" className="scan-camera-fallback-v333" disabled={capturing} onClick={()=>{setLiveMode(false);nativeInput.current?.click();}}>Take photo with phone camera</button>
-         {(!liveMode||error)&&<button type="button" className="scan-camera-retry-v1104117" disabled={capturing} onClick={()=>{setLiveMode(true);setRetryKey(n=>n+1);setError('');}}>Try live scanner</button>}
+         {(!liveMode||error)&&<button type="button" className="scan-camera-retry-v1104117" disabled={capturing} onClick={startLiveScanner}>Try live scanner</button>}
        </div>}
     </div>
     <footer>

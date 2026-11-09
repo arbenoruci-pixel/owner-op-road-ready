@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {acquireCameraStream,attachCameraPreview,refreshCameraPreview,
  preferNativeCamera,preferredCameraConstraints,stopCameraStream,cameraMessage} from '../scanner-paper/cameraRuntime.js';
+import {updateCaptureWindow,CAPTURE_WINDOW_MS,LIVE_ANALYSIS_INTERVAL_MS} from '../v110331/captureWindow.js';
 
 const camera=fs.readFileSync('scripts/scanner-paper/CameraAdapter.jsx','utf8');
 const flow=fs.readFileSync('scripts/scanner-paper/cameraRecovery.css','utf8');
@@ -67,10 +68,36 @@ test('mounted PWA has a native first screen, retry, bounded sampling and track c
  assert.ok(camera.includes('stopCameraStream(streamRef.current)'));
  assert.ok(camera.includes('refreshCameraPreview('));
  assert.ok(camera.includes('{allowMainThread:false}'));
- assert.ok(camera.includes('Math.max(180,450-'));
+ assert.ok(camera.includes('Math.max(180,LIVE_ANALYSIS_INTERVAL_MS-'));
  assert.ok(camera.includes('if(sample.width!==w)sample.width=w'));
  assert.ok(flow.includes('.scan-camera-recovery-v1104117'));
  assert.ok(flow.includes('position:static!important'));
  assert.ok(!camera.includes('width:{ideal:3840}'));
+});
+
+const detection={found:true,confidence:.94,corners:[{x:.1,y:.1},{x:.9,y:.1},{x:.9,y:.9},{x:.1,y:.9}]};
+test('auto capture tolerates timer jitter and ordinary worker latency at the reduced preview cadence',()=>{
+ for(const times of [[0,451,902],[0,600,1200],[0,730,1510],[0,LIVE_ANALYSIS_INTERVAL_MS,2*LIVE_ANALYSIS_INTERVAL_MS]]){
+  let state=null;
+  for(const [i,at] of times.entries()){
+   state=updateCaptureWindow(state,detection,{ready:true},at);
+   assert.equal(state.ready,i===2,'three fresh stable observations: '+times);
+  }
+ }
+});
+test('extra timing slack still rejects stale, blurred, lost, low-confidence and moving pages',()=>{
+ let state=null;
+ for(const at of [0,600])state=updateCaptureWindow(state,detection,{ready:true},at);
+ const expired=updateCaptureWindow(state,detection,{ready:true},600+CAPTURE_WINDOW_MS+1);
+ assert.equal(expired.ready,false);assert.equal(expired.samples.length,1);
+ for(const [d,q] of [[detection,{ready:false}],[{...detection,found:false},{ready:true}],[{...detection,confidence:.5},{ready:true}]]){
+  const reset=updateCaptureWindow(state,d,q,1200);
+  assert.equal(reset.ready,false);assert.equal(reset.samples.length,0);
+ }
+ state=null;
+ for(let i=0;i<10;i++){
+  state=updateCaptureWindow(state,{...detection,corners:detection.corners.map(p=>({...p,x:p.x+i*.025}))},{ready:true},i*600);
+  assert.equal(state.ready,false);
+ }
 });
 
