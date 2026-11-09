@@ -11,6 +11,30 @@ const initial=()=>({engine:'owned-smart-reader',engineVersion:'test',documentId:
 const context={groupId:'g1',pageId:'p1',sourceImageId:'doc:p1:original',imageHash:'a'.repeat(64),originalHash:'b'.repeat(64),expectedRevision:0,year:2026};
 const response=()=>({...reconcileSmartReadings(read(),read()),imageHash:context.imageHash,model:'example/vision',checkedAt:'2026-11-09T00:00:00Z'});
 const candidates=[{id:'load-one',loadNo:'BROKER-100',aliases:[{kind:'bol_number',value:'SH045061'}]}];
+test('BOL/POD disagreement files the agreed shipment while leaving delivery unverified',async()=>{
+ const {scanWithSourceFields}=await import('../../packages/smart-reader-core/src/scanFields.js');
+ const {automaticPayloadMatches}=await import('../../lib/reader-ai/automatic.js');
+ const first=read(),second=read();first.delivery='uncertain';second.kind='pod';second.delivery='receiver_stamped';
+ second.fields.push({field:'deliveryDate',value:'11/06/26',quote:'Received 11/06/26',location:'bottom',clear:true});
+ const checked={...response(),...reconcileSmartReadings(first,second)};
+ assert.deepEqual(checked.issues,['document_type_uncertain','delivery_acknowledgement_uncertain']);
+ assert.deepEqual(checked.unresolved,['deliveryDate']);
+ const before=initial(),result=applyAutomaticReading(before,checked,context);
+ assert.equal(result.automaticReading.ready,true);
+ assert.equal(result.automaticReading.kind,'bol');
+ assert.equal(result.automaticReading.deliveryStatus,'unverified');
+ assert.equal(result.automaticReading.filingScope,'shipment_document');
+ assert.equal(result.automaticReading.date,'2026-11-04');
+ assert.equal(result.documents[0].fields.bolNumber.value,'SH045061');
+ assert.equal(automaticFolder(result,candidates).loadNo,'BROKER-100');
+ const analysis={},projected=scanWithSourceFields(analysis,{analysis,result},'bol');
+ assert.equal(automaticPayloadMatches(result,projected,'bol'),true);
+ assert.equal(projected.fields.deliveryDate,undefined);
+ assert.equal(before.documents[0].fields.bolNumber.value,null);
+ const reversed=applyAutomaticReading(initial(),{...response(),...reconcileSmartReadings(second,first)},context);
+ assert.equal(reversed.automaticReading.kind,'bol');assert.equal(reversed.automaticReading.ready,true);
+ assert.equal(reversed.automaticReading.deliveryStatus,'unverified');
+});
 test('clear source becomes machine-confirmed fields and identifies exactly one existing folder',()=>{
  const original=initial(),before=JSON.stringify(original),result=applyAutomaticReading(original,response(),context);
  assert.equal(JSON.stringify(original),before);assert.equal(result.automaticReading.ready,true);
@@ -24,7 +48,7 @@ test('clear source becomes machine-confirmed fields and identifies exactly one e
  assert.equal(snapshot.automaticReading.originalHash,context.originalHash);
 });
 test('conflicting digits, unreadable or mixed pages do not become ready',()=>{
- for(const edit of [r=>{r.fields[0].value='SH045067';r.fields[0].quote='BOL: SH045067';},r=>{r.mixed=true;},r=>{r.quality='partial';},r=>{r.delivery='uncertain';}]){
+ for(const edit of [r=>{r.fields[0].value='SH045067';r.fields[0].quote='BOL: SH045067';},r=>{r.mixed=true;},r=>{r.quality='partial';}]){
   const second=read();edit(second);const checked={...response(),...reconcileSmartReadings(read(),second)};
   const result=applyAutomaticReading(initial(),checked,context);assert.equal(result.automaticReading.ready,false);assert.equal(automaticFolder(result,candidates),null);
  }
@@ -68,7 +92,7 @@ test('line wrapping and repeated spaces preserve literal evidence without changi
  }
 });
 
-test('receiver signature and completed stamp agree on delivery while pickup or uncertainty still blocks filing',()=>{
+test('receiver signature and completed stamp agree while uncertain acknowledgement cannot verify POD',()=>{
  const first=read(),second=read();first.kind=second.kind='pod';
  first.delivery='receiver_signed';second.delivery='receiver_stamped';
  assert.equal(reconcileSmartReadings(first,second).verified,true);
@@ -109,4 +133,31 @@ test('invoice and unloading readings use their real filing types and representab
   assert.equal(result.automaticReading.ready,true);assert.equal(result.automaticReading.filingType,filingType);
   const projected=scanWithSourceFields(analysis,{analysis,result},filingType);assert.equal(projected.fields.total,'250.00');assert.equal(automaticPayloadMatches(result,projected,filingType),true);
  }
+});
+
+test('shipment fallback requires both readable pages to agree on every shipment identity field',()=>{
+ for(const edit of [r=>{r.kind='invoice';r.fields=[];},r=>{r.mixed=true;},r=>{r.quality='partial';},
+ ...['bolNumber','shipper','consignee','documentDate'].map(key=>r=>{r.fields=r.fields.filter(f=>f.field!==key);})]){
+  const first=read(),second=read();first.delivery='uncertain';second.kind='pod';second.delivery='receiver_stamped';edit(second);
+  const checked={...response(),...reconcileSmartReadings(first,second)};
+  assert.equal(checked.shipmentIdentity.verified,false);
+  const result=applyAutomaticReading(initial(),checked,context);
+  assert.equal(result.automaticReading.ready,false);assert.equal(automaticFolder(result,candidates),null);
+ }
+});
+test('uncertain delivery keeps verified shipping identity without upgrading to POD',()=>{
+ for(const date of [undefined,'02/30/26','11/06/26']){
+  const first=read(),second=read();first.kind=second.kind='pod';first.delivery=second.delivery='receiver_stamped';
+  if(date)for(const r of [first,second])r.fields.push({field:'deliveryDate',value:date,quote:'Received '+date,location:'bottom',clear:true});
+  const result=applyAutomaticReading(initial(),{...response(),...reconcileSmartReadings(first,second)},context);
+  assert.equal(result.automaticReading.ready,true);
+  assert.equal(result.automaticReading.kind,date==='11/06/26'?'pod':'bol');
+  assert.equal(result.automaticReading.deliveryStatus,date==='11/06/26'?undefined:'unverified');
+  assert.equal(result.automaticReading.date,date==='11/06/26'?'2026-11-06':'2026-11-04');
+ }
+ const first=read(),second=read();second.delivery='uncertain';
+ const result=applyAutomaticReading(initial(),{...response(),...reconcileSmartReadings(first,second)},context);
+ assert.equal(result.automaticReading.ready,true);assert.equal(result.automaticReading.kind,'bol');
+ assert.equal(result.automaticReading.deliveryStatus,'unverified');
+ assert.equal(automaticFolder(result,[...candidates,{...candidates[0],id:'another',loadNo:'BROKER-200'}]),null);
 });
