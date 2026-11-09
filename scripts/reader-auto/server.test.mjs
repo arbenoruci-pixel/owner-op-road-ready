@@ -13,6 +13,7 @@ test('two independent image calls, shared budget, cached result and approved ses
  assert.ok(calls[0].messages[1].content[0].text.includes('UNTRUSTED OCR'));
  assert.ok(!JSON.stringify(calls[1].messages).includes('UNTRUSTED OCR'));assert.ok(!JSON.stringify(calls[1].messages).includes('B-1234'));
  assert.equal(calls[0].messages[1].content[1].image_url.url,image);
+ assert.ok(calls.every(c=>c.messages[0].content.includes('Allowed fields by kind:')&&c.messages[0].content.includes('receiptDate')),'provider knows the exact per-kind keys enforced by validation');
  assert.equal((await (await api.POST(request())).json()).cached,true);assert.equal(calls.length,2);assert.equal(authorizations,2);
  assert.ok(!JSON.stringify(body).includes('synthetic-secret'));
 });
