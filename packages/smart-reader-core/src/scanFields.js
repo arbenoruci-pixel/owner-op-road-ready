@@ -5,7 +5,7 @@ import {hasRateStructure} from './rateVocabulary.js';
 import {documentReferences} from './documentReference.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
-  poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
+  poNumber:'poNumber',documentDate:'documentDate',deliveryDate:'deliveryDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
 const referenceKinds={bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailerNo'};
 const aliases={shipper:'origin',consignee:'destination',documentDate:'date'};
 const bolWarning='BOL number was not verified from its label. Check the original.';
@@ -76,7 +76,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
     fields[key]=field.value;accepted.push(key);
     if(replaceAlias)fields[alias]=field.value;
     proofs[key]={status:field.status,value:field.value,evidence:valid,...(validPage?{sourcePage:pageSource}:{})};
-    evidence[key]=fieldEvidence[key]={fieldLabel:field.label,value:field.value,source:field.status==='confirmed'?'driver_confirmed':'document_text',
+    evidence[key]=fieldEvidence[key]={fieldLabel:field.label,value:field.value,source:field.status==='confirmed'?(field.correction?.origin==='machine'?'machine_confirmed':'driver_confirmed'):'document_text',
       status:field.status==='confirmed'?'confirmed':'read',excerpt:[...new Set(valid.map(ref=>ref.quote))].join('\n').slice(0,350)};
   }
   const fieldReferenceKinds=delivery?{...referenceKinds,loadNo:'load_number'}:referenceKinds;

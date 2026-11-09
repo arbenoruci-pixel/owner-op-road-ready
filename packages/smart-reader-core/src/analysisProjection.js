@@ -27,7 +27,7 @@ function fieldProjection(result, group, field) {
   return {label:field.label, kind:field.kind, required:Boolean(field.required),
     status:value !== null ? confirmed ? 'confirmed' : 'supported' : field.status === 'missing' ? 'missing' : 'needs_review',
     value, candidates, issues:list(field.issues),
-    ...(confirmed ? {confirmation:{...(sourcePageValid ? {sourcePage:copy(sourcePage)} : {}), ...(correctionEvidence && evidenceValid(correctionEvidence) ? {evidence:copy(correctionEvidence)} : {})}} : {}),
+    ...(confirmed ? {confirmation:{...(field.correction?.origin==='machine'?{origin:'machine',method:field.correction.method,model:field.correction.model,visualQuotes:copy(field.correction.visualQuotes)}:{}),...(sourcePageValid ? {sourcePage:copy(sourcePage)} : {}), ...(correctionEvidence && evidenceValid(correctionEvidence) ? {evidence:copy(correctionEvidence)} : {})}} : {}),
   };
 }
 
@@ -84,6 +84,7 @@ export function createAnalysisProjection({analysis = {}, review, selectedType = 
   const reviewItems = groups.flatMap(group => Object.entries(group.fields).filter(([,field]) => field.status !== 'confirmed' && (field.status === 'needs_review' || field.required && field.status === 'missing')).map(([key,field]) => ({groupId:group.id,field:key,reason:field.status,issues:field.issues})));
   const mixed = groups.filter(group => group.kind !== 'signing_certificate').length > 1 || Boolean(analysis.typeEvidenceV110334?.mixedDocuments);
   return {version:READER_ANALYSIS_VERSION, engine:result?.engine || null, engineVersion:result?.engineVersion || null,
+    ...(result?.automaticReading?{automaticReading:copy(result.automaticReading)}:{}),
     documentId:result?.documentId || null, revision:result?.reviewRevision || 0,
     source:{...(validText(source.sha256) ? {sha256:source.sha256} : {}), ...(validText(source.fileName) ? {fileName:source.fileName} : {}), immutable:true},
     selection:{type:selectedType || analysis.type?.id || '',loadNo:String(selectedLoadNo || ''),assignment},

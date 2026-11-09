@@ -56,7 +56,7 @@ test('fuel and lumper require transaction evidence; certainty alone is insuffici
 
 test('disabled endpoint makes zero authentication or provider requests',async()=>{
   const handlers=createAiReaderHandlers({env:()=>({}),authorize:()=>assert.fail('disabled'),fetcher:()=>assert.fail('disabled')});
-  assert.deepEqual(await (await handlers.GET()).json(),{enabled:false,version:AI_READER_VERSION,model:null,limits:AI_READER_LIMITS,extraction:{enabled:false,version:AI_EXTRACTION_VERSION,reason:'explicit_request_required',limits:AI_EXTRACTION_LIMITS}});
+  assert.deepEqual(await (await handlers.GET()).json(),{enabled:false,version:AI_READER_VERSION,model:null,limits:AI_READER_LIMITS,smartReading:{enabled:false,version:'verified-document-reading-v1',passes:2},extraction:{enabled:false,version:AI_EXTRACTION_VERSION,reason:'explicit_request_required',limits:AI_EXTRACTION_LIMITS}});
   assert.equal((await handlers.POST(request())).status,503);
 });
 
