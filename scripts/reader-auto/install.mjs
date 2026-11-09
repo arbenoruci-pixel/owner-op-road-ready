@@ -3,8 +3,19 @@ import assert from 'node:assert/strict';
 const root='source/src/modules/scan/';
 function patch(path,before,after){const text=fs.readFileSync(path,'utf8');if(text.includes(after))return;assert.equal(text.split(before).length,2,'Automatic reader anchor: '+path+' '+before.slice(0,90));fs.writeFileSync(path,text.replace(before,after));}
 fs.copyFileSync('scripts/reader-auto/SmartReading.jsx',root+'SmartReadingV1104118.jsx');
+patch(root+'CompactReadingV1104101.jsx','onKind,suggestion})','onKind,suggestion,autoRead=true})');
+patch(root+'CompactReadingV1104101.jsx','if(!cancelled&&canRead&&!disabled','if(!cancelled&&autoRead&&canRead&&!disabled');
+patch(root+'CompactReadingV1104101.jsx','group.kind,page?.id,canRead]);','group.kind,page?.id,canRead,autoRead]);');
 patch(root+'OwnedReaderPreview.jsx',"import CompactReading from './CompactReadingV1104101.jsx';","import CompactReading from './SmartReadingV1104118.jsx';");
+patch(root+'readerAiFallbackV110398.js',"import {createAiFallback}","import {createAutomaticReader} from '../../../../lib/reader-ai/read.js';\nimport {createAiFallback}");
+patch(root+'readerAiFallbackV110398.js','export const extractDocumentFields = createAiExtraction({',`export const readDocumentAutomatically = createAutomaticReader({
+  identify:reviewScanAnalysis,sources:aiPageSources,prepare:prepareAiPage,
+  session:signal=>withAbort(import('../../../../lib/owner-op-cloud/client.js').then(({cloudSession})=>cloudSession()),signal),
+  online:()=>typeof navigator!=='undefined'&&navigator.onLine!==false,
+});
+export const extractDocumentFields = createAiExtraction({`);
 const file=root+'SmartScanSheetV105.jsx';
+patch(file,'        retainPageSourcesV110347:true,','        retainPageSourcesV110347:true,\n        automaticReading:true,');
 patch(file,"import React, { useEffect", "import {automaticFolder,automaticPayloadMatches} from '../../../../lib/reader-ai/automatic.js';\nimport React, { useEffect");
 patch(file,'  buildVaultDocumentV105,','  buildVaultDocumentV105,\n  documentFolderV105,');
 patch(file,'  const needsReview = Boolean(',`  const machineProof=readerReviewV110345?.result?.automaticReading;

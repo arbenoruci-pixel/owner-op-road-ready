@@ -24,7 +24,7 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: node --test scripts/reader-auto/core.test.mjs scripts/reader-auto/server.test.mjs
+      - run: node --test scripts/reader-auto/core.test.mjs scripts/reader-auto/server.test.mjs scripts/reader-auto/client.test.mjs
       - name: Build exact production runtime and verify protected files
         run: node scripts/build-v110.mjs > /tmp/reader-auto-build.log 2>&1 || { tail -n 100 /tmp/reader-auto-build.log; exit 1; }
       - run: |
