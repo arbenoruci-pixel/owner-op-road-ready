@@ -161,3 +161,19 @@ test('uncertain delivery keeps verified shipping identity without upgrading to P
  assert.equal(result.automaticReading.deliveryStatus,'unverified');
  assert.equal(automaticFolder(result,[...candidates,{...candidates[0],id:'another',loadNo:'BROKER-200'}]),null);
 });
+
+test('source-verified BOL is ready in its folder without a human confirmation or POD claim',async()=>{
+ const {folderChecklist}=await import('../smart-folders/core.js');
+ const {scanWithSourceFields}=await import('../../packages/smart-reader-core/src/scanFields.js');
+ const second=read();second.kind='pod';second.delivery='receiver_stamped';
+ const result=applyAutomaticReading(initial(),{...response(),...reconcileSmartReadings(read(),second)},context);
+ const analysis={},projected=scanWithSourceFields(analysis,{analysis,result},'bol');
+ const doc={id:'saved',type:'bol',canonicalLoadNo:'BROKER-100',extracted:projected.fields,automaticFilingV1:{...result.automaticReading,confirmationOrigin:'machine',loadNo:'BROKER-100'}};
+ const check=d=>folderChecklist({reference:'BROKER-100',source:{},logs:[],documents:[d]},[{kind:'bol',status:'review',sources:[{doc:d}]}]);
+ assert.equal(check(doc).find(r=>r.kind==='bol').status,'saved');
+ assert.equal(check(doc).find(r=>r.kind==='pod').status,'later');
+ for(const edit of [d=>{d.automaticFilingV1.ready=false;},d=>{d.automaticFilingV1.loadNo='BROKER-200';},d=>{d.extracted.shipper='Changed';},d=>{d.extracted.readerSourceFieldsV110393.reviewRevision++;},d=>{d.sourceCopyConflictV110419=true;}]){
+  const changed=structuredClone(doc);edit(changed);assert.equal(check(changed).find(r=>r.kind==='bol').status,'review');
+ }
+ assert.equal(folderChecklist({reference:'BROKER-100',source:{},logs:[],documents:[doc]},[{kind:'bol',status:'missing',sources:[{doc}]}]).find(r=>r.kind==='bol').status,'partial');
+});

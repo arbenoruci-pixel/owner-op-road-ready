@@ -76,6 +76,16 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,ra
    const stored=await page.evaluate(async()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction(['document_blobs','capture_asset_blobs']),qs=['document_blobs','capture_asset_blobs'].map(t=>tx.objectStore(t).getAll());let count=0;for(const q of qs)q.onsuccess=async()=>{if(++count!==2)return;const rows=[];for(const row of qs.flatMap(q=>q.result)){const blob=row.blob,bytes=blob?.arrayBuffer?await blob.arrayBuffer():blob?.bytes;if(bytes)rows.push(Array.from(new Uint8Array(bytes)));}db.close();resolve(rows);};};}));
    assert.ok(stored.some(b=>Buffer.from(b).equals(original)),'original bytes remain identical');
    await page.reload();assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')))).documents.length,1);
+   if(scenario==='shipment'){
+    await page.getByRole('button',{name:/^Documents/}).first().click();
+    const folder=page.getByRole('region',{name:'Smart load folders',exact:true});await folder.waitFor();
+    await folder.locator('.rr-smart-card').filter({hasText:'Load 9001'}).click();
+    await folder.getByRole('heading',{name:'9001',exact:true}).waitFor();
+    const bol=await folder.getByRole('region',{name:'Pickup BOL',exact:true}).innerText();
+    assert.match(bol,/Saved/);assert.doesNotMatch(bol,/check details/i);
+    assert.match(await folder.getByRole('region',{name:'POD',exact:true}).innerText(),/Add after delivery/);
+    assert.equal(await folder.getByText('Completed',{exact:true}).count(),0);
+   }
   }else{
    await page.getByRole('region',{name:'Automatic reading for Bill of lading'}).waitFor({timeout:60000});
    if(['ambiguous','manual_type'].includes(scenario))await page.getByText('Read and checked automatically',{exact:true}).waitFor();
