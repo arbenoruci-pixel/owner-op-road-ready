@@ -52,6 +52,10 @@ test('multi-page scans retain the existing review flow without a partial automat
  const h=fixture({identify:()=>({...review,pageCount:2,pages:[...review.pages,{id:'page-2',number:2}]})});
  assert.equal(await h.read(),null);assert.equal(h.calls(),0);
 });
+test('offline scans retain local review without a provider or capability request',async()=>{
+ const h=fixture({online:()=>false,fetcher:()=>assert.fail('Offline must not request a service')});
+ assert.equal(await h.read(),null);assert.equal(h.calls(),0);
+});
 test('returning to pages while waiting for allowance cancels the queued read',async()=>{
  const stop=new AbortController(),h=fixture({wait:async()=>{stop.abort();return new Promise(()=>{});}});
  for(const text of ['previous-one','previous-two'])await h.server.POST(new Request('https://app.test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:'read',image,text,pageNumber:1})}));
