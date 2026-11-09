@@ -38,3 +38,30 @@ test('each double read consumes two calls and cancellation aborts both providers
  const cancelled=new Request(request(),{signal:abort.signal});
  assert.equal((await waiting.POST(cancelled)).status,503);assert.equal(signals.length,2);assert.ok(signals.every(s=>s.aborted));
 });
+
+test('wrapped image evidence survives the real provider response envelope',async()=>{
+ const value=structuredClone(reading);
+ value.fields.push({field:'shipper',value:'Test Liverpool Warehouse 100 Test Blvd, Liverpool, NY 13090',quote:'Test Liverpool Warehouse\n100 Test Blvd, Liverpool, NY 13090',location:'top',clear:true});
+ const api=createAiReaderHandlers({env,authorize:async()=> 'user',fetcher:async()=>Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(value)}}]})});
+ const response=await api.POST(request()),body=await response.json();
+ assert.equal(response.status,200);assert.equal(body.result.verified,true);
+ assert.equal(body.result.fields.find(f=>f.field==='shipper').quotes[0],value.fields[1].quote);
+});
+
+test('smart response failures identify the cause without exposing the source or credentials',async()=>{
+ const badQuote=structuredClone(reading);badQuote.fields[0].quote='PRIVATE SOURCE: B-9999';
+ const badSchema={...reading,extra:'PRIVATE SOURCE'};
+ for(const [choice,expected] of [
+  [{finish_reason:'stop',message:{refusal:'PRIVATE SOURCE'}},'refused_output'],
+  [{finish_reason:'length',message:{content:'PRIVATE SOURCE'}},'token_limit'],
+  [{finish_reason:'content_filter',message:{content:'PRIVATE SOURCE'}},'incomplete_output'],
+  [{finish_reason:'stop',message:{content:'PRIVATE SOURCE'}},'invalid_json'],
+  [{finish_reason:'stop',message:{content:JSON.stringify(badSchema)}},'invalid_schema'],
+  [{finish_reason:'stop',message:{content:JSON.stringify(badQuote)}},'value_not_in_quote'],
+ ]){
+  const api=createAiReaderHandlers({env,authorize:async()=> 'user',fetcher:async()=>Response.json({choices:[choice]})});
+  const response=await api.POST(request()),body=await response.json();
+  assert.equal(response.status,502);assert.equal(body.diagnostic.outputIssue,expected);
+  assert.ok(!JSON.stringify(body).includes('PRIVATE SOURCE'));assert.ok(!JSON.stringify(body).includes('synthetic-secret'));
+ }
+});
