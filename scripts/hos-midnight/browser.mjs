@@ -36,7 +36,7 @@ async function snapshot(page) {
 }
 
 async function openHome(page) {
-  const home=page.locator('.adaptive-home-v1038');
+  const home=page.locator('.rr-driver-home, .adaptive-home-v1038').first();
   if(!await home.isVisible().catch(()=>false)) {
     const button=page.getByRole('button',{name:/Home/i}).first();
     await button.waitFor({timeout:30000});await button.click();

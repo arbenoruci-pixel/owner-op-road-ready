@@ -26,3 +26,8 @@ test('new UI is scoped to Home and Active Load',()=>{
  assert.ok(fs.statSync('public/driver-dashboard/highway-sunset.webp').size<150000);
 });
 
+
+test('shortcut navigation uses two readable rows on narrow phones',()=>{
+ assert.ok(css.includes('grid-template-rows:repeat(2,auto)!important'));
+ assert.ok(css.includes('white-space:normal!important'));
+});

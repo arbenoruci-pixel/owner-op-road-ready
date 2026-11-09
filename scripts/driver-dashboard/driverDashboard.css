@@ -85,3 +85,110 @@
 @media(min-width:650px){.rr-driver-home{padding:20px 35px 50px!important}.rrd-app-icon{width:76px;height:76px}.rrd-icon-grid{gap:25px 15px}.rrd-header>button{flex-basis:44px;height:44px}.rrd-history-row{min-height:64px}}
 @media(max-width:360px){.rrd-brand-icon{flex-basis:42px;width:42px;height:42px}.rrd-header>button{flex-basis:31px;height:34px;padding:5px!important}.rrd-duty-location{font-size:11px}.rrd-app-icon{border-radius:15px}.rrd-icon-grid{gap:14px 4px}.rrd-history-money b{font-size:11px}}
 
+
+/* Ensure the dashboard's eight iPhone-style shortcuts keep two true rows. Legacy navigation flex rules have higher generic priority. */
+.rr-driver-home nav.rrd-icon-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  grid-template-rows:repeat(2,auto)!important;
+  grid-auto-flow:row!important;
+  align-items:start!important;
+  gap:17px 6px!important;
+  width:100%!important;
+  height:auto!important;
+  padding:12px 2px 18px!important;
+}
+.rr-driver-home nav.rrd-icon-grid>button{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:7px!important;
+  min-width:0!important;
+  width:100%!important;
+  min-height:105px!important;
+  height:auto!important;
+  flex:none!important;
+  margin:0!important;
+  border:0!important;
+  padding:0!important;
+  background:transparent!important;
+}
+.rr-driver-home nav.rrd-icon-grid>button>.rrd-app-icon{
+  display:grid!important;
+  flex:0 0 auto!important;
+  place-items:center!important;
+}
+.rr-driver-home nav.rrd-icon-grid>button>span:last-child{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  line-height:1.35!important;
+  text-align:center!important;
+}
+
+
+/* Keep every shortcut title readable on narrow iPhones instead of shortening it. */
+.rr-driver-home nav.rrd-icon-grid>button{
+  min-height:116px!important;
+}
+.rr-driver-home nav.rrd-icon-grid>button>span:last-child{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  overflow-wrap:break-word!important;
+  font-size:clamp(10.5px,2.75vw,12px)!important;
+  line-height:1.22!important;
+  min-height:28px!important;
+}
+
+
+/* Darken inherited light mission widgets so the dedicated Active Load matches the Home palette. */
+.rr-driver-mission .adaptive-mission-v1038>header h1{
+  color:#f5f9ff!important;
+  font-size:clamp(23px,6vw,28px)!important;
+  line-height:1.15!important;
+}
+.rr-driver-mission .adaptive-mission-v1038>header p,
+.rr-driver-mission .adaptive-progress-v1038>em{
+  color:#b8cbe2!important;
+}
+.rr-driver-mission .adaptive-mission-v1038>header span{color:#76c4ff!important;}
+.rr-driver-mission .adaptive-mission-v1038>header strong{
+  color:#b5dcff!important;
+  background:#163553!important;
+  border:1px solid #315c83!important;
+}
+.rr-driver-mission .adaptive-progress-v1038>i{background:#243950!important;}
+.rr-driver-mission .adaptive-mission-actions-v1038 button:not(.primary){
+  background:#17334f!important;color:#f4f9ff!important;
+  border:1px solid #3b6186!important;border-radius:11px!important;
+}
+.rr-driver-mission .adaptive-quick-v1038{
+  background:#112b45!important;color:#eff8ff!important;
+  border:1px solid #33577b!important;border-radius:13px!important;
+}
+.rr-driver-mission .adaptive-quick-v1038 em{color:#b6cae0!important;}
+.rr-driver-mission .adaptive-alert-v1038{
+  background:#30202c!important;color:#ffd9df!important;
+  border:1px solid #81516a!important;
+}
+.rr-driver-mission .adaptive-alert-v1038 em{color:#f4b8c6!important;}
+.rr-driver-mission .adaptive-instructions-v1038,
+.rr-driver-mission .adaptive-upcoming-v1038{
+  background:#0f2941!important;color:#eaf4fe!important;
+  border:1px solid #2d5274!important;
+}
+.rr-driver-mission .adaptive-instructions-v1038>header b,
+.rr-driver-mission .adaptive-instructions-v1038 p b,
+.rr-driver-mission .adaptive-upcoming-v1038 b{color:#eef8ff!important;}
+.rr-driver-mission .adaptive-instructions-v1038 p em,
+.rr-driver-mission .adaptive-upcoming-v1038 em{color:#b6cbe0!important;}
+.rr-driver-home nav.rrd-icon-grid>button:last-child>span:last-child{
+  font-size:9.6px!important;
+  white-space:nowrap!important;
+}
+

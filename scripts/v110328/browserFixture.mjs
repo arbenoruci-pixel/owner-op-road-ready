@@ -26,7 +26,7 @@ async function seed(page,state,originalFiles=[],{navigateHome=true}={}){
  await page.goto(origin);
  if(!navigateHome)return;
  await page.locator('.logbook-home-screen-v988').waitFor({timeout:30000});
- const adaptiveHome=page.locator('.adaptive-home-v1038');
+ const adaptiveHome=page.locator('.rr-driver-home, .adaptive-home-v1038').first();
  if(!(await adaptiveHome.isVisible().catch(()=>false))){
    const homeButton=page.getByRole('button',{name:/Home/i}).first();
    await homeButton.waitFor({timeout:30000});
