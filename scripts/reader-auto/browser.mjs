@@ -16,7 +16,7 @@ const otherReadings={
  invoice:{kind:'invoice',values:{invoiceNumber:'INV-123',vendor:'EXAMPLE WAREHOUSE',invoiceDate:'11/04/2026',total:'$250.00'}},
  unloading:{kind:'unloading_receipt',values:{receiptNumber:'L-123',poNumber:'PO-7401',receiptDate:'11/04/2026',amount:'$240.00',fee:'$10.00',total:'$250.00'}}
 };
-for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,rate,invoice,unloading,ambiguous,wrong_image,unavailable,pipeline,manual_type').split(',')){
+for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,unquoted_optional,unquoted_reference,rate,invoice,unloading,ambiguous,wrong_image,unavailable,pipeline,manual_type').split(',')){
  const browser=await ({chromium,webkit})[engine].launch({headless:true}),context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(30000);
  try{
@@ -29,7 +29,12 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,ra
     providerCalls++;
     if(scenario==='pipeline')await new Promise(resolve=>setTimeout(resolve,1500));
     if(scenario==='unavailable')return Response.json({error:'unavailable'},{status:503});
-    const providerReading=scenario==='shipment'?providerCalls===1?{...readings,delivery:'uncertain'}:{...readings,kind:'pod',delivery:'receiver_stamped',fields:[...readings.fields,{field:'deliveryDate',value:'11/06/2026',quote:'Received 11/06/2026',location:'bottom',clear:true}]}:pageReading;
+    let providerReading=scenario==='shipment'?providerCalls===1?{...readings,delivery:'uncertain'}:{...readings,kind:'pod',delivery:'receiver_stamped',fields:[...readings.fields,{field:'deliveryDate',value:'11/06/2026',quote:'Received 11/06/2026',location:'bottom',clear:true}]}:pageReading;
+    if(['unquoted_optional','unquoted_reference'].includes(scenario)){
+     providerReading=structuredClone(pageReading);
+     const field=providerReading.fields.find(f=>f.field===(scenario==='unquoted_optional'?'weight':'bolNumber'));
+     field.quote=scenario==='unquoted_optional'?'Weight: 1000':'BOL: B-4329';
+    }
     return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(providerReading)}}]});
   }});
   await context.route('**/api/reader/classify',async route=>{
@@ -57,7 +62,7 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,ra
   await page.locator('input[type=file][multiple]').first().setInputFiles({name:'synthetic-auto-bol.png',mimeType:'image/png',buffer:original});
   await page.getByRole('button',{name:'Read document',exact:true}).click();
   if(scenario==='pipeline'){await started;await page.getByText('Reading and checking the original…',{exact:true}).waitFor();assert.equal(await page.getByRole('combobox',{name:'Document type',exact:true}).count(),0,'manual form must wait for the verified reading');}
-  if(['automatic','pod','shipment','rate','invoice','unloading','pipeline'].includes(scenario)){
+  if(['automatic','pod','shipment','unquoted_optional','rate','invoice','unloading','pipeline'].includes(scenario)){
    await page.getByText(scenario==='shipment'?'FILED TO LOAD · DELIVERY STAMP UNVERIFIED':'READ, CHECKED AND FILED',{exact:true}).waitFor({timeout:60000});
    const store=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')));
    assert.equal(store.documents.length,1);const saved=store.documents[0];
@@ -71,12 +76,16 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,ra
     assert.equal(saved.extracted.readerSourceFieldsV110393.fields.deliveryDate,undefined);
     assert.deepEqual(store.loads,state.testInstructionStore.loads,'filing BOL must not complete or change the load');
    }
+   if(scenario==='unquoted_optional'){
+    assert.equal(saved.extracted.readerSourceFieldsV110393.fields.weight,undefined);
+    assert.deepEqual(saved.automaticFilingV1.fieldIssues,[{field:'weight',issue:'value_not_in_quote',passes:[1,2]}]);
+   }
    if(scenario==='rate')assert.equal(saved.extracted.gross,'2500.00');
    if(['invoice','unloading'].includes(scenario))assert.equal(saved.extracted.total,'250.00');
    const stored=await page.evaluate(async()=>new Promise((resolve,reject)=>{const r=indexedDB.open('owner-op-road-ready-offline-v1');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,tx=db.transaction(['document_blobs','capture_asset_blobs']),qs=['document_blobs','capture_asset_blobs'].map(t=>tx.objectStore(t).getAll());let count=0;for(const q of qs)q.onsuccess=async()=>{if(++count!==2)return;const rows=[];for(const row of qs.flatMap(q=>q.result)){const blob=row.blob,bytes=blob?.arrayBuffer?await blob.arrayBuffer():blob?.bytes;if(bytes)rows.push(Array.from(new Uint8Array(bytes)));}db.close();resolve(rows);};};}));
    assert.ok(stored.some(b=>Buffer.from(b).equals(original)),'original bytes remain identical');
    await page.reload();assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')))).documents.length,1);
-   if(scenario==='shipment'){
+   if(['shipment','unquoted_optional'].includes(scenario)){
     await page.getByRole('button',{name:/^Documents/}).first().click();
     const folder=page.getByRole('region',{name:'Smart load folders',exact:true});await folder.waitFor();
     await folder.locator('.rr-smart-card').filter({hasText:'Load 9001'}).click();
@@ -89,6 +98,7 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,ra
   }else{
    await page.getByRole('region',{name:'Automatic reading for Bill of lading'}).waitFor({timeout:60000});
    if(['ambiguous','manual_type'].includes(scenario))await page.getByText('Read and checked automatically',{exact:true}).waitFor();
+   else if(scenario==='unquoted_reference')await page.getByRole('button',{name:'Check unclear details',exact:true}).waitFor();
    else await page.getByRole('button',{name:'Read again',exact:true}).waitFor();
    const store=await page.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')));assert.equal(store.documents.length,0);
   }
@@ -96,5 +106,8 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,ra
   assert.equal(calls,1);assert.equal(providerCalls,2);assert.deepEqual(protectedData(await snapshot(page)),before);assert.deepEqual(errors,[]);
   await page.screenshot({path:`browser-test-results/reader-auto/${engine}-${scenario}.png`,fullPage:true});
   console.log(`PASS ${engine} ${scenario}: verified reading, original preservation, folder boundary and unchanged duty records`);
- }catch(error){await page.screenshot({path:`browser-test-results/reader-auto/${engine}-${scenario}-failure.png`,fullPage:true});fs.writeFileSync(`browser-test-results/reader-auto/${engine}-${scenario}-failure.txt`,await page.locator('body').innerText()+'\nERRORS '+JSON.stringify(errors));throw error;}finally{await browser.close();}
+ }catch(error){await page.screenshot({path:`browser-test-results/reader-auto/${engine}-${scenario}-failure.png`,fullPage:true});fs.writeFileSync(`browser-test-results/reader-auto/${engine}-${scenario}-failure.txt`,await page.locator('body').innerText()+'\nERRORS '+JSON.stringify(errors));throw error;}finally{
+  // Block new traffic while existing fixture routes drain before browser teardown.
+  await context.setOffline(true);await context.unrouteAll({behavior:'wait'});await browser.close();
+ }
 }

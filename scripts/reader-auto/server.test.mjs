@@ -49,7 +49,6 @@ test('wrapped image evidence survives the real provider response envelope',async
 });
 
 test('smart response failures identify the cause without exposing the source or credentials',async()=>{
- const badQuote=structuredClone(reading);badQuote.fields[0].quote='PRIVATE SOURCE: B-9999';
  const badSchema={...reading,extra:'PRIVATE SOURCE'};
  for(const [choice,expected] of [
   [{finish_reason:'stop',message:{refusal:'PRIVATE SOURCE'}},'refused_output'],
@@ -57,11 +56,24 @@ test('smart response failures identify the cause without exposing the source or 
   [{finish_reason:'content_filter',message:{content:'PRIVATE SOURCE'}},'incomplete_output'],
   [{finish_reason:'stop',message:{content:'PRIVATE SOURCE'}},'invalid_json'],
   [{finish_reason:'stop',message:{content:JSON.stringify(badSchema)}},'invalid_schema'],
-  [{finish_reason:'stop',message:{content:JSON.stringify(badQuote)}},'value_not_in_quote'],
  ]){
   const api=createAiReaderHandlers({env,authorize:async()=> 'user',fetcher:async()=>Response.json({choices:[choice]})});
   const response=await api.POST(request()),body=await response.json();
   assert.equal(response.status,502);assert.equal(body.diagnostic.outputIssue,expected);
   assert.ok(!JSON.stringify(body).includes('PRIVATE SOURCE'));assert.ok(!JSON.stringify(body).includes('synthetic-secret'));
  }
+});
+
+test('one unsupported optional value preserves other independently quoted fields without another call',async()=>{
+ let calls=0;
+ const source={...reading,fields:[...reading.fields,{field:'weight',value:'44120 LB',quote:'PRIVATE SOURCE: 44120',location:'middle',clear:true}]};
+ const api=createAiReaderHandlers({env,authorize:async()=> 'user',fetcher:async()=>{calls++;return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(source)}}]});}});
+ const response=await api.POST(request()),body=await response.json();
+ assert.equal(response.status,200);assert.equal(calls,2);
+ assert.equal(body.result.fields.find(f=>f.field==='bolNumber').rawValue,'B-1234');
+ assert.equal(body.result.fields.some(f=>f.field==='weight'),false);
+ assert.deepEqual(body.result.unresolved,['weight']);
+ assert.deepEqual(body.result.fieldIssues,[{field:'weight',issue:'value_not_in_quote',passes:[1,2]}]);
+ assert.ok(!JSON.stringify(body).includes('PRIVATE SOURCE'));
+ assert.equal((await (await api.POST(request())).json()).cached,true);assert.equal(calls,2);
 });

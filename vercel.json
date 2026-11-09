@@ -26,7 +26,8 @@
       "feat/automatic-document-filing-20261109": false,
       "fix/reader-scan-sequencing-20261109": false,
       "fix/reader-provider-response-20261109": false,
-      "fix/reader-shipment-filing-20261109": false
+      "fix/reader-shipment-filing-20261109": false,
+      "fix/reader-field-recovery-20261109": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
