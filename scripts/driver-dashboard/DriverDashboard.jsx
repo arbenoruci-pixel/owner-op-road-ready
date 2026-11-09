@@ -5,6 +5,7 @@ import AdaptiveHomeV1038 from './AdaptiveHomeV1038.jsx';
 import GrossBoard from '../owneros/GrossBoard.jsx';
 import {businessLoadRows,operationalCandidateContext} from '../loads/currentLoadV110473.js';
 import {grossMoney,grossValue} from '../owneros/compactGross.js';
+import {getActiveLoadGuideV103} from '../loads/loadGuideV103.js';
 import {getHomeTerminalTimeZone,homeTerminalDayKey} from '../../core/time/homeTerminalTime.js';
 import './driverDashboard.css';
 
@@ -93,9 +94,10 @@ function Shortcuts({actions}) {
 }
 function MissionScreen(props){
  const {activeLoad,summary,state,operatorProfile,logbookEnabled,onBack,onSection,onOpenLog,onOpenLogbook,onOpenStatus,onOpenTrailer,onOpenDot,onOpenWallet,onScan,onGuide,onOpenBackup,onDrive,onOpenShipment,savedScan,onContinueSavedScan,savedScanBusy,savedScanMessage}=props;
+ const liveGuide=getActiveLoadGuideV103(state);
  return <section className="screen rr-driver-mission rr-business-shell">
   <header className="rrd-mission-header"><button type="button" onClick={onBack} aria-label="Back to Home"><Glyph name="back"/></button><span className="rrd-mission-name"><span className="rrd-mini-active"><Glyph name="active" size={19}/></span><b>Active Load</b></span><button type="button" onClick={()=>onSection('load_documents')} aria-label="Open load folders"><Glyph name="menu"/></button></header>
-  {activeLoad?<>
+  {(activeLoad||liveGuide)?<>
    <AdaptiveHomeV1038 state={state} summary={summary} activeLoad={activeLoad} operatorProfile={operatorProfile} logbookEnabled={logbookEnabled}
     savedScan={savedScan} savedScanBusy={savedScanBusy} savedScanMessage={savedScanMessage} onContinueSavedScan={onContinueSavedScan}
     onOpenStatus={onOpenStatus} onOpenTrailer={onOpenTrailer} onOpenDay={onOpenLog} onOpenLogbook={onOpenLogbook}
@@ -130,7 +132,7 @@ export default function DriverDashboard(props){
   </div>
   <GrossBoard store={businessStore} state={state} onOpen={()=>goSection('overview')}/>
   <Shortcuts actions={{onLog:onOpenLogbook||onLog,onWallet,onScan:()=>onScan('auto'),onLoads:()=>goSection('load_documents'),onDocs:()=>goSection('documents'),onDot,onActive:()=>setMissionOpen(true),onMaintenance:()=>goSection('maintenance')}}/>
-  <LoadHistory store={businessStore} state={state} activeNo={activeLoad?.loadNo} onOpenLoads={()=>goSection('load_documents')}/>
+  <LoadHistory store={businessStore} state={state} activeNo={activeLoad?.loadNo||getActiveLoadGuideV103(state)?.loadNo} onOpenLoads={()=>goSection('load_documents')}/>
   <footer className="rrd-version">Road Ready · v110.4.115</footer>
  </section>;
 }
