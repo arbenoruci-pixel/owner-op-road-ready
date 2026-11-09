@@ -20,7 +20,7 @@ export default function SmartReading(props){
     const finish=(state,text)=>{if(active.current===generation){setMode(state);setMessage(text);}};
     (async()=>{
       if(result.automaticReading){finish('done',result.automaticReading.message);return;}
-      if(!file||result.documents.length!==1||group.pageIds.length!==1||group.boundaryReview){finish('legacy','Check these pages together.');return;}
+      if(!file||result.documents.length!==1||result.pages.length!==1||result.pageCount!==1||group.pageIds.length!==1||group.boundaryReview){finish('legacy','Check these pages together.');return;}
       const response=await fetch('/api/reader/classify',{signal:request.signal,cache:'no-store'}),config=await response.json();
       if(!response.ok||!config.enabled||config.smartReading?.version!==SMART_READING_VERSION){finish('legacy','');return;}
       if(navigator.onLine===false){finish('attention','Offline. The original is kept; try reading when connected.');return;}

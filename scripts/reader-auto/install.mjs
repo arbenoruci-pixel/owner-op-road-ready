@@ -5,16 +5,17 @@ function patch(path,before,after){const text=fs.readFileSync(path,'utf8');if(tex
 fs.copyFileSync('scripts/reader-auto/SmartReading.jsx',root+'SmartReadingV1104118.jsx');
 patch(root+'OwnedReaderPreview.jsx',"import CompactReading from './CompactReadingV1104101.jsx';","import CompactReading from './SmartReadingV1104118.jsx';");
 const file=root+'SmartScanSheetV105.jsx';
-patch(file,"import React, { useEffect", "import {automaticFolder} from '../../../../lib/reader-ai/automatic.js';\nimport React, { useEffect");
+patch(file,"import React, { useEffect", "import {automaticFolder,automaticPayloadMatches} from '../../../../lib/reader-ai/automatic.js';\nimport React, { useEffect");
 patch(file,'  buildVaultDocumentV105,','  buildVaultDocumentV105,\n  documentFolderV105,');
 patch(file,'  const needsReview = Boolean(',`  const machineProof=readerReviewV110345?.result?.automaticReading;
-  const readingReady=Boolean(machineProof?.ready&&machineProof.revision===readerReviewV110345.result.reviewRevision&&machineProof.kind===selectedType);
+  const readingReady=Boolean(machineProof?.ready&&machineProof.revision===readerReviewV110345.result.reviewRevision&&machineProof.filingType===selectedType&&automaticPayloadMatches(readerReviewV110345.result,scanWithSourceFields(analysis,readerReviewV110345,selectedType),selectedType));
   const needsReview = Boolean(!readingReady && (`);
 patch(file,'|| requiresLoad && !selectedLoadNo || !documentDate);','|| requiresLoad && !selectedLoadNo || !documentDate) || requiresLoad && !selectedLoadNo || !documentDate);');
 patch(file,"    const refreshed=reviewAssignment(","    let refreshed=reviewAssignment(");
 patch(file,'    if(!refreshed)return;',`    if(value.result?.automaticReading?.ready){
       const automatic=automaticFolder(value.result,collectLoadCandidatesV105(state,migrateBusinessStoreV105(readBusinessStore(),state)));
-      if(automatic&&!loadSelectionSourceV11037.startsWith('driver_'))refreshed={match:automatic,loadNo:automatic.loadNo,assignment:automatic.source,documentDate:value.result.automaticReading.date,stopSequence:0};
+      if(!loadDocumentType(typeId))refreshed={match:null,loadNo:'',assignment:'unassigned',documentDate:value.result.automaticReading.date,stopSequence:0};
+      else if(automatic&&!loadSelectionSourceV11037.startsWith('driver_'))refreshed={match:automatic,loadNo:automatic.loadNo,assignment:automatic.source,documentDate:value.result.automaticReading.date,stopSequence:0};
       else if(refreshed)refreshed={...refreshed,documentDate:value.result.automaticReading.date};
       setLinkToLogbook(false);
     }
@@ -34,6 +35,7 @@ patch(file,'  async function save() {','  async function save(automatic = false)
 patch(file,'      const meta = selectedMeta;',`      const meta = selectedMeta;
       if(automaticSave){
         const fresh=automaticFolder(readerReviewV110345?.result,collectLoadCandidatesV105(state,currentStore));
+        if(!automaticPayloadMatches(readerReviewV110345?.result,sourceAnalysisV110393,selectedType))throw new Error('The checked details did not reach this document. Read the original again.');
         if(!readingReady||requiresLoad&&fresh?.loadNo!==filingSelectedLoadNo)throw new Error('The folder changed. Choose the correct folder.');
         const bytes=await file.arrayBuffer(),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
         if((currentStore.documents||[]).some(d=>d.sha256===digest))throw new Error('This original is already saved. Its existing record was kept.');
@@ -46,12 +48,17 @@ patch(file,'        userConfirmed:true,','        userConfirmed:!automaticSave,'
 patch(file,'      Object.assign(record,shipmentFields);',`      Object.assign(record,shipmentFields);
       if(automaticSave){
         record.status='verified';record.reviewStatus='verified';record.confirmationOrigin='machine';
-        record.folder=documentFolderV105(meta.id,{canonicalLoadNo:selectedLoadNo,status:'verified'});
+        record.folder=documentFolderV105(meta.id,{canonicalLoadNo:selectedLoadNo,status:'verified',automaticFilingV1:storageFieldsV10964.automaticFilingV1});
+        if(machineProof.kind==='invoice')record.label='Invoice';
         record.automaticFilingV1=storageFieldsV10964.automaticFilingV1;
         record.auditTrail.push({id:'auto_'+Date.now(),action:'automatically_filed',at:Date.now(),source:'verified_reader_v1',detail:'Checked original and filed to '+(selectedLoadNo||record.folder)});
       }`);
 patch(file,'      const savedViewV10964 = savedViewModelV10964({ record, meta, stored });',`      const savedViewV10964 = savedViewModelV10964({ record, meta, stored });
-      if(automaticSave)savedViewV10964.record.automaticFilingV1=record.automaticFilingV1;`);
+      if(automaticSave){savedViewV10964.record.automaticFilingV1=record.automaticFilingV1;if(machineProof.kind==='invoice')savedViewV10964.meta.label='Invoice';}`);
 patch(file,"{saved.record.instructionGuideId ? 'DOCUMENT AND GUIDE SAVED' : 'DOCUMENT SAVED'}","{saved.record.automaticFilingV1 ? 'READ, CHECKED AND FILED' : saved.record.instructionGuideId ? 'DOCUMENT AND GUIDE SAVED' : 'DOCUMENT SAVED'}");
+// Generic supplier invoices retain their existing `other` storage type. Only
+// newly verified machine readings get a ready Documents destination.
+patch(root+'smartScanRoutingV11039.js',"  if (record.status === 'needs_review' || typeId === 'other' ||",`  if(typeId==='other'&&record.status==='verified'&&record.automaticFilingV1?.ready&&record.automaticFilingV1.kind==='invoice'&&record.automaticFilingV1.confirmationOrigin==='machine')return 'documents';
+  if (record.status === 'needs_review' || typeId === 'other' ||`);
 patch('app/api/reader/classify/route.js','export const maxDuration = 30;','export const maxDuration = 60;');
 console.log('PASS — automatic image verification and unique-folder filing installed');

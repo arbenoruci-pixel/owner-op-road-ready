@@ -39,6 +39,7 @@ test('source mismatch, stale revision and conflicting folders cannot auto-file',
 test('human corrections and multi-document packets stay intact',()=>{
  const result=initial();result.documents[0].fields.shipper={...result.documents[0].fields.shipper,status:'confirmed',value:'Driver checked',correction:{origin:'human'}};
  const next=applyAutomaticReading(result,response(),context);assert.equal(next.documents[0].fields.shipper.value,'Driver checked');assert.equal(next.automaticReading.ready,false);
+ const ungrouped=initial();ungrouped.pages.push({...page,id:'p2',number:2});ungrouped.pageCount=2;assert.equal(applyAutomaticReading(ungrouped,response(),context).automaticReading.ready,false);
  const packet=initial();packet.documents.push({...packet.documents[0],id:'g2'});assert.equal(applyAutomaticReading(packet,response(),context).automaticReading.ready,false);
 });
 test('US date convention is explicit; invalid dates and guessed units are excluded',()=>{
@@ -57,4 +58,29 @@ test('a disputed optional OCR value is retained only as a candidate',()=>{
  const second=read();second.fields=second.fields.filter(f=>f.field!=='carrier');
  const result=applyAutomaticReading(input,{...response(),...reconcileSmartReadings(read(),second)},context);
  assert.equal(result.automaticReading.ready,true);assert.equal(result.documents[0].fields.carrier.value,null);
+});
+test('verified rate pay reaches the save projection even without local OCR rate structure',async()=>{
+ const {scanWithSourceFields}=await import('../../packages/smart-reader-core/src/scanFields.js');
+ const {automaticPayloadMatches}=await import('../../lib/reader-ai/automatic.js');
+ const first={kind:'rate_confirmation',quality:'readable',mixed:false,delivery:'none',fields:Object.entries({loadNumber:'9001',totalRate:'$2500.00',pickupDate:'11/04/26',shipper:'Example Warehouse',consignee:'Example Market'}).map(([field,value])=>({field,value,quote:field+': '+value,location:'top',clear:true}))};
+ const result=applyAutomaticReading(initial(),{...response(),...reconcileSmartReadings(first,first)},context);
+ const analysis={fields:{gross:'99.00',total:'99.00',bolNo:'STALE-123'}};
+ const projected=scanWithSourceFields(analysis,{analysis,result},'rate_confirmation');
+ assert.equal(result.automaticReading.ready,true);assert.equal(projected.fields.gross,'2500.00');assert.equal(projected.fields.total,'2500.00');assert.equal(projected.fields.bolNo,undefined);
+ assert.equal(automaticPayloadMatches(result,analysis,'rate_confirmation'),false);
+ assert.equal(automaticPayloadMatches(result,projected,'rate_confirmation'),true);
+ assert.equal(automaticPayloadMatches(result,{...projected,fields:{...projected.fields,gross:'99.00'}},'rate_confirmation'),false);
+});
+test('invoice and unloading readings use their real filing types and representable required fields',async()=>{
+ const {scanWithSourceFields}=await import('../../packages/smart-reader-core/src/scanFields.js');
+ const {automaticPayloadMatches}=await import('../../lib/reader-ai/automatic.js');
+ for(const [kind,filingType,values] of [
+  ['invoice','other',{invoiceNumber:'INV-123',vendor:'Example Warehouse',invoiceDate:'11/04/26',total:'$250.00'}],
+  ['unloading_receipt','lumper_receipt',{receiptNumber:'L-123',receiptDate:'11/04/26',amount:'$240.00',fee:'$10.00',total:'$250.00'}]
+ ]){
+  const first={kind,quality:'readable',mixed:false,delivery:'none',fields:Object.entries(values).map(([field,value])=>({field,value,quote:field+': '+value,location:'top',clear:true}))};
+  const result=applyAutomaticReading(initial(),{...response(),...reconcileSmartReadings(first,first)},context),analysis={fields:{total:'99.00'}};
+  assert.equal(result.automaticReading.ready,true);assert.equal(result.automaticReading.filingType,filingType);
+  const projected=scanWithSourceFields(analysis,{analysis,result},filingType);assert.equal(projected.fields.total,'250.00');assert.equal(automaticPayloadMatches(result,projected,filingType),true);
+ }
 });
