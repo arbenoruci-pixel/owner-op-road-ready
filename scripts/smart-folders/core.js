@@ -133,6 +133,22 @@ export function linkedLogbooks(folder,state={}){
  return out;
 }
 function kinds(doc){return new Set([documentType(doc),...list(doc.extracted?.evidenceFactsV1?.components).map(c=>c.kind)]);}
+// A verified automatic BOL carries source-bound field confirmations, rather
+// than a fabricated human review. Read this proof without rewriting the file.
+function automaticBolReady(doc,loadNo){
+ const proof=doc.automaticFilingV1||doc.extracted?.automaticFilingV1,fields=doc.extracted||{},source=fields.readerSourceFieldsV110393;
+ if(documentType(doc)!=='bol'||doc.sourceCopyConflictV110419||proof?.version!==1||proof.ready!==true||proof.kind!=='bol'||proof.filingType!=='bol'
+   ||proof.origin!=='machine'||proof.confirmationOrigin!=='machine'||proof.passes!==2||proof.method!=='two_independent_image_reads'
+   ||!ref(loadNo)||ref(proof.loadNo)!==ref(loadNo)||docLoad(doc)!==ref(loadNo)
+   ||!(/^[a-f0-9]{64}$/.test(proof.originalHash||'')&&/^[a-f0-9]{64}$/.test(proof.imageHash||''))
+   ||source?.documentId!==proof.documentId||source.reviewRevision!==proof.revision||!date(proof.date))return false;
+ return ['bolNo','shipper','consignee','documentDate'].every(key=>{
+  const field=source.fields?.[key];
+  return field?.status==='confirmed'&&text(field.value)&&field.value===fields[key]
+   &&field.sourcePage?.sourceImageId===proof.sourceImageId&&field.sourcePage?.originalHash===proof.originalHash
+   &&field.sourcePage?.imageHash===proof.imageHash;
+ });
+}
 export function folderChecklist(folder,existingRows=[]){
  const pickedUp=folder.logs.length>0||Boolean(folder.source.shipmentEventId)||/^(in_transit|picked_up|delivered|completed)$/i.test(text(folder.source.operationalStatus||folder.source.status));
  return [['rate_confirmation','Ratecon',true],['bol','Pickup BOL',pickedUp||folder.completed],['pod','POD',folder.completed]].map(([kind,label,due])=>{
@@ -140,7 +156,8 @@ export function folderChecklist(folder,existingRows=[]){
   const knownSources=existing.flatMap(r=>r.sources||[]);
   const sources=knownSources.length?knownSources:files.map(doc=>({doc,pages:[]}));
   const docs=unique(sources.map(s=>s.doc));
-  const missing=existing.some(r=>r.status==='missing'),review=existing.some(r=>r.status==='review')||Boolean(folder.shipment&&existing.length===0);
+  const automatic=kind==='bol'&&docs.length>0&&docs.every(d=>automaticBolReady(d,folder.reference));
+  const missing=existing.some(r=>r.status==='missing'),review=!automatic&&(existing.some(r=>r.status==='review')||Boolean(folder.shipment&&existing.length===0));
   const status=!docs.length?(due?'missing':'later'):missing?'partial':review?'review':'saved';
   const syncPending=docs.some(d=>originalSyncLabel(d));
   return {kind,label,due,sources,files:docs,status,detail:status==='missing'?'Missing':status==='later'?(kind==='pod'?'Add after delivery':'Add at pickup'):status==='partial'?'More documents needed':status==='review'?'Saved · check details':syncPending?'Saved · original sync pending':`${docs.length===1?'Saved':docs.length+' files saved'}`};

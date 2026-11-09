@@ -2,16 +2,16 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 const read=path=>fs.readFileSync(path,'utf8');
-const before=JSON.parse(read('release-version.json')),version='110.4.120';
-assert.ok(['110.4.117','110.4.118','110.4.119',version].includes(before.version),'Automatic reading release must follow 110.4.117');
+const before=JSON.parse(read('release-version.json')),version='110.4.121';
+assert.ok(['110.4.117','110.4.118','110.4.119','110.4.120',version].includes(before.version),'Automatic reading release must follow 110.4.117');
 const sha=String(process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'})).trim();
 assert.match(sha,/^[a-f0-9]{40}$/i);
-const build='v1104120-reader-response-'+sha.slice(0,12),now=new Date().toISOString();
+const build='v1104121-shipment-filing-'+sha.slice(0,12),now=new Date().toISOString();
 for(const file of ['release-version.json','public/app-version.json']){
  const data=JSON.parse(read(file));
- Object.assign(data,{version,build,sourceCommit:sha,force:false,label:'v110.4.120 Read wrapped document text reliably',releasedAt:now,updatedAt:now,notes:[
- 'Verify wrapped text without rejecting line breaks in original-image evidence.',
- 'Read consistent business names and accept independently verified receiver acknowledgements.',
+ Object.assign(data,{version,build,sourceCommit:sha,force:false,label:'v110.4.121 File verified shipment details',releasedAt:now,updatedAt:now,notes:[
+ 'File independently verified BOL details to the matching load when the delivery stamp remains unclear.',
+ 'Keep uncertain delivery evidence separate from verified shipment identity; never infer completed delivery.',
  'Existing stored originals, logbook, HOS and DOT records are preserved.'
  ]});
  fs.writeFileSync(file,JSON.stringify(data,null,2)+'\n');

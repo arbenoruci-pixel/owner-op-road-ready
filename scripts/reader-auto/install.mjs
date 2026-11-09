@@ -67,6 +67,7 @@ patch(file,'      Object.assign(record,shipmentFields);',`      Object.assign(re
 patch(file,'      const savedViewV10964 = savedViewModelV10964({ record, meta, stored });',`      const savedViewV10964 = savedViewModelV10964({ record, meta, stored });
       if(automaticSave){savedViewV10964.record.automaticFilingV1=record.automaticFilingV1;if(machineProof.kind==='invoice')savedViewV10964.meta.label='Invoice';}`);
 patch(file,"{saved.record.instructionGuideId ? 'DOCUMENT AND GUIDE SAVED' : 'DOCUMENT SAVED'}","{saved.record.automaticFilingV1 ? 'READ, CHECKED AND FILED' : saved.record.instructionGuideId ? 'DOCUMENT AND GUIDE SAVED' : 'DOCUMENT SAVED'}");
+patch(file,"{saved.record.automaticFilingV1 ? 'READ, CHECKED AND FILED'", "{saved.record.automaticFilingV1?.deliveryStatus==='unverified' ? 'FILED TO LOAD · DELIVERY STAMP UNVERIFIED' : saved.record.automaticFilingV1 ? 'READ, CHECKED AND FILED'");
 // Generic supplier invoices retain their existing `other` storage type. Only
 // newly verified machine readings get a ready Documents destination.
 patch(root+'smartScanRoutingV11039.js',"  if (record.status === 'needs_review' || typeId === 'other' ||",`  if(typeId==='other'&&record.status==='verified'&&record.automaticFilingV1?.ready&&record.automaticFilingV1.kind==='invoice'&&record.automaticFilingV1.confirmationOrigin==='machine')return 'documents';
