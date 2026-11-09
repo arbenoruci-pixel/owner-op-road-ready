@@ -7,7 +7,9 @@ test('active page uses existing saved guided mission and never invents completio
  assert.ok(d.includes('<AdaptiveHomeV1038'));
  assert.ok(d.includes('onOpenGuide={onGuide}'));
  assert.ok(!d.includes('dispatchLoadGuideActionV103'));
- assert.ok(d.includes('activeLoad||liveGuide'));
+ assert.ok(d.includes('currentOperationalLoad(state,checklistStore,{day:localDayKey(),minute:nowMin(),selectedGuide:liveGuide})'));
+ assert.ok(d.includes('{currentLoad?<>'));
+ assert.ok(d.includes('No active load'));
 });
 test('home shortcuts map to existing app actions',()=>{
  for(const key of ['onOpenLogbook','onWallet','onScan','load_documents','documents','onDot','setMissionOpen(true)','maintenance'])assert.ok(d.includes(key),key);

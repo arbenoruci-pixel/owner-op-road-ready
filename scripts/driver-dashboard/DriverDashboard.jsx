@@ -4,10 +4,13 @@ import {AppIcon} from './PhoneHomeToolsV110435.jsx';
 import {moduleEnabled,MODULE_CATALOG} from '../setup/operatorProfile.js';
 import AdaptiveHomeV1038 from './AdaptiveHomeV1038.jsx';
 import GrossBoard from '../owneros/GrossBoard.jsx';
-import {businessLoadRows,operationalCandidateContext} from '../loads/currentLoadV110473.js';
+import {businessLoadRows,operationalCandidateContext,currentOperationalLoad} from '../loads/currentLoadV110473.js';
 import {grossMoney,grossValue} from '../owneros/compactGross.js';
 import {getActiveLoadGuideV103} from '../loads/loadGuideV103.js';
 import {getHomeTerminalTimeZone,homeTerminalDayKey} from '../../core/time/homeTerminalTime.js';
+import {useChecklistStoreV110321} from '../loads/useChecklistStoreV110321.js';
+import {localDayKey} from '../../shared/utils/date.js';
+import {nowMin} from '../../shared/utils/time.js';
 import './driverDashboard.css';
 
 function Glyph({name,size=20}) {
@@ -108,15 +111,17 @@ function SecondaryTools({operatorProfile,onSection,onDrive,onOpenBackup}) {
 function MissionScreen(props){
  const {activeLoad,summary,state,operatorProfile,logbookEnabled,onBack,onSection,onOpenLog,onOpenLogbook,onOpenStatus,onOpenTrailer,onOpenDot,onOpenWallet,onScan,onGuide,onOpenBackup,onDrive,onOpenShipment,savedScan,onContinueSavedScan,savedScanBusy,savedScanMessage}=props;
  const liveGuide=getActiveLoadGuideV103(state);
+ const checklistStore=useChecklistStoreV110321();
+ const currentLoad=currentOperationalLoad(state,checklistStore,{day:localDayKey(),minute:nowMin(),selectedGuide:liveGuide});
  return <section className="screen rr-driver-mission rr-business-shell">
   <header className="rrd-mission-header"><button type="button" onClick={onBack} aria-label="Back to Home"><Glyph name="back"/></button><span className="rrd-mission-name"><span className="rrd-mini-active"><Glyph name="active" size={19}/></span><b>Active Load</b></span><button type="button" onClick={()=>onSection('load_documents')} aria-label="Open load folders"><Glyph name="menu"/></button></header>
-  {(activeLoad||liveGuide)?<>
+  {currentLoad?<>
    <AdaptiveHomeV1038 state={state} summary={summary} activeLoad={activeLoad} operatorProfile={operatorProfile} logbookEnabled={logbookEnabled}
     savedScan={savedScan} savedScanBusy={savedScanBusy} savedScanMessage={savedScanMessage} onContinueSavedScan={onContinueSavedScan}
     onOpenStatus={onOpenStatus} onOpenTrailer={onOpenTrailer} onOpenDay={onOpenLog} onOpenLogbook={onOpenLogbook}
     onOpenShipment={onOpenShipment} onOpenDot={onOpenDot} onOpenWallet={onOpenWallet}
     onOpenScan={onScan} onOpenGuide={onGuide} onOpenBackup={onOpenBackup} onOpenDrive={onDrive} onOpenSection={onSection}/>
-   <section className="rrd-mission-doc-actions"><h2>Load paperwork</h2><p>Keep the original Rate Con, pickup BOL, signed POD and receipts linked to the load. Missing documents stay marked for review.</p><div><button type="button" onClick={()=>onScan('auto')}>Scan / add document</button><button type="button" onClick={()=>onSection('load_documents')}>Open load folder</button></div></section>
+   <section className="rrd-mission-doc-actions"><h2>Load paperwork</h2><p>Keep the original Rate Con, pickup BOL, signed POD and receipts linked to the load. Missing documents stay marked for review.</p><div><button type="button" onClick={()=>onScan('auto')}>Scan / add document</button>{currentLoad.guide?<button type="button" onClick={()=>onSection('load_documents')}>Open load folder</button>:null}</div></section>
   </>:<section className="rrd-mission-empty"><Glyph name="active" size={40}/><h1>No active load</h1><p>Add a rate confirmation or select the correct load from your saved folders. Road Ready will show the next recorded step here.</p><button type="button" onClick={()=>onScan('auto')}>Scan Rate Confirmation</button><button type="button" onClick={()=>onSection('load_documents')}>Choose saved load</button></section>}
  </section>;
 }
