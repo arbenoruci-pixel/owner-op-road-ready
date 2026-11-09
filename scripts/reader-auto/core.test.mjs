@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SMART_READING_VERSION,reconcileSmartReadings} from '../../lib/reader-ai/smartReading.js';
+import {SMART_READING_VERSION,reconcileSmartReadings,validateSmartReading} from '../../lib/reader-ai/smartReading.js';
 import {applyAutomaticReading,automaticFolder,normalizeAutomaticValue} from '../../lib/reader-ai/automatic.js';
 import {fieldsForProfile} from '../../packages/smart-reader-core/src/engine.js';
 import {createAnalysisProjection} from '../../packages/smart-reader-core/src/analysisProjection.js';
@@ -51,6 +51,32 @@ test('only receiver acknowledgement can upgrade a BOL to POD',()=>{
  const a=read(),b=read();a.kind=b.kind='pod';a.delivery=b.delivery='pickup_only';
  assert.equal(reconcileSmartReadings(a,b).verified,false);
  a.delivery=b.delivery='receiver_stamped';assert.equal(reconcileSmartReadings(a,b).verified,true);
+});
+
+test('line wrapping and repeated spaces preserve literal evidence without changing digits or punctuation',()=>{
+ const first=read(),second=read();
+ for(const r of [first,second]){
+  const shipper=r.fields.find(f=>f.field==='shipper');
+  shipper.value='Example Warehouse, LLC';shipper.quote='SHIP FROM:\nExample\tWarehouse,\r\nLLC';
+ }
+ const originalQuote=first.fields.find(f=>f.field==='shipper').quote;
+ assert.equal(validateSmartReading(first).fields.find(f=>f.field==='shipper').quote,originalQuote);
+ assert.equal(reconcileSmartReadings(first,second).fields.find(f=>f.field==='shipper').rawValue,'Example Warehouse, LLC');
+ for(const [value,quote] of [['SH045061','BOL: SH045067'],['SH045061','BOL: SH045 061'],['SH045061','BOL: SH-045061']]){
+  const bad=read();Object.assign(bad.fields[0],{value,quote});
+  assert.throws(()=>validateSmartReading(bad),e=>e.outputIssue==='value_not_in_quote');
+ }
+});
+
+test('receiver signature and completed stamp agree on delivery while pickup or uncertainty still blocks filing',()=>{
+ const first=read(),second=read();first.kind=second.kind='pod';
+ first.delivery='receiver_signed';second.delivery='receiver_stamped';
+ assert.equal(reconcileSmartReadings(first,second).verified,true);
+ for(const delivery of ['pickup_only','blank','uncertain','none']){
+  second.delivery=delivery;assert.equal(reconcileSmartReadings(first,second).verified,false);
+ }
+ second.delivery='receiver_stamped';first.kind='bol';
+ assert.equal(reconcileSmartReadings(first,second).verified,false);
 });
 
 test('a disputed optional OCR value is retained only as a candidate',()=>{

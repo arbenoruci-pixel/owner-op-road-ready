@@ -24,7 +24,8 @@
       "feat/driver-home-active-load-20261108": false,
       "fix/iphone-scanner-camera-freeze-20261108": false,
       "feat/automatic-document-filing-20261109": false,
-      "fix/reader-scan-sequencing-20261109": false
+      "fix/reader-scan-sequencing-20261109": false,
+      "fix/reader-provider-response-20261109": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
