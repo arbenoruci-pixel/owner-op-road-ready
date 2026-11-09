@@ -47,7 +47,7 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,ra
     return {data:{text:lines.join('\n'),confidence:96,tsv}};
    }})};
   },{lines});
-  const state=baseState(),load={id:'load-fixture',source:'rate_confirmation',loadNo:'9001',broker:'Example Broker',origin:'Example City, IL',destination:'Example Town, IN',pickupDate:'2026-11-04',aliases:[{kind:'bol_number',value:'B-4321'},{kind:'po_number',value:'PO-7401'}]};
+  const state=baseState(),load={id:'load-fixture',createdAt:1793750400000,updatedAt:1793750400000,source:'rate_confirmation',loadNo:'9001',broker:'Example Broker',origin:'Example City, IL',destination:'Example Town, IN',pickupDate:'2026-11-04',aliases:[{kind:'bol_number',value:'B-4321'},{kind:'po_number',value:'PO-7401'}]};
   state.testInstructionStore={loads:[load,...(['ambiguous','manual_type'].includes(scenario)?[{...load,id:'second-load',loadNo:'9002'}]:[])],documents:[],expenses:[],fuel:[],maintenance:[],settlements:[]};
   await seed(page,state);const before=protectedData(await snapshot(page));
   const displayLines=otherReadings[scenario]?[otherReadings[scenario].kind,...Object.entries(otherReadings[scenario].values).map(([k,v])=>k+': '+v)]:scenario==='pod'?[...lines,'Received by EXAMPLE MARKET 11/06/2026']:lines;
