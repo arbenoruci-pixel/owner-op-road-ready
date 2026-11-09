@@ -106,5 +106,8 @@ for(const scenario of (process.env.READER_AUTO_CASES||'automatic,pod,shipment,un
   assert.equal(calls,1);assert.equal(providerCalls,2);assert.deepEqual(protectedData(await snapshot(page)),before);assert.deepEqual(errors,[]);
   await page.screenshot({path:`browser-test-results/reader-auto/${engine}-${scenario}.png`,fullPage:true});
   console.log(`PASS ${engine} ${scenario}: verified reading, original preservation, folder boundary and unchanged duty records`);
- }catch(error){await page.screenshot({path:`browser-test-results/reader-auto/${engine}-${scenario}-failure.png`,fullPage:true});fs.writeFileSync(`browser-test-results/reader-auto/${engine}-${scenario}-failure.txt`,await page.locator('body').innerText()+'\nERRORS '+JSON.stringify(errors));throw error;}finally{await browser.close();}
+ }catch(error){await page.screenshot({path:`browser-test-results/reader-auto/${engine}-${scenario}-failure.png`,fullPage:true});fs.writeFileSync(`browser-test-results/reader-auto/${engine}-${scenario}-failure.txt`,await page.locator('body').innerText()+'\nERRORS '+JSON.stringify(errors));throw error;}finally{
+  // Block new traffic while existing fixture routes drain before browser teardown.
+  await context.setOffline(true);await context.unrouteAll({behavior:'wait'});await browser.close();
+ }
 }
