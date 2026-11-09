@@ -62,6 +62,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
     if(replaceAlias){delete fields[alias];delete fieldEvidence[alias];delete fieldConfidence[alias];delete evidence[alias];}
     delete fields[key];delete fieldEvidence[key];delete fieldConfidence[key];delete evidence[key];
     if(key==='weight'){delete fields.weightUnit;delete fieldEvidence.weightUnit;delete evidence.weightUnit;}
+    if(result.automaticReading?.ready&&field.correction?.origin!=='machine')continue;
     if(!['supported','confirmed'].includes(field.status)||typeof field.value!=='string'||!field.value)continue;
     if(field.kind==='party'&&!isDocumentParty(field.value)){
       savedWarnings.push('The saved '+field.label.toLowerCase()+' value looks like a form label. Check the company name on the original.');continue;

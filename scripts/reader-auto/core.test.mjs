@@ -51,3 +51,10 @@ test('only receiver acknowledgement can upgrade a BOL to POD',()=>{
  assert.equal(reconcileSmartReadings(a,b).verified,false);
  a.delivery=b.delivery='receiver_stamped';assert.equal(reconcileSmartReadings(a,b).verified,true);
 });
+
+test('a disputed optional OCR value is retained only as a candidate',()=>{
+ const input=initial();input.documents[0].fields.carrier={...input.documents[0].fields.carrier,value:'Wrong OCR carrier',status:'supported'};
+ const second=read();second.fields=second.fields.filter(f=>f.field!=='carrier');
+ const result=applyAutomaticReading(input,{...response(),...reconcileSmartReadings(read(),second)},context);
+ assert.equal(result.automaticReading.ready,true);assert.equal(result.documents[0].fields.carrier.value,null);
+});
