@@ -12,7 +12,7 @@ const completion=()=>Response.json({choices:[{finish_reason:'stop',message:{cont
 test('runtime status activates without a build environment token or project ID and exposes no credential',async()=>{
  const runtimeToken=token(),handlers=createAiReaderHandlers({env:()=>({})});
  const status=await (await handlers.GET(request(runtimeToken))).json();
- assert.deepEqual(status,{enabled:true,version:'document-classification-v2',model:'openai/gpt-5.4-mini',limits:AI_READER_LIMITS,extraction:{enabled:true,version:AI_EXTRACTION_VERSION,reason:'explicit_request_required',limits:AI_EXTRACTION_LIMITS}});
+ assert.deepEqual(status,{enabled:true,version:'document-classification-v2',model:'openai/gpt-5.4-mini',limits:AI_READER_LIMITS,smartReading:{enabled:true,version:'verified-document-reading-v1',passes:2},extraction:{enabled:true,version:AI_EXTRACTION_VERSION,reason:'explicit_request_required',limits:AI_EXTRACTION_LIMITS}});
  assert.equal(JSON.stringify(status).includes(runtimeToken),false);
  assert.equal((await (await handlers.GET(request())).json()).enabled,false);
 });

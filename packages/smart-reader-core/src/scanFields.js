@@ -5,7 +5,7 @@ import {hasRateStructure} from './rateVocabulary.js';
 import {documentReferences} from './documentReference.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
-  poNumber:'poNumber',documentDate:'documentDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
+  poNumber:'poNumber',documentDate:'documentDate',deliveryDate:'deliveryDate',weight:'weight',netWeight:'netWeight',tareWeight:'tareWeight',totalUnits:'totalUnits',temperature:'temperature'};
 const referenceKinds={bolNo:'bol_number',poNumber:'po_number',trailerNo:'trailerNo'};
 const aliases={shipper:'origin',consignee:'destination',documentDate:'date'};
 const bolWarning='BOL number was not verified from its label. Check the original.';
@@ -46,15 +46,16 @@ function genericFieldMapping(sourceFields,selectedType){
 // remain the driver's choices. Source support never means automatic filing.
 export function scanWithSourceFields(analysis,review,selectedType){
   if(!analysis||review?.analysis!==analysis||!selectedType)return analysis;
-  const result=review.result,doc=result?.documents?.[0];
-  if(result?.engine!=='owned-smart-reader'||(result.documents.length!==1&&!linkedRateCertificates(result,doc))||![selectedType,sourceKinds[selectedType]].includes(doc?.kind)
+  const result=review.result,doc=result?.documents?.[0],proof=result?.automaticReading;
+  const automatic=Boolean(proof?.ready&&proof.revision===result.reviewRevision&&proof.kind===doc?.kind&&proof.filingType===selectedType);
+  if(result?.engine!=='owned-smart-reader'||(result.documents.length!==1&&!linkedRateCertificates(result,doc))||!automatic&&![selectedType,sourceKinds[selectedType]].includes(doc?.kind)
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
   const rate=selectedType==='rate_confirmation';
-  if(rate&&!result.pages.some(page=>page.observations.some(o=>(isNumberedRateTable(o.lines)||hasRateStructure(o.lines)))))return analysis;
+  if(rate&&!automatic&&!result.pages.some(page=>page.observations.some(o=>(isNumberedRateTable(o.lines)||hasRateStructure(o.lines)))))return analysis;
   const delivery=selectedType==='delivery_order',shipping=['bol','pod'].includes(selectedType);
   const genericMapping=genericFieldMapping(doc.fields,selectedType);
   const fieldMapping=delivery?{loadNo:'loadNumber',poNumber:'poNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',documentDate:'date'}:rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',broker:'broker',carrierName:'carrier',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress',origin:'pickupCity',destination:'deliveryCity'}:shipping?mapping:genericMapping;
-  const fields={...analysis.fields},fieldEvidence={...analysis.fieldEvidence},fieldConfidence={...analysis.fieldConfidence};
+  const fields={...(automatic?{}:analysis.fields)},fieldEvidence={...(automatic?{}:analysis.fieldEvidence)},fieldConfidence={...(automatic?{}:analysis.fieldConfidence)};
   const oldReview=analysis.evidenceReviewV11036||{},evidence={...oldReview.evidence},accepted=[],proofs={},savedWarnings=[];
   for(const [key,ownedKey]of Object.entries(fieldMapping)){
     const field=doc.fields[ownedKey];if(!field)continue;
@@ -62,6 +63,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
     if(replaceAlias){delete fields[alias];delete fieldEvidence[alias];delete fieldConfidence[alias];delete evidence[alias];}
     delete fields[key];delete fieldEvidence[key];delete fieldConfidence[key];delete evidence[key];
     if(key==='weight'){delete fields.weightUnit;delete fieldEvidence.weightUnit;delete evidence.weightUnit;}
+    if(automatic&&field.correction?.origin!=='machine')continue;
     if(!['supported','confirmed'].includes(field.status)||typeof field.value!=='string'||!field.value)continue;
     if(field.kind==='party'&&!isDocumentParty(field.value)){
       savedWarnings.push('The saved '+field.label.toLowerCase()+' value looks like a form label. Check the company name on the original.');continue;
@@ -76,7 +78,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
     fields[key]=field.value;accepted.push(key);
     if(replaceAlias)fields[alias]=field.value;
     proofs[key]={status:field.status,value:field.value,evidence:valid,...(validPage?{sourcePage:pageSource}:{})};
-    evidence[key]=fieldEvidence[key]={fieldLabel:field.label,value:field.value,source:field.status==='confirmed'?'driver_confirmed':'document_text',
+    evidence[key]=fieldEvidence[key]={fieldLabel:field.label,value:field.value,source:field.status==='confirmed'?(field.correction?.origin==='machine'?'machine_confirmed':'driver_confirmed'):'document_text',
       status:field.status==='confirmed'?'confirmed':'read',excerpt:[...new Set(valid.map(ref=>ref.quote))].join('\n').slice(0,350)};
   }
   const fieldReferenceKinds=delivery?{...referenceKinds,loadNo:'load_number'}:referenceKinds;
