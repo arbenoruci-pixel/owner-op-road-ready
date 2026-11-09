@@ -21,7 +21,8 @@
       "fix/device-handoff-session": false,
       "fix/reviewed-folder-filing": false,
       "feat/compact-dark-workspace": false,
-      "feat/driver-home-active-load-20261108": false
+      "feat/driver-home-active-load-20261108": false,
+      "fix/iphone-scanner-camera-freeze-20261108": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",

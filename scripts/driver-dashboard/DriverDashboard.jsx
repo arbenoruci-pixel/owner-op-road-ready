@@ -1,12 +1,16 @@
 'use client';
 import React,{useMemo,useState} from 'react';
 import {AppIcon} from './PhoneHomeToolsV110435.jsx';
+import {moduleEnabled,MODULE_CATALOG} from '../setup/operatorProfile.js';
 import AdaptiveHomeV1038 from './AdaptiveHomeV1038.jsx';
 import GrossBoard from '../owneros/GrossBoard.jsx';
-import {businessLoadRows,operationalCandidateContext} from '../loads/currentLoadV110473.js';
+import {businessLoadRows,operationalCandidateContext,currentOperationalLoad} from '../loads/currentLoadV110473.js';
 import {grossMoney,grossValue} from '../owneros/compactGross.js';
 import {getActiveLoadGuideV103} from '../loads/loadGuideV103.js';
 import {getHomeTerminalTimeZone,homeTerminalDayKey} from '../../core/time/homeTerminalTime.js';
+import {useChecklistStoreV110321} from '../loads/useChecklistStoreV110321.js';
+import {localDayKey} from '../../shared/utils/date.js';
+import {nowMin} from '../../shared/utils/time.js';
 import './driverDashboard.css';
 
 function Glyph({name,size=20}) {
@@ -79,7 +83,7 @@ function LoadHistory({store,state,activeNo,onOpenLoads}){
   </details>):<p className="rrd-no-loads">No completed or saved load folders to show yet.</p>}</div>:null}
  </section>;
 }
-function Shortcuts({actions}) {
+function Shortcuts({actions,operatorProfile}) {
  const shortcuts=[
  ['logbook','Logbook','logbook',actions.onLog],
  ['wallet','Wallet','wallet',actions.onWallet],
@@ -90,20 +94,34 @@ function Shortcuts({actions}) {
  ['active','Active Load','active',actions.onActive],
  ['maintenance','Maintenance','maintenance',actions.onMaintenance],
  ];
- return <nav className="rrd-icon-grid" aria-label="Road Ready tools">{shortcuts.map(([icon,name,tone,go])=><button type="button" key={name} onClick={go} disabled={!go}><span className={'rrd-app-icon rrd-icon-'+tone}>{['active','maintenance'].includes(icon)?<Glyph name={icon} size={34}/>:<AppIcon name={icon}/>}</span><span>{name}</span></button>)}</nav>;
+ return <nav className="rrd-icon-grid" aria-label="Road Ready tools">{shortcuts.filter(([icon])=>['scan','active'].includes(icon)||moduleEnabled(operatorProfile,icon)).map(([icon,name,tone,go])=><button type="button" key={name} onClick={go} disabled={!go} aria-label={icon==='logbook'?'Open logbook':name}><span className={'rrd-app-icon rrd-icon-'+tone}>{['active','maintenance'].includes(icon)?<Glyph name={icon} size={34}/>:<AppIcon name={icon}/>}</span><span>{name}</span></button>)}</nav>;
+}
+function SecondaryTools({operatorProfile,onSection,onDrive,onOpenBackup}) {
+ const [more,setMore]=useState(false);
+ const extra=MODULE_CATALOG.filter(m=>['settlements','money','fuel','expenses','performance'].includes(m.id)&&moduleEnabled(operatorProfile,m.id));
+ return <><nav className="rrd-secondary-tools" aria-label="Additional tools">
+  {moduleEnabled(operatorProfile,'loads')?<button type="button" onClick={()=>onSection('billing')}>Billing</button>:null}
+  {moduleEnabled(operatorProfile,'drive')?<button type="button" onClick={onDrive}>Drive</button>:null}
+  <button type="button" onClick={()=>onSection('my_month')}>My month</button>
+  <button type="button" onClick={()=>onSection('import_documents')}>Import</button>
+  <button type="button" onClick={onOpenBackup}>Export &amp; Backup</button>
+  {extra.length||moduleEnabled(operatorProfile,'loads')?<button type="button" onClick={()=>setMore(v=>!v)} aria-expanded={more}>More tools</button>:null}
+ </nav>{more?<section className="rrd-secondary-tools" aria-label="More tools">{moduleEnabled(operatorProfile,'loads')?<button type="button" onClick={()=>onSection('loads')}>Manage load details</button>:null}{extra.map(m=><button type="button" key={m.id} onClick={()=>onSection(m.id)}>{m.label}</button>)}<button type="button" onClick={()=>setMore(false)} aria-label="Close more tools">Close</button></section>:null}</>;
 }
 function MissionScreen(props){
  const {activeLoad,summary,state,operatorProfile,logbookEnabled,onBack,onSection,onOpenLog,onOpenLogbook,onOpenStatus,onOpenTrailer,onOpenDot,onOpenWallet,onScan,onGuide,onOpenBackup,onDrive,onOpenShipment,savedScan,onContinueSavedScan,savedScanBusy,savedScanMessage}=props;
  const liveGuide=getActiveLoadGuideV103(state);
+ const checklistStore=useChecklistStoreV110321();
+ const currentLoad=currentOperationalLoad(state,checklistStore,{day:localDayKey(),minute:nowMin(),selectedGuide:liveGuide});
  return <section className="screen rr-driver-mission rr-business-shell">
   <header className="rrd-mission-header"><button type="button" onClick={onBack} aria-label="Back to Home"><Glyph name="back"/></button><span className="rrd-mission-name"><span className="rrd-mini-active"><Glyph name="active" size={19}/></span><b>Active Load</b></span><button type="button" onClick={()=>onSection('load_documents')} aria-label="Open load folders"><Glyph name="menu"/></button></header>
-  {(activeLoad||liveGuide)?<>
+  {currentLoad?<>
    <AdaptiveHomeV1038 state={state} summary={summary} activeLoad={activeLoad} operatorProfile={operatorProfile} logbookEnabled={logbookEnabled}
     savedScan={savedScan} savedScanBusy={savedScanBusy} savedScanMessage={savedScanMessage} onContinueSavedScan={onContinueSavedScan}
     onOpenStatus={onOpenStatus} onOpenTrailer={onOpenTrailer} onOpenDay={onOpenLog} onOpenLogbook={onOpenLogbook}
     onOpenShipment={onOpenShipment} onOpenDot={onOpenDot} onOpenWallet={onOpenWallet}
     onOpenScan={onScan} onOpenGuide={onGuide} onOpenBackup={onOpenBackup} onOpenDrive={onDrive} onOpenSection={onSection}/>
-   <section className="rrd-mission-doc-actions"><h2>Load paperwork</h2><p>Keep the original Rate Con, pickup BOL, signed POD and receipts linked to the load. Missing documents stay marked for review.</p><div><button type="button" onClick={()=>onScan('auto')}>Scan / add document</button><button type="button" onClick={()=>onSection('load_documents')}>Open load folder</button></div></section>
+   <section className="rrd-mission-doc-actions"><h2>Load paperwork</h2><p>Keep the original Rate Con, pickup BOL, signed POD and receipts linked to the load. Missing documents stay marked for review.</p><div><button type="button" onClick={()=>onScan('auto')}>Scan / add document</button>{currentLoad.guide?<button type="button" onClick={()=>onSection('load_documents')}>Open load folder</button>:null}</div></section>
   </>:<section className="rrd-mission-empty"><Glyph name="active" size={40}/><h1>No active load</h1><p>Add a rate confirmation or select the correct load from your saved folders. Road Ready will show the next recorded step here.</p><button type="button" onClick={()=>onScan('auto')}>Scan Rate Confirmation</button><button type="button" onClick={()=>onSection('load_documents')}>Choose saved load</button></section>}
  </section>;
 }
@@ -130,10 +148,12 @@ export default function DriverDashboard(props){
    <span className="rrd-duty-location"><Glyph name="pin" size={17}/>{summary.location}</span>
    <button type="button" onClick={onTrailer} aria-label={'Equipment '+summary.vehicle}><AppIcon name="loads"/><span>{summary.vehicle}</span></button>
   </div>
+  {savedScan?<aside className="rrd-saved-scan"><b>Continue your load</b><p>Your original document is saved.</p><button type="button" disabled={savedScanBusy} onClick={()=>onContinueSavedScan?.(savedScan)}>{savedScanBusy?'Opening saved original…':'Continue saved scan'}</button>{savedScanMessage?<p role="alert">{savedScanMessage}</p>:null}</aside>:null}
   <GrossBoard store={businessStore} state={state} onOpen={()=>goSection('overview')}/>
-  <Shortcuts actions={{onLog:onOpenLogbook||onLog,onWallet,onScan:()=>onScan('auto'),onLoads:()=>goSection('load_documents'),onDocs:()=>goSection('documents'),onDot,onActive:()=>setMissionOpen(true),onMaintenance:()=>goSection('maintenance')}}/>
+  <Shortcuts operatorProfile={operatorProfile} actions={{onLog:onOpenLogbook||onLog,onWallet,onScan:()=>onScan('auto'),onLoads:()=>goSection('load_documents'),onDocs:()=>goSection('documents'),onDot,onActive:()=>setMissionOpen(true),onMaintenance:()=>goSection('maintenance')}}/>
+  <SecondaryTools operatorProfile={operatorProfile} onSection={goSection} onDrive={onDrive} onOpenBackup={onOpenBackup}/>
   <LoadHistory store={businessStore} state={state} activeNo={activeLoad?.loadNo||getActiveLoadGuideV103(state)?.loadNo} onOpenLoads={()=>goSection('load_documents')}/>
-  <footer className="rrd-version">Road Ready · v110.4.115</footer>
+  <footer className="rrd-version">Road Ready · v110.4.116</footer>
  </section>;
 }
 

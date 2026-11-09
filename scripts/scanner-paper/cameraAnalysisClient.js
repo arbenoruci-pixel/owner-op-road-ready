@@ -8,7 +8,8 @@ export function createCameraAnalyzer(){
   const terminate=()=>{worker?.terminate();worker=null;};
   return {
     busy:()=>Boolean(pending),
-    async analyze(pixels,width,height){
+    degraded:()=>disabled||typeof Worker==='undefined',
+    async analyze(pixels,width,height,{allowMainThread=true}={}){
       if(pending)await pending.catch(()=>{});
       if(disposed)throw new Error('Camera closed');
       if(!disabled&&typeof Worker!=='undefined'){
@@ -26,6 +27,7 @@ export function createCameraAnalyzer(){
         }catch{disabled=true;terminate();}
       }
       if(disposed)throw new Error('Camera closed');
+      if(!allowMainThread)throw new Error('Camera auto detection unavailable');
       return analyzeCameraFrame(pixels,width,height);
     },
     dispose(){disposed=true;this.cancel?.();terminate();},

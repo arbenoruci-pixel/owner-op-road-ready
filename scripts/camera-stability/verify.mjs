@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=path=>fs.readFileSync(path,'utf8');
+const adapter=read('source/src/modules/scan/v3/CameraAdapterV3.jsx');
+const runtime=read('source/src/modules/scan/v3/cameraRuntimeV1104117.js');
+const worker=read('source/src/modules/scan/v3/cameraAnalysisClientV1104110.js');
+const intake=read('source/src/modules/scan/ScanIntakeV110328.jsx');
+assert.ok(adapter.includes('preferNativeCamera'),'Native iPhone entry point');
+assert.ok(adapter.includes('acquireCameraStream('),'Bounded permission request');
+assert.ok(adapter.includes('attachCameraPreview('),'Bounded video playback');
+assert.ok(adapter.includes('refreshCameraPreview('),'Rebind after PWA resume');
+assert.ok(adapter.includes('Take photo with phone camera'),'Native original fallback');
+assert.ok(adapter.includes('Try live scanner'),'Opt-in live scanner');
+assert.ok(adapter.includes('setLiveMode(false);nativeInput.current?.click();'),'Native selection releases live stream');
+assert.ok(adapter.includes('stopCameraStream(streamRef.current)'),'Tracks are stopped on cleanup');
+assert.ok(runtime.includes('width:{ideal:1920}')&&!runtime.includes('3840'),'Reduced video resolution');
+assert.ok(worker.includes('if(!allowMainThread)throw'),'No synchronous auto analysis fallback');
+assert.ok(intake.includes('onCapture={(file,capture)=>addFiles([file],true,capture)}'),'Camera and original filing path unchanged');
+assert.ok(read('source/src/modules/scan/v3/cameraRecoveryV1104117.css').includes('.scan-camera-recovery-v1104117'),'Fallback styles included');
+console.log('PASS — production camera startup, native capture and original document processing contracts');
+

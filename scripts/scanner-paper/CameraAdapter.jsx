@@ -3,10 +3,12 @@ import React,{useEffect,useRef,useState} from 'react';
 import {trackBoundary} from './documentBoundaryV110329.js';
 import {canvasToFileV3} from './imageUtilsV3.js';
 import {captureRank,sameCapturePage,canAutoDeliver} from './captureQualityV1104101.js';
-import {updateCaptureWindow} from './captureWindowV110331.js';
+import {updateCaptureWindow,LIVE_ANALYSIS_INTERVAL_MS} from './captureWindowV110331.js';
 import {lockCapturedPage,observePageTransition} from './pageTransitionV110333.js';
 import {bindCapture} from './captureGeometryV1104110.js';
 import {createCameraAnalyzer} from './cameraAnalysisClientV1104110.js';
+import './cameraRecoveryV1104117.css';
+import {preferNativeCamera,acquireCameraStream,attachCameraPreview,refreshCameraPreview,stopCameraStream,cameraMessage} from './cameraRuntimeV1104117.js';
 
 function Icon({name}){const paths={close:'m6 6 12 12 M6 18 18 6',check:'m5 12 4 4 10-10',auto:'M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5 M9 12l2 2 4-4',flash:'m13 2-9 12h7l-1 8 10-13h-7Z',more:'M5 12h.01 M12 12h.01 M19 12h.01'};return <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]}/></svg>;}
 function fitRect(container,w,h){if(!container||!w||!h)return {x:0,y:0,width:0,height:0};const s=Math.min(container.clientWidth/w,container.clientHeight/h);return {x:(container.clientWidth-w*s)/2,y:(container.clientHeight-h*s)/2,width:w*s,height:h*s};}
@@ -16,11 +18,23 @@ async function nextFrame(video){await new Promise(resolve=>{let id;const finish=
 
 export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages=20,lastPage=null}){
   const videoRef=useRef(null),containerRef=useRef(null),streamRef=useRef(null),nativeInput=useRef(null),alive=useRef(true),busy=useRef(false),autoRef=useRef(true),captureRef=useRef(null),tracking=useRef(null),captureWindow=useRef(null),pageLock=useRef(null),observation=useRef(null),limit=useRef(false),finishRequested=useRef(false);
+  const [liveMode,setLiveMode]=useState(()=>!preferNativeCamera()),[retryKey,setRetryKey]=useState(0);
   const [corners,setCorners]=useState(null),[frame,setFrame]=useState({x:0,y:0,width:0,height:0}),[ready,setReady]=useState(false),[opened,setOpened]=useState(false),[capturing,setCapturing]=useState(false),[guidance,setGuidance]=useState('Opening camera…'),[error,setError]=useState(''),[auto,setAuto]=useState(true),[torch,setTorch]=useState(false),[hasTorch,setHasTorch]=useState(false),[thumbnail,setThumbnail]=useState(''),[options,setOptions]=useState(false),[capturePreview,setCapturePreview]=useState(''),[finishing,setFinishing]=useState(false);
   const previousPage=useRef(lastPage),previewTimer=useRef(null);
   const analyzer=useRef(null);
   limit.current=pageCount>=maxPages;
-  function stop(){streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;}
+  function stop(){
+    const video=videoRef.current;
+    if(video){try{video.pause()}catch{}video.srcObject=null;}
+    stopCameraStream(streamRef.current);streamRef.current=null;
+  }
+  function resetObservations(){
+    observation.current=null;tracking.current=null;captureWindow.current=null;
+    setCorners(null);setReady(false);
+  }
+  function startLiveScanner(){
+    autoRef.current=true;setAuto(true);setLiveMode(true);setRetryKey(n=>n+1);setError('');
+  }
   useEffect(()=>{
     if(!lastPage)return;const url=URL.createObjectURL(lastPage);setThumbnail(url);
     if(previousPage.current!==lastPage){
@@ -31,46 +45,95 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
     return()=>{clearTimeout(previewTimer.current);URL.revokeObjectURL(url);};
   },[lastPage]);
   useEffect(()=>{
-    alive.current=true;let cancelled=false;analyzer.current=createCameraAnalyzer();
+    alive.current=true;
+    resetObservations();
+    if(!liveMode){
+      setGuidance('For a reliable scan, take photos using your iPhone camera.');
+      setOpened(false);
+      return()=>{alive.current=false;stop();};
+    }
+    // Native capture has no live signature to compare with the next sheet.
+    // Preserve identifiable live-page locks across retry to avoid duplicates.
+    if(!pageLock.current?.signature)pageLock.current=null;
+    let cancelled=false,recovering=false,wasHidden=false;
+    analyzer.current=createCameraAnalyzer();
+    setOpened(false);setGuidance('Opening live camera…');setError('');
     (async()=>{try{
-      if(!navigator.mediaDevices?.getUserMedia)throw new Error('Use Phone camera on this device.');
-      const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}}});
-      if(cancelled){stream.getTracks().forEach(t=>t.stop());return;}streamRef.current=stream;
-      const track=stream.getVideoTracks()[0],caps=track.getCapabilities?.()||{};setHasTorch(caps.torch===true);
-      for(const property of ['focusMode','exposureMode','whiteBalanceMode'])if(caps[property]?.includes?.('continuous')){try{await track.applyConstraints({advanced:[{[property]:'continuous'}]});}catch{}if(cancelled)return;}
-      const video=videoRef.current;if(!video){stop();return;}video.srcObject=stream;await video.play();if(cancelled)return;
-      setOpened(true);setGuidance('Point the camera at your document');setFrame(fitRect(containerRef.current,video.videoWidth,video.videoHeight));
-    }catch(cause){if(!cancelled){setError(cause.message||'Camera could not open');stop();}}})();
-    return()=>{cancelled=true;alive.current=false;analyzer.current?.dispose();stop();};
-  },[]);
+      const stream=await acquireCameraStream(navigator.mediaDevices,{isCancelled:()=>cancelled});
+      if(cancelled)return;
+      streamRef.current=stream;
+      const video=videoRef.current;
+      if(!video){stop();return;}
+      await attachCameraPreview(video,stream,{isCancelled:()=>cancelled});
+      if(cancelled)return;
+      const track=stream.getVideoTracks()[0];let caps={};
+      try{caps=track?.getCapabilities?.()||{}}catch{}
+      setHasTorch(caps.torch===true);
+      setOpened(true);setGuidance('Point the camera at your document');
+      setFrame(fitRect(containerRef.current,video.videoWidth,video.videoHeight));
+    }catch(cause){
+      if(!cancelled){setError(cameraMessage(cause));setGuidance('Choose phone camera or try live scanner again.');setOpened(false);stop();}
+    }})();
+    function resume(){
+      if(cancelled||!alive.current)return;
+      if(document.hidden){wasHidden=true;resetObservations();return;}
+      if(!wasHidden||recovering||!streamRef.current)return;
+      wasHidden=false;recovering=true;
+      const stream=streamRef.current,video=videoRef.current;
+      if(!video||stream.getVideoTracks?.().some(t=>t.readyState==='ended')){
+        setOpened(false);setError('Camera paused. Tap Retry live scanner or use phone camera.');
+        recovering=false;return;
+      }
+      void refreshCameraPreview(video,stream,{isCancelled:()=>cancelled})
+        .then(()=>{if(!cancelled){setOpened(true);setError('');setGuidance('Point the camera at your document');}})
+        .catch(cause=>{if(!cancelled){setOpened(false);setError(cameraMessage(cause));}})
+        .finally(()=>{recovering=false;});
+    }
+    document.addEventListener('visibilitychange',resume);
+    window.addEventListener('pageshow',resume);
+    return()=>{
+      cancelled=true;alive.current=false;
+      document.removeEventListener('visibilitychange',resume);
+      window.removeEventListener('pageshow',resume);
+      analyzer.current?.dispose();analyzer.current=null;stop();
+    };
+  },[liveMode,retryKey]);
   useEffect(()=>{
     const update=()=>setFrame(fitRect(containerRef.current,videoRef.current?.videoWidth,videoRef.current?.videoHeight));const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(update):null;if(containerRef.current)observer?.observe(containerRef.current);window.addEventListener('resize',update);return()=>{observer?.disconnect();window.removeEventListener('resize',update);};
   },[]);
   useEffect(()=>{
+    if(!liveMode)return undefined;
     let cancelled=false,timer;const sample=document.createElement('canvas');
     const tick=async()=>{
       if(cancelled||finishRequested.current)return;
       const started=performance.now(),video=videoRef.current;
+      if(analyzer.current?.degraded()){
+        if(autoRef.current){autoRef.current=false;setAuto(false);setGuidance('Auto detection unavailable. Tap Capture or use phone camera.');}
+        timer=setTimeout(tick,900);return;
+      }
       if(video?.videoWidth&&video.readyState>=2&&!document.hidden&&!analyzer.current?.busy()){try{
-        const s=640/Math.max(video.videoWidth,video.videoHeight);sample.width=Math.round(video.videoWidth*s);sample.height=Math.round(video.videoHeight*s);
+        const s=Math.min(1,640/Math.max(video.videoWidth,video.videoHeight));
+        const w=Math.max(1,Math.round(video.videoWidth*s)),h=Math.max(1,Math.round(video.videoHeight*s));
+        if(sample.width!==w)sample.width=w;if(sample.height!==h)sample.height=h;
         const ctx=sample.getContext('2d',{alpha:false,willReadFrequently:true});ctx.drawImage(video,0,0,sample.width,sample.height);const pixels=ctx.getImageData(0,0,sample.width,sample.height);
-        const {detection,signature,quality}=await analyzer.current.analyze(pixels,video.videoWidth,video.videoHeight),now=performance.now();
+        const {detection,signature,quality}=await analyzer.current.analyze(pixels,video.videoWidth,video.videoHeight,{allowMainThread:false}),now=performance.now();
         if(cancelled||finishRequested.current)return;
+        if(document.hidden){resetObservations();timer=setTimeout(tick,LIVE_ANALYSIS_INTERVAL_MS);return;}
         observation.current={detection,signature};
         pageLock.current=observePageTransition(pageLock.current,detection,signature);
         // Watch page transitions even while the captured photo is in the worker.
         // The driver often moves to the next sheet before that job completes.
-        if(busy.current){timer=setTimeout(tick,Math.max(50,220-(performance.now()-started)));return;}
+        if(busy.current){timer=setTimeout(tick,Math.max(180,LIVE_ANALYSIS_INTERVAL_MS-(performance.now()-started)));return;}
         tracking.current=trackBoundary(tracking.current,detection,now);setCorners(detection.found?tracking.current.corners:null);
         captureWindow.current=updateCaptureWindow(captureWindow.current,detection,quality,now);
         setReady(captureWindow.current.ready);
         setGuidance(limit.current?'All pages captured. Tap Done.':pageLock.current?.locked?'Page captured · Done or show the next sheet':quality.issues[0]||(autoRef.current?'Hold steady…':'Ready to capture'));
         if(!finishRequested.current&&!limit.current&&!pageLock.current?.locked&&autoRef.current&&captureWindow.current.ready)captureRef.current?.({automatic:true});
       }catch{if(cancelled)return;tracking.current=null;captureWindow.current=null;setReady(false);setCorners(null);}}
-      timer=setTimeout(tick,Math.max(50,220-(performance.now()-started)));
+      timer=setTimeout(tick,Math.max(180,LIVE_ANALYSIS_INTERVAL_MS-(performance.now()-started)));
     };
-    timer=setTimeout(tick,100);return()=>{cancelled=true;clearTimeout(timer);};
-  },[]);
+    timer=setTimeout(tick,150);return()=>{cancelled=true;clearTimeout(timer);sample.width=sample.height=1;};
+  },[liveMode,retryKey]);
   async function deliver(file,capture=null){
     setCorners(null);setReady(false);setGuidance('Preparing page…');await onCapture?.(file,capture);
     if(!alive.current)return;tracking.current=null;captureWindow.current=null;setCorners(null);setReady(false);setGuidance(finishRequested.current?'Finishing captured page…':'Page captured · Done or show the next sheet');
@@ -152,11 +215,14 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
       {pageCount>0||capturing?<button type="button" className="scan-camera-done-v333" disabled={finishing} onClick={close} aria-label={pageCount?`Review (${pageCount})`:'Finish capture'}><Icon name="check"/><span>{finishing?'Finishing…':'Done'}</span></button>:<span className="scan-camera-header-space-v333"/>}
     </header>
     <div ref={containerRef} className="scan-camera-view-v333">
-      <video ref={videoRef} playsInline muted/>
+      <video ref={videoRef} autoPlay playsInline muted/>
       {points&&frame.width>0&&opened&&!capturing&&!capturePreview&&<svg viewBox={`0 0 ${frame.width+frame.x*2} ${frame.height+frame.y*2}`} preserveAspectRatio="none" className="scan-camera-outline-v333"><polygon points={points} fill={ready?'rgba(38,190,125,.18)':'rgba(56,163,255,.08)'} stroke={ready?'#26be7d':'#38a3ff'} strokeWidth="2" vectorEffect="non-scaling-stroke"/></svg>}
       {capturePreview&&<div className="scan-capture-preview-v334" aria-label="Captured page preview" key={capturePreview}><img src={capturePreview} alt="Captured document"/><span><Icon name="check"/>Page added</span></div>}
       <div className="scan-camera-guidance-v333" role="status">{error||guidance}</div>
-      {error&&!opened&&<button type="button" className="scan-camera-fallback-v333" disabled={capturing} onClick={()=>nativeInput.current?.click()}>Open phone camera</button>}
+             {(!opened||!liveMode||error)&&<div className="scan-camera-recovery-v1104117">
+         <button type="button" className="scan-camera-fallback-v333" disabled={capturing} onClick={()=>{setLiveMode(false);nativeInput.current?.click();}}>Take photo with phone camera</button>
+         {(!liveMode||error)&&<button type="button" className="scan-camera-retry-v1104117" disabled={capturing} onClick={startLiveScanner}>Try live scanner</button>}
+       </div>}
     </div>
     <footer>
       <div className="scan-camera-controls-v333">
@@ -164,7 +230,7 @@ export default function CameraAdapterV3({onCapture,onCancel,pageCount=0,maxPages
         {hasTorch&&<button type="button" disabled={capturing} aria-label={torch?'Flash on':'Flash off'} aria-pressed={torch} onClick={toggleTorch}><Icon name="flash"/><span>Flash</span></button>}
         <button type="button" disabled={capturing} aria-label="Camera options" aria-expanded={options} onClick={()=>setOptions(!options)}><Icon name="more"/><span>More</span></button>
       </div>
-      {options&&<div className="scan-camera-options-v333"><button type="button" disabled={capturing||pageCount>=maxPages} onClick={()=>{autoRef.current=false;setAuto(false);nativeInput.current?.click();}}>Use phone camera</button></div>}
+      {options&&<div className="scan-camera-options-v333"><button type="button" disabled={capturing||pageCount>=maxPages} onClick={()=>{autoRef.current=false;setAuto(false);setLiveMode(false);nativeInput.current?.click();}}>Use phone camera</button></div>}
       <div className="scan-camera-shutter-row-v333">
         {thumbnail?<button type="button" className="scan-camera-thumbnail-v333" disabled={finishing} onClick={close} aria-label={`Open ${pageCount} captured pages`}><img src={thumbnail} alt="Last captured page"/><span>{pageCount}</span></button>:<span/>}
         <button type="button" className="scan-camera-shutter-v333" disabled={!opened||capturing||pageCount>=maxPages} onClick={capture} aria-label="Capture document">{capturing&&<span className="scan-camera-spinner-v333"/>}</button>

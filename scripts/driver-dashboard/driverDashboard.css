@@ -192,3 +192,6 @@
   white-space:nowrap!important;
 }
 
+/* Retain access to configured tools alongside the compact primary shortcuts. */
+.rr-driver-home .rrd-secondary-tools{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px}
+.rr-driver-home .rrd-secondary-tools button{min-height:44px;padding:8px 12px;border:1px solid #33577b;border-radius:10px;background:#112b45;color:#eff8ff;font-size:12px}
