@@ -28,6 +28,7 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
   await page.getByRole('button',{name:/Load 82011/}).click();await page.locator('.rr-inbox-detail').waitFor();assert.equal(await page.locator('.rr-inbox-list').isVisible(),false);
   await page.setViewportSize({width:1024,height:850});await fit('Split inbox');assert.ok(await page.locator('.rr-inbox-list').isVisible());await page.screenshot({path:out+'/'+name+'-split.png'});
   await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Open billing ›',exact:true}).click();await page.locator('.billing-checklist-v102').waitFor();
+  await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
   assert.equal(await page.evaluate(()=>scrollY),0,'Billing opens at the top');assert.match(await page.locator('.owner-os-load-picker-v102').innerText(),/82011/,'Billing keeps selected folder');
   assert.ok(await page.getByRole('button',{name:'Invoice & packet PDF',exact:true}).isDisabled(),'Missing originals must still block packet generation');
   const contrast=await page.locator('.billing-checklist-v102 b').first().evaluate(el=>{const rgb=v=>v.match(/[\d.]+/g).slice(0,3).map(Number);const lum=rgb=>rgb.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);const a=lum(rgb(getComputedStyle(el).color)),b=lum(rgb(getComputedStyle(el.closest('.billing-checklist-v102')).backgroundColor));return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);});assert.ok(contrast>=4.5,'Billing text contrast >= 4.5');
@@ -38,5 +39,5 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
   assert.deepEqual(await page.locator('.rr-gross-card strong').allTextContents(),homeAmounts,'Home and dashboard use the same reconciled ledger');
   assert.deepEqual(protectedData(await snapshot(page)),before,'Read-only navigation preserves signed driver data');assert.deepEqual(errors,[],'No client errors');
   console.log('PASS '+name+' — 5 widths, consistent gross dashboard, compact rows, split inbox, billing gates, contrast, setup and immutable driver data');
- }catch(error){await page.screenshot({path:out+'/'+name+'-failure.png',fullPage:true});console.error((await page.locator('body').innerText()).slice(0,1800));throw error;}finally{await browser.close();}
+ }catch(error){fs.writeFileSync(out+'/'+name+'-failure.txt',String(error.stack||error));await page.screenshot({path:out+'/'+name+'-failure.png',fullPage:true});console.error((await page.locator('body').innerText()).slice(0,1800));throw error;}finally{await browser.close();}
 }
