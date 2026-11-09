@@ -30,7 +30,7 @@ async function seed(page,state,originalFiles=[],waitForApp=true){
  // Wait for the first persisted hydrated state, before invoking navigation.
  await page.waitForFunction(async()=>new Promise(resolve=>{const q=indexedDB.open('owner-op-road-ready-offline-v1');q.onerror=()=>resolve(false);q.onsuccess=()=>{const db=q.result,r=db.transaction('sync_meta').objectStore('sync_meta').get('last_local_write_at');r.onsuccess=()=>{db.close();resolve(!!r.result);};};}),null,{timeout:30000});
  await page.getByRole('button',{name:/Home/i}).first().waitFor({timeout:30000});
- const adaptiveHome=page.locator('.adaptive-home-v1038');
+ const adaptiveHome=page.locator('.rr-driver-home, .adaptive-home-v1038').first();
  if(!(await adaptiveHome.isVisible().catch(()=>false))){
    const homeButton=page.getByRole('button',{name:/Home/i}).first();
    await homeButton.waitFor({timeout:30000});

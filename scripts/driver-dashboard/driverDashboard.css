@@ -1,0 +1,194 @@
+/* Road Ready owner-approved Home and Active Load presentation. Scoped; no DOT, HOS or storage styling changes. */
+.rr-driver-home,.rr-driver-mission{--rrd-panel:rgba(9,24,42,.91);--rrd-stroke:rgba(134,181,228,.23);--rrd-blue:#35a3ff;--rrd-muted:#b7c7db;color:#f4f8fd!important;background:#03101e!important;color-scheme:dark;position:relative;isolation:isolate;width:100%;max-width:1100px!important;min-height:100dvh;margin:0 auto!important;padding:calc(8px + env(safe-area-inset-top)) 13px 36px!important;overflow-x:clip;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.rr-driver-home::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(180deg,#03101e 0%,rgba(3,16,30,.98) 26%,rgba(3,16,30,.75) 52%,rgba(3,16,30,.6) 75%,#03101e 100%),url('/driver-dashboard/highway-sunset.webp') center 66% / cover no-repeat;opacity:.88}
+.rr-driver-home :focus-visible,.rr-driver-mission :focus-visible{outline:2px solid #90ceff!important;outline-offset:3px!important}
+.rr-driver-home button,.rr-driver-mission button{touch-action:manipulation;font-family:inherit;cursor:pointer}
+.rr-driver-home>header.rrd-header{display:flex!important;align-items:center;gap:9px;background:transparent!important;padding:10px 0 16px!important;margin:0!important;border:0!important;min-height:66px}
+.rrd-brand-icon{display:grid;place-items:center;flex:0 0 49px;width:49px;height:49px;border-radius:14px;background:linear-gradient(135deg,#078af8,#07409a);box-shadow:inset 0 1px rgba(255,255,255,.29),0 6px 19px rgba(0,76,154,.33);color:white}
+.rrd-brand-icon svg{width:27px;height:27px}
+.rrd-brand-copy{display:grid;gap:1px;min-width:0;flex:1}
+.rrd-brand-copy b{font-size:clamp(23px,6vw,29px);font-weight:850;line-height:1.08;letter-spacing:-.8px;white-space:nowrap}
+.rrd-brand-copy small{font-size:clamp(10px,2.8vw,12px);font-weight:750;letter-spacing:.03em;color:#c2cfde;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
+.rrd-header>button,.rrd-mission-header>button{display:grid;place-items:center;position:relative;flex:0 0 36px;height:39px;color:#eef7ff!important;background:rgba(22,40,61,.9)!important;border:1px solid var(--rrd-stroke)!important;border-radius:12px!important;padding:7px!important;box-shadow:inset 0 1px rgba(255,255,255,.1)}
+.rrd-header>button svg,.rrd-mission-header>button svg{width:21px;height:21px}
+.rrd-alert-dot{position:absolute;right:4px;top:3px;width:9px;height:9px;border:2px solid #142439;background:#ff565a;border-radius:50%}
+.rrd-alerts{margin:0 0 12px;background:var(--rrd-panel);border:1px solid var(--rrd-stroke);border-radius:14px;padding:13px;display:grid;gap:6px}
+.rrd-alerts>b{font-size:15px}.rrd-alerts button{display:flex;justify-content:space-between;text-align:left;color:white;background:rgba(26,46,70,.9);border:1px solid var(--rrd-stroke);border-radius:9px;min-height:42px;padding:10px}
+.rrd-alerts p{margin:0;color:var(--rrd-muted)}
+.rrd-duty{display:flex;align-items:center;gap:5px;min-height:53px;border-radius:15px;background:rgba(15,29,46,.89);border:1px solid var(--rrd-stroke);box-shadow:inset 0 1px rgba(255,255,255,.09);padding:5px 7px;margin:0 0 16px}
+.rrd-duty>button{display:flex;align-items:center;gap:6px;min-height:39px;color:white;border:0;background:transparent;font-size:12px;font-weight:780;padding:0 2px;white-space:nowrap;min-width:0}
+.rrd-duty>button:last-child{padding:0 3px}
+.rrd-duty>button:last-child svg{width:22px;height:22px}
+.rrd-duty>button:last-child span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rrd-duty-badge{display:grid;place-items:center;border-radius:9px;background:#55647b;color:#fff;min-width:42px;height:32px;font-size:13px;font-weight:850;padding:0 6px}
+.rrd-duty-badge.rrd-duty-D{background:#098768}.rrd-duty-badge.rrd-duty-ON{background:#ac6726}.rrd-duty-badge.rrd-duty-SB{background:#6654a3}
+.rrd-duty-location{display:flex;align-items:center;justify-content:center;gap:5px;color:#e7f0fa;font-size:12px;line-height:1.2;min-width:0;flex:1;border-left:1px solid rgba(155,181,214,.3);border-right:1px solid rgba(155,181,214,.3);padding:0 5px;min-height:30px;text-align:center}
+.rrd-duty-location svg{flex:0 0 17px}
+.rr-driver-home .rr-gross-board{margin:0 0 12px!important;background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
+.rr-driver-home .rr-gross-board>header{margin-bottom:9px!important;padding:0 4px!important}
+.rr-driver-home .rr-gross-grid{gap:7px!important}
+.rr-driver-home .rr-gross-card{min-width:0!important;padding:9px 8px!important;border-radius:15px!important;min-height:113px!important;box-shadow:inset 0 1px rgba(255,255,255,.06)}
+.rr-driver-home .rr-gross-card strong{font-size:clamp(15px,4.35vw,24px)!important;white-space:nowrap;letter-spacing:-.7px;line-height:1.17}
+.rr-driver-home .rr-gross-card span,.rr-driver-home .rr-gross-card small{font-size:clamp(10px,2.7vw,12px)!important;line-height:1.35}
+.rr-driver-home .rr-gross-basis{margin:7px 2px 0!important;padding:0!important;background:transparent!important}
+.rrd-icon-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 7px;padding:13px 2px 19px;margin:1px 0 3px}
+.rrd-icon-grid button{display:flex;align-items:center;flex-direction:column;gap:7px;min-width:0;color:white!important;background:transparent!important;border:0!important;padding:0!important;min-height:100px;font-size:clamp(11px,2.8vw,14px);font-weight:720;text-align:center;white-space:nowrap}
+.rrd-icon-grid button:disabled{opacity:.48}
+.rrd-app-icon{display:grid;place-items:center;width:clamp(57px,16vw,72px);height:clamp(57px,16vw,72px);border-radius:18px;color:white;box-shadow:inset 0 1px 2px rgba(255,255,255,.36),0 7px 15px rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.15)}
+.rrd-app-icon svg{width:39px;height:39px;stroke-width:1.8}
+.rrd-icon-logbook{background:linear-gradient(148deg,#ffda53,#ff8b00 68%,#e45c03)}
+.rrd-icon-wallet{background:linear-gradient(150deg,#9784fa,#6440e7 68%,#4022a3)}
+.rrd-icon-scan{background:linear-gradient(150deg,#46cfff,#087af5 69%,#0652ac)}
+.rrd-icon-loads{background:linear-gradient(150deg,#4bebad,#06b965 68%,#03794e)}
+.rrd-icon-documents{background:linear-gradient(150deg,#c18dff,#8840f5 70%,#5a27b8)}
+.rrd-icon-dot{background:linear-gradient(150deg,#67cfff,#198fe9 68%,#0463bc)}
+.rrd-icon-active{background:linear-gradient(150deg,#54e97c,#11b843 68%,#08772c)}
+.rrd-icon-maintenance{background:linear-gradient(150deg,#9489ff,#6653d6 68%,#393299)}
+.rrd-history{border-radius:17px;background:rgba(6,19,35,.84);border:1px solid var(--rrd-stroke);box-shadow:0 14px 28px rgba(0,0,0,.2);overflow:hidden;margin-bottom:16px}
+.rrd-history>header{display:flex!important;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(150,190,229,.16);background:rgba(14,29,46,.66)!important;gap:4px;padding:4px 10px!important;min-height:48px}
+.rrd-history-toggle{display:flex;align-items:center;gap:7px;flex:1;min-height:40px;background:transparent;border:0;color:#f6fbff;text-align:left;padding:0}
+.rrd-history-toggle b{font-size:16px;white-space:nowrap}.rrd-history-toggle small{font-size:11px;color:var(--rrd-muted);white-space:nowrap}.rrd-history-icon{width:23px;height:23px;display:grid;place-items:center;color:#8ed1ff}.rrd-history-icon svg{width:22px;height:22px}
+.rrd-arrow{display:grid;place-items:center;transform:rotate(90deg);transition:transform .2s}.rrd-arrow.open{transform:rotate(-90deg)}
+.rrd-all-link{color:#65b9ff!important;background:transparent!important;border:0!important;padding:7px 3px;font-size:13px;font-weight:720;white-space:nowrap}
+.rrd-week{border-top:1px solid rgba(150,190,229,.13)}
+.rrd-week:first-child{border-top:0}
+.rrd-week>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:44px;padding:9px 13px;cursor:pointer;font-size:14px;font-weight:750;color:#e5f2ff}
+.rrd-week>summary::-webkit-details-marker{display:none}
+.rrd-week>summary small{font-size:12px;color:var(--rrd-muted);margin-left:auto;font-weight:500}
+.rrd-week>summary svg{transform:rotate(90deg)}.rrd-week[open]>summary svg{transform:rotate(-90deg)}
+.rrd-week>div{padding:0 5px 5px}
+.rrd-history-row{width:100%;display:flex;align-items:center;gap:8px;min-height:59px;text-align:left;background:rgba(11,29,50,.68);border:1px solid rgba(124,169,213,.12);border-radius:10px;color:white;padding:7px 8px;margin:3px 0}
+.rrd-status-dot{flex:0 0 24px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:900}
+.rrd-status-dot.done{background:#0f9a65}.rrd-status-dot.active{background:#157fd5}.rrd-status-dot.review{background:#af7025}.rrd-status-dot.muted{background:#59697c}
+.rrd-history-route{flex:1;min-width:0;display:grid;gap:1px}.rrd-history-route b{font-size:13px}.rrd-history-route small{font-size:11px;color:var(--rrd-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rrd-history-money{display:grid;gap:2px;flex:0 0 auto;text-align:right}.rrd-history-money b{font-size:12.5px;white-space:nowrap}.rrd-history-money small{font-size:10.5px;color:#9db5ce}
+.rrd-history-row>svg{flex:0 0 15px;color:#9cbedb}
+.rrd-show-all{width:100%;background:transparent;color:#71bfff;border:0;min-height:35px;font-size:12px}
+.rrd-no-loads{margin:12px;color:var(--rrd-muted);font-size:13px}
+.rrd-version{font-size:11px;color:#8fa9c0;text-align:center;margin:18px 0 0}
+.rr-driver-mission{max-width:740px!important;padding:calc(9px + env(safe-area-inset-top)) 12px calc(28px + env(safe-area-inset-bottom))!important}
+.rr-driver-mission .rrd-mission-header{display:flex!important;align-items:center;justify-content:space-between;gap:8px;background:transparent!important;border:0!important;padding:10px 0 16px!important;margin:0!important}
+.rrd-mission-name{display:flex;align-items:center;justify-content:center;gap:9px;flex:1;font-size:22px}.rrd-mission-name b{font-weight:850}
+.rrd-mini-active{width:34px;height:34px;background:linear-gradient(140deg,#37e78e,#008f55);border-radius:9px;display:grid;place-items:center}
+.rr-driver-mission .adaptive-home-v1038{padding:0!important;margin:0!important;max-width:none!important;background:transparent!important}
+.rr-driver-mission .adaptive-status-v1038,.rr-driver-mission .phone-app-grid,.rr-driver-mission .phone-more-tools,.rr-driver-mission .adaptive-hos-v1038,.rr-driver-mission .phone-device-note{display:none!important}
+.rr-driver-mission .adaptive-mission-v1038{border:1px solid rgba(57,151,255,.55)!important;background:linear-gradient(145deg,rgba(7,29,52,.94),rgba(4,17,32,.97))!important;border-radius:19px!important;box-shadow:0 12px 28px rgba(0,0,0,.24)!important;padding:15px!important;margin:0 0 14px!important}
+.rr-driver-mission .adaptive-mission-v1038 header h1{font-size:27px}
+.rr-driver-mission .adaptive-current-step-v1038{background:linear-gradient(110deg,#123a62,#0a2847)!important;border:1px solid rgba(88,173,255,.46)!important;border-radius:13px!important}
+.rr-driver-mission .adaptive-mission-actions-v1038 button.primary,.rrd-mission-empty button:first-of-type{background:linear-gradient(135deg,#159aff,#0058df)!important;color:white!important;border-color:#339dff!important;border-radius:12px!important;min-height:52px!important;font-weight:790}
+.rr-driver-mission .adaptive-mission-v1038 button,.rr-driver-mission .rrd-mission-doc-actions button{min-height:44px}
+.rr-driver-mission .adaptive-alert-v1038{border-radius:12px!important}
+.rrd-mission-doc-actions{border:1px solid var(--rrd-stroke);background:var(--rrd-panel);border-radius:16px;padding:14px;margin:15px 0}
+.rrd-mission-doc-actions h2{font-size:17px;margin:0 0 6px}.rrd-mission-doc-actions p{font-size:13px;line-height:1.5;color:#b8cce2;margin:0 0 12px}.rrd-mission-doc-actions>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}.rrd-mission-doc-actions button{background:#163957;color:white;border:1px solid #31638f;border-radius:10px;font-weight:710;padding:8px}
+.rrd-mission-empty{text-align:center;display:grid;justify-items:center;gap:12px;padding:48px 22px;border:1px solid var(--rrd-stroke);border-radius:18px;background:var(--rrd-panel)}
+.rrd-mission-empty h1{font-size:25px;margin:0}.rrd-mission-empty p{color:#c0d1e1;font-size:14px;line-height:1.5;margin:0}.rrd-mission-empty>button{min-height:46px;border:1px solid #3b698f;color:#fff;background:#132c47;border-radius:11px;padding:10px 16px;font-weight:720}
+@media(min-width:650px){.rr-driver-home{padding:20px 35px 50px!important}.rrd-app-icon{width:76px;height:76px}.rrd-icon-grid{gap:25px 15px}.rrd-header>button{flex-basis:44px;height:44px}.rrd-history-row{min-height:64px}}
+@media(max-width:360px){.rrd-brand-icon{flex-basis:42px;width:42px;height:42px}.rrd-header>button{flex-basis:31px;height:34px;padding:5px!important}.rrd-duty-location{font-size:11px}.rrd-app-icon{border-radius:15px}.rrd-icon-grid{gap:14px 4px}.rrd-history-money b{font-size:11px}}
+
+
+/* Ensure the dashboard's eight iPhone-style shortcuts keep two true rows. Legacy navigation flex rules have higher generic priority. */
+.rr-driver-home nav.rrd-icon-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  grid-template-rows:repeat(2,auto)!important;
+  grid-auto-flow:row!important;
+  align-items:start!important;
+  gap:17px 6px!important;
+  width:100%!important;
+  height:auto!important;
+  padding:12px 2px 18px!important;
+}
+.rr-driver-home nav.rrd-icon-grid>button{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:7px!important;
+  min-width:0!important;
+  width:100%!important;
+  min-height:105px!important;
+  height:auto!important;
+  flex:none!important;
+  margin:0!important;
+  border:0!important;
+  padding:0!important;
+  background:transparent!important;
+}
+.rr-driver-home nav.rrd-icon-grid>button>.rrd-app-icon{
+  display:grid!important;
+  flex:0 0 auto!important;
+  place-items:center!important;
+}
+.rr-driver-home nav.rrd-icon-grid>button>span:last-child{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  line-height:1.35!important;
+  text-align:center!important;
+}
+
+
+/* Keep every shortcut title readable on narrow iPhones instead of shortening it. */
+.rr-driver-home nav.rrd-icon-grid>button{
+  min-height:116px!important;
+}
+.rr-driver-home nav.rrd-icon-grid>button>span:last-child{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  overflow-wrap:break-word!important;
+  font-size:clamp(10.5px,2.75vw,12px)!important;
+  line-height:1.22!important;
+  min-height:28px!important;
+}
+
+
+/* Darken inherited light mission widgets so the dedicated Active Load matches the Home palette. */
+.rr-driver-mission .adaptive-mission-v1038>header h1{
+  color:#f5f9ff!important;
+  font-size:clamp(23px,6vw,28px)!important;
+  line-height:1.15!important;
+}
+.rr-driver-mission .adaptive-mission-v1038>header p,
+.rr-driver-mission .adaptive-progress-v1038>em{
+  color:#b8cbe2!important;
+}
+.rr-driver-mission .adaptive-mission-v1038>header span{color:#76c4ff!important;}
+.rr-driver-mission .adaptive-mission-v1038>header strong{
+  color:#b5dcff!important;
+  background:#163553!important;
+  border:1px solid #315c83!important;
+}
+.rr-driver-mission .adaptive-progress-v1038>i{background:#243950!important;}
+.rr-driver-mission .adaptive-mission-actions-v1038 button:not(.primary){
+  background:#17334f!important;color:#f4f9ff!important;
+  border:1px solid #3b6186!important;border-radius:11px!important;
+}
+.rr-driver-mission .adaptive-quick-v1038{
+  background:#112b45!important;color:#eff8ff!important;
+  border:1px solid #33577b!important;border-radius:13px!important;
+}
+.rr-driver-mission .adaptive-quick-v1038 em{color:#b6cae0!important;}
+.rr-driver-mission .adaptive-alert-v1038{
+  background:#30202c!important;color:#ffd9df!important;
+  border:1px solid #81516a!important;
+}
+.rr-driver-mission .adaptive-alert-v1038 em{color:#f4b8c6!important;}
+.rr-driver-mission .adaptive-instructions-v1038,
+.rr-driver-mission .adaptive-upcoming-v1038{
+  background:#0f2941!important;color:#eaf4fe!important;
+  border:1px solid #2d5274!important;
+}
+.rr-driver-mission .adaptive-instructions-v1038>header b,
+.rr-driver-mission .adaptive-instructions-v1038 p b,
+.rr-driver-mission .adaptive-upcoming-v1038 b{color:#eef8ff!important;}
+.rr-driver-mission .adaptive-instructions-v1038 p em,
+.rr-driver-mission .adaptive-upcoming-v1038 em{color:#b6cbe0!important;}
+.rr-driver-home nav.rrd-icon-grid>button:last-child>span:last-child{
+  font-size:9.6px!important;
+  white-space:nowrap!important;
+}
+

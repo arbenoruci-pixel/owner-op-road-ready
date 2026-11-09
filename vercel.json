@@ -20,7 +20,8 @@
       "fix/scanner-paper-capture": false,
       "fix/device-handoff-session": false,
       "fix/reviewed-folder-filing": false,
-      "feat/compact-dark-workspace": false
+      "feat/compact-dark-workspace": false,
+      "feat/driver-home-active-load-20261108": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
@@ -30,25 +31,52 @@
     {
       "source": "/app-version.json",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate" },
-        { "key": "CDN-Cache-Control", "value": "no-store" },
-        { "key": "Surrogate-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Surrogate-Control",
+          "value": "no-store"
+        }
       ]
     },
     {
       "source": "/update.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate" },
-        { "key": "CDN-Cache-Control", "value": "no-store" },
-        { "key": "Surrogate-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Surrogate-Control",
+          "value": "no-store"
+        }
       ]
     },
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate" },
-        { "key": "Service-Worker-Allowed", "value": "/" },
-        { "key": "CDN-Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "no-store"
+        }
       ]
     }
   ]
