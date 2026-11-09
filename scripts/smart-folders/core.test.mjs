@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildSmartFolders,folderChecklist,folderSummary,documentLabel,savedTime,requestedScanFolder,explicitFolderScanCandidates} from './core.js';
+import {buildSmartFolders,folderChecklist,folderSummary,documentLabel,savedTime,requestedScanFolder,explicitFolderScanCandidates,isRetiredTestScanFolder} from './core.js';
 const doc=(id,type,load='',extra={})=>({id,type,loadNo:load,createdAt:1793813639097,...extra});
 test('reviewed BOL aliases combine the saved Ratecon and shipment evidence without changing originals or logs',()=>{
  const input={folders:[{loadNo:'31450-11788',status:'completed'}],
@@ -174,4 +174,19 @@ test('conflicting checksums for one stable original remain distinct and never hi
  }
  const unknown={...one};delete unknown.sha256;
  assert.equal(buildSmartFolders({folders:[{loadNo:'A'}],documents:[one,two,unknown]}).folders[0].documents.length,3,'an ambiguous checksum-free projection is not silently assigned to either conflicting original');
+});
+
+test('owner-requested archived 2021 scan disappears from load list without touching the PDF',()=>{
+ const orphan={reference:'1741530',shipment:false,origin:'',destination:'',logs:[],documents:[{id:'old-packet',fileName:'scanned-document.pdf',date:'2021-10-23'}]};
+ const built=buildSmartFolders({folders:[{loadNo:'1741530',status:'unknown'}],documents:[{id:'old-packet',fileName:'scanned-document.pdf',date:'2021-10-23',load_no:'1741530'}]});
+ assert.equal(built.folders.length,1);
+ assert.equal(isRetiredTestScanFolder(built.folders[0]),true,'Archived 2021 BOL is retired');
+ const before=structuredClone(orphan);
+ assert.equal(isRetiredTestScanFolder(orphan),true);
+ assert.deepEqual(orphan,before,'source document remains intact');
+ assert.equal(isRetiredTestScanFolder({...orphan,reference:'1741531'}),false);
+ assert.equal(isRetiredTestScanFolder({...orphan,logs:[{day:'2021-10-23'}]}),false);
+ assert.equal(isRetiredTestScanFolder({...orphan,documents:[...orphan.documents,{id:'another'}]}),false);
+ assert.equal(isRetiredTestScanFolder({...orphan,documents:[{...orphan.documents[0],date:'2026-11-08'}]}),false);
+ assert.equal(isRetiredTestScanFolder({...orphan,origin:'Dayton, MN'}),false);
 });

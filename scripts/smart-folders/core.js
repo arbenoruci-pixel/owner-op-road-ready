@@ -1,4 +1,16 @@
 // Read-only folder projection. Closing a trip changes its view, never its files.
+// Owner-requested retirement of one orphaned 2021 test-scan folder. The PDF
+// original stays in Files and immutable account history; no HOS data changes.
+// A real/new load with the same number is never excluded.
+export function isRetiredTestScanFolder(folder={}) {
+ if(String(folder.reference||'').trim()!=='1741530'||folder.shipment)return false;
+ if(String(folder.origin||'').trim()||String(folder.destination||'').trim())return false;
+ if((folder.logs||[]).length!==0||(folder.documents||[]).length!==1)return false;
+ const doc=folder.documents[0]||{};
+ const date=String(doc.documentDate||doc.document_date||doc.date||doc.extracted?.pickupDate||'').slice(0,10);
+ const name=String(doc.fileName||doc.original_file_name||doc.title||'').trim().toLowerCase();
+ return date==='2021-10-23'&&name==='scanned-document.pdf';
+}
 const text=v=>String(v??'').trim();
 const list=v=>Array.isArray(v)?v:[];
 const ref=v=>text(v).toUpperCase();
