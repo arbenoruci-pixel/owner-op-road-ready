@@ -14,6 +14,11 @@ for(const file of files('scripts').filter(p=>/browser[^/]*\.mjs$/.test(p)&&!p.in
  s=s.replaceAll("'.adaptive-home-v1038'","'.rr-driver-home'").replaceAll("'.phone-app-grid'","'.rrd-icon-grid'").replaceAll("'.phone-app-grid>button'","'.rrd-icon-grid>button'");
  s=s.replace(/(page|target)\.getByRole\('button',\{name:'(Full mission|Open shipment log)',exact:true\}\)/g,"(await missionPage($1)).getByRole('button',{name:'$2',exact:true})");
  for(const name of ['Documents','Smart Scan','Continue saved scan','Open logbook','Import','Export & Backup','Drive','Billing','More tools'])s=s.replaceAll(`page.getByRole('button',{name:'${name}',exact:true})`,`(await homeControl(page,'${name}'))`);
+ s=s.replaceAll("page.getByRole('button',{name:/Smart Scan/}).first()","(await homeControl(page,'Smart Scan'))");
+ if(file==='scripts/browser-fullscreen-reader-v110369.mjs'){
+  s=s.replace("await page.locator('.rr-driver-home').waitFor();\n  assert.equal(await card", "await page.locator('.rr-driver-home').waitFor();await missionPage(page);\n  assert.equal(await card");
+  s=s.replace("card=(await missionPage(page)).locator('.adaptive-mission-v1038');\n  await seed(page,state);", "await seed(page,state);card=(await missionPage(page)).locator('.adaptive-mission-v1038');\n  ");
+ }
  if(file==='scripts/workspace-navigation/browser-navigation.mjs')s=s.replace("await page.getByRole('button',{name:'Open load folder',exact:true}).click();","await missionPage(page);await page.getByRole('button',{name:'Open load folder',exact:true}).click();");
  if(file==='scripts/compact-business/browser.mjs')s=s.replace("name:'Open load inbox'","name:'Loads'").replaceAll("'.rr-business-nav button'","'.rrd-icon-grid button'");
  if(file==='scripts/v110435/browser-phone-home.mjs'){

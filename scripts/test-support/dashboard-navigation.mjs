@@ -24,7 +24,8 @@ export async function searchContrast(locator){
 
 export async function readingDetails(region){
  const toggle=region.getByRole('button',{name:'All reading details',exact:true});
- await toggle.waitFor();
- if(await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
+ const exported=region.getByRole('button',{name:'Export reading review',exact:true});
+ await toggle.or(exported).first().waitFor();
+ if(await toggle.isVisible()&&await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
  return region;
 }
