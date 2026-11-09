@@ -50,6 +50,7 @@ try{
  await camera.waitFor({state:'visible',timeout:30000});
  const native=camera.getByRole('button',{name:'Take photo with phone camera'});
  await native.waitFor({state:'visible'});
+ await camera.locator('[role="status"]').filter({hasText:/iPhone camera|reliable scan/i}).waitFor();
  const label=(await camera.locator('[role="status"]').innerText()).slice(0,250);
  assert.match(label,/iPhone camera|reliable scan/i);
  assert.equal(await page.evaluate(()=>window.__cameraStarts),0,'iOS standalone must not open heavy WebRTC stream on entry');

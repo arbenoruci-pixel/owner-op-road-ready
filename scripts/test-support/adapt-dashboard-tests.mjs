@@ -20,6 +20,7 @@ for(const file of files('scripts').filter(p=>/browser[^/]*\.mjs$/.test(p)&&!p.in
   s=s.replace("card=(await missionPage(page)).locator('.adaptive-mission-v1038');\n  await seed(page,state);", "await seed(page,state);card=(await missionPage(page)).locator('.adaptive-mission-v1038');\n  ");
  }
  if(file==='scripts/workspace-navigation/browser-navigation.mjs')s=s.replace("await page.getByRole('button',{name:'Open load folder',exact:true}).click();","await missionPage(page);await page.getByRole('button',{name:'Open load folder',exact:true}).click();");
+ if(file==='scripts/v110411/browser-filing.mjs')s=s.replace('await reviewFixturePodEvidence(page',"await (await homeControl(page,'Documents')).waitFor();await reviewFixturePodEvidence(page").replace("    assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),0,'Saved POD covers","    await missionPage(page);assert.equal(await page.getByText('Pickup BOL missing',{exact:true}).count(),0,'Saved POD covers");
  if(file==='scripts/compact-business/browser.mjs')s=s.replace("name:'Open load inbox'","name:'Loads'").replaceAll("'.rr-business-nav button'","'.rrd-icon-grid button'");
  if(file==='scripts/v110435/browser-phone-home.mjs'){
   s=s.replaceAll("name:'Apps'","name:'Road Ready tools'").replace("getByRole('navigation',{name:'Road Ready tools'}).getByRole('button',{name:'My month'","getByRole('navigation',{name:'Additional tools'}).getByRole('button',{name:'My month'").replace(/(getByRole\('navigation',\{name:'Road Ready tools'\}\)\.getByRole\('button'\)\.count\(\),)\d+/,'$17');
@@ -30,3 +31,6 @@ for(const file of files('scripts').filter(p=>/browser[^/]*\.mjs$/.test(p)&&!p.in
  if(s!==before){let relative=path.relative(path.dirname(file),'scripts/test-support/dashboard-navigation.mjs');if(!relative.startsWith('.'))relative='./'+relative;s=`// Dashboard navigation adapted\nimport {missionPage,homeControl,searchContrast,readingDetails} from '${relative}';\n`+s;execFileSync(process.execPath,['--check','--input-type=module'],{input:s});fs.writeFileSync(file,s);}
 }
 console.log('PASS — dashboard test navigation updated; behavioral/data assertions retained');
+// The evidence helper returns through Home after verifying immutable originals.
+const podHelper='scripts/test-support/review-pod-evidence.mjs';
+fs.writeFileSync(podHelper,fs.readFileSync(podHelper,'utf8').replaceAll("'.adaptive-home-v1038'","'.rr-driver-home'"));
