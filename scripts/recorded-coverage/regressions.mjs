@@ -104,4 +104,9 @@ replace(canonical,"await setup(page,context,fixture(activeDay));const rows=page.
     assert.deepEqual(errors,[]);reports.push({browser:name,activeDay,passed:true});continue;
    }
    await rows.first().waitFor();`);
+const sleeper='scripts/v110408/browser-sleeper-midnight.mjs';
+replace(sleeper,"assert.match(await event.innerText(), ended ? /\\b1m\\b/ : /\\b2h\\b/);",
+  "assert.match(await event.innerText(), /\\b1m\\b/);\n  assert.match(await page.locator('.logcheck-summary').innerText(), /Unrecorded time: 22:01–24:00 · 119 min/);");
+replace(sleeper,"assert.equal(totals[1], ended ? '0.02' : '2.00', 'Sleeper total must match its visible interval');",
+  "assert.equal(totals[1], '0.02', 'Sleeper total must match its saved interval regardless of later status changes');");
 console.log('PASS — final-runtime regressions require saved completed endpoints and explicit missing time');
