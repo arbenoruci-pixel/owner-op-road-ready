@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 // outputs. Keep its exact byte checks and all unknown-edit rejection tests.
 const changes=[
   ['source/src/modules/logbook/DayLogScreen.jsx','ca8577bc89e632085c180038875524caee4eaf02b458af2b28e35973b83e6629','58ec537e1732dc13eb1f06ca9f0e9c270cd38d18e8a49e1cd36449de1b78752b'],
-  ['source/src/modules/logbook/eventEditingV110.js','29a415229d2f5493a47fe04b00714fb37be9e5665981b47168d04a8c77eb19ab','e9f7a940fa0ae7116fc3eb35b424e3781048e9c6c5d0bcbd53dc7777440a9fce'],
+  ['source/src/modules/logbook/eventEditingV110.js','29a415229d2f5493a47fe04b00714fb37be9e5665981b47168d04a8c77eb19ab','e21061950b1ed45e8c9cb037f98e4d1168155a9bf6fcdfb034378a501000017e'],
 ];
 for(const [file,,expected] of changes)assert.equal(createHash('sha256').update(fs.readFileSync(file)).digest('hex'),expected,'Reviewed recorded-time output changed: '+file);
 const prepared=['install','finish-mobile','finish-interaction'].map(stage=>{

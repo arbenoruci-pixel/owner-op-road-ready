@@ -2,7 +2,7 @@ import test, {mock} from 'node:test';
 import assert from 'node:assert/strict';
 import {fixture, day, at} from './fixture.mjs';
 import {recordedCoverage, recordedDayView} from '../../source/src/core/compliance/recordedCoverage.js';
-import {projectLogbookEvents, projectEditorLogbookEvents, logbookClock} from '../../source/src/modules/logbook/eventEditingV110.js';
+import {projectLogbookEvents, projectEditorLogbookEvents, logbookClock, applyLogbookEditorEdit, applyLogbookEditorInsert} from '../../source/src/modules/logbook/eventEditingV110.js';
 import {displayEventsForDayFromState} from '../../source/src/core/timeline/displayTimeline.js';
 import {dutyViewEvents} from '../../source/src/modules/logbook/dutyViewV110212.js';
 import {readArchiveLogbookDay} from '../../source/src/modules/logbook/archiveDayV1103.js';
@@ -47,6 +47,20 @@ test('explicitly completed raw record signs and round-trips at midnight',()=>{
   assert.equal(recordedCoverage(state,day,at).issues.length,0);
   assert.deepEqual(state,before);
   assert.deepEqual(ranges(visible(JSON.parse(JSON.stringify(state)))),ranges(state.eventsByDay[day]));
+});
+test('explicit historical End stays locked through later insert, serialization and review',()=>{
+  const state=fixture(), before=structuredClone(state), tail=state.eventsByDay[day].at(-1);
+  const edited=applyLogbookEditorEdit(state,{day,id:tail.id,patch:{endMin:1400}},at);
+  assert.equal(edited.ok,true);
+  const saved=JSON.parse(JSON.stringify(edited.state));
+  assert.equal(saved.eventsByDay[day].at(-1).paperLogEndV110315,true);
+  assert.equal(projectEditorLogbookEvents(saved,day,at).at(-1).endMin,1400);
+  const inserted=applyLogbookEditorInsert(saved,{day,event:{id:'explicit-rest-insert',status:'ON',startMin:1360,endMin:1370}},at);
+  assert.equal(inserted.ok,true);
+  assert.equal(inserted.state.eventsByDay[day].at(-1).endMin,1400,'later insert cannot silently extend the explicit End');
+  assert.deepEqual(recordedCoverage(inserted.state,day,at).gaps,[{startMin:1400,endMin:1440}]);
+  assert.deepEqual(inserted.state.signatureByDay,before.signatureByDay);
+  assert.deepEqual(state,before);
 });
 test('one-minute gaps, interior gaps, overlaps and invalid ranges cannot become clean coverage',()=>{
   for(const mutate of [s=>s.eventsByDay[day].at(-1).endMin=1439,s=>s.eventsByDay[day][2].startMin++,

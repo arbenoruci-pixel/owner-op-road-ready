@@ -29,6 +29,8 @@ const editor = root + 'eventEditingV110.js';
 patch(editor, '  return historicalStatusTailV110317(projectLogbookEvents(state,day,at),!!day && day<clock.day);',
   `  // Open the saved interval; the driver explicitly supplies any missing end.
   return projectLogbookEvents(state,day,at);`);
+patch(editor, "  if((projected.live?.id===id||projected.historicalTail?.id===id)&&Object.hasOwn(changes,'endMin'))after.paperLogEndV110315=true;",
+  "  if((projected.live?.id===id||day<logbookClock(state,at).day)&&Object.hasOwn(changes,'endMin'))after.paperLogEndV110315=true;");
 const report = root + 'reportDayV110391.js';
 imports(report, "import { recordedDayView } from '../../core/compliance/recordedCoverage.js';");
 patch(report, '  const end = day === clock.day ? clock.minute : 1440;',
