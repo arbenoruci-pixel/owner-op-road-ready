@@ -15,7 +15,8 @@ function verifiedSignedEvents(signature, day) {
   const content = signature?.certifiedContent;
   if (!signature?.signed || content?.version !== 1 || content.day !== day || !Array.isArray(content.events)) return null;
   let hash = 2166136261;
-  for (const char of stable(content)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+  const serialized = stable(content);
+  for (let index = 0; index < serialized.length; index++) hash = Math.imul(hash ^ serialized.charCodeAt(index), 16777619) >>> 0;
   return signature.certifiedFingerprint === 'rods-110.1.0-' + hash.toString(16).padStart(8, '0')
     ? content.events : null;
 }

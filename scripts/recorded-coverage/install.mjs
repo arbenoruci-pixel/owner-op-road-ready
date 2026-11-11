@@ -40,6 +40,14 @@ patch(signing, '  const issues = [];\n  const today = localDayKey();',
 patch(signing, '  const coverageOptions = { ...liveCoverageOptionsV1036(state), today };',
   '  const coverageOptions = { ...liveCoverageOptionsV1036(state), today, recordedState:state };');
 imports(signing, "import { getHomeTerminalTimeZone } from '../../core/time/homeTerminalTime.js';");
+const officerCheck = 'source/src/core/dot/dotOfficerCheckEngine.js';
+imports(officerCheck, "import { getHomeTerminalTimeZone } from '../time/homeTerminalTime.js';");
+patch(officerCheck, '    currentEventId:manualEventId || gpsEventId || \'\',',
+  "    currentEventId:manualEventId || gpsEventId || '',\n    recordedState:state, today:localDayKey(new Date(), getHomeTerminalTimeZone(state)),");
+for (const file of [signing, officerCheck]) {
+  patch(file, "{ currentLocation: state.currentLocation || {}, currentStatus:state.currentStatus || 'OFF', currentReason:state.currentReason || 'Off Duty' }",
+    "{ recordedState:state, today:localDayKey(new Date(), getHomeTerminalTimeZone(state)), currentLocation: state.currentLocation || {}, currentStatus:state.currentStatus || 'OFF', currentReason:state.currentReason || 'Off Duty' }");
+}
 const raw = 'source/src/core/compliance/rawRodsChecks.js';
 imports(raw, "import { rawRecordedCoverage } from './recordedCoverage.js';");
 patch(raw, '  const today = options.today || localDayKey();',

@@ -12,6 +12,7 @@ import {validateLogForSigning, isFatalSigningIssue, signBlockMessage} from '../.
 import {buildDayBackupPayload} from '../../source/src/core/backup/dayTransfer.js';
 import {captureInspection} from '../../lib/owner-op-cloud/inspectionSnapshot.js';
 import {inspectionReadiness} from '../../source/src/modules/dot/inspectionReadiness.js';
+import {buildDotOfficerCheck} from '../../source/src/core/dot/dotOfficerCheckEngine.js';
 mock.timers.enable({apis:['Date'],now:at});
 const ranges = rows => rows.map(e => [e.status,e.startMin,e.endMin]);
 const visible = (state, date=day, instant=at) => {
@@ -78,6 +79,7 @@ test('only verified signed midnight prefix matches the inspection carry; stale o
   state.signatureByDay[prior]=createCertificationRecord(state,prior,{now:at.getTime()});
   state.eventsByDay[day]=[{id:'today',status:'ON',startMin:60,endMin:1440,city:'Current City',state:'IL'}];
   assert.equal(recordedCoverage(state,day,at).gaps.length,0);
+  assert.equal(buildDotOfficerCheck(state,day).rawCoverageResult.issues.length,0);
   assert.equal(recordedDayView(state,day)[0].city,'PRIOR CITY');
   state.signatureByDay[prior].certifiedContent.events[0].endMin=1383;
   assert.deepEqual(recordedCoverage(state,day,at).gaps,[{startMin:0,endMin:60}]);

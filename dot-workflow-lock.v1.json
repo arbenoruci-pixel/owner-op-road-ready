@@ -85,7 +85,7 @@
     "source/src/modules/logbook/certificationV110.js": "164ba1ab1bfe2bd385f2775fcb98fb1f3c32fa6dc857359ba80efb7054496418",
     "source/src/modules/logbook/dayFormV110.js": "352b948a6839bf501fccf26f69c6ac6a521c73877f57b69cb6cbc00907dae79d",
     "source/src/modules/logbook/public-api.js": "18ec4f800b2d4affe61eec003fb0a10617151935e42637c9029635180dfba459",
-    "source/src/modules/logbook/signing.js": "b974f105c3ebf8cea6a855826c616a91a3a7e673d4a05224b97f57a1c6b3ddaa",
+    "source/src/modules/logbook/signing.js": "32e44aad7981392d9522658cbb0ba561e36b4464b2104069f6ad2440e6b09aa9",
     "source/src/road-ready-os-v105.css": "4c3074d7b8573d2595aebf49c1fb44c2becaa549916f38332959e45ddc70ac5c",
     "source/src/styles.css": "542b7c5c649bf84b444921c201806c0cc7453a9abf4f26d653fed4a61c24462e",
     "supabase/functions/owner-op-cloud-v1/index.ts": "ddf6c96f07dc6e8e322c11e3e3def4e2e9d2958c7ccc175d4cc11fee9396be5e"

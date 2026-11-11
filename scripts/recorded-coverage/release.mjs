@@ -29,4 +29,12 @@ for(const [file,prefix] of [['public/sw.js','OWNER_OP_SW'],['source/src/core/upd
 for(const file of ['source/src/shared/ui/ToolsSheet.jsx','source/src/modules/home/HomeScreen.jsx','source/src/modules/home/DriverDashboard.jsx']) {
   fs.writeFileSync(file,fs.readFileSync(file,'utf8').replaceAll('110.4.122',version));
 }
+// Keep release-identity assertions exact, following the existing release pipeline.
+for(const file of ['lib/owner-op-cloud/cloudMirrorV110450.js','scripts/test-duty-graph-continuity.mjs','scripts/test-editor-grips-v110355.mjs','scripts/verify-log-integrity-v1051.mjs','scripts/test-document-continuity-integration-v110375.mjs']) {
+  const source=fs.readFileSync(file,'utf8');
+  fs.writeFileSync(file,source.replaceAll('110.4.122',version).replace(/v1104122-field-recovery-[a-f0-9]{12}/g,build));
+}
+const locks=JSON.parse(fs.readFileSync('module-locks.v1.json','utf8'));
+locks.release=version;
+fs.writeFileSync('module-locks.v1.json',JSON.stringify(locks,null,2)+'\n');
 console.log('PASS — recorded coverage release '+version+' / '+sha);
