@@ -109,4 +109,10 @@ replace(sleeper,"assert.match(await event.innerText(), ended ? /\\b1m\\b/ : /\\b
   "assert.match(await event.innerText(), /\\b1m\\b/);\n  assert.match(await page.locator('.logcheck-summary').innerText(), /Unrecorded time: 22:01–24:00 · 119 min/);");
 replace(sleeper,"assert.equal(totals[1], ended ? '0.02' : '2.00', 'Sleeper total must match its visible interval');",
   "assert.equal(totals[1], '0.02', 'Sleeper total must match its saved interval regardless of later status changes');");
+const rest='scripts/hos-rest-review/browser.mjs';
+replace(rest,"assert.equal(await editor.getByLabel('End time',{exact:true}).inputValue(),'00:00');",
+  "assert.equal(await editor.getByLabel('End time',{exact:true}).inputValue(),'21:44');");
+replace(rest,"assert.match(await editor.locator('.selected-duration-live').innerText(),/2h 17m/);",
+  "assert.match(await editor.locator('.selected-duration-live').innerText(),/\\b1m\\b/);");
+replace(rest,'historical Sleeper opens to midnight; Cancel is read-only','historical Sleeper opens at its saved end; Cancel is read-only');
 console.log('PASS — final-runtime regressions require saved completed endpoints and explicit missing time');
