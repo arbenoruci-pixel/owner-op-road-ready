@@ -42,7 +42,7 @@ replace(browser,"const initial=fixture(activeDay,status);await setup(page,contex
     assert.deepEqual(errors,[]);reports.push({browser:name,activeDay,status,passed:true});continue;
    }
    await rows.first().waitFor();`);
-replace(browser,'activeDay===today?312:1440',"activeDay===today?312:activeDay==='2026-09-07'?1202:1440",2);
+replace(browser,'activeDay===today?312:1440',"activeDay===today?312:activeDay==='2026-09-07'?1202:1364",2);
 const carry='scripts/browser-carry-edit-v110365.mjs';
 replace(carry,"import assert from 'node:assert/strict';",
   "import {createCertificationRecord} from '../source/src/modules/logbook/certificationV110.js';\nimport assert from 'node:assert/strict';");
@@ -115,4 +115,24 @@ replace(rest,"assert.equal(await editor.getByLabel('End time',{exact:true}).inpu
 replace(rest,"assert.match(await editor.locator('.selected-duration-live').innerText(),/2h 17m/);",
   "assert.match(await editor.locator('.selected-duration-live').innerText(),/\\b1m\\b/);");
 replace(rest,'historical Sleeper opens to midnight; Cancel is read-only','historical Sleeper opens at its saved end; Cancel is read-only');
+for(const file of [browser,canonical]) {
+  replace(file,"assert.equal(await rows.count(),1,'one canonical event row expected');",
+    `assert.equal(await rows.count(),activeDay==='2026-09-06'?3:1,'completed day preserves each saved event row');
+   if(activeDay==='2026-09-06') {
+    assert.deepEqual(await rows.evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-log-event-id'))),['off-a','off-b','off-c']);
+    assert.match(await page.locator('.logcheck-summary').innerText(),/Unrecorded time: 22:44–24:00 · 76 min/);
+   }`);
+}
+replace(browser,` const expectedX=52+minutes/1440*894;
+ await page.waitForFunction(({expectedX})=>{
+   const traces=[...document.querySelectorAll('.logbook-ui-v110 .log-graph-v110 .duty-trace-v110')];
+   return traces.length===1 && Math.abs(Number(traces[0].getAttribute('d').split(' H ').at(-1))-expectedX)<0.0001;
+ },{expectedX},{timeout:10000});`,
+  ` const expectedXs=(minutes===1364?[998,1033,1364]:[minutes]).map(minute=>52+minute/1440*894);
+ await page.waitForFunction(({expectedXs})=>{
+   const traces=[...document.querySelectorAll('.logbook-ui-v110 .log-graph-v110 .duty-trace-v110')];
+   return traces.length===expectedXs.length && traces.every((trace,index)=>Math.abs(Number(trace.getAttribute('d').split(' H ').at(-1))-expectedXs[index])<0.0001);
+ },{expectedXs},{timeout:10000});`);
+replace(browser,'graph total must match canonical row, not stored end time','graph total must match the exact displayed saved intervals');
+replace(canonical,'one canonical status body; carry stays read-only','saved completed rows remain separate; current carry stays read-only');
 console.log('PASS — final-runtime regressions require saved completed endpoints and explicit missing time');
