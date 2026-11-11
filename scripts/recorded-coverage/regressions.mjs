@@ -43,4 +43,65 @@ replace(browser,"const initial=fixture(activeDay,status);await setup(page,contex
    }
    await rows.first().waitFor();`);
 replace(browser,'activeDay===today?312:1440',"activeDay===today?312:activeDay==='2026-09-07'?1202:1440",2);
+const carry='scripts/browser-carry-edit-v110365.mjs';
+replace(carry,"import assert from 'node:assert/strict';",
+  "import {createCertificationRecord} from '../source/src/modules/logbook/certificationV110.js';\nimport assert from 'node:assert/strict';");
+replace(carry,"const initial=fixture(scenario),activeDay=initial.activeDay,end=scenario==='prefix'?617:scenario==='full-day'?1440:90;",
+  `const initial=fixture(scenario),activeDay=initial.activeDay,end=scenario==='prefix'?617:scenario==='full-day'?1440:90;
+   // Completed carry needs a complete, verified adjacent signed day.
+   if(scenario!=='current-prefix') {
+    initial.eventsByDay[prior][0].startMin=0;
+    initial.signatureByDay[prior]=createCertificationRecord(initial,prior,{now:new Date('2026-09-17T06:00:00Z').getTime()});
+    initial.certifyStatus[prior]='Certified';
+   }`);
+const wizard='scripts/browser-wizard-midnight-v110317.mjs';
+replace(wizard,`    if(scenario==='explicit-end') {
+     assert.match(text,/1h 58m unconfirmed/);
+     await check.getByRole('button',{name:'Start Fix Wizard',exact:true}).click();
+     const wizard=page.getByRole('dialog',{name:'Coverage Fix Wizard',exact:true});await wizard.waitFor();
+     assert.match(await wizard.innerText(),/10:02 PM.*12:00 AM/);
+     await wizard.getByRole('button',{name:'Cancel',exact:true}).first().click();
+    } else {
+     assert.doesNotMatch(text,/missing log coverage|1h 58m unconfirmed/i);
+     assert.equal(await check.getByRole('button',{name:'Start Fix Wizard',exact:true}).count(),0);
+     await page.screenshot({path:\`\${output}/\${name}-\${scenario}-\${stage}.png\`});
+     await check.getByRole('button',{name:'Close',exact:true}).click();
+     assert.doesNotMatch(await page.locator('.signature-panel').innerText(),/Missing log coverage|1h 58m unconfirmed/i);
+    }`,
+  `    assert.match(text,/1h 58m unconfirmed/,'all saved tails expose their exact missing interval');
+    await check.getByRole('button',{name:'Start Fix Wizard',exact:true}).click();
+    const wizard=page.getByRole('dialog',{name:'Coverage Fix Wizard',exact:true});await wizard.waitFor();
+    assert.match(await wizard.innerText(),/10:02 PM.*12:00 AM/);
+    await wizard.getByRole('button',{name:'Cancel',exact:true}).first().click();
+    if(await check.isVisible())await check.getByRole('button',{name:'Close',exact:true}).click();
+    assert.match(await page.locator('.sign-save').innerText(),/Fix Issues Before Sign/);`);
+replace(wizard,`   if(scenario!=='explicit-end') {
+    await page.locator('.sign-save').click();
+    await waitState(page,s=>s.certifyStatus?.[day]==='Certified');
+    await page.reload();await openLog(page);
+    await page.getByRole('navigation',{name:'Log sections'}).getByRole('button',{name:'Sign',exact:true}).click();
+    assert.match(await page.locator('.sign-status-card').innerText(),/Signed and certified/);
+    assert.deepEqual((await stored(page)).eventsByDay[day],baseline.eventsByDay[day]);
+   }`,
+  `   await page.locator('.sign-save').click();
+   await page.getByRole('dialog',{name:'Fix issues wizard',exact:true}).waitFor();
+   assert.deepEqual((await stored(page)).signatureByDay,baseline.signatureByDay,'clicking Sign with a gap cannot create an attestation');
+   await page.reload();await openLog(page);
+   await page.getByRole('navigation',{name:'Log sections'}).getByRole('button',{name:'Sign',exact:true}).click();
+   assert.doesNotMatch(await page.locator('.sign-status-card').innerText(),/Signed and certified/);
+   assert.deepEqual((await stored(page)).eventsByDay[day],baseline.eventsByDay[day]);`);
+const canonical='scripts/browser-canonical-continuity-v11026.mjs';
+replace(canonical,"await setup(page,context,fixture(activeDay));const rows=page.locator('.events.clean-events .clean-event-row');await rows.first().waitFor();",
+  `await setup(page,context,fixture(activeDay));const rows=page.locator('.events.clean-events .clean-event-row');
+   if(activeDay==='2026-09-05') {
+    const before=await stored(page);
+    assert.equal(await rows.count(),0,'unsigned empty completed dates remain visibly unrecorded');
+    assert.equal(await page.locator('.logbook-ui-v110 .duty-trace-v110').count(),0);
+    assert.match(await page.locator('.logbook-ui-v110').innerText(),/Unrecorded time: 00:00–24:00 · 1440 min/);
+    await page.reload();await page.locator('.logbook-ui-v110 .log-graph-v110').waitFor();
+    const after=await stored(page);
+    for(const key of ['eventsByDay','signatureByDay','logbookEditHistoryByDay'])assert.deepEqual(after[key],before[key]);
+    assert.deepEqual(errors,[]);reports.push({browser:name,activeDay,passed:true});continue;
+   }
+   await rows.first().waitFor();`);
 console.log('PASS — final-runtime regressions require saved completed endpoints and explicit missing time');
