@@ -27,7 +27,8 @@
       "fix/reader-scan-sequencing-20261109": false,
       "fix/reader-provider-response-20261109": false,
       "fix/reader-shipment-filing-20261109": false,
-      "fix/reader-field-recovery-20261109": false
+      "fix/reader-field-recovery-20261109": false,
+      "fix/logbook-recorded-coverage": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",

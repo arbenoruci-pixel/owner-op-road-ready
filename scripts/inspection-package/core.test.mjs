@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fixture,at,today} from '../inspection-signed/fixture.mjs';
-import {createCertificationRecord} from '../../source/src/modules/logbook/certificationV110.js';
+import {historicalCertificationFixture} from '../recorded-coverage/legacySignatureFixture.mjs';
 import {captureInspection,assertInspectionComplete,assertInspectionUnchanged} from '../../lib/owner-op-cloud/inspectionSnapshot.js';
 import {inspectionReadiness} from '../../source/src/modules/dot/inspectionReadiness.js';
-const sign=(s,day)=>{s.signatureByDay[day]=createCertificationRecord(s,day,{now:+at-86400000,driverName:'Test Driver',signatureDataUrl:'data:image/png;base64,dGVzdA=='});s.certifyStatus[day]='Certified';};
+const sign=(s,day)=>{s.signatureByDay[day]=historicalCertificationFixture(s,day,{now:+at-86400000,driverName:'Test Driver',signatureDataUrl:'data:image/png;base64,dGVzdA=='});s.certifyStatus[day]='Certified';};
 function leading(){const s=fixture();for(const[day,events]of Object.entries({
  '2026-10-27':[{status:'SB',startMin:1281,endMin:1440,city:'A',state:'OH'}],
  '2026-10-28':[{status:'ON',startMin:1025,endMin:1123},{status:'D',startMin:1123,endMin:1244},{status:'OFF',startMin:1244,endMin:1440,city:'B',state:'IL'}],
