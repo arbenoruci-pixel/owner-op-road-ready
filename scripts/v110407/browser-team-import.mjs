@@ -106,7 +106,13 @@ for(const[name,engine]of engines){
     });
     await scenario('database-failure-closed',async page=>{
       await seed(page,empty());await openBackup(page);
-      await page.evaluate(()=>{IDBObjectStore.prototype.getAll=function(){throw new DOMException('Synthetic unavailable database','UnknownError');};});
+      await page.evaluate(()=>{
+        const unavailable=function(){throw new DOMException('Synthetic unavailable database','UnknownError');};
+        // Inventory now streams rows; an unavailable database must reject both
+        // bulk reads and cursor reads while the import stays fail-closed.
+        IDBObjectStore.prototype.getAll=unavailable;
+        IDBObjectStore.prototype.openCursor=unavailable;
+      });
       await page.locator('input[type=file]').last().setInputFiles(file);
       await page.getByRole('status').filter({hasText:'could not be checked'}).waitFor();
       assert.equal(await page.getByRole('button',{name:'Import Everything',exact:true}).isDisabled(),true);
