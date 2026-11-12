@@ -80,6 +80,22 @@ try{
  await waitFor(()=>workspace.payload.records['["book","alpha","currentStatus"]']==='SB');
  const sleeperState=await snapshot(tablet),sleeper=sleeperState.eventsByDay['2026-10-07'].find(e=>e.status==='SB'&&e.city==='Buffalo');
  assert.ok(sleeper,'Tablet must durably save Sleeper in Buffalo');
+ // The populated phone keeps its own logbook until an explicit handoff.
+ const phoneBeforeReceive=await snapshot(phone);
+ await phone.evaluate(()=>window.dispatchEvent(new Event('online')));
+ await waitFor(()=>phone.evaluate(()=>window.__fixtureAccountStatus?.message?.includes('phone logbook is preserved')));
+ const phoneRetained=await snapshot(phone);
+ assert.equal(phoneRetained.currentStatus,phoneBeforeReceive.currentStatus);
+ assert.equal(phoneRetained.teamLogbooksByDriverId.beta.signatureByDay[day].signatureDataUrl,'data:image/png;base64,YmV0YS1zaWduYXR1cmU=');
+ // Model the explicit receive marker established by the active-device protocol.
+ await phone.evaluate(()=>new Promise((resolve,reject)=>{
+  const request=indexedDB.open('owner-op-road-ready-offline-v1');
+  request.onerror=()=>reject(request.error);
+  request.onsuccess=()=>{const db=request.result,tx=db.transaction('sync_meta','readwrite');
+   tx.objectStore('sync_meta').put({key:'road-ready-device-handoff-v1',value:{uid:'00000000-0000-4000-8000-000000000029',generation:1,records:true,archive:false}});
+   tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);
+  };
+ }));
  await phone.reload();await phone.locator('.adaptive-home-v1038').waitFor();
  const reopened=await snapshot(phone);
  assert.equal(reopened.currentStatus,'SB');assert.equal(reopened.currentLocation.city,'Buffalo');

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const file='lib/owner-op-cloud/accountSyncV110455.js';
 let source=fs.readFileSync(file,'utf8');
-const anchor='   if(merge.conflicts.length){conflictReview=';
+const anchor='   if(merge.conflicts.length){';
 const guard="   if(!receiving&&!joining)assertPhoneLogbookRetained(local.encoded,merge.records);\n";
 assert.equal(source.split(anchor).length,2,'Account merge guard anchor changed');
 assert(source.indexOf(anchor)<source.indexOf("const payload={...(remote?.payload||{})"),'Guard must precede cloud commit and local install');

@@ -23,7 +23,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Exact production build and retained behavioral contracts
-        run: node scripts/build-v110.mjs > /tmp/date-transfer-build.log 2>&1
+        run: node scripts/build-v110.mjs > /tmp/date-transfer-build.log 2>&1 || { tail -n 120 /tmp/date-transfer-build.log; exit 1; }
       - name: Final runtime and HOS preservation
         run: |
           npm run verify:architecture
