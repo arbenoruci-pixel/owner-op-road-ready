@@ -28,7 +28,7 @@ test('local corrections remain uploadable; equal copies and non-logbook updates 
  assert.doesNotThrow(()=>assertPhoneLogbookRetained({},local));
 });
 test('final runtime enforces authority before writes and preserves explicit receiving',()=>{
- const source=fs.readFileSync('lib/owner-op-cloud/accountSyncV110455.js','utf8'),guard='if(!receiving)assertPhoneLogbookRetained(local.encoded,merge.records,{receivingArchive});';
+ const source=fs.readFileSync('lib/owner-op-cloud/accountSyncV110455.js','utf8'),guard='if(!receiving)assertPhoneLogbookRetained(local.encoded,merge.records,{receivingArchive,base});';
  assert(source.includes(guard));assert(source.indexOf(guard)<source.indexOf('const payload={...(remote?.payload||{})'));
  assert(source.indexOf(guard)<source.indexOf('if(changed)await install('));
  assert(source.includes('if(receiving)merge={records:remoteRecords,conflicts:[]};'));
@@ -42,4 +42,12 @@ test('unfinished archive receiving permits wallet originals while still protecti
  assert.doesNotThrow(()=>assertPhoneLogbookRetained(local,wallet,{receivingArchive:true}));
  const changed=structuredClone(wallet);changed[key].eventsByDay[0].endMin=1440;
  assert.throws(()=>assertPhoneLogbookRetained(local,changed,{receivingArchive:true}),/phone logbook is preserved/);
+});
+
+test('first wallet archive hydration remains possible, while a saved or deliberately removed wallet cannot be replaced',()=>{
+ const walletKey=JSON.stringify(['state','dotWallet']),withoutWallet={...local};delete withoutWallet[walletKey];
+ assert.doesNotThrow(()=>assertPhoneLogbookRetained(withoutWallet,local,{base:withoutWallet}));
+ assert.throws(()=>assertPhoneLogbookRetained(withoutWallet,local,{base:local}),/phone logbook is preserved/);
+ const changed={...local,[walletKey]:{documents:{cloud:{attachmentDataUrl:'different'}}}};
+ assert.throws(()=>assertPhoneLogbookRetained(local,changed,{base:local}),/phone logbook is preserved/);
 });

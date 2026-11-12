@@ -4,7 +4,7 @@ const file='lib/owner-op-cloud/accountSyncV110455.js';
 let source=fs.readFileSync(file,'utf8');
 // Guard automatic merges before the existing, snapshot-validated manual choices.
 const anchor='   if(choices&&conflictReview&&same(';
-const guard="   if(!receiving)assertPhoneLogbookRetained(local.encoded,merge.records,{receivingArchive});\n";
+const guard="   if(!receiving)assertPhoneLogbookRetained(local.encoded,merge.records,{receivingArchive,base});\n";
 assert.equal(source.split(anchor).length,2,'Account merge guard anchor changed');
 assert(source.indexOf(anchor)<source.indexOf("const payload={...(remote?.payload||{})"),'Guard must precede cloud commit and local install');
 assert(source.includes("workingRecord} from './accountCoreV110455.js';"),'Account core import changed');
