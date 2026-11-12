@@ -2,15 +2,16 @@ import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {buildLargeBackup,inspectLargeBackup} from './largeBackupV110431.js';
 import {ChunkedZip,readStoredZip,inspectBlob,sha256} from './chunkedZipV110431.js';
 import {verifyDeviceSafetyArchive} from '../../../../lib/local-db/safetyArchive.js';
-import {selectRange,day,assertWindow,list,object} from './transferCore.js';
+import {day,assertWindow,list,object} from './transferCore.js';
 import {hashBlob,hashValue} from './transferHash.js';
+import {readRangeRows} from './transferRangeRows.js';
 const STATE_KEY='owner-op-road-ready-state-v1';
 const KIND='owner_op_road_ready_transfer';
 export async function readRows(db){const rows={};for(const t of db.tables)if(!/^(mutation_queue|account_receive_staging)$/.test(t.name))rows[t.name]=await t.toArray();return rows;}
 export function rowDatabase(rows){return {tables:Object.keys(rows).map(name=>({name,toCollection:()=>({offset:at=>({limit:n=>({toArray:async()=>rows[name].slice(at,at+n)})})})})),table:name=>({toArray:async()=>rows[name]||[]})};}
 export async function buildRangeArchive({state,businessStore,from,to,db=getOwnerOpDb(),appVersion='',onProgress=()=>{},signal}={}){
  assertWindow(from,to);if(!db)throw Error('Device storage is unavailable.');onProgress('Reading selected records…');
- const selected=selectRange(state,businessStore,await readRows(db),from,to);
+ const selected=await readRangeRows({db,state,businessStore,from,to,signal,onProgress});
  const counts=Object.fromEntries(Object.entries(selected.rows).map(([k,v])=>[k,v.length]));
  selected.rows.app_snapshots=[{key:STATE_KEY,state:selected.state}];
  selected.state={...selected.state,transferWindow:{from,to}};

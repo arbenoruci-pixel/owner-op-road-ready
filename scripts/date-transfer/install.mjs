@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 const read=f=>fs.readFileSync(f,'utf8'),write=(f,s)=>fs.writeFileSync(f,s);
 function patch(file,before,after){const s=read(file);if(s.includes(after))return;assert.equal(s.split(before).length,2,'Transfer anchor changed: '+file+' '+before.slice(0,70));write(file,s.replace(before,()=>after));}
 const target='source/src/modules/backup/';
-for(const [from,to]of Object.entries({'hash.js':'transferHash.js','core.js':'transferCore.js','archive.js':'transferArchive.js','storage.js':'transferStorage.js','TransferPanel.jsx':'TransferPanel.jsx'}))fs.writeFileSync(target+to,read('scripts/date-transfer/'+from).replaceAll("'./hash.js'","'./transferHash.js'"));
+for(const [from,to]of Object.entries({'hash.js':'transferHash.js','core.js':'transferCore.js','rangeRows.js':'transferRangeRows.js','archive.js':'transferArchive.js','storage.js':'transferStorage.js','TransferPanel.jsx':'TransferPanel.jsx'}))fs.writeFileSync(target+to,read('scripts/date-transfer/'+from).replaceAll("'./hash.js'","'./transferHash.js'").replaceAll("'./core.js'","'./transferCore.js'"));
 const screen=target+'BackupLogsScreen.jsx';
 // Reinstall cleanly on an already materialized workspace as well as a fresh build.
 write(screen,read(screen).replace(/\n\s*<TransferPanel\b[^>]*\/>/g,''));
