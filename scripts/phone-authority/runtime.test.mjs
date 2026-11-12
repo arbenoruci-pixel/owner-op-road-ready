@@ -54,3 +54,14 @@ test('actual coordinator preserves the active phone before any cloud commit or l
  assert.equal(received.error,undefined);assert.equal((await f.db.app_snapshots.get(f.key)).state.eventsByDay[f.day][0].endMin,120);
  assert.deepEqual((await f.db.sync_meta.get('single-device-before-handoff:2')).value.state,before);
 });
+
+test('explicitly reviewed remote conflict selection remains available without permitting automatic replacement',async()=>{
+ const f=await fixture();await f.db.sync_meta.delete('handoff');
+ const base=structuredClone((await f.db.app_snapshots.get(f.key)).state),records=core.recordsFrom({state:base}),edited=structuredClone(base);
+ edited.eventsByDay[f.day][0].endMin=80;await f.db.app_snapshots.put({key:f.key,state:edited});
+ await f.db.sync_meta.put({key:'account-sync-v110455:base',value:{uid:'00000000-0000-4000-8000-000000000001',revision:24,records,remoteRecords:records}});
+ const pending=await f.syncAccount({initial:true,scope:'records'});
+ assert.equal(pending.conflicts.length,1);assert.equal((await f.db.app_snapshots.get(f.key)).state.eventsByDay[f.day][0].endMin,80);
+ const chosen=await f.syncAccount({scope:'records',choices:{[JSON.stringify(['day','driver',f.day])]:'remote'}});
+ assert.equal(chosen.error,undefined);assert.equal((await f.db.app_snapshots.get(f.key)).state.eventsByDay[f.day][0].endMin,120);
+});
