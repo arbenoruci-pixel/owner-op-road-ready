@@ -28,6 +28,7 @@ jobs:
         run: |
           npm run verify:architecture
           node scripts/date-transfer/core.test.mjs
+          node scripts/date-transfer/rangeRows.test.mjs
           node scripts/date-transfer/runtime.test.mjs
           node scripts/verify-hos-drive-clock-no-midnight-reset-v9581.mjs
           node scripts/verify-hos-drive-clock-resets-after-10h-off-v9581.mjs
@@ -54,6 +55,7 @@ jobs:
             sleep 1
           done
           node scripts/date-transfer/browser.mjs
+          node scripts/date-transfer/browser-export-memory.mjs
           node scripts/smart-import/browser-import.mjs
           node scripts/smart-import/browser-quarterly.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

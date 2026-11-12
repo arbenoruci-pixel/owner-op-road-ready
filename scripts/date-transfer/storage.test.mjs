@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import assert from 'node:assert/strict';
 import {PDFDocument} from 'pdf-lib';
 import {getOwnerOpDb} from '../../lib/local-db/dexie.js';
+import {buildDeviceSafetyInventory} from '../../lib/local-db/safetyArchive.js';
 import {buildRangeArchive,inspectTransfer} from '../../source/src/modules/backup/transferArchive.js';
 import {prepareTransferImport,commitTransferImport,recoverTransferProjection} from '../../source/src/modules/backup/transferStorage.js';
 import {buildLargeBackup} from '../../source/src/modules/backup/largeBackupV110431.js';
@@ -12,7 +13,18 @@ const db=getOwnerOpDb();await db.open();const state={activeDriverId:'driver_prim
 const pdf=await PDFDocument.create();pdf.addPage();const bytes=await pdf.save(),blob=new Blob([bytes],{type:'application/pdf'}),sha=await hashBlob(blob);const business={loads:[{id:'tql',loadNo:'38622645',bolNumber:'81657654',pickupDate:'2026-10-03',deliveryDate:'2026-10-08'}],documents:[]};
 const doc={local_id:'d',client_document_id:'c',load_no:'38622645',document_date:'2026-10-13',mime_type:'application/pdf',type:'pod',original_file_name:'pod.pdf',sha256:sha};
 await db.documents_local.add(doc);await db.document_blobs.add({local_blob_id:'b',client_document_id:'c',blob});
-const progress=[];const exported=await buildRangeArchive({db,state,businessStore:business,from:'2026-10-04',to:'2026-10-11',onProgress:s=>progress.push(s)});
+const progress=[];
+const snapshotRead=db.app_snapshots.toArray,metadataRead=db.sync_meta.toArray;
+db.app_snapshots.toArray=()=>{throw Error('Export must not deserialize recovery snapshots');};
+db.sync_meta.toArray=()=>{throw Error('Export must not deserialize sync journals');};
+await db.app_snapshots.put({key:'synthetic-recovery',state:{note:'Retain this history'}});
+await db.sync_meta.put({key:'synthetic-journal',value:{note:'Retain this journal'}});
+const inventory=await buildDeviceSafetyInventory(state,business);
+assert.equal(inventory.dexieTables.app_snapshots.count,1);
+assert.equal(inventory.dexieTables.sync_meta.count,1);
+assert.equal(inventory.documentBlobBytes,blob.size);
+const exported=await buildRangeArchive({db,state,businessStore:business,from:'2026-10-04',to:'2026-10-11',onProgress:s=>progress.push(s)});
+db.app_snapshots.toArray=snapshotRead;db.sync_meta.toArray=metadataRead;
 assert(exported.file.name.endsWith('.zip'));const checked=await inspectTransfer(exported.file);assert.deepEqual(Object.keys(checked.data.state.eventsByDay),['2026-10-04']);assert.equal(checked.data.dexie.documents_local.length,1);assert.equal(await hashBlob(checked.data.dexie.document_blobs[0].blob),sha);assert.equal(checked.data.transferMetadata.fileHashes.length>0,true);
 // Missing binary is repaired without metadata duplication; repeated import is inert.
 await db.document_blobs.clear();let current={...state,eventsByDay:{},signatureByDay:{},certifyStatus:{}};storage.setItem('owner-op-road-ready-business-v1',JSON.stringify(business));
