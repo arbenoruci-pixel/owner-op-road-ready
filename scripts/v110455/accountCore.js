@@ -132,3 +132,23 @@ export function hasData({state={},business={},tables={}}){
  return books.some(b=>Object.values(b.eventsByDay||{}).some(v=>v?.length)||Object.values(b.signatureByDay||{}).some(v=>v?.signed||v?.signatureDataUrl)||Object.keys(b.formByDay||{}).length>0)||Object.values(state.dotWallet?.documents||{}).some(d=>d.attachmentDataUrl||d.present)||Object.values(state.routeLegsByDay||{}).some(v=>v?.length);
 }
 export function validatePayload(payload){if(payload?.format!==FORMAT||!payload.records||typeof payload.records!=='object'||Array.isArray(payload.records))throw Error('Unsupported account data.');for(const k of Object.keys(payload.records)){const p=JSON.parse(k);if(!Array.isArray(p)||!p.every(x=>typeof x==='string'&&valid(x)))throw Error('Invalid account record.');}return payload;}
+
+
+// An already populated active phone is the authority for its logbook.
+// An explicit device handoff is handled separately by the account coordinator.
+export function phoneLogbookRecord(key) {
+ const [kind,field]=JSON.parse(key);
+ return kind==='day'||kind==='book'||
+  kind==='state'&&['teamDrivers','driverProfile','homeTerminalTimeZone','homeTerminalTimeZoneLabel','dotWallet'].includes(field)||
+  kind==='local'&&['owner-op-road-ready-operator-profile-v1','owner-op-road-ready-home-terminal-timezone-v1'].includes(field)||
+  kind==='table'&&['drivers_local','log_days_local','inspections_local'].includes(field);
+}
+export function assertPhoneLogbookRetained(local={},next={}) {
+ const hasLogbook=Object.entries(local).some(([key,value])=>JSON.parse(key)[0]==='day'&&
+  (value?.eventsByDay?.length||value?.signatureByDay?.signed||value?.signatureByDay?.signatureDataUrl));
+ if(!hasLogbook)return;
+ const pick=records=>Object.fromEntries(Object.entries(records).filter(([key])=>phoneLogbookRecord(key)));
+ if(!equivalentRecords(pick(local),pick(next)))throw Object.assign(
+  Error('Your phone logbook is preserved. The cloud copy differs, so no incoming logbook changes were applied. DOT and exports use the saved phone records.'),
+  {phoneAuthority:true});
+}

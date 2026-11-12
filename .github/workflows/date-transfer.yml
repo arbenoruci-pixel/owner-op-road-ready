@@ -56,6 +56,7 @@ jobs:
           done
           node scripts/date-transfer/browser.mjs
           node scripts/date-transfer/browser-export-memory.mjs
+          node scripts/date-transfer/browser-export-scale.mjs
           node scripts/smart-import/browser-import.mjs
           node scripts/smart-import/browser-quarterly.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -178,6 +178,7 @@ steps.push('test-support/adapt-dashboard-tests.mjs');
 steps.push('reader-auto/install.mjs','reader-auto/core.test.mjs','reader-auto/server.test.mjs','reader-auto/client.test.mjs','reader-auto/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('recorded-coverage/install.mjs','recorded-coverage/core.test.mjs','recorded-coverage/rendered.test.mjs','inspection-package/core.test.mjs','recorded-coverage/regressions.mjs','recorded-coverage/compatibility.mjs','v110378/test-review-regressions.mjs','recorded-coverage/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('date-transfer/export-install.mjs','date-transfer/rangeRows.test.mjs','date-transfer/export-release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('phone-authority/install.mjs','phone-authority/core.test.mjs','date-transfer/metadata-release.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")
