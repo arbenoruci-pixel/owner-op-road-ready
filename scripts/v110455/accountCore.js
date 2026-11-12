@@ -143,11 +143,11 @@ export function phoneLogbookRecord(key) {
   kind==='local'&&['owner-op-road-ready-operator-profile-v1','owner-op-road-ready-home-terminal-timezone-v1'].includes(field)||
   kind==='table'&&['drivers_local','log_days_local','inspections_local'].includes(field);
 }
-export function assertPhoneLogbookRetained(local={},next={}) {
+export function assertPhoneLogbookRetained(local={},next={}, {receivingArchive=false}={}) {
  const hasLogbook=Object.entries(local).some(([key,value])=>JSON.parse(key)[0]==='day'&&
   (value?.eventsByDay?.length||value?.signatureByDay?.signed||value?.signatureByDay?.signatureDataUrl));
  if(!hasLogbook)return;
- const pick=records=>Object.fromEntries(Object.entries(records).filter(([key])=>phoneLogbookRecord(key)));
+ const pick=records=>Object.fromEntries(Object.entries(records).filter(([key])=>phoneLogbookRecord(key)&&(!receivingArchive||workingRecord(key))));
  if(!equivalentRecords(pick(local),pick(next)))throw Object.assign(
   Error('Your phone logbook is preserved. The cloud copy differs, so no incoming logbook changes were applied. DOT and exports use the saved phone records.'),
   {phoneAuthority:true});

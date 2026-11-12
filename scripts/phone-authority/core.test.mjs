@@ -28,11 +28,18 @@ test('local corrections remain uploadable; equal copies and non-logbook updates 
  assert.doesNotThrow(()=>assertPhoneLogbookRetained({},local));
 });
 test('final runtime enforces authority before writes and preserves explicit receiving',()=>{
- const source=fs.readFileSync('lib/owner-op-cloud/accountSyncV110455.js','utf8'),guard='if(!receiving&&!joining)assertPhoneLogbookRetained(local.encoded,merge.records);';
+ const source=fs.readFileSync('lib/owner-op-cloud/accountSyncV110455.js','utf8'),guard='if(!receiving)assertPhoneLogbookRetained(local.encoded,merge.records,{receivingArchive});';
  assert(source.includes(guard));assert(source.indexOf(guard)<source.indexOf('const payload={...(remote?.payload||{})'));
  assert(source.indexOf(guard)<source.indexOf('if(changed)await install('));
  assert(source.includes('if(receiving)merge={records:remoteRecords,conflicts:[]};'));
  const share=fs.readFileSync('lib/owner-op-cloud/inspectionShare.js','utf8');
  assert(!/syncAccount\s*\(/.test(share),'DOT preparation must not sync account data');
  assert(share.includes('getState?.()'));assert(share.includes('assertInspectionUnchanged'));assert(share.includes('assertWalletUnchanged'));
+});
+
+test('unfinished archive receiving permits wallet originals while still protecting phone duty days',()=>{
+ const wallet={...local,[JSON.stringify(['state','dotWallet'])]:{documents:{license:{attachmentDataUrl:'received-original'}}}};
+ assert.doesNotThrow(()=>assertPhoneLogbookRetained(local,wallet,{receivingArchive:true}));
+ const changed=structuredClone(wallet);changed[key].eventsByDay[0].endMin=1440;
+ assert.throws(()=>assertPhoneLogbookRetained(local,changed,{receivingArchive:true}),/phone logbook is preserved/);
 });

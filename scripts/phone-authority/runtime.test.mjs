@@ -45,6 +45,10 @@ test('actual coordinator preserves the active phone before any cloud commit or l
  assert.match(blocked.error,/phone logbook is preserved/);assert.equal(blocked.canOpenLocal,true);
  assert.deepEqual((await f.db.app_snapshots.get(f.key)).state,before);
  assert.equal(f.downloads.length,0);
+ await f.db.sync_meta.put({key:'handoff',value:{uid:'00000000-0000-4000-8000-000000000001',generation:2,records:false,archive:true}});
+ const unfinished=await f.syncAccount({scope:'records'});
+ assert.match(unfinished.error,/phone logbook is preserved/);
+ assert.deepEqual((await f.db.app_snapshots.get(f.key)).state,before);
  await f.db.sync_meta.put({key:'handoff',value:{uid:'00000000-0000-4000-8000-000000000001',generation:2,records:true,archive:false}});
  const received=await f.syncAccount({initial:true,scope:'records'});
  assert.equal(received.error,undefined);assert.equal((await f.db.app_snapshots.get(f.key)).state.eventsByDay[f.day][0].endMin,120);
