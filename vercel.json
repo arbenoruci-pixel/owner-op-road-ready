@@ -29,7 +29,8 @@
       "fix/reader-shipment-filing-20261109": false,
       "fix/reader-field-recovery-20261109": false,
       "fix/logbook-recorded-coverage": false,
-      "fix/iphone-date-export": false
+      "fix/iphone-date-export": false,
+      "fix/phone-authority-export-metadata": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",

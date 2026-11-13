@@ -6,6 +6,7 @@ on:
       - 'scripts/v110451/**'
       - 'scripts/v110453/**'
       - 'scripts/v110455/**'
+      - 'scripts/phone-authority/**'
       - 'scripts/v110463/**'
       - 'scripts/finalize-single-device-v110463.mjs'
       - 'supabase/migrations/*single_active_device.sql'
@@ -48,6 +49,7 @@ jobs:
           node scripts/v110455/account-core.test.mjs
           node scripts/v110455/account-files.test.mjs
           node scripts/v110455/account-regression.test.mjs
+          node scripts/phone-authority/core.test.mjs
           node scripts/v110458/binary-storage.test.mjs
       - name: Install isolated browser test
         run: |

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {chromium,webkit} from 'playwright';
+import {LOG_FIELDS,recordsFrom,phoneLogbookRecord} from './accountCore.js';
 import {origin,baseState,seed,setupRoutes,snapshot,simplePdf} from '../v110434/browserFixture.mjs';
 const browser=await (process.env.SYNC_TEST_BROWSER==='webkit'?webkit:chromium).launch({headless:true,...(origin.startsWith('https')&&process.env.HTTPS_PROXY?{proxy:{server:process.env.HTTPS_PROXY}}:{})});
 const objects=new Map(),history=new Map(),downloads=new Map();let workspace=null,commits=0,fullBackups=0,corrupt=false;
@@ -40,10 +41,11 @@ const openLogbook=async page=>{await page.getByRole('button',{name:'Open logbook
 const closeSync=async page=>page.getByRole('button',{name:'Close sync details',exact:true}).click();
 const waitFor=async f=>{for(let i=0;i<80;i++){if(await f())return;await new Promise(r=>setTimeout(r,250));}throw Error('Timed out waiting for synchronization');};
 async function changeBusiness(page,id){await page.evaluate(id=>{const k='owner-op-road-ready-business-v1',b=JSON.parse(localStorage.getItem(k)||'{}');b.expenses=[...(b.expenses||[]),{id,date:'2026-10-05',amount:25,category:'repair',notes:id}];localStorage.setItem(k,JSON.stringify(b));window.dispatchEvent(new Event('owner-op-business-updated'));},id);}
+const logbook=state=>Object.fromEntries([...LOG_FIELDS,'teamLogbooksByDriverId'].map(key=>[key,state[key]]));
 const expense=async(page,id)=>page.evaluate(id=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')||'{}').expenses?.some(x=>x.id===id),id);
 try{
  const {page:phone,context:phoneContext}=await client(),day='2026-10-02',state={...baseState(),activeDriverId:'alpha',teamDrivers:[{id:'alpha',name:'Synthetic Driver'},{id:'beta',name:'Saved Beta'}],teamLogbooksByDriverId:{beta:{eventsByDay:{[day]:[{id:'beta-event',status:'ON',startMin:600,endMin:620}]},signatureByDay:{[day]:{signed:true,signatureDataUrl:'data:image/png;base64,YmV0YS1zaWduYXR1cmU='}},formByDay:{[day]:{coDrivers:'Synthetic Driver'}}}},loadGuidesById:{stable_guide:{id:'stable_guide',loadNo:'STABLE-1',status:'closed',logIntegrityRepairedAt:10,steps:[{id:'pickup',checklist:[{...'Pickup # SAFE'}]}]}},testInstructionStore:{loads:[{id:'load-82002',loadNo:'82002',origin:'Test city, IL',destination:'Example city, OH',pickupDate:'2026-09-07',deliveryDate:'2026-09-07'}],documents:[{id:'original-local',clientDocumentId:'original-client',loadNo:'82002',type:'bol',original_file_name:'original.pdf'}]}};
- const original=simplePdf('Synthetic original\nLoad 82002');await seed(phone,state,[{id:'original',binaryBytes:true,bytes:[...original]},{id:'original-copy',binaryBytes:true,bytes:[...original]},{id:'second',binaryBytes:true,bytes:[...secondOriginal]}]);await waitFor(()=>workspace?.revision>0);await new Promise(r=>setTimeout(r,3500));
+ const original=simplePdf('Synthetic original\nLoad 82002');await seed(phone,state,[{id:'original',binaryBytes:true,bytes:[...original]},{id:'original-copy',binaryBytes:true,bytes:[...original]},{id:'second',binaryBytes:true,bytes:[...secondOriginal]}]);await waitFor(()=>workspace?.revision>0);await waitFor(()=>[...objects.values()].some(bytes=>bytes.equals(original)));
  const originalObject=[...objects].find(([,v])=>v.equals(original))[0],beforeTabletDownloads=downloads.get(originalObject);
  const {page:tablet,context:tabletContext}=await client(true);const heldOriginal={context:tabletContext,key:originalObject,reached:false};heldOriginal.wait=new Promise(resolve=>heldOriginal.release=resolve);storageBarrier=heldOriginal;await seed(tablet,{testInstructionStore:{}});assert.ok(await tablet.evaluate(()=>JSON.parse(localStorage.getItem('owner-op-road-ready-business-v1')).loads.some(l=>l.loadNo==='82002')));
  const tabletState=await snapshot(tablet);assert.deepEqual(tabletState.teamLogbooksByDriverId.beta.eventsByDay[day],state.teamLogbooksByDriverId.beta.eventsByDay[day]);assert.equal(tabletState.teamLogbooksByDriverId.beta.signatureByDay[day].signatureDataUrl,'data:image/png;base64,YmV0YS1zaWduYXR1cmU=');
@@ -80,6 +82,22 @@ try{
  await waitFor(()=>workspace.payload.records['["book","alpha","currentStatus"]']==='SB');
  const sleeperState=await snapshot(tablet),sleeper=sleeperState.eventsByDay['2026-10-07'].find(e=>e.status==='SB'&&e.city==='Buffalo');
  assert.ok(sleeper,'Tablet must durably save Sleeper in Buffalo');
+ // The populated phone keeps its own logbook until an explicit handoff.
+ const phoneBeforeReceive=await snapshot(phone);
+ await phone.evaluate(()=>window.dispatchEvent(new Event('online')));
+ await waitFor(()=>phone.evaluate(()=>window.__fixtureAccountStatus?.message?.includes('phone logbook is preserved')));
+ const phoneRetained=await snapshot(phone);
+ assert.deepEqual(logbook(phoneRetained),logbook(phoneBeforeReceive),'Blocked receive preserves every saved duty interval, signature and driver book');
+ assert.equal(phoneRetained.teamLogbooksByDriverId.beta.signatureByDay[day].signatureDataUrl,'data:image/png;base64,YmV0YS1zaWduYXR1cmU=');
+ // Model the explicit receive marker established by the active-device protocol.
+ await phone.evaluate(()=>new Promise((resolve,reject)=>{
+  const request=indexedDB.open('owner-op-road-ready-offline-v1');
+  request.onerror=()=>reject(request.error);
+  request.onsuccess=()=>{const db=request.result,tx=db.transaction('sync_meta','readwrite');
+   tx.objectStore('sync_meta').put({key:'road-ready-device-handoff-v1',value:{uid:'00000000-0000-4000-8000-000000000029',generation:1,records:true,archive:false}});
+   tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);
+  };
+ }));
  await phone.reload();await phone.locator('.adaptive-home-v1038').waitFor();
  const reopened=await snapshot(phone);
  assert.equal(reopened.currentStatus,'SB');assert.equal(reopened.currentLocation.city,'Buffalo');
@@ -91,6 +109,19 @@ try{
  await tablet.evaluate(()=>{delete document.visibilityState;document.dispatchEvent(new Event('visibilitychange'));});
  for(const page of [phone,tablet])await page.getByRole('button',{name:/Home/i}).first().click();
  console.log('PASS saved Sleeper in Buffalo reaches the reopened phone after the tablet is hidden; other driver signatures remain exact');
+ // Start the independent business-sync cases from equally initialized peers.
+ // Reopening the phone normalizes currentLocation by omitting null GPS fields.
+ // The still-mounted tablet must keep its exact local copy when that cloud
+ // version differs. A local reload applies the same startup normalization;
+ // it does not grant a handoff or permit an incoming logbook replacement.
+ const tabletBeforeReload=await snapshot(tablet);
+ await tablet.reload();await tablet.locator('.adaptive-home-v1038').waitFor();
+ await waitFor(()=>tablet.evaluate(()=>['current','records_current'].includes(window.__fixtureAccountStatus?.phase)));
+ const tabletAfterReload=await snapshot(tablet);
+ const locationKey=JSON.stringify(['book',tabletBeforeReload.activeDriverId,'currentLocation']);
+ const savedRecords=state=>Object.fromEntries(Object.entries(recordsFrom({state})).filter(([key])=>phoneLogbookRecord(key)&&key!==locationKey));
+ assert.deepEqual(savedRecords(tabletAfterReload),savedRecords(tabletBeforeReload),'Local reload preserves all duty times, signatures and driver records');
+ assert.deepEqual(tabletAfterReload.currentLocation,Object.fromEntries(Object.entries(tabletBeforeReload.currentLocation).filter(([key,value])=>!(['lat','lng','gpsAccuracy'].includes(key)&&value===null))),'Only empty GPS metadata is normalized');
  // A busy cross-tab receive lock must not consume a durable save notification.
  const saveLock=await tabletContext.newPage();await saveLock.goto(origin+'/_not-found');
  await saveLock.evaluate(()=>{navigator.locks.request('road-ready-account-sync-v110455',async()=>{window.__held=true;await new Promise(resolve=>window.__release=resolve);});});
@@ -101,7 +132,7 @@ try{
  assert.ok(!Object.values(workspace.payload.records).some(v=>v?.id==='saved-while-lock-busy'),'Another tab still owns the lock');
  await saveLock.evaluate(()=>window.__release());
  await waitFor(()=>Object.values(workspace.payload.records).some(v=>v?.id==='saved-while-lock-busy'));
- await phone.reload();await phone.locator('.adaptive-home-v1038').waitFor();assert.ok(await expense(phone,'saved-while-lock-busy'));
+ await phone.reload();await phone.locator('.adaptive-home-v1038').waitFor();await waitFor(()=>expense(phone,'saved-while-lock-busy'));
  await tablet.evaluate(()=>{delete document.visibilityState;document.dispatchEvent(new Event('visibilitychange'));});await saveLock.close();
  console.log('PASS a hidden tablet retries its saved change after another tab releases the receive lock');
  // Offline edits on separate records merge in both directions.
@@ -150,4 +181,4 @@ try{
  await new Promise(r=>setTimeout(r,200));await tablet.evaluate(()=>window.dispatchEvent(new Event('online')));
  await waitFor(()=>workspace.payload.records['["table","document_blobs","original-blob"]'].blob.chunks[0].sha256===replacementHash);await writer.close();
  assert.equal(fullBackups,0);assert.deepEqual(errors,[]);console.log('PASS two-device account flow with native Blob writes rejected on receiving devices: legacy false-conflict recovery, login hydration, exact original PDF, separate drivers/signatures, offline edits both directions, reload, concurrent-tab hydration, cross-tab binary replacement, same-day conflicts, corrupt-file rollback, no automatic full backup; commits='+commits);
-}catch(e){for(let i=0;i<pages.length;i++)console.error('PAGE '+i+' '+(await pages[i].locator('body').innerText()).slice(-5000));throw e;}finally{await browser.close();}
+}catch(e){for(let i=0;i<pages.length;i++){console.error('PAGE '+i+' '+(await pages[i].locator('body').innerText()).slice(-5000));console.error('SYNC '+i,await pages[i].evaluate(()=>window.__fixtureAccountStatus));}throw e;}finally{await browser.close();}
