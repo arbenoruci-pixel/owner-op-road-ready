@@ -51,3 +51,13 @@ test('first wallet archive hydration remains possible, while a saved or delibera
  const changed={...local,[walletKey]:{documents:{cloud:{attachmentDataUrl:'different'}}}};
  assert.throws(()=>assertPhoneLogbookRetained(local,changed,{base:local}),/phone logbook is preserved/);
 });
+
+test('startup removal of empty GPS metadata still cannot replace the active device location automatically',()=>{
+ const locationKey=JSON.stringify(['book','driver','currentLocation']);
+ const phone={...local,[locationKey]:{city:'Buffalo',state:'NY',lat:null,lng:null,gpsAccuracy:null,locationSource:'manual'}};
+ const cloud={...local,[locationKey]:{city:'Buffalo',state:'NY',locationSource:'manual'}};
+ const before=structuredClone({phone,cloud}),merged=mergeRecords(phone,phone,cloud);
+ assert.equal(merged.conflicts.length,0);
+ assert.throws(()=>assertPhoneLogbookRetained(phone,merged.records),error=>error.phoneAuthority===true);
+ assert.deepEqual({phone,cloud},before,'Both copies, duty endpoints and signature evidence remain exact');
+});
