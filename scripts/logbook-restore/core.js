@@ -65,7 +65,7 @@ export async function chooseOriginals(request,candidates){
  for(const [day,proof]of Object.entries(p.days)){
   if(chosen[day])continue;
   const entry=p.indexedUnsignedDays?.[day],value=entry?.value;
-  if(!value||Array.isArray(value)||own(value,'signatureByDay')||!['Active','Needs signature',''].includes(value.certifyStatus||'')||Object.keys(value).some(f=>!['eventsByDay','certifyStatus','inspectionByDay','formByDay','manualMilesByDay','dutySafetyBackupByDay'].includes(f)))continue;
+  if(!value||Array.isArray(value)||own(value,'signatureByDay')||!['Active','Active day / Not certified yet','Needs signature',''].includes(value.certifyStatus||'')||Object.keys(value).some(f=>!['eventsByDay','certifyStatus','inspectionByDay','formByDay','manualMilesByDay','dutySafetyBackupByDay'].includes(f)))continue;
   if(await verifiedIndexedValue(entry,request)&&await matchesOriginal(value,proof,p.driverId,day))chosen[day]={value:structuredClone(value),source:'verified-device-index:'+day};
  }
  for(const [day,proof]of Object.entries(p.routes||{})){
