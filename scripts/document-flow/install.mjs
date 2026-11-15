@@ -10,7 +10,7 @@ patch(dash,"onOpenLoads={()=>goSection('load_documents')}","onOpenLoads={number=
 patch(own+'EvidenceWorkspaceV110453.jsx',"'use client';","'use client';\nimport {requestLoadFolder} from './folderRequest.js';");
 patch(own+'EvidenceWorkspaceV110453.jsx',"onClick={()=>chooseTab('loads')}>Open load folders","onClick={()=>{requestLoadFolder(selected.loadNo||(selected.source?.shipmentReference?'shipment:'+selected.source.shipmentReference:''));chooseTab('loads');}}>Open load folders");
 const folder=own+'SmartLoadFolders.jsx';
-patch(folder,"'use client';","'use client';\nimport {FOLDER_REQUEST,folderTarget,consumeLoadFolder} from './folderRequest.js';");
+patch(folder,"'use client';","'use client';\nimport {FOLDER_REQUEST,folderTarget,consumeLoadFolder,resolveFolderTarget} from './folderRequest.js';");
 patch(folder,"useState(()=>{try{const value=sessionStorage.getItem('road-ready-open-load-folder')||'';sessionStorage.removeItem('road-ready-open-load-folder');return value;}catch{return '';}})","useState(()=>consumeLoadFolder(typeof sessionStorage==='undefined'?null:sessionStorage))");
 patch(folder,"[filter,setFilter]=useState('active')","[filter,setFilter]=useState('all')");
 patch(folder,"[advanced,setAdvanced]=useState(false)","[advanced,setAdvanced]=useState(false),[organizeId,setOrganizeId]=useState('')");
@@ -55,9 +55,17 @@ patch(own+'RecoveryPanelV110413.jsx','    {preview?<section',`    <details><summ
     {preview?<section`);
 
 patch(own+'recoveryStorageV110413.js','    finalizeDocuments:async({db,rows,next})=>{','    finalizeDocuments:async({db,rows,next})=>{\n      corrected=0;');
-patch(folder,'FOLDER_REQUEST,folderTarget,consumeLoadFolder','FOLDER_REQUEST,folderTarget,consumeLoadFolder,resolveFolderTarget');
 patch(folder,'const folder=smart.folders.find(f=>f.id===selected)','const folder=resolveFolderTarget(smart.folders,selected)');
 patch(core,"const evidenceScanTypes=new Set(['bol'","const evidenceScanTypes=new Set(['rate_confirmation','bol'");
 patch(core,'export function requestedScanFolder(context,type,candidates=[]){',"export function requestedScanFolder(context,type,candidates=[]){\n if(type==='rate_confirmation'&&context?.shipmentReference)return '';\n");
 patch(scan+'SmartScanSheetV105.jsx',"import {automaticFolder,automaticPayloadMatches}","import {assertReviewedRateFolder} from '../owneros/folderRequest.js';\nimport {automaticFolder,automaticPayloadMatches}");
 patch(scan+'SmartScanSheetV105.jsx','      assertScanLoadIdentityV110326(meta.id,sourceAnalysisV110393?.fields,sourceAnalysisV110393,selectedLoadNo);','      assertReviewedRateFolder(meta.id,sourceAnalysisV110393,selectedLoadNo);\n      assertScanLoadIdentityV110326(meta.id,sourceAnalysisV110393?.fields,sourceAnalysisV110393,selectedLoadNo);');
+fs.copyFileSync('scripts/document-flow/acceptedProof.js',own+'acceptedProof.js');
+patch(core,'// Read-only folder projection.',"import {acceptedPhotoProof} from './acceptedProof.js';\n// Read-only folder projection.");
+patch(core,'  const syncPending=docs.some(d=>originalSyncLabel(d));',`  const alternative=acceptedPhotoProof(folder,kind);
+  if(!docs.length&&alternative)return {kind,label:alternative.label,due,sources:[{doc:alternative.doc,pages:alternative.pages}],files:[alternative.doc],status:'saved',detail:alternative.detail};
+  const syncPending=docs.some(d=>originalSyncLabel(d));`);
+fs.copyFileSync('scripts/document-flow/rateSave.js',scan+'rateSave.js');
+patch(scan+'SmartScanSheetV105.jsx',"import {assertReviewedRateFolder}","import {preserveSavedRateDetails} from './rateSave.js';\nimport {assertReviewedRateFolder}");
+patch(scan+'SmartScanSheetV105.jsx',"    return upsertBusinessLoadV105(store, {\n      id:record.canonicalLoadId", "    const previous=(store.loads||[]).find(load=>String(load.canonicalLoadNo||load.loadNo||'').trim().toUpperCase()===String(record.canonicalLoadNo).trim().toUpperCase())||{};\n    return upsertBusinessLoadV105(store, preserveSavedRateDetails(previous,{\n      id:record.canonicalLoadId");
+patch(scan+'SmartScanSheetV105.jsx',"      source:'rate_confirmation_v105',\n      documentId:record.id,\n    });","      source:'rate_confirmation_v105',\n      documentId:record.id,\n    }));");
