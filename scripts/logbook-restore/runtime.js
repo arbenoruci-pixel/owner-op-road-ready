@@ -11,7 +11,7 @@ import {RECOVERY_KIND,chooseOriginals,recoveryPlan,validateRequest,dayValue,matc
 const CHECKPOINT='authorized-logbook-recovery:';
 async function checked(query){const {data,error}=await bounded(query);if(error)throw error;return data;}
 function available(){return navigator.onLine!==false&&document.visibilityState==='visible'&&accountStatus().phase!=='syncing'&&window.__rrAccountState?.()&&!window.__rrAccountState().sheet&&!document.activeElement?.matches('input,textarea,select,[contenteditable=true]');}
-function today(state){return new Intl.DateTimeFormat('en-CA',{timeZone:state.homeTerminalTimeZone||'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+function today(state){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:state.homeTerminalTimeZone||'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));return parts.year+'-'+parts.month+'-'+parts.day;}
 async function* retainedCopies(db,uid){
  const keys=(await db.sync_meta.toCollection().primaryKeys()).filter(k=>/^single-device-before-handoff:|^account-sync-v110455:(first-join|pending)$/.test(k)).reverse();
  for(const key of keys){const row=await db.sync_meta.get(key),v=row?.value;if(v?.uid===uid)yield {key,uid,state:v.state||v.oldState};}

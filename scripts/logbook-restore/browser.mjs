@@ -11,7 +11,7 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   await setupRoutes(context);const f=await fixture(),uid='00000000-0000-4000-8000-000000000029',device='00000000-0000-4000-8000-000000000130';
   let request={...f.request,user_id:uid,device_id:device},enabled=false,receipts=0;
   await context.route('**/rest/v1/road_ready_corrections*',async route=>{
-   const headers=await fixtureCorsHeaders(route.request(),origin),method=route.request().method(),url=new URL(route.request().url());
+   const headers={...await fixtureCorsHeaders(route.request(),origin),'Access-Control-Allow-Methods':'GET,POST,PATCH,OPTIONS'},method=route.request().method(),url=new URL(route.request().url());
    if(method==='OPTIONS')return route.fulfill({headers,body:''});
    if(method==='PATCH'){request={...request,...route.request().postDataJSON()};if(request.status==='applied')receipts++;return route.fulfill({headers,json:{id:request.id}});}
    return route.fulfill({headers,json:url.searchParams.has('id')?request:enabled&&request.status==='pending'?[request]:[]});
