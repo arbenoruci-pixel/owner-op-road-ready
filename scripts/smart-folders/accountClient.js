@@ -1,6 +1,6 @@
 'use client';
 import {cloudClient,cloudSession} from './client.js';
-import {bounded} from './mirrorCoreV110450.js';
+import {bounded,hashBytes} from './mirrorCoreV110450.js';
 import {readFile} from './accountFilesV110455.js';
 import {findAccountOriginal,readAccountDocumentOriginal} from './documentOriginalCore.js';
 import {getOwnerOpDb} from '../local-db/dexie.js';
@@ -19,6 +19,11 @@ export function readCurrentAccountOriginal(clientId){
     const error=new Error('Could not retrieve this account’s original. Check your connection and try again.',{cause});
     error.code='ACCOUNT_ORIGINAL_UNAVAILABLE';throw error;
    }
+  },
+  hashBytes,
+  getBackups:async uid=>{
+   const {data,error}=await bounded(cloudClient().from('road_ready_backup_snapshots').select('user_id,manifest').eq('user_id',uid).order('created_at',{ascending:false}).limit(10),20000);
+   if(error)throw error;return data||[];
   },
   readFile:(file,{uid,check})=>readFile(file,{uid,check,storage:cloudClient().storage.from('owner-op-private')}),
  });
