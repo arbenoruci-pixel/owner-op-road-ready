@@ -12,3 +12,5 @@ export const namedDate=String.raw`(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?
 export const dateValue=new RegExp(String.raw`^(?:${namedDate}|\d{4}-\d{2}-\d{2}|\d{1,2}[/.]\d{1,2}[/.]\d{4})$`,'i');
 export const hasRateTitle=lines=>lines.slice(0,20).some(line=>rateHeading.test(line.text));
 export const hasRateStructure=lines=>hasRateTitle(lines)&&lines.some(l=>pickupLabel.test(l.text))&&lines.some(l=>deliveryLabel.test(l.text))&&lines.some(l=>totalRateSignal.test(l.text));
+
+export const hasCarrierTender=lines=>lines.some(l=>/^\s*CARRIER\s+LOAD\s+TENDER\s*$/i.test(l.text))&&lines.some(l=>/^\s*STOP\s+\d+\s*[-–:]\s*PICKUP\b/i.test(l.text))&&lines.some(l=>/^\s*STOP\s+\d+\s*[-–:]\s*(?:DROP|DELIVERY)\b/i.test(l.text))&&lines.some(l=>/^\s*TOTAL\s*:/i.test(l.text));

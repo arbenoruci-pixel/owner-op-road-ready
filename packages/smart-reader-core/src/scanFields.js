@@ -1,7 +1,8 @@
 import {resolveEvidence} from './input.js';
 import {isDocumentParty} from './fieldGuards.js';
 import {isNumberedRateTable} from './numberedRate.js';
-import {hasRateStructure} from './rateVocabulary.js';
+import {sourceRateStops} from './rateStopProjection.js';
+import {hasCarrierTender,hasRateStructure} from './rateVocabulary.js';
 import {documentReferences} from './documentReference.js';
 
 const mapping={bolNo:'bolNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',trailerNo:'trailerNumber',
@@ -18,6 +19,9 @@ const layoutWarning='Some fields could not be verified beside their labels. Chec
 function linkedRateCertificates(result,doc){
   if(doc?.kind!=='rate_confirmation')return false;
   const primaryRefs=documentReferences(result.pages.filter(page=>doc.pageIds.includes(page.id))),refs=documentReferences(result.pages);
+  // Supporting audit pages retain their own boundaries. Only this primary
+  // group's evidence may fill fields; this does not authorize automatic filing.
+  if(result.documents.every(other=>other===doc||other.kind==='signing_certificate'&&other.role==='supporting'&&other.identityStatus==='supported'&&!other.fields.documentReference?.candidates?.length&&result.pages.filter(page=>other.pageIds.includes(page.id)).every(page=>page.observations.some(o=>o.lines.some(l=>/^\s*Highway Audit Report\s*$/i.test(l.text))))))return true;
   if(!primaryRefs.length||new Set(refs.map(ref=>ref.value)).size!==1||refs.some(ref=>ref.line.confidence!==null&&ref.line.confidence<.8))return false;
   return result.documents.every(other=>other===doc||other.kind==='signing_certificate'&&other.role==='supporting'
     &&other.fields.documentReference?.status==='supported'&&other.fields.documentReference.value===refs[0].value);
@@ -51,10 +55,10 @@ export function scanWithSourceFields(analysis,review,selectedType){
   if(result?.engine!=='owned-smart-reader'||(result.documents.length!==1&&!linkedRateCertificates(result,doc))||!automatic&&![selectedType,sourceKinds[selectedType]].includes(doc?.kind)
     ||analysis.typeEvidenceV110334?.mixedDocuments)return analysis;
   const rate=selectedType==='rate_confirmation';
-  if(rate&&!automatic&&!result.pages.some(page=>page.observations.some(o=>(isNumberedRateTable(o.lines)||hasRateStructure(o.lines)))))return analysis;
+  if(rate&&!automatic&&!result.pages.some(page=>page.observations.some(o=>(isNumberedRateTable(o.lines)||hasRateStructure(o.lines)||hasCarrierTender(o.lines)))))return analysis;
   const delivery=selectedType==='delivery_order',shipping=['bol','pod'].includes(selectedType);
   const genericMapping=genericFieldMapping(doc.fields,selectedType);
-  const fieldMapping=delivery?{loadNo:'loadNumber',poNumber:'poNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',documentDate:'date'}:rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',broker:'broker',carrierName:'carrier',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress',origin:'pickupCity',destination:'deliveryCity'}:shipping?mapping:genericMapping;
+  const fieldMapping=delivery?{loadNo:'loadNumber',poNumber:'poNumber',shipper:'shipper',consignee:'consignee',carrierName:'carrier',documentDate:'date'}:rate?{loadNo:'loadNumber',gross:'totalRate',total:'totalRate',documentDate:'documentDate',pickupDate:'pickupDate',deliveryDate:'deliveryDate',equipment:'equipment',miles:'miles',broker:'broker',carrierName:'carrier',shipper:'shipper',consignee:'consignee',pickupAddress:'pickupAddress',deliveryAddress:'deliveryAddress',pickupAppointment:'pickupAppointment',deliveryAppointment:'deliveryAppointment',origin:'pickupCity',destination:'deliveryCity'}:shipping?mapping:genericMapping;
   const fields={...(automatic?{}:analysis.fields)},fieldEvidence={...(automatic?{}:analysis.fieldEvidence)},fieldConfidence={...(automatic?{}:analysis.fieldConfidence)};
   const oldReview=analysis.evidenceReviewV11036||{},evidence={...oldReview.evidence},accepted=[],proofs={},savedWarnings=[];
   for(const [key,ownedKey]of Object.entries(fieldMapping)){
@@ -81,6 +85,7 @@ export function scanWithSourceFields(analysis,review,selectedType){
     evidence[key]=fieldEvidence[key]={fieldLabel:field.label,value:field.value,source:field.status==='confirmed'?(field.correction?.origin==='machine'?'machine_confirmed':'driver_confirmed'):'document_text',
       status:field.status==='confirmed'?'confirmed':'read',excerpt:[...new Set(valid.map(ref=>ref.quote))].join('\n').slice(0,350)};
   }
+  if(rate)fields.stops=sourceRateStops(fields,proofs);
   const fieldReferenceKinds=delivery?{...referenceKinds,loadNo:'load_number'}:referenceKinds;
   fields.references=(Array.isArray(fields.references)?fields.references:[]).filter(ref=>!Object.values(fieldReferenceKinds).includes(ref.kind));
   for(const key of accepted)if(fieldReferenceKinds[key])fields.references.push({kind:fieldReferenceKinds[key],value:fields[key],source:'reader_source'});

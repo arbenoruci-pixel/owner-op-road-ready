@@ -40,6 +40,7 @@ function candidatesFor(pages, spec, dateContext=null) {
     if(normalized.issue&&!candidate.issue)candidate.issue=normalized.issue;
     if(expanded){candidate.labelEvidence??=[];appendUniqueEvidence(candidate.labelEvidence,dateContext.evidence);}
     candidate.evidence.push({...evidence,...(match.supportMethod?{supportMethod:match.supportMethod}:{}),...(normalized.issue?{matchIssue:normalized.issue}:{})});
+    if(match.continuations){candidate.continuationEvidence??=[];for(const tail of match.continuations)candidate.continuationEvidence.push(evidenceFor(page,observation,tail.line,tail.start,tail.end));}
     if(match.continuation){const tail=match.continuation;candidate.continuationEvidence??=[];candidate.continuationEvidence.push(evidenceFor(page,observation,tail.line,tail.start,tail.end));if(match.continuationKind)candidate.continuationKind=match.continuationKind;}
     for(const labelLine of [match.labelLine,...(match.extraLabelLines||[])].filter(Boolean)){candidate.labelEvidence??=[];appendUniqueEvidence(candidate.labelEvidence,[evidenceFor(page,observation,labelLine,0,labelLine.text.length)]);}
   }

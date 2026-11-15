@@ -179,6 +179,10 @@ steps.push('reader-auto/install.mjs','reader-auto/core.test.mjs','reader-auto/se
 steps.push('recorded-coverage/install.mjs','recorded-coverage/core.test.mjs','recorded-coverage/rendered.test.mjs','inspection-package/core.test.mjs','recorded-coverage/regressions.mjs','recorded-coverage/compatibility.mjs','v110378/test-review-regressions.mjs','recorded-coverage/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('date-transfer/export-install.mjs','date-transfer/rangeRows.test.mjs','date-transfer/export-release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('phone-authority/install.mjs','phone-authority/core.test.mjs','phone-authority/runtime.test.mjs','date-transfer/metadata-release.mjs','verify-isolation-locks-v110.mjs');
+// Folder UI assertions cover the final user-visible default after document-flow installs.
+if(steps.filter(step=>step==='smart-folders/ui.test.mjs').length!==1)throw Error('Expected one folder UI checkpoint');
+steps.splice(steps.indexOf('smart-folders/ui.test.mjs'),1);
+steps.push('document-flow/install.mjs','document-flow/core.test.mjs','smart-folders/ui.test.mjs','document-flow/release.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")

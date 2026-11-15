@@ -7,9 +7,9 @@ register(new URL('../test-jsx-loader.mjs',import.meta.url));register(new URL('./
 const {default:Folders}=await import('../../source/src/modules/owneros/SmartLoadFolders.jsx');
 const require=createRequire(import.meta.url),renderer=process.env.TEST_RENDERER?require(process.env.TEST_RENDERER):null;
 const props={loads:[{loadNo:'ACTIVE-1',status:'booked'},{loadNo:'DONE-1',status:'delivered'}],documents:[{id:'p1',clientDocumentId:'p1',type:'pod',loadNo:'DONE-1',title:'generic.jpg'}],state:{}};
-test('folder list starts with active trips and exposes completed trips and one search',()=>{
+test('folder list exposes active and completed trips immediately with one search',()=>{
  const html=renderToStaticMarkup(React.createElement(Folders,props));
- assert.match(html,/Active/);assert.match(html,/Completed/);assert.match(html,/ACTIVE-1/);assert.doesNotMatch(html,/DONE-1/);assert.match(html,/Load, BOL, broker or destination/);assert.doesNotMatch(html,/Choose week/);
+ assert.match(html,/Active/);assert.match(html,/Completed/);assert.match(html,/ACTIVE-1/);assert.match(html,/DONE-1/);assert.match(html,/Load, BOL, broker or destination/);assert.doesNotMatch(html,/Choose week/);
 });
 test('completed folder opens its POD directly and adds fuel to the chosen folder',{skip:!renderer},async()=>{
  globalThis.window={addEventListener(){},removeEventListener(){}};globalThis.sessionStorage={getItem(){return '';},removeItem(){},setItem(){}};
@@ -40,3 +40,5 @@ test('searching a reviewed BOL opens the canonical folder with its saved Ratecon
  assert.equal(context.loadNo,'31450-11788');assert.equal(context.shipmentReference,'');
  await renderer.act(async()=>tree.unmount());
 });
+
+test('an exact folder event opens a completed load while the inbox is already mounted',{skip:!renderer},async()=>{globalThis.window=new EventTarget();globalThis.sessionStorage={getItem(){return '';},removeItem(){},setItem(){}};let tree;await renderer.act(async()=>{tree=renderer.create(React.createElement(Folders,props));});await renderer.act(async()=>window.dispatchEvent(new CustomEvent('road-ready-open-load-folder',{detail:'load:DONE-1'})));assert.equal(tree.root.findAllByType('h2').some(h=>h.children.includes('DONE-1')),true);await renderer.act(async()=>tree.unmount());});

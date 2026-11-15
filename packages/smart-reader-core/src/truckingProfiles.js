@@ -202,5 +202,6 @@ export function truckingProfiles(base){
   profiles.find(p=>p.id==='signing_certificate').variants=[{method:'sertifi_signature',
     heading:/^\s*E-Signed\s*:(?:\s*\d{1,2}\/\d{1,2}\/\d{4}\b.*)?\s*$/i,
     signals:[/^\s*Sertifi Electronic Signature\s*$/i,/^\s*DOC\s*ID\s*:\s*\d{8,}\s*$/i]}];
+  profiles.find(p=>p.id==='signing_certificate').variants.push({heading:/^\s*Highway Audit Report\s*$/i,signals:[/^\s*Rate Confirmation ID:\s*\d+\s*$/i,/^\s*Activity History\s*$/i,/Digital signature audit trail for rate confirmation acceptance\./i],sameObservation:true});
   return profiles;
 }
