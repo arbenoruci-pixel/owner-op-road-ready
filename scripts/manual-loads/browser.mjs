@@ -12,6 +12,19 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   await seed(page,state,[]);const before=protectedData(await snapshot(page));
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'+ New load manually',exact:true}).click();
+  // Standalone Home form must not inherit setup-scan's white --rr-panel.
+  for(const width of [320,375,390,430,820]){
+   await page.setViewportSize({width,height:844});
+   const fit=await page.locator('.rr-manual').evaluate(root=>{
+    const panel=getComputedStyle(root),box=root.getBoundingClientRect();
+    return {background:panel.backgroundColor,color:panel.color,overflow:[...root.querySelectorAll('label,input,button')].filter(e=>{const b=e.getBoundingClientRect();return b.right>box.right+1||b.left<box.left-1;}).map(e=>e.tagName+':'+e.type),pageFits:document.documentElement.scrollWidth<=innerWidth+1};
+   });
+   assert.equal(fit.background,'rgb(16, 34, 55)','opaque dark form '+width);
+   assert.equal(fit.color,'rgb(237, 245, 255)','readable form text '+width);
+   assert.deepEqual(fit.overflow,[],'form controls fit '+width);assert.ok(fit.pageFits,'form page fits '+width);
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:out+'/'+name+'-manual-form.png',fullPage:true});
   await page.getByLabel('Load number',{exact:true}).fill('2026');
   await page.getByRole('button',{name:'Create folder & set active',exact:true}).click();
   await page.getByRole('alert').filter({hasText:'valid broker load number'}).waitFor();
