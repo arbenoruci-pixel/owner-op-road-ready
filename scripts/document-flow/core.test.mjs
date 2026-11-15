@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
-import {folderTarget,requestLoadFolder,consumeLoadFolder,resolveFolderTarget} from './folderRequest.js';
+import {folderTarget,requestLoadFolder,consumeLoadFolder,resolveFolderTarget,assertReviewedRateFolder} from './folderRequest.js';
 import {savedOriginalFile} from './savedOriginal.js';
-import {buildSmartFolders} from '../../source/src/modules/owneros/smartFolders.js';
+import {buildSmartFolders,requestedScanFolder,explicitFolderScanCandidates} from '../../source/src/modules/owneros/smartFolders.js';
 import {readDocument,resolveEvidence} from '../../packages/smart-reader-core/src/index.js';
 import {scanWithSourceFields} from '../../packages/smart-reader-core/src/scanFields.js';
 import {nativeFooterInput} from '../../packages/smart-reader-core/test/native-footer-fixture.mjs';
@@ -14,3 +14,5 @@ test('multi-stop plans never collapse into two stops during field projection',()
 test('navigation wiring passes the exact recent load and offers creation from reviewed fields',()=>{const dash=fs.readFileSync('source/src/modules/home/DriverDashboard.jsx','utf8'),scan=fs.readFileSync('source/src/modules/scan/SmartScanSheetV105.jsx','utf8');assert.match(dash,/onOpenLoads\(item.number\)/);assert.match(dash,/requestLoadFolder\(number\)/);assert.match(scan,/createLoadNo=\{selectedType === 'rate_confirmation' \? primaryLoadReference\(sourceAnalysisV110393\)/);});
 
 test('Home references resolve reviewed aliases and shipment folders without merging ambiguous owners',()=>{const load={id:'load:LOAD-1',reference:'LOAD-1',source:{aliases:[{value:'BOL-1'}]}},shipment={id:'shipment:BOL-2',reference:'BOL-2'};assert.equal(resolveFolderTarget([load,shipment],'BOL-1'),load);assert.equal(resolveFolderTarget([load,shipment],'BOL-2'),shipment);assert.equal(resolveFolderTarget([load,{id:'load:LOAD-3',reference:'LOAD-3',source:{aliases:['BOL-1']}}],'BOL-1'),null);});
+
+test('a Ratecon keeps its opened canonical folder but a verified conflicting load cannot be saved there',()=>{const store={loads:[{id:'saved',loadNo:'LOAD-1',status:'completed'}]},ctx={loadNo:'LOAD-1'},choices=explicitFolderScanCandidates(ctx,'rate_confirmation',[],store);assert.equal(requestedScanFolder(ctx,'rate_confirmation',choices),'LOAD-1');assert.equal(requestedScanFolder({loadNo:'BOL-1',shipmentReference:'BOL-1'},'rate_confirmation',[{loadNo:'BOL-1',shipmentFiling:true}]),'');const source={fields:{readerSourceFieldsV110393:{fields:{loadNo:{status:'confirmed',value:'LOAD-2'}}}}};assert.throws(()=>assertReviewedRateFolder('rate_confirmation',source,'LOAD-1'),/belongs to load LOAD-2/);assert.doesNotThrow(()=>assertReviewedRateFolder('rate_confirmation',source,'LOAD-2'));assert.doesNotThrow(()=>assertReviewedRateFolder('bol',source,'LOAD-1'));});

@@ -57,3 +57,7 @@ patch(own+'RecoveryPanelV110413.jsx','    {preview?<section',`    <details><summ
 patch(own+'recoveryStorageV110413.js','    finalizeDocuments:async({db,rows,next})=>{','    finalizeDocuments:async({db,rows,next})=>{\n      corrected=0;');
 patch(folder,'FOLDER_REQUEST,folderTarget,consumeLoadFolder','FOLDER_REQUEST,folderTarget,consumeLoadFolder,resolveFolderTarget');
 patch(folder,'const folder=smart.folders.find(f=>f.id===selected)','const folder=resolveFolderTarget(smart.folders,selected)');
+patch(core,"const evidenceScanTypes=new Set(['bol'","const evidenceScanTypes=new Set(['rate_confirmation','bol'");
+patch(core,'export function requestedScanFolder(context,type,candidates=[]){',"export function requestedScanFolder(context,type,candidates=[]){\n if(type==='rate_confirmation'&&context?.shipmentReference)return '';\n");
+patch(scan+'SmartScanSheetV105.jsx',"import {automaticFolder,automaticPayloadMatches}","import {assertReviewedRateFolder} from '../owneros/folderRequest.js';\nimport {automaticFolder,automaticPayloadMatches}");
+patch(scan+'SmartScanSheetV105.jsx','      assertScanLoadIdentityV110326(meta.id,sourceAnalysisV110393?.fields,sourceAnalysisV110393,selectedLoadNo);','      assertReviewedRateFolder(meta.id,sourceAnalysisV110393,selectedLoadNo);\n      assertScanLoadIdentityV110326(meta.id,sourceAnalysisV110393?.fields,sourceAnalysisV110393,selectedLoadNo);');

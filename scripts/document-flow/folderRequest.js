@@ -17,3 +17,9 @@ export function resolveFolderTarget(folders,target){
  const matching=folders.filter(f=>[f.reference,...(f.source?.aliases||[]).filter(a=>a?.source!=='load_info').map(a=>typeof a==='string'?a:a?.value)].some(v=>String(v||'').replace(/[^A-Z0-9]/gi,'').toUpperCase()===key));
  return matching.length===1?matching[0]:null;
 }
+export function assertReviewedRateFolder(type,analysis,selected){
+ if(type!=='rate_confirmation'||!selected)return;
+ const field=analysis?.fields?.readerSourceFieldsV110393?.fields?.loadNo;
+ if(!['supported','confirmed'].includes(field?.status)||!field.value)return;
+ if(field.value.trim().toUpperCase()!==selected.trim().toUpperCase())throw Error('The reviewed Ratecon belongs to load '+field.value+'. Choose that load folder or save it for review.');
+}
