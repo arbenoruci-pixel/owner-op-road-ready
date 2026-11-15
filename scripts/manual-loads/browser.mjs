@@ -43,6 +43,7 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   await page.getByText('3 / 3 document types saved',{exact:true}).waitFor();
   await page.screenshot({path:out+'/'+name+'-completed.png'});
   await page.getByRole('button',{name:'‹ Home',exact:true}).click();await page.reload();
+  await page.locator('.rr-driver-home').or(page.getByRole('button',{name:/Home/}).first()).first().waitFor();
   if(!(await page.locator('.rr-driver-home').isVisible()))await page.getByRole('button',{name:/Home/}).first().click();
   await page.getByRole('heading',{name:'No active load',exact:true}).waitFor();
   const store=await readStore();assert.equal(store.documents.filter(d=>d.canonicalLoadNo==='MANUAL-128').length,3);assert.equal(store.loads.find(l=>l.id==='done').gross,104770.09);
