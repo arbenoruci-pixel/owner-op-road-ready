@@ -40,3 +40,5 @@ test('searching a reviewed BOL opens the canonical folder with its saved Ratecon
  assert.equal(context.loadNo,'31450-11788');assert.equal(context.shipmentReference,'');
  await renderer.act(async()=>tree.unmount());
 });
+
+test('an exact folder event opens a completed load while the inbox is already mounted',{skip:!renderer},async()=>{globalThis.window=new EventTarget();globalThis.sessionStorage={getItem(){return '';},removeItem(){},setItem(){}};let tree;await renderer.act(async()=>{tree=renderer.create(React.createElement(Folders,props));});await renderer.act(async()=>window.dispatchEvent(new CustomEvent('road-ready-open-load-folder',{detail:'load:DONE-1'})));assert.equal(tree.root.findAllByType('h2').some(h=>h.children.includes('DONE-1')),true);await renderer.act(async()=>tree.unmount());});

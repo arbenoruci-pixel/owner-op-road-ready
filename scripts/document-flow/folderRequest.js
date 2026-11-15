@@ -11,3 +11,9 @@ export function requestLoadFolder(value,host=window){
  host.dispatchEvent(new CustomEvent(FOLDER_REQUEST,{detail:id}));return id;
 }
 export function consumeLoadFolder(storage){try{const id=folderTarget(storage.getItem(FOLDER_REQUEST));storage.removeItem(FOLDER_REQUEST);return id;}catch{return '';}}
+export function resolveFolderTarget(folders,target){
+ const id=folderTarget(target),exact=folders.find(f=>f.id===id);if(exact)return exact;
+ const key=id.replace(/^(load|shipment):/,'').replace(/[^A-Z0-9]/gi,'').toUpperCase();if(!key)return null;
+ const matching=folders.filter(f=>[f.reference,...(f.source?.aliases||[]).filter(a=>a?.source!=='load_info').map(a=>typeof a==='string'?a:a?.value)].some(v=>String(v||'').replace(/[^A-Z0-9]/gi,'').toUpperCase()===key));
+ return matching.length===1?matching[0]:null;
+}

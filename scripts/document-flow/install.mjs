@@ -55,3 +55,5 @@ patch(own+'RecoveryPanelV110413.jsx','    {preview?<section',`    <details><summ
     {preview?<section`);
 
 patch(own+'recoveryStorageV110413.js','    finalizeDocuments:async({db,rows,next})=>{','    finalizeDocuments:async({db,rows,next})=>{\n      corrected=0;');
+patch(folder,'FOLDER_REQUEST,folderTarget,consumeLoadFolder','FOLDER_REQUEST,folderTarget,consumeLoadFolder,resolveFolderTarget');
+patch(folder,'const folder=smart.folders.find(f=>f.id===selected)','const folder=resolveFolderTarget(smart.folders,selected)');
