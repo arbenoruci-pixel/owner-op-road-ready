@@ -17,7 +17,10 @@ export function carrierTenderMatches(page,spec){
   for(const role of ['pickup','delivery']){
    const chosen=marks.filter(x=>(x.m[2].toLowerCase()==='pickup'?'pickup':'delivery')===role);if(chosen.length!==1)continue;
    const {l:label,i,m}=chosen[0],end=marks.find(x=>x.i>i)?.i??lines.length;
-   const block=lines.slice(i+1,end),cityIndex=block.findIndex(l=>/^[A-Z][A-Z .'-]*,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\s*$/i.test(l.text));
+   if(!safe(label))continue;
+   // PDF.js emits table cells in visual row order. Quantity/weight columns
+   // can sit between wrapped company/address lines in the original PDF.
+   const block=lines.slice(i+1,end).filter(l=>l.box&&Math.abs(l.box.x-label.box.x)<.025),cityIndex=block.findIndex(l=>/^[A-Z][A-Z .'-]*,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\s*$/i.test(l.text));
    if(cityIndex<1||cityIndex>6)continue;
    const cells=block.slice(0,cityIndex+1);if(!safe(label)||!cells.every(l=>safe(l)&&Math.abs(l.box.x-label.box.x)<.025)||cells.some((l,j)=>j&&l.box.y-cells[j-1].box.y>.04))continue;
    const street=cells.findIndex(l=>/^\s*\d+[A-Z]?(?:[-/]\d+)?\s+\S/.test(l.text));if(street<1)continue;
