@@ -41,3 +41,17 @@ test('another open logbook keeps its editor lock and blocks recovery until the e
  assert.equal((await f.restoreAuthorizedLogbook(f.request)).deferred,true);assert.equal(f.applies,0);assert.deepEqual((await f.db.app_snapshots.get(f.key)).state,f.current);
  f.lockState.editorBusy=false;assert.equal((await f.restoreAuthorizedLogbook(f.request)).status,'applied');assert.equal(f.applies,1);
 });
+test('newer sign-out snapshot completes days missing from an older handoff copy',async()=>{
+ const f=await runtimeFixture(),old=structuredClone(f.original);delete old.eventsByDay[f.days[1]];
+ await f.db.sync_meta.put({key:'single-device-before-handoff:9',value:{uid:f.context.uid,state:old}});
+ await f.db.app_snapshots.put({key:'single-device-signout:1794733200000',state:f.original});
+ assert.equal((await f.restoreAuthorizedLogbook(f.request)).status,'applied');
+ for(const day of f.days){assert.deepEqual(core.dayValue(f.live,'driver_primary',day),core.dayValue(f.original,'driver_primary',day));assert.equal(f.request.result.sources[day],'single-device-signout:1794733200000');}
+});
+test('a sign-out copy that fails original evidence produces diagnostics without changing records',async()=>{
+ const f=await runtimeFixture(),wrong=structuredClone(f.original);wrong.eventsByDay[f.days[1]][0].note='later difference';
+ await f.db.sync_meta.put({key:'single-device-before-handoff:9',value:{uid:f.context.uid,state:wrong}});
+ await f.db.app_snapshots.put({key:'single-device-signout:1794733200000',state:wrong});
+ await assert.rejects(f.restoreAuthorizedLogbook(f.request),error=>error.message.includes('not yet found')&&error.recoveryCandidates.some(c=>c.source==='single-device-signout:1794733200000'));
+ assert.equal(f.applies,0);assert.deepEqual((await f.db.app_snapshots.get(f.key)).state,f.current);
+});

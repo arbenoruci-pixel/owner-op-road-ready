@@ -35,14 +35,17 @@ export function validateRequest(request,{uid,deviceId,today}){
  return p;
 }
 export async function chooseOriginals(request,candidates){
- const p=request.patch,chosen={},routeBuckets={};
+ const p=request.patch,chosen={},routeBuckets={},candidatesSeen=[];
  for await(const candidate of candidates){
   if(!candidate.state||candidate.uid&&candidate.uid!==request.user_id)continue;
+  const diagnostic={source:candidate.key,days:{}};
   for(const [day,proof]of Object.entries(p.days)){
    if(chosen[day])continue;
    const value=dayValue(candidate.state,p.driverId,day);
+   diagnostic.days[day]={count:value.eventsByDay?.length||0,header:await digest(dayHeader(value,p.driverId,day))};
    if(await matchesOriginal(value,proof,p.driverId,day))chosen[day]={value:structuredClone(value),source:candidate.key};
   }
+  if(Object.values(diagnostic.days).some(d=>d.count>0)&&candidatesSeen.length<24)candidatesSeen.push(diagnostic);
   for(const [day,proof]of Object.entries(p.routes||{})){
    if(routeBuckets[day])continue;
    const value=candidate.state.routeLegsByDay?.[day]||[];
@@ -52,7 +55,7 @@ export async function chooseOriginals(request,candidates){
   if(Object.keys(chosen).length===Object.keys(p.days).length&&Object.keys(routeBuckets).length===Object.keys(p.routes||{}).length)break;
  }
  const missing=Object.keys(p.days).filter(day=>!chosen[day]);
- if(missing.length)throw Error('Original phone copy not yet found for '+missing.join(', ')+'. No days were changed.');
+ if(missing.length)throw Object.assign(Error('Original phone copy not yet found for '+missing.join(', ')+'. No days were changed.'),{recoveryCandidates:candidatesSeen});
  if(Object.keys(routeBuckets).length!==Object.keys(p.routes||{}).length)throw Error('Original route context is incomplete. No days were changed.');
  return {...chosen,routeBuckets};
 }
