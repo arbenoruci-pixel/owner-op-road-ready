@@ -32,7 +32,8 @@
       "fix/iphone-date-export": false,
       "fix/phone-authority-export-metadata": false,
       "fix/document-folders-20261115": false,
-      "fix/document-archive-sync": false
+      "fix/document-archive-sync": false,
+      "fix/phone-home-fit": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",

@@ -4,6 +4,7 @@ on:
     paths:
       - 'scripts/workspace-navigation/**'
       - 'scripts/smart-folders/**'
+      - 'scripts/manual-loads/**'
       - 'scripts/compact-business/**'
       - 'scripts/smart-import/**'
       - 'scripts/reliability-sync/**'
@@ -54,7 +55,7 @@ jobs:
             sleep 1
           done
           failed=0
-          for test in compact-business/browser.mjs smart-folders/browser-flow.mjs reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
+          for test in manual-loads/browser.mjs compact-business/browser.mjs smart-folders/browser-flow.mjs reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
             if ! node "scripts/$test"; then failed=1; fi
           done
           exit "$failed"
