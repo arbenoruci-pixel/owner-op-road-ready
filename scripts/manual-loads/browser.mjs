@@ -13,6 +13,9 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   for(const width of [320,390,430,820]){await page.setViewportSize({width,height:844});assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'full revenue fits '+width);assert.ok(await page.locator('.rrd-icon-grid button>span:last-child').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'shortcut labels fit '+width);}
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'+ New load manually',exact:true}).click();
+  await page.getByLabel('Load number',{exact:true}).fill('2026');
+  await page.getByRole('button',{name:'Create folder & set active',exact:true}).click();
+  await page.getByRole('alert').filter({hasText:'valid broker load number'}).waitFor();
   for(const [label,value]of [['Load number','MANUAL-128'],['Broker','Example broker'],['Pickup','Example, IL'],['Delivery','Sample, OH'],['Agreed rate ($)','2250']])await page.getByLabel(label,{exact:true}).fill(value);
   await page.getByRole('button',{name:'Create folder & set active',exact:true}).click();
   await page.getByRole('heading',{name:'MANUAL-128',exact:true}).waitFor();

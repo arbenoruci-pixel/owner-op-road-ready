@@ -1,3 +1,5 @@
+// Dashboard navigation adapted
+import {missionPage,homeControl,searchContrast,readingDetails} from '../test-support/dashboard-navigation.mjs';
 // Synthetic localhost fixtures only; no real mailbox, account or production data.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,9 +20,11 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
   const homeAmounts=await page.locator('.rr-gross-card strong').allTextContents();
   for(const width of [320,390,430,820,1024]){await page.setViewportSize({width,height:844});await fit('Home '+width);assert.equal(await page.locator('.rr-gross-card').count(),3);assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(rows=>rows.every(r=>r.scrollWidth<=r.clientWidth+1)),'Gross numbers remain inside cards');}
   await page.setViewportSize({width:390,height:844});
-  assert.ok(await page.locator('.rr-business-nav button').evaluateAll(buttons=>buttons.every(button=>{const r=button.getBoundingClientRect();return button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})),'All four navigation actions are unobstructed');
+  // Home now includes the active folder above revenue. Check every shortcut after scrolling it into view.
+  for(const button of await page.locator('.rrd-icon-grid button').all()){await button.scrollIntoViewIfNeeded();assert.ok(await button.evaluate(button=>{const r=button.getBoundingClientRect();return button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),'Every navigation action is unobstructed when visible');}
+  await page.getByRole('region',{name:'Gross revenue dashboard'}).scrollIntoViewIfNeeded();
   await page.screenshot({path:out+'/'+name+'-home.png'});
-  await page.getByRole('button',{name:'Open load inbox',exact:true}).click();await page.getByRole('region',{name:'Smart load folders'}).waitFor();
+  await page.getByRole('button',{name:'Loads',exact:true}).click();await page.getByRole('region',{name:'Smart load folders'}).waitFor();
   await page.getByRole('button',{name:/^Completed/}).click();
   assert.ok(await page.locator('.rr-smart-tabs button').evaluateAll(rows=>rows.every(e=>getComputedStyle(e).backgroundColor===(e.getAttribute('aria-pressed')==='true'?'rgb(21, 61, 110)':'rgba(0, 0, 0, 0)'))),'Filter highlight follows its selected state');
   for(const width of [320,390,820]){await page.setViewportSize({width,height:844});await fit('Inbox '+width);assert.ok(await page.locator('.rr-smart-card').first().evaluate(e=>e.getBoundingClientRect().height<155),'Inbox row is compact');}

@@ -8,7 +8,7 @@ import {persistCaptureAssetsV106} from '../scan/captureAssetStoreV106.js';
 import {attachmentCaptureMetadata} from '../scan/attachmentCaptureV110427.js';
 import {backendDocumentTypeV1040,truckDocumentTypeMetaV1040} from '../scan/truckDocumentCatalogV1040.js';
 import {createAnalysisProjection} from '../../../../packages/smart-reader-core/src/analysisProjection.js';
-import {assertManualOriginal,exactLoad} from './manualLoadCore.js';
+import {assertManualOriginal,exactLoad,loadKey} from './manualLoadCore.js';
 import {persistManualStore,readBusinessStore} from './manualLoadRuntime.js';
 const labels={rate_confirmation:'Ratecon',bol:'Pickup BOL',pod:'POD',fuel_receipt:'Fuel receipt',other:'Other document'};
 export default function ManualDocument({target,type,onClose,onSaved,state}){
@@ -29,6 +29,7 @@ export default function ManualDocument({target,type,onClose,onSaved,state}){
    const fresh=readBusinessStore();exactLoad(fresh,target.id,target.loadNo);
    if((fresh.documents||[]).some(d=>d.sha256===sha256))throw Error('This original was saved while you were working. Open it from Documents.');
    const record=buildVaultDocumentV105({stored,type:truckDocumentTypeMetaV1040(type),fields,analysis:{fields,method:'driver_manual_folder'},match:{matched:true,loadNo:target.loadNo,canonicalLoadId:target.id,broker:target.broker||''},selectedLoadNo:target.loadNo,documentDate:day,userConfirmed:true,linkToLogbook:false});
+   if(loadKey(record.canonicalLoadNo)!==loadKey(target.loadNo)||record.status!=='verified')throw Error('The document could not be linked to this load. It has not been marked saved.');
    Object.assign(record,{sha256,evidenceOnlyV110413:true,attachmentSource:'driver_manual_folder',linkToLogbook:false,linkDay:'',linkedEventId:'',...(type==='pod'?{podSigned:true}:{})});
    const identity=stored.localDocument?.client_document_id;
    if((fresh.documents||[]).some(d=>identity&&(d.clientDocumentId===identity||d.client_document_id===identity)))throw Error('This original already has a saved folder. Its existing assignment was kept.');

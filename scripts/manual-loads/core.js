@@ -1,3 +1,4 @@
+import {normalizeCanonicalLoadNoV105} from '../../source/src/modules/documents/documentFoundationV105.js';
 const text=v=>String(v??'').trim();
 export const loadKey=v=>text(v).toUpperCase().replace(/[^A-Z0-9]/g,'');
 export const closedLoad=l=>/^(delivered|completed|complete|closed|archived|invoiced|paid|cancelled|canceled|tonu|deleted|removed|superseded)$/i.test(text(l?.operationalStatus||l?.status));
@@ -7,8 +8,8 @@ export function exactLoad(store,id,no){
  return rows[0];
 }
 export function createManualLoad(store,values,id,now=Date.now()){
- const loadNo=text(values.loadNo).toUpperCase();
- if(!/^[A-Z0-9][A-Z0-9 ._/-]{0,79}$/.test(loadNo)||!loadKey(loadNo))throw Error('Enter the broker load number.');
+ const loadNo=normalizeCanonicalLoadNoV105(values.loadNo);
+ if(!/^[A-Z0-9][A-Z0-9 ._/-]{0,79}$/.test(loadNo)||!loadKey(loadNo))throw Error('Enter a valid broker load number: 3–28 letters, numbers or dashes, including a number. Dates cannot be used as load numbers.');
  if((store.loads||[]).some(l=>loadKey(l.canonicalLoadNo||l.loadNo)===loadKey(loadNo)))throw Error('This load already exists. Open its folder from Loads.');
  const amount=text(values.gross).replace(/[$,\s]/g,'');
  if(amount&&(!/^\d+(\.\d{1,2})?$/.test(amount)||!Number.isFinite(Number(amount))))throw Error('Enter a valid rate with up to two decimal places.');
@@ -34,6 +35,7 @@ export function activeFolderLoad(loads,current){
 }
 export function assertManualOriginal(store,{id,loadNo,type,day,signed,sha256}){
  exactLoad(store,id,loadNo);
+ if(!normalizeCanonicalLoadNoV105(loadNo))throw Error('This load number cannot be linked to documents. Correct its number before filing.');
  if(!['rate_confirmation','bol','pod','fuel_receipt','other'].includes(type))throw Error('Choose a document type.');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(day))throw Error('Choose the document date.');
  if(type==='pod'&&!signed)throw Error('Check the receiver signature before saving this as POD.');

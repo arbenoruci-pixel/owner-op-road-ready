@@ -8,23 +8,29 @@ test('creating a manual folder retains documents and prior loads and selects onl
  assert.throws(()=>createManualLoad(store,{loadNo:'DONE1'},'bad'),/already exists/);
 });
 test('manual active selection never revives closed loads or chooses arbitrarily among multiple open loads',()=>{
- const a={id:'a',loadNo:'A',status:'booked'},b={id:'b',loadNo:'B',status:'booked'},store={loads:[old,a,b]};
+ const a={id:'a',loadNo:'A123',status:'booked'},b={id:'b',loadNo:'B',status:'booked'},store={loads:[old,a,b]};
  assert.equal(activeFolderLoad(store.loads,null),null);
  assert.throws(()=>setManualActive(store,'old','DONE-1'),/closed/);
  const next=setManualActive(store,'b','B');assert.equal(activeFolderLoad(next.loads,null).id,'b');
- assert.throws(()=>setManualActive(store,'b','A'),/changed/);
+ assert.throws(()=>setManualActive(store,'b','A123'),/changed/);
 });
 test('closing a trip preserves missing paperwork and unrelated financial and driver fields',()=>{
- const a={id:'a',loadNo:'A',status:'booked',gross:1200,stops:[{address:'Original'}]},documents=[];
+ const a={id:'a',loadNo:'A123',status:'booked',gross:1200,stops:[{address:'Original'}]},documents=[];
  const store={loads:[a,old],documents,unrelated:{retain:true}};
- const next=markManualDelivered(store,'a','A','2026-11-15',15);
+ const next=markManualDelivered(store,'a','A123','2026-11-15',15);
  assert.equal(next.loads[0].status,'delivered');assert.equal(next.loads[0].actualDeliveryDate,'2026-11-15');assert.equal(next.loads[0].gross,1200);assert.equal(next.loads[0].stops,a.stops);assert.equal(next.documents,documents);assert.equal(next.loads[1],old);assert.equal(next.unrelated,store.unrelated);
 });
 test('manual filing requires the exact load, document date, explicit signed-POD check and prevents duplicate relocation',()=>{
- const store={loads:[{id:'a',loadNo:'A'}],documents:[{sha256:'known',loadNo:'OTHER'}]},args={id:'a',loadNo:'A',type:'pod',day:'2026-11-15',signed:true,sha256:'new'};
+ const store={loads:[{id:'a',loadNo:'A123'}],documents:[{sha256:'known',loadNo:'OTHER'}]},args={id:'a',loadNo:'A123',type:'pod',day:'2026-11-15',signed:true,sha256:'new'};
  assert.doesNotThrow(()=>assertManualOriginal(store,args));
  assert.throws(()=>assertManualOriginal(store,{...args,signed:false}),/signature/);
  assert.throws(()=>assertManualOriginal(store,{...args,sha256:'known'}),/already saved/);
  assert.throws(()=>assertManualOriginal(store,{...args,id:'other'}),/changed/);
  assert.throws(()=>assertManualOriginal(store,{...args,day:''}),/date/);
+});
+
+test('manual folder identity follows the document canonical rules before any write',()=>{
+ for(const loadNo of ['2026','AB','ALPHABETIC','2026-11-15'])assert.throws(()=>createManualLoad({loads:[]},{loadNo},'new'),/valid broker/);
+ assert.equal(createManualLoad({loads:[]},{loadNo:'exp 601606'},'new').loads[0].loadNo,'EXP601606');
+ assert.throws(()=>assertManualOriginal({loads:[{id:'bad',loadNo:'2026'}]},{id:'bad',loadNo:'2026',type:'bol',day:'2026-11-15'}),/cannot be linked/);
 });
