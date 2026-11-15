@@ -50,3 +50,30 @@ test('route restoration rejects later edits and never crosses outside the approv
  f.request.patch.routes[f.days[0]].hash=await digest(foreign.routeLegsByDay[f.days[0]]);
  await assert.rejects(chooseOriginals(f.request,[{key:'crosses-scope',state:foreign}]),/route context is incomplete/);
 });
+async function indexedFixture(){
+ const f=await fixture(),unsigned=f.days[1],value=dayValue(f.original,'driver_primary',unsigned);
+ f.request.patch.indexedUnsignedDays={[unsigned]:{value,sha256:await digest(value),source:{userId:f.context.uid,deviceId:f.context.deviceId}}};
+ f.request.patch.indexedRouteBuckets={};
+ for(const day of f.days){const value=f.original.routeLegsByDay[day]||[];f.request.patch.indexedRouteBuckets[day]={value,sha256:await digest(value),source:{userId:f.context.uid,deviceId:f.context.deviceId}};}
+ f.retained=structuredClone(f.original);delete f.retained.eventsByDay[unsigned];delete f.retained.routeLegsByDay;
+ return f;
+}
+test('combines retained signed originals with exact unsigned indexed originals and original routes',async()=>{
+ const f=await indexedFixture(),chosen=await chooseOriginals(f.request,[{key:'retained',state:f.retained}]);
+ const {next}=await recoveryPlan(f.current,f.request,chosen,f.context);
+ for(const day of f.days)assert.deepEqual(dayValue(next,'driver_primary',day),dayValue(f.original,'driver_primary',day));
+ assert.equal(chosen[f.days[0]].source,'retained');assert.equal(chosen[f.days[1]].source,'verified-device-index:'+f.days[1]);
+ assert.deepEqual(next.routeLegsByDay[f.days[0]],f.original.routeLegsByDay[f.days[0]]);
+});
+test('indexed fallback rejects signed days, other phones, altered events, redactions and unapproved fields',async()=>{
+ for(const mutation of ['signed','foreign','event','redacted','unknown']){
+  const f=await indexedFixture(),entry=f.request.patch.indexedUnsignedDays[f.days[1]];
+  if(mutation==='signed'){entry.value.signatureByDay=f.original.signatureByDay[f.days[0]];entry.value.certifyStatus='Certified';}
+  if(mutation==='foreign')entry.source.deviceId='other-phone';
+  if(mutation==='event')entry.value.eventsByDay[0].endMin++;
+  if(mutation==='redacted')entry.value.dutySafetyBackupByDay={embeddedFile:true,originalInBackup:true};
+  if(mutation==='unknown')entry.value.currentStatus='OFF';
+  entry.sha256=await digest(entry.value);
+  await assert.rejects(chooseOriginals(f.request,[{key:'retained',state:f.retained}]),/not yet found/,mutation);
+ }
+});
