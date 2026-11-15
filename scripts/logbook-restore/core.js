@@ -34,6 +34,12 @@ export function validateRequest(request,{uid,deviceId,today}){
  for(const [day,proof]of Object.entries(p.routes||{}))if(!own(p.days,day)||!/^[a-f0-9]{64}$/.test(proof.hash)||!Number.isInteger(proof.count)||proof.count<0)throw Error('Invalid original route evidence.');
  return p;
 }
+async function verifiedIndexedValue(entry,request){
+ if(!entry||entry.source?.userId!==request.user_id||entry.source?.deviceId!==request.device_id)return false;
+ const raw=canonical(entry.value);
+ if(!raw||raw!==canonical(visible(entry.value))||/"(?:embeddedFile|originalInBackup|fileBytes|__proto__|constructor|prototype)"/.test(raw))return false;
+ return /^[a-f0-9]{64}$/.test(entry.sha256||'')&&await digest(entry.value)===entry.sha256;
+}
 export async function chooseOriginals(request,candidates){
  const p=request.patch,chosen={},routeBuckets={},candidatesSeen=[];
  for await(const candidate of candidates){
@@ -53,6 +59,20 @@ export async function chooseOriginals(request,candidates){
    if(Array.isArray(value)&&value.length===proof.count&&await digest(visible(value))===proof.hash)routeBuckets[day]={value:structuredClone(value),source:candidate.key};
   }
   if(Object.keys(chosen).length===Object.keys(p.days).length&&Object.keys(routeBuckets).length===Object.keys(p.routes||{}).length)break;
+ }
+ // Only unsigned complete originals may come from the phone's pre-loss index.
+ // Signed days still require their actual retained signature bytes on this phone.
+ for(const [day,proof]of Object.entries(p.days)){
+  if(chosen[day])continue;
+  const entry=p.indexedUnsignedDays?.[day],value=entry?.value;
+  if(!value||Array.isArray(value)||own(value,'signatureByDay')||!['Active','Active day / Not certified yet','Needs signature',''].includes(value.certifyStatus||'')||Object.keys(value).some(f=>!['eventsByDay','certifyStatus','inspectionByDay','formByDay','manualMilesByDay','dutySafetyBackupByDay'].includes(f)))continue;
+  if(await verifiedIndexedValue(entry,request)&&await matchesOriginal(value,proof,p.driverId,day))chosen[day]={value:structuredClone(value),source:'verified-device-index:'+day};
+ }
+ for(const [day,proof]of Object.entries(p.routes||{})){
+  if(routeBuckets[day])continue;
+  const entry=p.indexedRouteBuckets?.[day],value=entry?.value;
+  if(!Array.isArray(value)||value.length!==proof.count||value.some(route=>!own(p.days,route.pickupDay||route.day||day)||route.deliveryDay&&!own(p.days,route.deliveryDay)))continue;
+  if(await verifiedIndexedValue(entry,request)&&await digest(visible(value))===proof.hash)routeBuckets[day]={value:structuredClone(value),source:'verified-device-index:'+day};
  }
  const missing=Object.keys(p.days).filter(day=>!chosen[day]);
  if(missing.length)throw Object.assign(Error('Original phone copy not yet found for '+missing.join(', ')+'. No days were changed.'),{recoveryCandidates:candidatesSeen});

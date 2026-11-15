@@ -9,7 +9,7 @@
   "source": {
     "AGENTS.md": "50609054b631a0abcebfcfd3fcc0173f5214e4bf556ab49fe352022d11534109",
     "app/inspection/page.jsx": "449886bd34c6d6bcdaf55d0936b0665c7d71220eaaf453db0b6962a34a2224f1",
-    "docs/DOT_WORKFLOW_LOCK.md": "4aaae9ee2b68de2b7f4dd7e6f03b62c00cf7f59ce6bfae424fd8b4060762ff6b",
+    "docs/DOT_WORKFLOW_LOCK.md": "e3bb1b2af0894390841001654f508f83694ce747b5f8cd4fe13950b5ddff4424",
     "scripts/inspection-package/InspectionWizard.jsx": "c030659dc4876f5c4b2a0b22c22aa7aa6b2ae3c6e90ae76f3d9684a855ec5264",
     "scripts/inspection-package/README.md": "4ff35309729cfa0aa5bf673e6c6352dea487c928982b7e123086e0549fb212c7",
     "scripts/inspection-package/client.js": "2dc9beefaa5ccf51cde7562910dc144e1488c1d94ea8f42a32f792cbb48c7ca2",
