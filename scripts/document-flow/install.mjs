@@ -73,3 +73,6 @@ const sync='lib/owner-op-cloud/accountSyncV110455.js';
 fs.writeFileSync('lib/owner-op-cloud/documentReviewFreshness.js',fs.readFileSync('scripts/document-flow/reviewFreshness.js','utf8').replace("'../../lib/owner-op-cloud/accountCoreV110455.js'","'./accountCoreV110455.js'"));
 patch(sync,"import {FORMAT,TABLE_KEYS", "import {documentReviewStillCurrent} from './documentReviewFreshness.js';\nimport {FORMAT,TABLE_KEYS");
 patch(sync,'if(choices&&conflictReview&&same(conflictReview.local,local.encoded)&&same(conflictReview.remote,remote?.payload?.records)){','if(choices&&conflictReview&&((same(conflictReview.local,local.encoded)&&same(conflictReview.remote,remote?.payload?.records))||documentReviewStillCurrent(conflictReview,local.encoded,remote?.payload?.records,merge.conflicts,choices))){');
+
+await import('./installSyncDiagnostics.mjs');
+await import('./syncDiagnostics.test.mjs');
