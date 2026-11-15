@@ -21,5 +21,6 @@ export function assertReviewedRateFolder(type,analysis,selected){
  if(type!=='rate_confirmation'||!selected)return;
  const field=analysis?.fields?.readerSourceFieldsV110393?.fields?.loadNo;
  if(!['supported','confirmed'].includes(field?.status)||!field.value)return;
- if(field.value.trim().toUpperCase()!==selected.trim().toUpperCase())throw Error('The reviewed Ratecon belongs to load '+field.value+'. Choose that load folder or save it for review.');
+ const identity=value=>String(value||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+ if(identity(field.value)!==identity(selected))throw Error('The reviewed Ratecon belongs to load '+field.value+'. Choose that load folder or save it for review.');
 }
