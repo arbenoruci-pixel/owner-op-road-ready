@@ -7,6 +7,7 @@ import {APP_STATE_KEY,flushAppSnapshots} from '../local-db/appState.js';
 import {canonical} from './accountCoreV110455.js';
 import {bounded} from './mirrorCoreV110450.js';
 import {RECOVERY_KIND,chooseOriginals,recoveryPlan,validateRequest,dayValue,matchesOriginal,digest} from './authorizedLogbookRecoveryCore.js';
+import {certificationStatusV1032} from '../../source/src/modules/logbook/certificationV110.js';
 
 const CHECKPOINT='authorized-logbook-recovery:';
 async function checked(query){const {data,error}=await bounded(query);if(error)throw error;return data;}
@@ -40,9 +41,10 @@ export async function restoreAuthorizedLogbook(request){
    await flushAppSnapshots();
    const current=structuredClone(window.__rrAccountState()),saved=await db.app_snapshots.get(APP_STATE_KEY);
    const plan=await recoveryPlan(current,request,originals,context),fingerprint=canonical(current);
+   for(const day of Object.keys(request.patch.days))if(plan.next.certifyStatus?.[day]==='Certified'&&certificationStatusV1032(plan.next,day).status!=='Certified')throw Error('Original signed context is incomplete for '+day+'. No days were changed.');
    const recheck=await assertActiveDevice();
    if(recheck.uid!==uid||recheck.generation!==lease.generation||!available())return {deferred:true};
-   result={phase:'applied',days:plan.days,sources:plan.sources,deviceConfirmedAt:new Date().toISOString(),fingerprints:{}};
+   result={phase:'applied',days:plan.days,sources:plan.sources,routeSources:plan.routeSources,deviceConfirmedAt:new Date().toISOString(),fingerprints:{}};
    for(const day of Object.keys(request.patch.days))result.fingerprints[day]=await digest(dayValue(plan.next,request.patch.driverId,day));
    await db.transaction('rw',db.app_snapshots,db.sync_meta,async()=>{
     const fresh=await db.app_snapshots.get(APP_STATE_KEY);
@@ -61,6 +63,7 @@ export async function restoreAuthorizedLogbook(request){
    const value=dayValue(installed,request.patch.driverId,day),live=dayValue(window.__rrAccountState(),request.patch.driverId,day);
    if(!await matchesOriginal(value,proof,request.patch.driverId,day)||canonical(value)!==canonical(live)||await digest(value)!==result.fingerprints[day])throw Error('Recovery receipt does not match the saved phone. No success was reported.');
   }
+  for(const [day,proof]of Object.entries(request.patch.routes||{}))if(await digest(installed.routeLegsByDay?.[day]||[])!==proof.hash)throw Error('The restored route context changed before acknowledgement.');
   const session=await cloudSession();if(session?.user?.id!==uid)throw Error('Account changed before recovery acknowledgement.');
   await checked(cloudClient().from('road_ready_corrections').update({status:'applied',result,applied_at:result.deviceConfirmedAt}).eq('user_id',uid).eq('device_id',phone).eq('id',request.id).eq('status','pending').select('id').single());
   window.dispatchEvent(new CustomEvent('road-ready-local-saved',{detail:{scope:'records',source:'authorized-logbook-restore'}}));

@@ -31,10 +31,11 @@ export function validateRequest(request,{uid,deviceId,today}){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||day>=today)throw Error('Recovery cannot change today or a future day.');
   if(!/^[a-f0-9]{64}$/.test(proof.header)||!Number.isInteger(proof.count)||proof.count<1||!Array.isArray(proof.events)||proof.events.some(e=>!Number.isInteger(e.index)||!e.id||!/^[a-f0-9]{64}$/.test(e.hash)))throw Error('Original record evidence is incomplete.');
  }
+ for(const [day,proof]of Object.entries(p.routes||{}))if(!own(p.days,day)||!/^[a-f0-9]{64}$/.test(proof.hash)||!Number.isInteger(proof.count)||proof.count<0)throw Error('Invalid original route evidence.');
  return p;
 }
 export async function chooseOriginals(request,candidates){
- const p=request.patch,chosen={};
+ const p=request.patch,chosen={},routeBuckets={};
  for await(const candidate of candidates){
   if(!candidate.state||candidate.uid&&candidate.uid!==request.user_id)continue;
   for(const [day,proof]of Object.entries(p.days)){
@@ -42,11 +43,18 @@ export async function chooseOriginals(request,candidates){
    const value=dayValue(candidate.state,p.driverId,day);
    if(await matchesOriginal(value,proof,p.driverId,day))chosen[day]={value:structuredClone(value),source:candidate.key};
   }
-  if(Object.keys(chosen).length===Object.keys(p.days).length)break;
+  for(const [day,proof]of Object.entries(p.routes||{})){
+   if(routeBuckets[day])continue;
+   const value=candidate.state.routeLegsByDay?.[day]||[];
+   if(!Array.isArray(value)||value.some(route=>!own(p.days,route.pickupDay||route.day||day)||route.deliveryDay&&!own(p.days,route.deliveryDay)))continue;
+   if(Array.isArray(value)&&value.length===proof.count&&await digest(visible(value))===proof.hash)routeBuckets[day]={value:structuredClone(value),source:candidate.key};
+  }
+  if(Object.keys(chosen).length===Object.keys(p.days).length&&Object.keys(routeBuckets).length===Object.keys(p.routes||{}).length)break;
  }
  const missing=Object.keys(p.days).filter(day=>!chosen[day]);
  if(missing.length)throw Error('Original phone copy not yet found for '+missing.join(', ')+'. No days were changed.');
- return chosen;
+ if(Object.keys(routeBuckets).length!==Object.keys(p.routes||{}).length)throw Error('Original route context is incomplete. No days were changed.');
+ return {...chosen,routeBuckets};
 }
 function emptyRecordedDay(value){
  return !(value.eventsByDay?.length||value.signatureByDay||value.inspectionByDay||value.formByDay||value.certifyStatus==='Certified')&&
@@ -70,5 +78,14 @@ export async function recoveryPlan(current,request,chosen,context){
   else if(own(target[field],day)){target[field]={...target[field]};delete target[field][day];}
  }
  if(Object.keys(replacements).length)next.teamLogbooksByDriverId={...next.teamLogbooksByDriverId,[p.driverId]:book};
- return {next,days:Object.keys(replacements),sources};
+ const routeSources={};
+ for(const [day,proof]of Object.entries(p.routes||{})){
+  const before=current.routeLegsByDay?.[day]||[],beforeHash=await digest(visible(before));
+  if(beforeHash===proof.hash)continue;
+  if(beforeHash!==request.before_data?.routeBuckets?.[day])throw Error('Conflict: original routes changed for '+day+'. No days were changed.');
+  const original=chosen.routeBuckets?.[day];
+  if(!original||await digest(visible(original.value))!==proof.hash)throw Error('Original route evidence changed. No days were changed.');
+  next.routeLegsByDay={...next.routeLegsByDay,[day]:structuredClone(original.value)};routeSources[day]=original.source;
+ }
+ return {next,days:Object.keys(replacements),sources,routeSources};
 }

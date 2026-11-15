@@ -7,7 +7,8 @@ test('restores only approved complete days with original signature bytes and pre
  const chosen=await chooseOriginals(f.request,[{key:'retained',uid:f.context.uid,state:f.original}]);
  const {next,days}=await recoveryPlan(f.current,f.request,chosen,f.context);
  for(const day of f.days)assert.deepEqual(dayValue(next,'driver_primary',day),dayValue(f.original,'driver_primary',day));
- for(const field of ['currentStatus','gpsTrip','dotWallet','routeLegsByDay','view'])assert.deepEqual(next[field],before[field]);
+ for(const field of ['currentStatus','gpsTrip','dotWallet','view'])assert.deepEqual(next[field],before[field]);
+ assert.deepEqual(next.routeLegsByDay.today,before.routeLegsByDay.today);assert.deepEqual(next.routeLegsByDay[f.days[0]],f.original.routeLegsByDay[f.days[0]]);
  assert.deepEqual(next.eventsByDay['2026-11-15'],before.eventsByDay['2026-11-15']);assert.deepEqual(next.teamLogbooksByDriverId.other,before.teamLogbooksByDriverId.other);
  assert.deepEqual(next.teamLogbooksByDriverId.driver_primary.eventsByDay['2026-11-15'],before.eventsByDay['2026-11-15']);assert.equal(next.teamLogbooksByDriverId.driver_primary.currentStatus,before.currentStatus);
  assert.deepEqual(f.current,before);assert.deepEqual(f.original,source);assert.deepEqual(days,f.days);
@@ -40,4 +41,12 @@ test('exact reviewed damaged day may be replaced; extra mileage prevents empty-d
 test('a known event cannot be substituted at a different position or with changed raw fields',async()=>{
  const f=await fixture(),day=f.days[0],value=dayValue(f.original,'driver_primary',day),proof=f.request.patch.days[day];
  value.eventsByDay.reverse();assert.equal(await matchesOriginal(value,proof,'driver_primary',day),false);
+});
+test('route restoration rejects later edits and never crosses outside the approved days',async()=>{
+ const f=await fixture(),chosen=await chooseOriginals(f.request,[{key:'retained',state:f.original}]);
+ f.current.routeLegsByDay[f.days[0]]=[{id:'later-manual-route'}];
+ await assert.rejects(recoveryPlan(f.current,f.request,chosen,f.context),/routes changed/);
+ const foreign=structuredClone(f.original);foreign.routeLegsByDay[f.days[0]][0].deliveryDay='2026-11-16';
+ f.request.patch.routes[f.days[0]].hash=await digest(foreign.routeLegsByDay[f.days[0]]);
+ await assert.rejects(chooseOriginals(f.request,[{key:'crosses-scope',state:foreign}]),/route context is incomplete/);
 });
