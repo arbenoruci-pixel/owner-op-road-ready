@@ -155,3 +155,6 @@ rateConfirmationProfile.variants.push({heading:rateHeading,signals:[totalRateSig
 rateConfirmationProfile.fields.totalRate.pattern=totalRatePattern;
 rateConfirmationProfile.fields.loadNumber.pattern=new RegExp(String.raw`^\s*${loadNumberLabel}\s*[:#]?\s*([A-Z0-9][A-Z0-9._/-]*)(?=\s*(?:$|\||(?:CARRIER\s+)?RATE\s*(?:CONFIRMATION|CON)\s*$))`,'id');
 for(const key of ['loadNumber','totalRate','broker','carrier','equipment','shipper','consignee','pickupDate','deliveryDate','pickupAddress','deliveryAddress','pickupAppointment','deliveryAppointment','pickupCity','deliveryCity','documentDate'])rateConfirmationProfile.fields[key].rateVocabulary=key;
+
+// Carrier tenders explicitly state both stop roles and the agreed total.
+rateConfirmationProfile.variants.push({heading:/^\s*CARRIER\s+LOAD\s+TENDER\s*$/i,signals:[/^\s*STOP\s+\d+\s*[-–:]\s*PICKUP\b/i,/^\s*STOP\s+\d+\s*[-–:]\s*(?:DROP|DELIVERY)\b/i,/^\s*TOTAL\s*:/i],sameObservation:true});

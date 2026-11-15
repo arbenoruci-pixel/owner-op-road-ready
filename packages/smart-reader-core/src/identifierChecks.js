@@ -1,3 +1,4 @@
+import {carrierTenderMatches} from './carrierTender.js';
 import {fieldMatches} from './layout.js';
 import {recoverPartyContinuations} from './partyEvidence.js';
 import {recoverConsigneeBlocks} from './partyBlocks.js';
@@ -42,6 +43,7 @@ export function pageFieldMatches(page,spec){
       if(observations.size>=2)delete match.issue;
     }
   }
+  if(spec.rateVocabulary)matches.push(...carrierTenderMatches(page,spec));
   if(spec.rateVocabulary)matches.push(...rateRouteMatches(page,spec));
   if(spec.rateVocabulary)matches.push(...contractRateMatches(page,spec));
   if(spec.numberedRate)matches.push(...numberedRateMatches(page,spec));
