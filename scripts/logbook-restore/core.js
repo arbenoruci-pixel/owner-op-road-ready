@@ -1,7 +1,7 @@
 import {DAY_FIELDS,LOG_FIELDS,canonical} from '../v110455/accountCore.js';
 import {visible} from '../v110451/recordsCore.js';
 
-export const RECOVERY_KIND='authorized_logbook_restore_v1';
+export const RECOVERY_KIND='authorized_logbook_restore_v2';
 const own=(v,k)=>Object.prototype.hasOwnProperty.call(v||{},k);
 export function dayValue(state,driver,day){
  const active=state.activeDriverId||state.teamDrivers?.[0]?.id||'driver_primary';
