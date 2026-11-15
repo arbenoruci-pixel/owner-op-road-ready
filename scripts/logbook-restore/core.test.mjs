@@ -9,6 +9,7 @@ test('restores only approved complete days with original signature bytes and pre
  for(const day of f.days)assert.deepEqual(dayValue(next,'driver_primary',day),dayValue(f.original,'driver_primary',day));
  for(const field of ['currentStatus','gpsTrip','dotWallet','routeLegsByDay','view'])assert.deepEqual(next[field],before[field]);
  assert.deepEqual(next.eventsByDay['2026-11-15'],before.eventsByDay['2026-11-15']);assert.deepEqual(next.teamLogbooksByDriverId.other,before.teamLogbooksByDriverId.other);
+ assert.deepEqual(next.teamLogbooksByDriverId.driver_primary.eventsByDay['2026-11-15'],before.eventsByDay['2026-11-15']);assert.equal(next.teamLogbooksByDriverId.driver_primary.currentStatus,before.currentStatus);
  assert.deepEqual(f.current,before);assert.deepEqual(f.original,source);assert.deepEqual(days,f.days);
  assert.deepEqual((await recoveryPlan(next,f.request,chosen,f.context)).days,[]);
 });

@@ -1,4 +1,4 @@
-import {DAY_FIELDS,canonical} from '../v110455/accountCore.js';
+import {DAY_FIELDS,LOG_FIELDS,canonical} from '../v110455/accountCore.js';
 import {visible} from '../v110451/recordsCore.js';
 
 export const RECOVERY_KIND='authorized_logbook_restore_v1';
@@ -64,7 +64,7 @@ export async function recoveryPlan(current,request,chosen,context){
   replacements[day]=chosen[day].value;sources[day]=chosen[day].source;
  }
  const next=structuredClone(current),active=current.activeDriverId||current.teamDrivers?.[0]?.id||'driver_primary';
- const book={...(next.teamLogbooksByDriverId?.[p.driverId]||{})};
+ const book={...(next.teamLogbooksByDriverId?.[p.driverId]||{}),...(active===p.driverId?Object.fromEntries(LOG_FIELDS.filter(field=>own(next,field)).map(field=>[field,next[field]])):{})};
  for(const target of [book,...(active===p.driverId?[next]:[])])for(const [day,value]of Object.entries(replacements))for(const field of DAY_FIELDS){
   if(own(value,field))target[field]={...(target[field]||{}),[day]:structuredClone(value[field])};
   else if(own(target[field],day)){target[field]={...target[field]};delete target[field][day];}
