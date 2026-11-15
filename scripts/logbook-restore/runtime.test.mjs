@@ -9,11 +9,12 @@ async function runtimeFixture(){
   if(patch&&fail)return Promise.resolve({error:Error('receipt offline')}).then(resolve,reject);
   if(patch)request={...request,...patch};return Promise.resolve({data:structuredClone(request)}).then(resolve,reject);
  }};return q;};
+ const lockState={editorBusy:false};
  const context={...core,canonical,cloudClient:()=>({from:query}),cloudSession:async()=>({user:{id:f.context.uid}}),assertActiveDevice:async()=>({uid:f.context.uid,generation:9}),deviceId:()=>f.context.deviceId,HANDOFF_KEY:'handoff',accountStatus:()=>({phase:'idle'}),getOwnerOpDb:()=>db,APP_STATE_KEY:key,flushAppSnapshots:async()=>{},bounded:async p=>p,
- navigator:{onLine:true,locks:{request:async(name,options,fn)=>(fn||options)({name})}},document:{visibilityState:'visible',activeElement:null},window:{__rrAccountState:()=>live,dispatchEvent:e=>{if(e.type==='road-ready-account-apply'){live=structuredClone(e.detail);applies++;}}},localStorage:{getItem:()=>f.context.uid},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail;}},Date:class extends Date{constructor(...args){super(...(args.length?args:['2026-11-15T20:00:00Z']));}},Intl};
+ navigator:{onLine:true,locks:{request:async(name,options,fn)=>(fn||options)(lockState.editorBusy&&name==='road-ready-record-editor-v1'?null:{name})}},document:{visibilityState:'visible',activeElement:null},window:{__rrAccountState:()=>live,dispatchEvent:e=>{if(e.type==='road-ready-account-apply'){live=structuredClone(e.detail);applies++;}}},localStorage:{getItem:()=>f.context.uid},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail;}},Date:class extends Date{constructor(...args){super(...(args.length?args:['2026-11-15T20:00:00Z']));}},Intl};
  const source=fs.readFileSync('scripts/logbook-restore/runtime.js','utf8').replace(/^import[^\n]*\n/gm,'').replace(/\bexport /g,'');
  const api=new Function(...Object.keys(context),source+'\nreturn {restoreAuthorizedLogbook};')(...Object.values(context));
- return {...f,...api,db,key,get live(){return live;},get request(){return request;},get applies(){return applies;},failReceipt:v=>{fail=v;}};
+ return {...f,...api,db,key,lockState,get live(){return live;},get request(){return request;},get applies(){return applies;},failReceipt:v=>{fail=v;}};
 }
 test('coordinator atomically stores pre-restore checkpoint and verifies original bytes before acknowledgement',async()=>{
  const f=await runtimeFixture(),out=await f.restoreAuthorizedLogbook(f.request);
@@ -33,4 +34,9 @@ test('active handoff defers recovery; missing originals and changed dates cause 
  await f.db.sync_meta.put({key:'handoff',value:{uid:f.context.uid,records:false}});
  await f.db.sync_meta.put({key:'single-device-before-handoff:9',value:{uid:'foreign',state:f.original}});
  await assert.rejects(f.restoreAuthorizedLogbook(f.request),/not yet found/);assert.deepEqual((await f.db.app_snapshots.get(f.key)).state,f.current);assert.equal(f.applies,0);
+});
+test('another open logbook keeps its editor lock and blocks recovery until the editor closes',async()=>{
+ const f=await runtimeFixture();f.lockState.editorBusy=true;
+ assert.equal((await f.restoreAuthorizedLogbook(f.request)).deferred,true);assert.equal(f.applies,0);assert.deepEqual((await f.db.app_snapshots.get(f.key)).state,f.current);
+ f.lockState.editorBusy=false;assert.equal((await f.restoreAuthorizedLogbook(f.request)).status,'applied');assert.equal(f.applies,1);
 });

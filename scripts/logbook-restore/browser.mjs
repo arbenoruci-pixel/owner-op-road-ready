@@ -24,9 +24,10 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
    await new Promise((resolve,reject)=>{const q=indexedDB.open('owner-op-road-ready-offline-v1');q.onsuccess=()=>{const db=q.result,tx=db.transaction('sync_meta','readwrite');tx.objectStore('sync_meta').put({key:'single-device-before-handoff:8',value:{uid,state:original},updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};q.onerror=()=>reject(q.error);});
   },{uid,device,original:f.original});
   enabled=true;await page.reload();
-  await page.waitForFunction(()=>window.__rrAccountState?.()?.signatureByDay?.['2026-11-10']?.signed===true,null,{timeout:90000});
+  await page.waitForFunction(()=>window.__rrAccountState?.()?.signatureByDay?.['2026-11-10']?.signed===true,null,{timeout:90000}).catch(async error=>{console.error('Recovery diagnostics',JSON.stringify({request,url:page.url(),body:await page.locator('body').innerText()}));throw error;});
   for(let i=0;i<30&&request.status!=='applied';i++)await page.waitForTimeout(300);
   assert.equal(request.status,'applied',JSON.stringify(request.result));assert.equal(receipts,1);
+  await page.waitForURL(origin+'/',{timeout:15000});await page.waitForFunction(()=>window.__rrAccountState?.()?.signatureByDay?.['2026-11-10']?.signed===true);
   const after=await snapshot(page);
   for(const day of f.days)assert.deepEqual(dayValue(after,'driver_primary',day),dayValue(f.original,'driver_primary',day));
   assert.deepEqual(after.eventsByDay['2026-11-15'],before.eventsByDay['2026-11-15']);

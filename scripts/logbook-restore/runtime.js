@@ -67,11 +67,15 @@ export async function restoreAuthorizedLogbook(request){
   return {status:'applied',days:result.days};
  }):{deferred:true}):{deferred:true});
 }
-export async function checkAuthorizedLogbookRecovery(){
+export async function checkAuthorizedLogbookRecovery({restoreHere=false}={}){
  if(!available())return {deferred:true};
  const session=await cloudSession();if(!session)return {};
  const requests=await checked(cloudClient().from('road_ready_corrections').select('*').eq('user_id',session.user.id).eq('device_id',deviceId()).eq('kind',RECOVERY_KIND).eq('status','pending').order('created_at',{ascending:true}).limit(1));
  if(!requests?.length)return {};
+ // The normal App intentionally holds a shared editor lease while mounted.
+ // Navigate within this same phone to release that lease before requesting the
+ // exclusive recovery lock; other open editing tabs still block restoration.
+ if(!restoreHere){await flushAppSnapshots();if(!available()||window.__OWNER_OP_BUSINESS_STORE_VOLATILE_V10963__)return {deferred:true};window.location.assign('/logbook-recovery');return {opening:true};}
  try{return await restoreAuthorizedLogbook(requests[0]);}
  catch(error){
   // Preserve the request and originals when evidence is missing or edits race.
