@@ -10,7 +10,6 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
  try{
   const state=baseState();state.testInstructionStore={loads:[{id:'done',loadNo:'OLD-1',status:'delivered',gross:104770.09,origin:'Example, IL',destination:'Sample, OH',deliveryDate:'2026-11-13'}],documents:[],fuel:[],expenses:[],maintenance:[],settlements:[]};
   await seed(page,state,[]);const before=protectedData(await snapshot(page));
-  for(const width of [320,390,430,820]){await page.setViewportSize({width,height:844});assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'full revenue fits '+width);assert.ok(await page.locator('.rrd-icon-grid button>span:last-child').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'shortcut labels fit '+width);}
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'+ New load manually',exact:true}).click();
   await page.getByLabel('Load number',{exact:true}).fill('2026');
@@ -48,7 +47,9 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   await page.getByRole('heading',{name:'No active load',exact:true}).waitFor();
   const store=await readStore();assert.equal(store.documents.filter(d=>d.canonicalLoadNo==='MANUAL-128').length,3);assert.equal(store.loads.find(l=>l.id==='done').gross,104770.09);
   assert.deepEqual(protectedData(await snapshot(page)),before);assert.deepEqual(readerRequests,[]);assert.deepEqual(errors,[]);
+  for(const width of [320,390,430,820]){await page.setViewportSize({width,height:844});assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'full revenue fits '+width);assert.ok(await page.locator('.rrd-icon-grid button>span:last-child').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'shortcut labels fit '+width);}
+  await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:out+'/'+name+'-home.png'});
   console.log('PASS '+name+' — four phone/tablet widths, manual folder, active Home access, original hashes, signed-POD confirmation, delivery with missing docs, reload and unchanged driver records');
- }catch(e){await page.screenshot({path:out+'/'+name+'-failure.png',fullPage:true});fs.writeFileSync(out+'/'+name+'-failure.txt',e.stack+'\n'+await page.locator('body').innerText());throw e;}finally{await browser.close();}
+ }catch(e){console.error(await page.locator('.rrd-icon-grid button>span:last-child').evaluateAll(es=>es.map(e=>({text:e.textContent,width:e.clientWidth,scroll:e.scrollWidth,font:getComputedStyle(e).fontSize,wrap:getComputedStyle(e).whiteSpace}))));await page.screenshot({path:out+'/'+name+'-failure.png',fullPage:true});fs.writeFileSync(out+'/'+name+'-failure.txt',e.stack+'\n'+await page.locator('body').innerText());throw e;}finally{await browser.close();}
 }
