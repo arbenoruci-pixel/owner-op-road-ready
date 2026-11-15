@@ -1,11 +1,22 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
 import {folderTarget,requestLoadFolder,consumeLoadFolder,resolveFolderTarget,assertReviewedRateFolder} from './folderRequest.js';
 import {savedOriginalFile} from './savedOriginal.js';
+import {documentReviewStillCurrent} from './reviewFreshness.js';
 import {buildSmartFolders,requestedScanFolder,explicitFolderScanCandidates} from '../../source/src/modules/owneros/smartFolders.js';
 import {readDocument,resolveEvidence} from '../../packages/smart-reader-core/src/index.js';
 import {scanWithSourceFields} from '../../packages/smart-reader-core/src/scanFields.js';
 import {nativeFooterInput} from '../../packages/smart-reader-core/test/native-footer-fixture.mjs';
 const storage=()=>{const m=new Map();return{getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)};};
+test('document review remains valid during unrelated updates, while changed selected versions and logbook conflicts require fresh review',()=>{
+ const key=JSON.stringify(['business-array','documents']),other=JSON.stringify(['state','loadInfo']),day=JSON.stringify(['day','driver','2026-11-15']);
+ const review={local:{[key]:[{id:'original'},{id:'new-email'}],[other]:{updatedAt:1}},remote:{[key]:[{id:'original'}]}},choices={[key]:'local'},conflicts=[{key}];
+ const local={...review.local,[other]:{updatedAt:2}};
+ assert.equal(documentReviewStillCurrent(review,local,review.remote,conflicts,choices),true);
+ assert.equal(documentReviewStillCurrent(review,{...local,[key]:[{id:'replaced'}]},review.remote,conflicts,choices),false);
+ assert.equal(documentReviewStillCurrent(review,local,{...review.remote,[key]:[{id:'new-cloud-file'}]},conflicts,choices),false);
+ assert.equal(documentReviewStillCurrent(review,local,review.remote,[...conflicts,{key:day}],{...choices,[day]:'remote'}),false);
+ assert.equal(documentReviewStillCurrent(review,local,review.remote,conflicts,{}),false);
+});
 test('folder target survives route mount and reaches an already mounted inbox',()=>{const host=new EventTarget();host.sessionStorage=storage();let seen;host.addEventListener('road-ready-open-load-folder',e=>seen=e.detail);assert.equal(requestLoadFolder('TEST-600',host),'load:TEST-600');assert.equal(seen,'load:TEST-600');assert.equal(consumeLoadFolder(host.sessionStorage),seen);assert.equal(consumeLoadFolder(host.sessionStorage),'');assert.equal(folderTarget({type:'click'}),'');assert.equal(folderTarget('shipment:BOL-9'),'shipment:BOL-9');});
 test('new empty folders remain accessible; fuel and wallet files stay out of unfiled loads',()=>{const store={loads:[{loadNo:'NEW-1'},{loadNo:'OLD-2',status:'archived',aliases:['BOL-2']},{loadNo:'REMOVED',deleted:true}]};const docs=[{id:'fuel',type:'fuel_receipt'},{id:'license',type:'driver_license'},{id:'paper',type:'bol'},{id:'known',type:'pod',loadNo:'BOL-2'}];const before=JSON.stringify({store,docs});const r=buildSmartFolders({businessStore:store,documents:docs});assert.equal(r.folders.length,2);assert.deepEqual(r.unfiled.map(d=>d.id),['paper']);assert.deepEqual(r.folders.find(f=>f.reference==='OLD-2').documents.map(d=>d.id),['known']);assert.equal(JSON.stringify({store,docs}),before);});
 test('saved scan uses account-aware original reader and preserves exact original bytes',async()=>{const bytes=new Uint8Array([1,2,3,255]);let queried;const f=await savedOriginalFile({id:'local',fileName:'original.pdf'},{readMetadata:async()=>({client_document_id:'stable'}),readOriginal:async r=>{queried=r;return new Blob([bytes],{type:'application/pdf'});}});assert.equal(queried.client_document_id,'stable');assert.deepEqual(new Uint8Array(await f.arrayBuffer()),bytes);assert.equal(f.name,'original.pdf');await assert.rejects(()=>savedOriginalFile({clientDocumentId:'stable'},{readMetadata:async()=>null,readOriginal:async()=>null}),/not available yet/);});
