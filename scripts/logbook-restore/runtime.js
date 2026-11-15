@@ -14,10 +14,16 @@ async function checked(query){const {data,error}=await bounded(query);if(error)t
 function available(){return navigator.onLine!==false&&document.visibilityState==='visible'&&accountStatus().phase!=='syncing'&&window.__rrAccountState?.()&&!window.__rrAccountState().sheet&&!document.activeElement?.matches('input,textarea,select,[contenteditable=true]');}
 function today(state){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:state.homeTerminalTimeZone||'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));return parts.year+'-'+parts.month+'-'+parts.day;}
 async function* retainedCopies(db,uid){
+ // Revoked-device sign-out saves the live phone before the next cloud handoff.
+ // These may be newer than the pre-update snapshot and must be searched first.
+ const snapshots=await db.app_snapshots.toCollection().primaryKeys();
+ const signouts=snapshots.filter(k=>/^single-device-signout:\d+$/.test(k)).sort((a,b)=>Number(b.split(':')[1])-Number(a.split(':')[1]));
+ for(const key of signouts){const row=await db.app_snapshots.get(key);if(row?.state)yield {key,state:row.state};}
  const keys=(await db.sync_meta.toCollection().primaryKeys()).filter(k=>/^single-device-before-handoff:|^account-sync-v110455:(first-join|pending)$/.test(k)).reverse();
  for(const key of keys){const row=await db.sync_meta.get(key),v=row?.value;if(v?.uid===uid)yield {key,uid,state:v.state||v.oldState};}
- for(const key of ['owner-op-road-ready-pre-update-snapshot-v1','account-sync-before-first-join','owner-op-road-ready-pre-cloud-raw-v1']){
+ for(const key of snapshots.filter(k=>!signouts.includes(k))){
   const row=await db.app_snapshots.get(key);if(row?.state)yield {key,state:row.state};
+  if(row?.state?.state)yield {key:key+':embedded-state',state:row.state.state};
  }
 }
 export async function restoreAuthorizedLogbook(request){
@@ -83,7 +89,7 @@ export async function checkAuthorizedLogbookRecovery({restoreHere=false}={}){
  catch(error){
   // Preserve the request and originals when evidence is missing or edits race.
   // The operator can diagnose this receipt without altering any day.
-  await checked(cloudClient().from('road_ready_corrections').update({result:{phase:'waiting',message:String(error.message).slice(0,400),checkedAt:new Date().toISOString()}}).eq('user_id',session.user.id).eq('device_id',deviceId()).eq('id',requests[0].id).eq('status','pending')).catch(()=>{});
+  await checked(cloudClient().from('road_ready_corrections').update({result:{phase:'waiting',message:String(error.message).slice(0,400),candidates:error.recoveryCandidates||[],checkedAt:new Date().toISOString()}}).eq('user_id',session.user.id).eq('device_id',deviceId()).eq('id',requests[0].id).eq('status','pending')).catch(()=>{});
   return {error:error.message};
  }
 }

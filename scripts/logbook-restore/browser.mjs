@@ -21,7 +21,7 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   const before=await snapshot(page);
   await page.evaluate(async({uid,device,original})=>{
    localStorage.setItem('owner-op-account-data-owner-v1',uid);localStorage.setItem('owner-op-cloud-mirror-v1:device',device);
-   await new Promise((resolve,reject)=>{const q=indexedDB.open('owner-op-road-ready-offline-v1');q.onsuccess=()=>{const db=q.result,tx=db.transaction('sync_meta','readwrite');tx.objectStore('sync_meta').put({key:'single-device-before-handoff:8',value:{uid,state:original},updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};q.onerror=()=>reject(q.error);});
+   await new Promise((resolve,reject)=>{const q=indexedDB.open('owner-op-road-ready-offline-v1');q.onsuccess=()=>{const db=q.result,tx=db.transaction('app_snapshots','readwrite');tx.objectStore('app_snapshots').put({key:'single-device-signout:1794733200000',state:original,updated_at:new Date().toISOString()});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};q.onerror=()=>reject(q.error);});
   },{uid,device,original:f.original});
   enabled=true;await page.reload();
   await page.waitForFunction(()=>window.__rrAccountState?.()?.signatureByDay?.['2026-11-10']?.signed===true,null,{timeout:90000}).catch(async error=>{console.error('Recovery diagnostics',JSON.stringify({request,url:page.url(),body:await page.locator('body').innerText()}));throw error;});
@@ -34,6 +34,6 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   assert.deepEqual(after.dotWallet,before.dotWallet);
   await page.reload();await page.waitForFunction(()=>window.__rrAccountState?.()?.signatureByDay?.['2026-11-10']?.signed===true);
   assert.equal(receipts,1);assert.deepEqual(dayValue(await snapshot(page),'driver_primary','2026-11-10'),dayValue(f.original,'driver_primary','2026-11-10'));
-  console.log('PASS '+name+' — actual retained-phone recovery, original signature, today preserved, receipt and reload');
+  console.log('PASS '+name+' — sign-out snapshot recovery, original signature, today preserved, receipt and reload');
  }finally{await browser.close();}
 }

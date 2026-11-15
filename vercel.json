@@ -35,7 +35,8 @@
       "fix/document-archive-sync": false,
       "fix/phone-home-fit": false,
       "fix/manual-form-contrast": false,
-      "fix/restore-original-logbook": false
+      "fix/restore-original-logbook": false,
+      "fix/logbook-signout-recovery": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
