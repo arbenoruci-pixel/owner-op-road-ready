@@ -22,7 +22,7 @@ function Requirements() {
         <li>At least <strong>12 months</strong> driving Amazon Relay loads</li>
       </ul>
       <p className={styles.insurance}>Our insurer generally requires drivers to be 24 or older, subject to applicable state rules.</p>
-      <p className={styles.privacy}>Our team requests copies of your CDL and registration privately if your pre-application moves forward.</p>
+      <p className={styles.privacy}>Enter your truck’s actual parking address on this form. If you move forward, our team sends a personal link for your CDL and any other documents requested for insurance review.</p>
     </>
   );
 }

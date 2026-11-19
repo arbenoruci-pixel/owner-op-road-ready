@@ -55,3 +55,33 @@
 @media (max-width: 380px) {
   .group dl > div { grid-template-columns: 1fr; gap: .15rem; }
 }
+
+.insurance {
+  margin: 1.35rem 0;
+  padding: 1rem;
+  border: 1px solid #c4d6d7;
+  border-radius: .65rem;
+  background: #f4f8f7;
+}
+.insurance h3, .requestChoices legend { margin: 0; padding: 0; color: #173537; font-size: 1.04rem; font-weight: 700; }
+.insurance p { margin: .45rem 0 .75rem; }
+.documentHeader, .documentActions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; }
+.documentHeader { justify-content: space-between; }
+.shell .textAction { min-height: 44px; padding: .3rem .1rem; border: 0; background: transparent; color: #175a60; font-size: .9rem; text-decoration: underline; text-underline-offset: .2em; }
+.documentList { margin: .65rem 0 1rem; padding: 0; list-style: none; }
+.documentList li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .6rem 0; border-top: 1px solid #d7e3e1; }
+.documentList strong, .documentList span { display: block; }
+.documentList span, .privateLink small { color: #4d656a; font-size: .875rem; }
+.requestChoices { min-width: 0; margin: .65rem 0 0; padding: 0; border: 0; }
+.requestChoices label { min-height: 44px; display: flex; align-items: center; gap: .6rem; font-size: .95rem; cursor: pointer; }
+.requestChoices input { flex: none; width: 1.12rem; height: 1.12rem; margin: 0; accent-color: #18625a; }
+.documentActions { margin-top: .65rem; }
+.privateLink { margin: .5rem 0 .8rem; padding: .85rem; border-radius: .55rem; border: 1px solid #b6d6c9; background: #fff; }
+.privateLink label { display: grid; gap: .38rem; color: #21493f; font-weight: 650; }
+.privateLink input { min-width: 0; width: 100%; min-height: 44px; padding: .5rem .65rem; border: 1px solid #9cb3aa; border-radius: .35rem; background: #fff; color: #183f35; font-size: 1rem; }
+.privateLink button { margin: .55rem 0; }
+.privateLink small { display: block; }
+@media (max-width: 380px) {
+  .insurance { padding: .7rem; }
+  .documentList li { align-items: flex-start; flex-wrap: wrap; }
+}

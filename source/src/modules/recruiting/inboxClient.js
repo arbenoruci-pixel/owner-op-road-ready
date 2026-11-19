@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 
 const ENDPOINT = '/api/recruiting/applications';
 
-export async function inboxRequest(token, query = '', options = {}) {
-  const response = await fetch(ENDPOINT + query, {
+export async function inboxRequest(token, query = '', options = {}, endpoint = ENDPOINT) {
+  const response = await fetch(endpoint + query, {
     ...options,
     cache: 'no-store',
     headers: {
@@ -23,7 +23,7 @@ export async function inboxRequest(token, query = '', options = {}) {
 
 // Refresh only while the app is visible. Abort the previous request when the
 // account, page, or refresh key changes so old responses cannot update the UI.
-export function useInboxFeed(token, query, refreshKey = 0) {
+export function useInboxFeed(token, query, refreshKey = 0, endpoint = ENDPOINT) {
   const [result, setResult] = useState(null);
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function useInboxFeed(token, query, refreshKey = 0) {
       if (!active || denied || controller || document.hidden) return;
       controller = new AbortController();
       try {
-        const data = await inboxRequest(token, query, { signal: controller.signal });
+        const data = await inboxRequest(token, query, { signal: controller.signal }, endpoint);
         if (active) setResult({ token, query, data });
       } catch (error) {
         if (!active) return;
@@ -58,7 +58,7 @@ export function useInboxFeed(token, query, refreshKey = 0) {
       window.removeEventListener('online', refresh);
       window.removeEventListener('pageshow', refresh);
     };
-  }, [token, query, refreshKey]);
+  }, [token, query, refreshKey, endpoint]);
 
   return token && result?.token === token && result.query === query ? result : null;
 }

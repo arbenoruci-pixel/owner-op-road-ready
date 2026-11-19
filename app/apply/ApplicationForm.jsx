@@ -220,7 +220,7 @@ export default function ApplicationForm() {
             <Field {...bind('trailer')} label="Trailer type (optional)" hint="Leave blank for power only." required={false} wide />
           </>}
           {step === 4 && <>
-            <Field {...bind('garagingAddress')} label="Truck parking address" hint="Enter the street address, city, state and ZIP code." maxLength={400} wide />
+            <Field {...bind('garagingAddress')} label="Truck parking address" hint="Enter the actual garaging street address, city, state and ZIP code. Our team will request proof privately if needed." maxLength={400} wide />
             <Choice {...bind('physicalDamage')} label="Do you want physical damage coverage for your tractor?" />
             {values.physicalDamage === 'yes' && <Field {...bind('declaredValue')} label="Declared tractor value (USD)" hint="Enter the value in whole dollars." type="number" min="1" max="10000000" step="1" inputMode="numeric" wide />}
             <fieldset className={styles.documents}>

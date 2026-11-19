@@ -1,0 +1,30 @@
+.layout { max-width: 44rem; margin: 0 auto; padding: clamp(1.75rem, 5vw, 3.5rem) 1rem max(2rem, env(safe-area-inset-bottom)); }
+.layout h1 { margin: 0 0 1.25rem; font-size: clamp(2rem, 6vw, 3rem); line-height: 1.08; letter-spacing: -.05em; }
+.card { background: #fff; color: #17333d; border: 1px solid #ccd8d9; border-radius: 1rem; padding: clamp(1.05rem, 3.5vw, 2.1rem); box-shadow: 0 6px 20px -12px #223b4840; }
+.card h2 { margin: 0; font-size: 1.35rem; line-height: 1.3; letter-spacing: -.025em; }
+.card p { margin: .65rem 0; }
+.card .intro { margin: 0; color: #334c56; }
+.card .deadline { margin: .65rem 0 1.25rem; color: #485f68; line-height: 1.4; font-size: .93rem; }
+.card .progress { color: #1a5d52; font-weight: 700; padding-bottom: .65rem; border-bottom: 1px solid #c9d8d6; }
+.items { display: grid; gap: 1.25rem; margin: 1.15rem 0 1.5rem; }
+.item { min-width: 0; }
+.item label, .item h2 { font-size: 1.05rem; font-weight: 700; line-height: 1.35; }
+.item p { margin: .15rem 0 .5rem; font-size: .92rem; color: #4c616b; }
+.card .item input[type='file'] {
+  display: block; box-sizing: border-box; width: 100%; min-width: 0; min-height: 2.95rem; font-size: 1rem; padding: .36rem;
+  border: 1px solid #a9b9bd !important; border-radius: .42rem !important; background: #f7f9f9 !important; color: #243d48 !important;
+}
+.item input::file-selector-button { min-height: 2.15rem; font: inherit; font-weight: 650; color: #194f46; background: #e3efea; border: 1px solid #a9c1ba; border-radius: .32rem; margin-right: .55rem; padding: .27rem .65rem; }
+.card .received { font-weight: 650; color: #175d51; }
+.consent { background: #eef5f2; border-radius: .55rem; padding: .85rem 1rem; }
+.consent label { display: flex; gap: .75rem; align-items: flex-start; cursor: pointer; font-size: .98rem; }
+.card .consent input { appearance: auto; margin: .15rem 0 0; padding: 0; width: 1.2rem; height: 1.2rem; min-width: 1.2rem; min-height: 0; accent-color: #126154; }
+.consent p { margin: .5rem 0 0 1.95rem; font-size: .9rem; color: #486058; }
+.card .error { color: #8f2728; font-size: .94rem; margin-top: .45rem; }
+.button { display: inline-flex; justify-content: center; align-items: center; margin-top: 1rem; padding: .68rem 1.15rem; min-height: 3rem; border-radius: .55rem; border: 1px solid #14594e; color: #fff; background: #155e53; font-weight: 700; font-size: 1rem; cursor: pointer; }
+.button:disabled { opacity: .7; cursor: wait; }
+.card :is(input, button):focus-visible { outline: 3px solid #13786c !important; outline-offset: 3px; }
+@media (max-width: 32rem) { .button { width: 100%; } }
+.preview { margin-top: .42rem; color: #1c574e; }
+.preview summary { min-height: 2.6rem; padding: .4rem 0; font-weight: 650; cursor: pointer; }
+.preview img { display: block; max-width: 100%; height: auto; max-height: 38rem; object-fit: contain; margin-top: .48rem; }
