@@ -1,206 +1,262 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { canEnterWorkHistory, applicationPayload, documents, drivingRecords, registrationStatuses, reviewRows, states, steps, validateStep } from './application.js';
 import styles from './apply.module.css';
 
-const states = 'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS GU MP PR VI'.split(' ');
-const steps = ['Experience', 'Contact', 'Equipment'];
-const documents = [
-  ['cdl', 'CDL copy'],
-  ['registration', 'Truck registration or IRP cab card'],
-  ['experience', 'Work references or records of driving experience'],
-];
+const yesNo = [['yes', 'Yes'], ['no', 'No']];
+const stateOptions = states.map(state => [state, state]);
+const monthOptions = Array.from({ length: 12 }, (_, month) => [String(month), String(month)]);
+const amazonOptions = [['under', 'Less than 1 year'], ['year', '1 year'], ['longer', 'More than 1 year']];
+const lastStep = steps.length - 1;
 
-function Field({ name, label, hint, options, wide, ...props }) {
+function Help({ name, hint, error }) {
+  return <>
+    {hint && <small id={name + '-hint'}>{hint}</small>}
+    {error && <small className={styles.fieldError} id={name + '-error'}>{error}</small>}
+  </>;
+}
+
+function accessibility(name, hint, error) {
+  return {
+    'aria-invalid': error ? true : undefined,
+    'aria-describedby': [hint && name + '-hint', error && name + '-error'].filter(Boolean).join(' ') || undefined,
+  };
+}
+
+function Field({ name, label, hint, error, options, wide, value, onChange, onBlur, type = 'text', required = true, ...props }) {
+  const common = { name, id: name, value, required, onChange: event => onChange(event.target.value), onBlur, ...accessibility(name, hint, error), ...props };
   return (
-    <label className={wide ? styles.wideField : styles.field}>
-      <span>{label}</span>
-      {hint && <small id={name + '-hint'}>{hint}</small>}
-      {options ? (
-        <select name={name} required aria-describedby={hint ? name + '-hint' : undefined} {...props}>
-          <option value="">Select an answer</option>
-          {options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
-        </select>
-      ) : (
-        <input name={name} type="text" required maxLength={200} aria-describedby={hint ? name + '-hint' : undefined} {...props} />
-      )}
-    </label>
+    <div className={wide ? styles.wideField : styles.field}>
+      <label htmlFor={name}>{label}</label>
+      {options ? <select {...common}>
+        <option value="">Select an answer</option>
+        {options.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
+      </select> : <input type={type} maxLength={200} {...common} />}
+      <Help name={name} hint={hint} error={error} />
+    </div>
   );
 }
 
-function StateField(props) {
-  return <Field {...props} options={states.map(state => [state, state])} />;
-}
-
-function readStep(form) {
-  const data = new FormData(form);
-  const values = Object.fromEntries(data);
-  if (form.elements.namedItem('documents')) {
-    values.documents = data.getAll('documents');
-    values.consent = data.get('consent') || '';
-  }
-  return values;
-}
-
-function submission(values) {
-  return {
-    website: values.website || '',
-    fullName: values.fullName.trim(), email: values.email.trim(), phone: values.phone.trim(),
-    age24: values.age24 === 'yes', activeClassA: values.activeClassA === 'yes', cdlState: values.cdlState,
-    cdlMonths: Number(values.cdlYears) * 12, otrMonths: Number(values.otrYears) * 12, amazonMonths: Number(values.amazonMonths),
-    priorCarrier: values.priorCarrier.trim(), amazonCarrier: values.amazonCarrier.trim(), drivingHistory: values.drivingHistory,
-    startDate: values.startDate, truckYear: Number(values.truckYear), truckMake: values.truckMake.trim(), truckModel: values.truckModel.trim(),
-    truckVin: (values.truckVin || '').trim().toUpperCase(),
-    registrationState: values.registrationState, registrationStatus: values.registrationStatus,
-    garagingAddress: values.garagingAddress.trim(), trailer: (values.trailer || '').trim(), physicalDamage: values.physicalDamage === 'yes',
-    declaredValue: values.physicalDamage === 'yes' ? Number(values.declaredValue) : null,
-    documents: values.documents || [], consent: values.consent === 'on',
-  };
+function Choice({ name, label, hint, error, options = yesNo, value, onChange }) {
+  return (
+    <fieldset className={styles.choiceGroup}>
+      <legend>{label}</legend>
+      <div className={styles.segmented}>
+        {options.map(([key, text]) =>
+          <label key={key} className={[styles.choice, value === key && styles.choiceSelected].filter(Boolean).join(' ')}>
+            <input type="radio" name={name} value={key} checked={value === key} required
+              onChange={() => onChange(key)} {...accessibility(name, hint, error)} /><span>{text}</span>
+          </label>
+        )}
+      </div>
+      <Help name={name} hint={hint} error={error} />
+    </fieldset>
+  );
 }
 
 export default function ApplicationForm() {
   const [step, setStep] = useState(0);
-  const [saved, setSaved] = useState({});
-  const [physicalDamage, setPhysicalDamage] = useState('');
-  const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [values, setValues] = useState({ documents: [], consent: false, amazonExtraMonths: '0' });
+  const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const heading = useRef(null);
+  const panel = useRef(null);
   const form = useRef(null);
   const lastRequest = useRef(null);
   const focusHeading = useRef(false);
+  const submitting = useRef(false);
 
   useEffect(() => {
-    if (focusHeading.current) heading.current?.focus();
+    if (focusHeading.current) {
+      heading.current?.focus({ preventScroll: true });
+      panel.current?.scrollIntoView({ block: 'start' });
+    }
   }, [step, done]);
 
-  function value(name) {
-    return { name, defaultValue: saved[name] || '' };
+  function update(name, value) {
+    setValues(previous => {
+      const next = { ...previous, [name]: value };
+      if (name === 'sameCarrier' && value) next.amazonCarrier = next.priorCarrier || '';
+      if (name === 'priorCarrier' && next.sameCarrier) next.amazonCarrier = value;
+      return next;
+    });
+    setErrors(previous => ({ ...previous, [name]: undefined }));
+    setServerError('');
   }
 
-  function move(next, values) {
-    setSaved(values);
-    setError('');
+  function bind(name) {
+    return {
+      name, value: values[name] ?? '', error: errors[name],
+      onChange: value => update(name, value),
+      onBlur: () => {
+        if (values[name] !== undefined && values[name] !== '') {
+          const message = validateStep(step, values)[name];
+          setErrors(previous => ({ ...previous, [name]: message }));
+        }
+      },
+    };
+  }
+
+  function go(next, edit = false) {
+    setErrors({});
+    setServerError('');
+    setEditing(edit);
     focusHeading.current = true;
     setStep(next);
   }
 
+  function showErrors(messages) {
+    setErrors(messages);
+    const name = Object.keys(messages)[0];
+    requestAnimationFrame(() => {
+      const input = form.current?.querySelector('[name="' + name + '"]:checked') || form.current?.querySelector('[name="' + name + '"]');
+      const details = input?.closest('details');
+      if (details) details.open = true;
+      input?.focus({ preventScroll: true });
+      const field = input?.closest('fieldset') || input;
+      field?.scrollIntoView({ block: 'center' });
+    });
+  }
+
   async function submit(event) {
     event.preventDefault();
-    if (busy) return;
-    const values = { ...saved, ...readStep(event.currentTarget) };
-    setError('');
-    if (step === 0 && (values.activeClassA !== 'yes' || Number(values.cdlYears) < 3 || Number(values.otrYears) < 3 || Number(values.amazonMonths) < 12)) {
-      setError('To apply, you need an active U.S. Class A CDL held for at least 3 years, 3 recent years of verifiable OTR driving and 12 months driving Amazon Relay loads.');
+    if (submitting.current) return;
+    const messages = validateStep(step, values);
+    if (Object.keys(messages).length) {
+      showErrors(messages);
       return;
     }
-    if (step === 1) {
-      const digits = values.phone.replace(/\D/g, '');
-      if (digits.length < 10 || digits.length > 15 || !/^[+0-9.()\s-]+$/.test(values.phone)) {
-        setError('Enter a phone number with 10 to 15 digits, including your area code.');
-        return;
-      }
-    }
-    if (step < steps.length - 1) {
-      move(step + 1, values);
+    if (step !== lastStep) {
+      go(editing ? lastStep : step + 1);
       return;
     }
 
     setBusy(true);
+    submitting.current = true;
+    setServerError('');
     try {
-      const data = submission(values);
+      const data = applicationPayload(values);
       const fingerprint = JSON.stringify(data);
-      if (lastRequest.current?.fingerprint !== fingerprint) {
-        lastRequest.current = { fingerprint, id: crypto.randomUUID() };
-      }
+      if (lastRequest.current?.fingerprint !== fingerprint) lastRequest.current = { fingerprint, id: crypto.randomUUID() };
       data.requestId = lastRequest.current.id;
       const response = await fetch('/api/recruiting/applications', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || result?.ok !== true) {
-        setError(result?.error || 'We could not confirm receipt. Please try submitting again.');
+        setServerError(result?.error || 'We could not confirm receipt. Please try submitting again.');
         return;
       }
       focusHeading.current = true;
       setDone(true);
     } catch {
-      setError('We could not confirm receipt. Check your connection and try submitting again.');
+      setServerError('We could not confirm receipt. Check your connection and try submitting again.');
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
 
-  if (done) {
-    return (
-      <section className={styles.panel}>
-        <h2 ref={heading} tabIndex={-1}>Application received</h2>
-        <p>Narta Express has received your pre-application. Our recruiting team will review it and contact you using the phone number or email you provided if we move forward.</p>
-      </section>
-    );
-  }
+  if (done) return (
+    <section ref={panel} className={styles.panel + ' ' + styles.success}>
+      <h2 ref={heading} tabIndex={-1}>Application received</h2>
+      <p>Narta Express has received your pre-application. Our recruiting team will review it and contact you using the phone number or email you provided if we move forward.</p>
+    </section>
+  );
+
+  const amazonTooShort = values.amazonDuration === 'under' ? 'Narta requires a full year (12 months) of Amazon Relay driving. You can apply once you reach 12 months.' : '';
+  const activeCdlMessage = values.activeClassA === 'no' ? 'You need an active U.S. Class A CDL to apply.' : '';
+  const showCarrierFields = canEnterWorkHistory(values);
 
   return (
-    <section className={styles.panel}>
-      <ol className={styles.progress} aria-label="Application progress">
-        {steps.map((label, index) => (
-          <li key={label} aria-current={index === step ? 'step' : undefined} className={index <= step ? styles.reached : undefined}>{label}</li>
-        ))}
-      </ol>
-      <h2 ref={heading} tabIndex={-1}>{['Driving experience', 'Contact & work history', 'Truck & parking'][step]}</h2>
+    <section ref={panel} className={styles.panel} aria-labelledby="step-title">
+      <div className={styles.progressMeta}><span className={styles.stepLabel}>Step {step + 1} of {steps.length}</span><span>{steps[step][0]}</span></div>
+      <div className={styles.progressTrack} role="progressbar" aria-label="Application progress" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={step + 1}><span className={styles.progressFill} style={{ width: ((step + 1) * 100 / steps.length) + '%' }} /></div>
+      <h2 ref={heading} id="step-title" tabIndex={-1}>{steps[step][1]}</h2>
+      <p className={styles.sectionHint}>{steps[step][2]}</p>
       <noscript><p>Enable JavaScript in your browser to complete this pre-application.</p></noscript>
-      <form key={step} method="post" action="/api/recruiting/applications" ref={form} onSubmit={submit} onChange={() => { if (error) setError(''); }}>
+      <form ref={form} key={step} method="post" action="/api/recruiting/applications" onSubmit={submit} noValidate>
         <div className={styles.fields}>
           {step === 0 && <>
-            <Field {...value('age24')} label="Are you at least 24 years old?" options={yesNo} />
-            <Field {...value('activeClassA')} label="Do you hold an active U.S. Class A CDL?" options={yesNo} />
-            <StateField {...value('cdlState')} label="CDL issuing state" />
-            <Field {...value('cdlYears')} label="Full years holding a Class A CDL" type="number" min="0" max="75" step="1" inputMode="numeric" />
-            <Field {...value('otrYears')} label="Recent, verifiable OTR driving" hint="Enter full years driving over the road." type="number" min="0" max="75" step="1" inputMode="numeric" />
-            <Field {...value('amazonMonths')} label="Amazon Relay driving" hint="Enter total months driving Relay loads." type="number" min="0" max="900" step="1" inputMode="numeric" />
+            <Choice {...bind('activeClassA')} label="Do you hold an active U.S. Class A CDL?" error={errors.activeClassA || activeCdlMessage} />
+            <Field {...bind('cdlState')} label="CDL issuing state" options={stateOptions} />
+            <Field {...bind('cdlYears')} label="Full years holding a Class A CDL" hint="Minimum 3 years." type="number" min="0" max="75" step="1" inputMode="numeric" />
+            <Choice {...bind('age24')} label="Are you at least 24 years old?" hint="For insurance review." />
           </>}
           {step === 1 && <>
-            <Field {...value('fullName')} label="Full name" autoComplete="name" minLength={2} maxLength={120} wide />
-            <Field {...value('email')} label="Email address" type="email" maxLength={254} autoComplete="email" autoCapitalize="none" />
-            <Field {...value('phone')} label="Phone number" type="tel" autoComplete="tel" maxLength={32} />
-            <Field {...value('priorCarrier')} label="Carrier that can verify your OTR driving" hint="Enter the carrier or business name." wide />
-            <Field {...value('amazonCarrier')} label="Carrier you drove Amazon Relay loads for" hint="If you ran under your own authority, enter your business name." wide />
-            <Field {...value('drivingHistory')} label="Driving record in the past 3 years" hint="Include personal and commercial driving. We review the details privately." options={[
-              ['clear', 'No accidents, moving violations or suspensions'],
-              ['review', 'I have something to discuss or I’m unsure'],
-            ]} wide />
-            <Field {...value('startDate')} label="When could you start?" type="date" />
+            <Field {...bind('otrYears')} label="Full years of recent, verifiable OTR driving" hint="Count over-the-road driving. Minimum 3 years." type="number" min="0" max="75" step="1" inputMode="numeric" wide />
+            <Choice {...bind('amazonDuration')} options={amazonOptions} label="How long have you driven Amazon Relay loads?" hint="Minimum 1 year (12 months)." error={errors.amazonDuration || amazonTooShort} />
+            {values.amazonDuration === 'longer' && <>
+              <Field {...bind('amazonYears')} label="Full years driving Amazon Relay" type="number" min="1" max="75" step="1" inputMode="numeric" />
+              <Field {...bind('amazonExtraMonths')} label="Additional months" options={monthOptions} />
+            </>}
+            {showCarrierFields && <>
+              <Field {...bind('priorCarrier')} label="Carrier that can verify your OTR driving" hint="Enter the carrier or your own business name." wide />
+              <div className={styles.wideField}>
+                <label className={styles.check}><input type="checkbox" name="sameCarrier" checked={!!values.sameCarrier}
+                  onChange={event => update('sameCarrier', event.target.checked)} /><span>I drove Amazon Relay for the same carrier</span></label>
+                {!values.sameCarrier && <Field {...bind('amazonCarrier')} label="Carrier you drove Amazon Relay loads for" hint="If you ran under your own authority, enter your business name." />}
+              </div>
+              <Field {...bind('drivingHistory')} label="Driving record in the past 3 years" hint="Include personal and commercial driving. Details are reviewed privately." options={drivingRecords} wide />
+            </>}
           </>}
           {step === 2 && <>
-            <Field {...value('truckYear')} label="Tractor model year" type="number" inputMode="numeric" min="1900" max={new Date().getUTCFullYear() + 1} />
-            <Field {...value('truckMake')} label="Tractor make" />
-            <Field {...value('truckModel')} label="Tractor model" />
-            <Field {...value('truckVin')} label="Tractor VIN (optional)" hint="If available, enter the 17-character vehicle identification number." required={false} minLength={17} maxLength={17} pattern="[A-HJ-NPR-Za-hj-npr-z0-9]{17}" title="Enter 17 letters and numbers, excluding I, O and Q." autoCapitalize="characters" spellCheck={false} />
-            <StateField {...value('registrationState')} label="Truck registration state" />
-            <Field {...value('registrationStatus')} label="Registration status" options={[['current', 'Current'], ['pending', 'Pending'], ['expired', 'Expired']]} />
-            <Field {...value('trailer')} label="Trailer type (optional)" hint="Leave blank for power only." required={false} />
-            <Field {...value('garagingAddress')} minLength={6} label="Where do you park your truck?" hint="Enter the actual parking street address, city, state and ZIP code." maxLength={400} wide />
-            <Field name="physicalDamage" label="Do you want physical damage coverage for your tractor?" value={physicalDamage} onChange={event => setPhysicalDamage(event.target.value)} options={yesNo} wide />
-            {physicalDamage === 'yes' && <Field {...value('declaredValue')} label="Declared tractor value (USD)" type="number" min="1" max="10000000" step="1" inputMode="numeric" />}
+            <Field {...bind('fullName')} label="Full name" autoComplete="name" minLength={2} maxLength={120} wide />
+            <Field {...bind('email')} label="Email address" type="email" maxLength={254} autoComplete="email" autoCapitalize="none" />
+            <Field {...bind('phone')} label="Phone number" type="tel" autoComplete="tel" maxLength={35} />
+            <Field {...bind('startDate')} label="Available start date" type="date" />
+          </>}
+          {step === 3 && <>
+            <Field {...bind('truckYear')} label="Tractor model year" type="number" inputMode="numeric" min="1900" max={new Date().getUTCFullYear() + 1} />
+            <Field {...bind('truckMake')} label="Tractor make" />
+            <Field {...bind('truckModel')} label="Tractor model" />
+            <Field {...bind('truckVin')} label="Tractor VIN (optional)" hint="Enter 17 characters if available." required={false} maxLength={17} autoCapitalize="characters" spellCheck={false} />
+            <Field {...bind('registrationState')} label="Truck registration state" options={stateOptions} />
+            <Field {...bind('registrationStatus')} label="Registration status" options={registrationStatuses} />
+            <Field {...bind('trailer')} label="Trailer type (optional)" hint="Leave blank for power only." required={false} wide />
+          </>}
+          {step === 4 && <>
+            <Field {...bind('garagingAddress')} label="Truck parking address" hint="Enter the street address, city, state and ZIP code." maxLength={400} wide />
+            <Choice {...bind('physicalDamage')} label="Do you want physical damage coverage for your tractor?" />
+            {values.physicalDamage === 'yes' && <Field {...bind('declaredValue')} label="Declared tractor value (USD)" hint="Enter the value in whole dollars." type="number" min="1" max="10000000" step="1" inputMode="numeric" wide />}
             <fieldset className={styles.documents}>
               <legend>Which documents can you provide privately?</legend>
-              {documents.map(([id, label]) => <label className={styles.check} key={id}><input type="checkbox" name="documents" value={id} defaultChecked={saved.documents?.includes(id) || false} /><span>{label}</span></label>)}
+              {documents.map(([key, label]) => <label className={styles.check} key={key}>
+                <input type="checkbox" name="documents" value={key} checked={values.documents.includes(key)}
+                  onChange={event => update('documents', event.target.checked ? [...values.documents, key] : values.documents.filter(id => id !== key))} /><span>{label}</span>
+              </label>)}
             </fieldset>
-            <label className={styles.checkConsent}>
-              <input type="checkbox" name="consent" required defaultChecked={saved.consent === 'on'} />
-              <span>I confirm these details are accurate and agree that Narta Express LLC may use them to review my pre-application and contact me about this opportunity.</span>
-            </label>
-            <label className={styles.trap} aria-hidden="true">Website<input type="text" name="website" tabIndex={-1} autoComplete="off" /></label>
+          </>}
+          {step === lastStep && <>
+            <div className={styles.reviewList}>
+              {reviewRows(values).map((rows, index) => <section className={styles.reviewGroup} key={steps[index][0]}>
+                <div className={styles.reviewHead}><h3>{steps[index][0]}</h3>
+                  <button className={styles.editLink} type="button" aria-label={'Edit ' + steps[index][0].toLowerCase()} disabled={busy} onClick={() => go(index, true)}>Edit</button>
+                </div>
+                <dl className={styles.reviewRows}>{rows.map(([label, answer]) => <div key={label}><dt>{label}</dt><dd>{answer}</dd></div>)}</dl>
+              </section>)}
+            </div>
+            <div className={styles.wideField}>
+              <label className={styles.checkConsent}>
+                <input type="checkbox" name="consent" required checked={values.consent}
+                  onChange={event => update('consent', event.target.checked)} {...accessibility('consent', null, errors.consent)} />
+                <span>I confirm these details are accurate and agree that Narta Express LLC may review my pre-application and contact me about this opportunity.</span>
+              </label>
+              <Help name="consent" error={errors.consent} />
+            </div>
+            <label className={styles.trap} aria-hidden="true">Website<input type="text" name="website" tabIndex={-1} autoComplete="off" value={values.website || ''} onChange={event => update('website', event.target.value)} /></label>
           </>}
         </div>
-        {error && <p role="alert" className={styles.error}>{error}</p>}
+        {serverError && <p role="alert" className={styles.error}>{serverError}</p>}
         <div className={styles.actions}>
-          {step > 0 && <button type="button" className={styles.back} disabled={busy} onClick={() => move(step - 1, { ...saved, ...readStep(form.current) })}>Back</button>}
-          <button className={styles.next} type="submit" disabled={busy}>{busy ? 'Submitting…' : step === 2 ? 'Submit pre-application' : 'Continue'}</button>
+          {step > 0 && !editing && <button type="button" className={styles.back} disabled={busy} onClick={() => go(step - 1)}>Back</button>}
+          <button className={styles.next} type="submit" disabled={busy}>{busy ? 'Submitting…' : step === lastStep ? 'Submit pre-application' : editing ? 'Save and return to review' : 'Continue'}</button>
         </div>
       </form>
     </section>
   );
 }
-
-const yesNo = [['yes', 'Yes'], ['no', 'No']];
