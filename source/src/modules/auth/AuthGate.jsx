@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cloudClient } from '../../../../lib/owner-op-cloud/client.js';
 import { ACCESS_CHECK_TIMEOUT_MS, OFFLINE_GRACE_MS, SESSION_CHECK_TIMEOUT_MS, approvalIsFresh, cachedApprovedUser, settleWithin } from './authStartupV110377.js';
+import { useInboxFeed } from '../recruiting/inboxClient.js';
+import recruitingStyles from '../recruiting/account.module.css';
 import './auth.css';
 
 function approvalKey(user) {
@@ -127,6 +129,11 @@ export default function AuthGate({ children }) {
   const [message, setMessage] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
   const [offlineAccess, setOfflineAccess] = useState(false);
+  const onMainScreen = typeof window !== 'undefined' && window.location.pathname === '/';
+  const recruitingToken = stage === 'approved' && !offlineAccess && onMainScreen ? session?.access_token : null;
+  const recruitingFeed = useInboxFeed(recruitingToken, '?count=1');
+  const newApplications = recruitingFeed?.data?.unread;
+  const accountLabel = newApplications > 0 ? `Account security, ${newApplications} new owner-operator applications` : 'Account security';
   const stageRef = useRef(stage);
   const verificationRef = useRef(0);
 
@@ -389,8 +396,18 @@ export default function AuthGate({ children }) {
   return (
     <>
       {children}
-      <button type="button" className="owner-auth-account-button" aria-label="Account security" onClick={() => setAccountOpen(v => !v)}>🔒</button>
-      {accountOpen ? <div className="owner-auth-account-menu"><b>{session?.user?.email}</b><span>{offlineAccess ? 'Approved · cached secure session' : 'Approved · secure session'}</span><button type="button" onClick={signOut}>Sign out</button></div> : null}
+      <button type="button" className="owner-auth-account-button" aria-label={accountLabel} aria-expanded={accountOpen} onClick={() => setAccountOpen(v => !v)}>
+        🔒
+        {newApplications > 0 && <span aria-hidden="true" className={recruitingStyles.badge}>{newApplications > 99 ? '99+' : newApplications}</span>}
+      </button>
+      {accountOpen && <div className="owner-auth-account-menu">
+        <b>{session?.user?.email}</b>
+        <span>{offlineAccess ? 'Approved · cached secure session' : 'Approved · secure session'}</span>
+        {typeof newApplications === 'number' && <a href="/recruiting" className={recruitingStyles.menuLink}>
+          Owner-operator applications{newApplications > 0 ? ` · ${newApplications} new` : ''}
+        </a>}
+        <button type="button" onClick={signOut}>Sign out</button>
+      </div>}
       {offlineAccess ? <div className="owner-auth-offline-badge">Secure cached session</div> : null}
     </>
   );

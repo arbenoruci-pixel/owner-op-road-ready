@@ -1,0 +1,32 @@
+.badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0 4px;
+  border: 2px solid white;
+  border-radius: 12px;
+  background: #a9283c;
+  color: white;
+  font: 700 .75rem/1 system-ui, sans-serif;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.menuLink {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding: .5rem .7rem;
+  border: 1px solid #b7c8d4;
+  border-radius: 8px;
+  background: #eef5fa;
+  color: #164b6b;
+  font-size: .93rem;
+  font-weight: 700;
+  text-decoration: none;
+}
