@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { cloudClient } from '../../lib/owner-op-cloud/client.js';
 import { inboxRequest, useInboxFeed } from '../../source/src/modules/recruiting/inboxClient.js';
+import InsuranceDocuments from './InsuranceDocuments.jsx';
 import styles from './inbox.module.css';
 
 const documentLabels = {
@@ -42,11 +43,12 @@ function DetailGroup({ title, rows }) {
   );
 }
 
-function Application({ record, onReview, busy }) {
+function Application({ record, token, onReview, busy }) {
+  const [opened, setOpened] = useState(false);
   const d = record.details;
   const docs = (d.documents || []).map(key => documentLabels[key] || key);
   return (
-    <details className={styles.card}>
+    <details className={styles.card} onToggle={event => setOpened(event.currentTarget.open)}>
       <summary>
         <span className={styles.identity}>
           <strong>{d.fullName}</strong>
@@ -62,6 +64,7 @@ function Application({ record, onReview, busy }) {
           ['Phone', <a href={'tel:' + d.phone.replace(/[^+0-9]/g, '')}>{d.phone}</a>],
           ['Available to start', dateLabel(d.startDate)],
         ]}/>
+        {record.reviewedAt && <InsuranceDocuments applicationId={record.id} token={token} opened={opened} />}
         <DetailGroup title="Driver experience" rows={[
           ['Active U.S. Class A CDL', yesNo(d.activeClassA)],
           ['CDL state', d.cdlState],
@@ -141,7 +144,7 @@ function Inbox({ token }) {
       {copyStatus && <p className={styles.muted} role="status">{copyStatus}</p>}
       {reviewError && <p className={styles.error} role="alert">{reviewError}</p>}
       {applications.length === 0 ? <p className={styles.empty}>New owner-operator applications will appear here.</p> :
-        applications.map(record => <Application key={record.id} record={record} onReview={markReviewed} busy={Boolean(marking)}/>)}
+        applications.map(record => <Application key={record.id} record={record} token={token} onReview={markReviewed} busy={Boolean(marking)}/>)}
       {total > 25 && <nav className={styles.pager} aria-label="Application pages">
         <button className={styles.secondary} type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>
         <span>Page {page + 1} of {Math.ceil(total / 25)}</span>
