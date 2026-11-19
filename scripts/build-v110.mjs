@@ -185,6 +185,7 @@ steps.splice(steps.indexOf('smart-folders/ui.test.mjs'),1);
 steps.push('document-flow/install.mjs','document-flow/core.test.mjs','smart-folders/ui.test.mjs','document-flow/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('manual-loads/install.mjs','manual-loads/core.test.mjs','manual-loads/release.mjs','verify-isolation-locks-v110.mjs');
 steps.push('logbook-restore/install.mjs','logbook-restore/core.test.mjs','logbook-restore/runtime.test.mjs','logbook-restore/release.mjs','verify-isolation-locks-v110.mjs');
+steps.push('live-duty/install.mjs','live-duty/release.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")
