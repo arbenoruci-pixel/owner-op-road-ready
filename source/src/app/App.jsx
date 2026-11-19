@@ -687,12 +687,43 @@ async function recoverSuspiciousTodayState(saved) {
   return recoveredCurrentStateForDay(saved, day, recovered, currentEvents);
 }
 
+function continueLiveNonDrivingDuty(saved, today, minute) {
+  const session = saved.liveNonDrivingDuty;
+  if (!session || !['SB', 'OFF', 'ON'].includes(session.status) ||
+      saved.currentStatus !== session.status || saved.gpsTrip?.status === 'active' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(session.day) || session.day > today) return saved;
+
+  let day = session.day;
+  let rows = saved.eventsByDay?.[day] || [];
+  let tail = sorted(rows).at(-1);
+  if (!tail || tail.id !== session.eventId || tail.status !== session.status ||
+      !['live_status', 'live_duty_continuation'].includes(tail.source)) return saved;
+
+  const eventsByDay = { ...saved.eventsByDay };
+  while (true) {
+    if (saved.signatureByDay?.[day] || saved.certifyStatus?.[day] === 'Certified') return saved;
+    const end = day === today ? minute : 1440;
+    if (end > tail.endMin) {
+      eventsByDay[day] = rows.map(row => row.id === tail.id ? { ...row, endMin:end } : row);
+    }
+    if (day === today || (day === addDays(today, -1) && minute === 0)) break;
+    day = addDays(day, 1);
+    if (eventsByDay[day]?.length) return saved;
+    tail = { ...tail, id:`live_duty_${session.eventId}_${day}`, startMin:0, endMin:0,
+      source:'live_duty_continuation' };
+    rows = [tail];
+  }
+  if (eventsByDay[session.day] === saved.eventsByDay[session.day] && day === session.day) return saved;
+  return { ...saved, eventsByDay, liveNonDrivingDuty:{ ...session, day, eventId:tail.id } };
+}
+
 function reconcileCurrentManualDrivingContinuity(saved = {}, now = new Date(), options = {}) {
   const zone = getHomeTerminalTimeZone(saved);
   const currentDay = localDayKey(now, zone);
   const previousDay = addDays(currentDay, -1);
   const nowMinute = homeTerminalMinute(now, zone);
-  return applyManualDrivingMidnightContinuity(saved, {
+  const continuous = continueLiveNonDrivingDuty(saved, currentDay, nowMinute);
+  return applyManualDrivingMidnightContinuity(continuous, {
     currentDay,
     previousDay,
     nowMinute,
@@ -2760,6 +2791,7 @@ export default function App() {
       let next = {
         ...base,
         activeDay:day,
+        liveNonDrivingDuty:['SB', 'OFF', 'ON'].includes(status) ? { day, eventId, status } : null,
         currentStatus:status,
         currentReason:reason,
         currentLocation:{ city:effectiveCity, state:effectiveState, lat:effectiveLat, lng:effectiveLng, gpsAccuracy:effectiveGpsAccuracy, locationSource:effectiveLocationSource },
