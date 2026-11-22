@@ -49,6 +49,12 @@ for(const name of files){
   source=source.replace(`await ${home}.waitFor({timeout:30000});`, `await ${nav}.or(${home}).first().waitFor({timeout:30000});`);
  }
  if(name==='workspace-navigation/browser-navigation.mjs'){
+  const folderAction="await missionPage(page);await page.getByRole('button',{name:'Open load folder',exact:true}).click();";
+  assert.ok(source.includes(folderAction),'Expected the mission folder entry');
+  source=source.replace(folderAction,"await missionPage(page);assert.equal(await page.locator('.rrd-mission-doc-actions').getByRole('button',{name:'Open load folder',exact:true}).count(),1);await page.getByRole('main').getByRole('button',{name:'Browse load folders',exact:true}).click();");
+  const toolAction="await page.getByRole('button',{name:button,exact:true}).click();";
+  assert.ok(source.includes(toolAction),'Expected DOT and backup navigation');
+  source=source.replace(toolAction,"await (await homeControl(page,button)).click();");
   const old="await page.getByLabel('Trip logbooks',{exact:true}).getByRole('button',{name:/2026-10-14/}).click();";
   assert.ok(source.includes(old),'Expected the retained trip logbook link');
   source=source.replace(old,"await page.locator('.rr-folder-logs summary').click();await page.locator('.rr-folder-logs').getByRole('button',{name:/2026-10-14/}).click();");

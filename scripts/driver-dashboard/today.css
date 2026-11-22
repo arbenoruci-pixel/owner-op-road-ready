@@ -87,6 +87,7 @@ nav.rr-today-nav>button[aria-current=page] { color:var(--today-blue)!important; 
 /* The authenticated app mounts its account button outside the driver nav.
    Give that existing control its own space beside the tabs, including on iPhones. */
 body:has(.owner-auth-account-button) nav.rr-today-nav {
+  --driver-account-space:calc(64px + env(safe-area-inset-right, 0px));
   padding-left:max(8px, env(safe-area-inset-left, 0px))!important;
   padding-right:calc(64px + env(safe-area-inset-right, 0px))!important;
 }
@@ -98,4 +99,19 @@ body:has(nav.rr-today-nav) .owner-auth-account-button {
 body:has(nav.rr-today-nav) .owner-auth-account-menu,
 body:has(nav.rr-today-nav) .owner-auth-offline-badge {
   bottom:calc(70px + env(safe-area-inset-bottom, 0px))!important;
+}
+
+/* The records shell also has a horizontal tab strip above its content.
+   Keep its styling local to those tabs when driver navigation is mounted. */
+.rr-files.rr-business-shell>nav.rr-today-nav {
+  margin:0!important; gap:2px; border:0!important; border-radius:0!important;
+  border-top:1px solid var(--today-line)!important; background:var(--today-card)!important;
+  padding:5px var(--driver-account-space,8px) calc(5px + env(safe-area-inset-bottom, 0px)) max(8px,env(safe-area-inset-left,0px))!important;
+}
+.rr-files.rr-business-shell>nav.rr-today-nav>button {
+  min-height:52px; padding:3px!important;
+  color:var(--today-muted)!important; background:transparent!important;
+}
+.rr-files.rr-business-shell>nav.rr-today-nav>button[aria-current=page] {
+  color:var(--today-blue)!important; background:var(--today-tint)!important;
 }

@@ -22,4 +22,21 @@
 .rr-folder-options{padding:0 0 12px}.rr-folder-intake,.rr-folder-file>div{display:flex;gap:7px;flex-wrap:wrap}.rr-folder-logs summary,.rr-folder-card>summary{cursor:pointer;min-height:44px;align-content:center;font-weight:650}.rr-folder-logs button,.rr-folder-card a{display:block;margin-top:5px}.rr-folder-logs small{font-weight:400}
 .rr-folder-panel .rr-manual-controls{margin:0;background:#fff;border-color:#dbe2ea;color:#183652}.rr-folder-panel .rr-manual-controls p,.rr-folder-panel .rr-manual-controls label{color:#243e55}.rr-folder-panel .rr-manual-controls:empty{display:none}
 .rr-folder-panel .rr-folder-error{background:#fff1ed;border-radius:8px;padding:10px;color:#8e2f1e}.rr-folder-panel label{display:grid;gap:6px;margin-block:8px}
-.rr-smart.rr-driver-folders>.rr-smart-muted,.rr-smart.rr-driver-folders>.rr-smart-search,.rr-smart.rr-driver-folders>h2{color:#183652}.rr-smart.rr-driver-folders .rr-smart-card small{color:#526578}
+.rr-smart.rr-driver-folders>.rr-smart-muted,.rr-smart.rr-driver-folders>.rr-smart-search,.rr-smart.rr-driver-folders>h2{color:#183652}
+
+
+/* Inbox rows keep the existing navy surface in both color schemes. */
+.rr-driver-folders .rr-inbox-list .rr-smart-card small {
+  color:#bfcede; font-size:.8125rem; line-height:1.35;
+}
+.rr-driver-folders .rr-inbox-list .rr-smart-card-bottom {
+  flex-wrap:wrap; align-items:baseline; row-gap:2px;
+}
+.rr-driver-folders .rr-inbox-list .rr-smart-card-bottom strong {
+  color:#ffd896; font-size:.8125rem; line-height:1.35;
+}
+.rr-driver-folders .rr-folder-panel .rr-folder-head>small { color:#d8e5ef; }
+.rr-driver-folders .rr-folder-card h3.rr-smart-summary {
+  color:#15283c; background:transparent; border:0; padding:0;
+}
+.rr-driver-folders .rr-folder-card h3.rr-smart-summary small { color:#425b70; }

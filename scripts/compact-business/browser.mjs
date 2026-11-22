@@ -34,6 +34,31 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
   const filters=page.getByRole('group',{name:'Load status'});
   assert.match(await filters.getByRole('button',{pressed:true}).innerText(),/Completed/);
   assert.ok(await filters.getByRole('button').evaluateAll(rows=>{const selected=rows.find(e=>e.getAttribute('aria-pressed')==='true');return selected&&rows.filter(e=>e!==selected).every(e=>getComputedStyle(e).backgroundColor!==getComputedStyle(selected).backgroundColor);}), 'Selected filter has a distinct visible highlight');
+  for (const scheme of ['light','dark']) {
+    await page.emulateMedia({colorScheme:scheme});
+    const contrast = await page.locator('.rr-smart-card').first().evaluate(row => {
+      const luminance = color => color.match(/[\d.]+/g).slice(0,3).map(Number)
+        .map(v => v/255).map(v => v <= .04045 ? v/12.92 : ((v+.055)/1.055)**2.4)
+        .reduce((total,v,i) => total + v*[.2126,.7152,.0722][i],0);
+      const labels = row.querySelectorAll(':scope>small,.rr-smart-card-bottom strong,.rr-smart-card-bottom small');
+      return [...labels].map(label => {
+        let parent = label;
+        while (parent.parentElement && getComputedStyle(parent).backgroundColor === 'rgba(0, 0, 0, 0)') parent = parent.parentElement;
+        const [dark,light] = [luminance(getComputedStyle(label).color),luminance(getComputedStyle(parent).backgroundColor)].sort((a,b)=>a-b);
+        return (light+.05)/(dark+.05);
+      });
+    });
+    assert.equal(contrast.length,3,'Broker, paperwork status and file count are present');
+    assert.ok(contrast.every(value=>value>=4.5),scheme+' load metadata contrast: '+contrast);
+    const navColors = await driver.getByRole('button').evaluateAll(buttons => buttons.map(button=>({
+      active:button.getAttribute('aria-current')==='page',
+      color:getComputedStyle(button).backgroundColor,
+    })));
+    const selected = navColors.find(button=>button.active);
+    assert.ok(selected && navColors.some(button=>!button.active && button.color!==selected.color),scheme+' selected driver tab is visibly distinct');
+    assert.ok(await driver.evaluate(nav => Math.abs(nav.getBoundingClientRect().bottom - window.innerHeight) <= 2),'Driver bar docks at viewport bottom');
+  }
+  await page.emulateMedia({colorScheme:'light'});
   for(const width of [320,390,820]){await page.setViewportSize({width,height:844});await fit('Inbox '+width);assert.ok(await page.locator('.rr-smart-card').first().evaluate(e=>e.getBoundingClientRect().height<155),'Inbox row is compact');}
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:out+'/'+name+'-loads.png'});
   await page.getByRole('button',{name:/Load 82011/}).click();await page.locator('.rr-inbox-detail').waitFor();assert.equal(await page.locator('.rr-inbox-list').isVisible(),false);

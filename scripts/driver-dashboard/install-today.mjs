@@ -14,6 +14,9 @@ function patch(file, original, change) {
 patch('DriverDashboard.jsx', 'function LoadHistory(', 'export function LoadHistory(');
 patch('DriverDashboard.jsx', 'function MissionScreen(', 'export function MissionScreen(');
 patch('DriverDashboard.jsx', "{currentLoad.guide?<button type=\"button\" onClick={()=>onSection('load_documents')}>Open load folder</button>:null}", "<button type=\"button\" onClick={()=>{requestLoadFolder(currentLoad.identity==='reference'?'shipment:'+currentLoad.shipmentReference:currentLoad.canonicalLoadNo);onSection('load_documents');}}>Open load folder</button>");
+patch('AdaptiveHomeV1038.jsx',
+  "className=\"primary\" onClick={()=>onSection('load_documents')}>Open load folder</button>",
+  "className=\"primary\" onClick={()=>onSection('load_documents')}>Browse load folders</button>");
 patch('HomeScreen.jsx', "import DriverDashboard from './DriverDashboard.jsx';", "import DriverDashboard from './TodayDashboard.jsx';");
 patch('HomeScreen.jsx', "const [businessSection, setBusinessSection] = useState(()=>state.homeSection||'');",
   "const [businessSection, setBusinessSection] = useState(()=>state.homeSection||'');\n  const [todayTab, setTodayTab] = useState('today');");
