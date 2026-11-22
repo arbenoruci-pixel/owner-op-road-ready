@@ -92,7 +92,7 @@ import { useLogbookClockV110 } from '../../shared/utils/useLogbookClockV110.js';
 change('source/src/modules/editor/InsertEditEventSheet.jsx',s=>{
  if(s.includes('// INSERT_TIME_CONTRACT_V110'))return s;
  s=once(s,"import { fromInput, nowMin, timeLabel, toInput } from '../../shared/utils/time.js';",`// INSERT_TIME_CONTRACT_V110
-import { nowMin, timeLabel } from '../../shared/utils/time.js';
+import { durLabel, nowMin, timeLabel } from '../../shared/utils/time.js';
 import { editorMinute as fromInput, editorTimeInput as toInput, editorRangeError, projectLogbookEvents } from '../logbook/public-api.js';
 import { useLogbookClockV110 } from '../../shared/utils/useLogbookClockV110.js';
 import EditEventSheet from './EditEventSheet.jsx';`);
@@ -117,6 +117,7 @@ import EditEventSheet from './EditEventSheet.jsx';`);
  s=once(s,'            {mode === \'insert\' && (\n              <div className="insert-duration-panel">',`            {rangeErrorV110 && <p role="alert" className="editor-error-v110">{rangeErrorV110}</p>}
             {mode === 'insert' && (
               <div className="insert-duration-panel">`);
+ s=once(s,'${Math.max(1, fromInput(form.end) - fromInput(form.start))}m','${durLabel(Math.max(1, fromInput(form.end) - fromInput(form.start)))}');
  s=once(s,'className="save-main" onClick={save}>{mode','className="save-main" onClick={save} disabled={!!rangeErrorV110}>{mode');
  return s;
 });
