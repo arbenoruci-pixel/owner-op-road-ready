@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import {register,createRequire} from 'node:module';
+import React from 'react';
+import {act} from 'react';
+const require=createRequire(import.meta.url);
+const {JSDOM}=require(process.env.FOLDER_TEST_DOM || 'jsdom');
+const dom=new JSDOM('<div id="root"></div>',{url:'https://folder.example.test/'});
+globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.sessionStorage=window.sessionStorage;
+globalThis.CustomEvent=window.CustomEvent;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+register(new URL('../test-jsx-loader.mjs',import.meta.url));register(new URL('../smart-folders/ui-loader.mjs',import.meta.url));register(new URL('./ui-loader.mjs',import.meta.url));
+const {createRoot}=await import('react-dom/client');
+const {default:Folders}=await import('../../source/src/modules/owneros/SmartLoadFolders.jsx');
+const open={id:'open',loadNo:'OPEN-110',status:'booked'},closed={id:'closed',canonicalLoadNo:'DONE-210',status:'delivered',notes:'Receiver signature is missing.',broker:'Fixture'};
+const docs=[{id:'p',clientDocumentId:'p',type:'pod',loadNo:'DONE-210',title:'POD',podSigned:true},{id:'rate',type:'rate_confirmation',loadNo:'DONE-210'}];
+const root=createRoot(document.querySelector('#root'));
+let scan,billing;
+await act(async()=>root.render(React.createElement(Folders,{loads:[open,{...closed,loadNo:closed.canonicalLoadNo}],documents:docs,
+  businessStore:{loads:[open,closed],evidenceAliases:[{from:'BOL-812',to:'DONE-210'}]},storedLoads:[open,closed],
+  state:{testCandidates:[{loadNo:'BOL-812',shipmentReference:'BOL-812',shipmentFiling:true,status:'completed'}]},onScan:value=>scan=value,onContinueBilling:value=>billing=value})));
+const find=label=>[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===label || b.textContent.trim()===label);
+const click=async button=>{assert.ok(button,'button present');await act(async()=>button.click());};
+assert.match(document.querySelector('.rr-inbox-list').textContent,/OPEN-110/);
+assert.doesNotMatch(document.querySelector('.rr-smart-cards').textContent,/DONE-210/);
+const search=document.querySelector('input[type=search]');assert.equal(search.placeholder,'Load, BOL, broker or destination');
+const changeSearch=async value=>act(async()=>{
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(search,value);
+  search.dispatchEvent(new window.Event('input',{bubbles:true}));
+});
+await changeSearch('BOL-812');
+assert.equal(document.querySelectorAll('.rr-smart-card').length,1);
+assert.match(document.querySelector('.rr-smart-card').textContent,/DONE-210/);
+await changeSearch('');
+// The selected historical load opens directly while Active continues to be the default list.
+await act(()=>window.dispatchEvent(new CustomEvent('road-ready-open-load-folder',{detail:'load:DONE-210'})));
+assert.equal(document.querySelector('.rr-inbox-detail h2').textContent,'DONE-210');
+assert.match(document.querySelector('.rr-inbox-detail').textContent,/POD needs review/);
+await click(find('Signed POD'));await click(find('View original'));assert.equal(globalThis.openedFile.id,'p');
+await click(find('Fuel receipts'));await click(find('Smart Scan'));assert.equal(scan.loadNo,'DONE-210');assert.equal(scan.kind,'fuel_receipt');
+await click(find('Review factoring packet'));assert.match(document.querySelector('.rr-inbox-detail').textContent,/No recorded submission/);
+await click(find('Open billing for this load'));assert.equal(billing,'DONE-210');
+await click(find('‹ Load folder'));await click(find('Download originals'));assert.match(document.querySelector('.rr-inbox-detail a').textContent,/fixture.pdf/);
+await click(find('‹ All load folders'));await click([...document.querySelectorAll('.rr-smart-tabs button')].find(b=>b.textContent.startsWith('Completed')));
+assert.match(document.querySelector('.rr-smart-cards').textContent,/DONE-210/);
+await act(()=>root.unmount());
+console.log('PASS active folders, completed-target navigation, original viewing, contextual scan, truthful POD state, file download and exact legacy billing target');
+const {planInvoiceSubmission}=await import('../../source/src/modules/owneros/invoiceSubmissionV110320.js');
+const {recordedPodReview}=await import('../../source/src/modules/owneros/folderReview.js');
+const load={loadNo:'BILL-310',broker:'Fixture broker',gross:1500,billingEmail:'test@example.test',notes:'The BOL has shipper signature only.'};
+const rate={type:'rate_confirmation',loadNo:load.loadNo,id:'r'}, proof={type:'pod',loadNo:load.loadNo,id:'p',sha256:'a'.repeat(64),podSigned:true};
+const makePlan=(trip,doc)=>planInvoiceSubmission({load:trip,documents:[rate,doc],profile:{carrierName:'Fixture carrier'}});
+assert.throws(()=>makePlan(load,proof),/Receiver signature needs review/);
+const record=recordedPodReview(load,proof,true,0,100),verified={...load,driverFolderPodReviews:{[proof.sha256]:record}};
+assert.equal(makePlan(verified,proof).documents.length,2);
+assert.throws(()=>makePlan(verified,{...proof,sourceCopyConflictV110419:true}),/review/);
+assert.throws(()=>makePlan({...verified,driverFolderPodReviews:{[proof.sha256]:{...record,signed:false}}},proof),/review/);
+console.log('PASS actual billing planner rejects the old shipper-only copy and recognizes its exact driver-reviewed replacement');

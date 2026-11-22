@@ -3,6 +3,7 @@
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
+      "redesign/driver-today-and-load-folders": false,
       "fix/dot-single-logbook-review": false,
       "fix/dot-wizard-wallet": false,
       "fix/dot-package-confirmation": false,

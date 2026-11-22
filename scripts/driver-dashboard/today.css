@@ -1,0 +1,117 @@
+.rr-driver-home.rr-today, nav.rr-today-nav {
+  --today-bg:#f2f5f8; --today-card:#fff; --today-ink:#112943; --today-muted:#435c72;
+  --today-line:#cbd7e2; --today-blue:#1455aa; --today-tint:#e9f1fc; --today-dark:#112d49;
+}
+.screen.rr-driver-home.rr-today {
+  display:block!important; box-sizing:border-box; position:relative; min-height:100dvh; height:auto!important;
+  width:100%; max-width:none!important; margin:0!important; padding:0 0 calc(92px + env(safe-area-inset-bottom))!important;
+  background:var(--today-bg)!important; color:var(--today-ink)!important; text-shadow:none!important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.rr-today *, .rr-today-nav * { box-sizing:border-box; }
+.rr-today>header.rr-today-brand {
+  display:flex!important; position:relative; top:auto; align-items:center; justify-content:space-between;
+  min-height:60px; margin:0!important; padding:8px max(16px,calc((100% - 680px) / 2))!important;
+  background:#112d49!important; color:white!important; border:0!important; border-radius:0!important;
+}
+.rr-today-brand>span { display:flex; align-items:center; gap:10px; font-weight:760; font-size:1.12rem; }
+.rr-today-brand svg { width:26px; height:26px; }
+.rr-today .rr-today-brand button { border:0; min-height:44px; padding:4px 10px; border-radius:8px; color:white; background:#24425f; max-width:55%; overflow-wrap:anywhere; font-size:.88rem; }
+.rr-today .rr-today-main { display:grid; gap:14px; width:100%; max-width:712px; margin:auto; padding:20px 16px; background:transparent; color:inherit; }
+.rr-today .rr-today-title,.rr-today .rr-today-row,.rr-today .rr-today-load { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.rr-today .rr-today-title h1 { margin:3px 0 0; color:var(--today-ink); font-size:clamp(2rem,5vw,2.4rem); line-height:1.12; letter-spacing:-.035em; }
+.rr-today .rr-today-kicker { color:var(--today-muted); font-size:.77rem; font-weight:740; letter-spacing:.08em; text-transform:uppercase; }
+.rr-today .rr-today-status,.rr-today .rr-today-kind { color:var(--today-blue); background:var(--today-tint); padding:6px 11px; border:0; border-radius:9px; font-size:.86rem; font-weight:700; }
+.rr-today button { cursor:pointer; font:inherit; }
+.rr-today .rr-today-status { min-height:44px; }
+.rr-today .rr-today-card,.rr-today .rr-today-attention { background:var(--today-card); border:1px solid var(--today-line); border-radius:16px; color:var(--today-ink); box-shadow:0 2px 6px rgba(19,44,72,.04); }
+.rr-today .rr-today-stop,.rr-today .rr-today-empty,.rr-today .rr-today-task,.rr-today .rr-today-hos { padding:17px; }
+.rr-today .rr-today-card h2 { color:var(--today-ink); font-size:1.48rem; line-height:1.2; letter-spacing:-.02em; margin:12px 0 5px; overflow-wrap:anywhere; }
+.rr-today .rr-today-card p { color:var(--today-muted); font-size:1rem; line-height:1.45; margin:5px 0; overflow-wrap:anywhere; }
+.rr-today .rr-today-note { display:block; margin:7px 0; font-size:.875rem; color:var(--today-muted); }
+.rr-today .rr-today-appt { display:grid; gap:3px; margin:13px 0 5px; border-left:3px solid var(--today-blue); padding-left:11px; }
+.rr-today .rr-today-appt>span { font-size:.875rem; color:var(--today-muted); }
+.rr-today .rr-today-appt>b { font-size:1.18rem; color:var(--today-ink); }
+.rr-today .rr-today-actions,.rr-today .rr-today-links,.rr-today .rr-today-utilities { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.rr-today .rr-today-actions { margin-top:14px; }
+.rr-today .rr-today-actions>* , .rr-today .rr-today-links>button, .rr-today .rr-today-utilities>button, .rr-today .rr-today-add-paper, .rr-today .rr-today-task button {
+  display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:46px; padding:8px 13px; border:1px solid var(--today-line); border-radius:10px; background:var(--today-card);
+  color:var(--today-blue); font-weight:680; font-size:.94rem; line-height:1.3; text-decoration:none; text-align:center;
+}
+.rr-today .rr-today-actions>* { flex:1 1 115px; }
+.rr-today .rr-today-actions>.primary,.rr-today .rr-today-add-paper { color:#fff; background:#1856a3; border-color:#1856a3; }
+.rr-today .rr-today-load { padding:12px 17px; border-top:1px solid var(--today-line); }
+.rr-today .rr-today-load h3 { color:var(--today-ink); font-size:1.13rem; margin:3px 0; overflow-wrap:anywhere; }
+.rr-today .rr-today-load p { font-size:.93rem; }
+.rr-today .rr-today-task { display:grid; gap:8px; }
+.rr-today .rr-today-utilities>button { flex:1; }
+.rr-today .rr-today-utilities svg { width:22px; height:22px; flex:none; }
+.rr-today .rr-today-attention summary { padding:13px 17px; cursor:pointer; min-height:46px; }
+.rr-today .rr-today-attention summary strong { margin-left:4px; }
+.rr-today .rr-today-more-tools,.rr-today .rr-today-attention[open] { display:grid; }
+.rr-today .rr-today-more-tools { background:var(--today-card); border-radius:14px; border:1px solid var(--today-line); overflow:hidden; }
+.rr-today .rr-today-more-tools>button,.rr-today .rr-today-attention>button { display:flex; align-items:center; justify-content:space-between; text-align:left; width:100%; min-height:48px; padding:10px 16px; border:0; border-bottom:1px solid var(--today-line); border-radius:0; color:var(--today-ink); background:var(--today-card); }
+.rr-today .rr-today-more-tools>button:last-child { border-bottom:0; }
+.rr-today .rr-today-hos .hos-compact-card { color:var(--today-ink); background:transparent; padding:0; border:0; box-shadow:none; }
+.rr-today .rr-today-hos .hos-compact-head { color:var(--today-ink); }
+.rr-today .rr-today-hos .hos-compact-head span { color:var(--today-muted); }
+.rr-today .rr-today-hos .hos-compact-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
+.rr-today .rr-today-hos .hos-compact-item { padding:7px 3px; min-width:0; }
+.rr-today .rr-today-hos .hos-compact-item b { font-size:clamp(.875rem,4.2vw,1.3rem); }
+nav.rr-today-nav { display:flex!important; align-items:stretch; justify-content:center; position:fixed; z-index:20; left:0; right:0; bottom:0; height:auto!important; width:100%; gap:2px; padding:5px 8px calc(5px + env(safe-area-inset-bottom))!important; margin:0!important; background:var(--today-card)!important; border:0; border-top:1px solid var(--today-line); }
+nav.rr-today-nav>button { display:flex!important; flex-direction:column; align-items:center; justify-content:center; gap:3px; flex:1 1 0; max-width:175px; min-height:52px; border:0; border-radius:9px; padding:3px; background:transparent!important; color:var(--today-muted)!important; font:650 .83rem/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+nav.rr-today-nav>button svg { width:22px; height:22px; }
+nav.rr-today-nav>button[aria-current=page] { color:var(--today-blue)!important; background:var(--today-tint)!important; }
+.rr-today :focus-visible, .rr-today-nav :focus-visible { outline:3px solid #2478cf; outline-offset:2px; }
+@media (prefers-color-scheme:dark) {
+  .rr-driver-home.rr-today, nav.rr-today-nav { --today-bg:#0d1e2e; --today-card:#152b40; --today-ink:#eaf3fb; --today-muted:#b9cad8; --today-line:#41536b; --today-blue:#a8d4ff; --today-tint:#203b55; }
+}
+@media (max-width:370px) {
+  .rr-today .rr-today-main { padding:14px 10px; gap:10px; }
+  .rr-today .rr-today-stop,.rr-today .rr-today-empty,.rr-today .rr-today-hos { padding:13px; }
+  .rr-today .rr-today-hos .hos-compact-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+.screen.rr-driver-home.rr-today::before { content:none; }
+.rr-today { color-scheme:light dark; --rr-text:var(--today-ink); --rr-muted:var(--today-muted); --rr-blue:var(--today-blue); --rr-line:var(--today-line); }
+.rr-today .rr-today-brand { padding-top:calc(8px + env(safe-area-inset-top))!important; }
+.rr-today .rr-gross-board>header>span,.rr-today .rr-gross-basis { color:var(--today-muted)!important; }
+.rr-today .rr-gross-board>header button { color:var(--today-blue)!important; min-height:44px; }
+.rr-today .rr-gross-card>span { color:#e7f0fa; }
+.rr-today .rr-gross-basis summary { min-height:44px; padding:10px 2px; }
+.rr-today .rrd-history { --rrd-muted:#c9d8e6; background:#19334c; }
+@media (max-width:580px) {
+  .rr-today .rr-gross-grid { grid-template-columns:1fr; gap:5px!important; }
+  .rr-driver-home.rr-today .rr-gross-card { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; min-height:0!important; gap:2px 9px; padding:9px 13px!important; }
+  .rr-today .rr-gross-card strong { grid-column:2; grid-row:1/3; }
+}
+/* The authenticated app mounts its account button outside the driver nav.
+   Give that existing control its own space beside the tabs, including on iPhones. */
+body:has(.owner-auth-account-button) nav.rr-today-nav {
+  --driver-account-space:calc(64px + env(safe-area-inset-right, 0px));
+  padding-left:max(8px, env(safe-area-inset-left, 0px))!important;
+  padding-right:calc(64px + env(safe-area-inset-right, 0px))!important;
+}
+body:has(nav.rr-today-nav) .owner-auth-account-button {
+  right:calc(9px + env(safe-area-inset-right, 0px))!important;
+  bottom:calc(9px + env(safe-area-inset-bottom, 0px))!important;
+  width:44px!important; height:44px!important; min-width:44px!important;
+}
+body:has(nav.rr-today-nav) .owner-auth-account-menu,
+body:has(nav.rr-today-nav) .owner-auth-offline-badge {
+  bottom:calc(70px + env(safe-area-inset-bottom, 0px))!important;
+}
+
+/* The records shell also has a horizontal tab strip above its content.
+   Keep its styling local to those tabs when driver navigation is mounted. */
+.rr-files.rr-business-shell>nav.rr-today-nav {
+  margin:0!important; gap:2px; border:0!important; border-radius:0!important;
+  border-top:1px solid var(--today-line)!important; background:var(--today-card)!important;
+  padding:5px var(--driver-account-space,8px) calc(5px + env(safe-area-inset-bottom, 0px)) max(8px,env(safe-area-inset-left,0px))!important;
+}
+.rr-files.rr-business-shell>nav.rr-today-nav>button {
+  min-height:52px; padding:3px!important;
+  color:var(--today-muted)!important; background:transparent!important;
+}
+.rr-files.rr-business-shell>nav.rr-today-nav>button[aria-current=page] {
+  color:var(--today-blue)!important; background:var(--today-tint)!important;
+}

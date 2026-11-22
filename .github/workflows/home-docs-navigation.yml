@@ -5,6 +5,11 @@ on:
       - 'scripts/workspace-navigation/**'
       - 'scripts/smart-folders/**'
       - 'scripts/manual-loads/**'
+      - 'scripts/driver-dashboard/**'
+      - 'scripts/driver-folder/**'
+      - 'scripts/test-support/adapt-driver-workflow-tests.mjs'
+      - 'scripts/test-support/dashboard-navigation.mjs'
+      - 'scripts/build-support/advance-release.mjs'
       - 'scripts/logbook-restore/**'
       - 'scripts/compact-business/**'
       - 'scripts/smart-import/**'
@@ -43,8 +48,8 @@ jobs:
           node scripts/verify-isolation-locks-v110.mjs
       - name: Install browser engines
         run: |
-          npm install --no-save --package-lock=false playwright@1.55.1 react-test-renderer@18.3.1
-          TEST_RENDERER=$PWD/node_modules/react-test-renderer node scripts/smart-folders/ui.test.mjs
+          npm install --no-save --package-lock=false playwright@1.55.1 jsdom@26.1.0
+          node scripts/driver-folder/ui.test.mjs
           npx playwright install --with-deps chromium webkit
       - name: Phone, iPad, shared records and filing flows
         run: |
@@ -56,7 +61,7 @@ jobs:
             sleep 1
           done
           failed=0
-          for test in logbook-restore/browser.mjs manual-loads/browser.mjs compact-business/browser.mjs smart-folders/browser-flow.mjs reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
+          for test in driver-dashboard/browser-today.mjs logbook-restore/browser.mjs manual-loads/browser.mjs compact-business/browser.mjs smart-folders/browser-flow.mjs reliability-sync/browser-profile.mjs reliability-sync/browser-quiet-status.mjs workspace-navigation/browser-navigation.mjs v110453/browser-workspace.mjs v110435/browser-phone-home.mjs v110430/browser-export.mjs smart-import/browser-import.mjs reliability-sync/browser-receive.test.mjs import-display/browser.mjs; do
             if ! node "scripts/$test"; then failed=1; fi
           done
           exit "$failed"

@@ -1,0 +1,42 @@
+.rr-smart:has(.rr-folder-panel),.rr-smart.rr-driver-folders{color-scheme:light;background:#f2f5f8;color:#17283d;padding:clamp(10px,3vw,22px);border-radius:14px;overflow-wrap:anywhere}
+.rr-folder-panel{display:grid;gap:14px;max-width:720px;margin-inline:auto;color:#17283d}
+.rr-folder-panel h2,.rr-folder-panel h3,.rr-folder-panel p{color:inherit;margin:0}
+.rr-folder-head{padding:16px 18px;background:#122b43;border-radius:12px;color:#fff}
+.rr-folder-head>div,.rr-folder-panel h3,.rr-folder-row,.rr-folder-logs>summary{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.rr-folder-head>div{flex-wrap:wrap}.rr-folder-head h2{font-size:clamp(24px,6vw,32px);margin:3px 0}
+.rr-folder-head>small,.rr-folder-stop>small{font-size:12px;font-weight:700;letter-spacing:.055em}
+.rr-folder-head p,.rr-folder-head>small{color:#d8e5ef}.rr-folder-head>div>span{background:#254662;color:#e7f1fc;border-radius:22px;padding:4px 12px;font-size:14px}
+.rr-folder-card,.rr-folder-note{background:#fff;color:#15283c;border:1px solid #dbe2ea;border-radius:12px;padding:14px 16px}
+.rr-folder-panel .rr-smart-summary{flex-direction:row;background:transparent;border:0;border-radius:0;padding:0;margin:0}
+.rr-folder-panel h3{font-size:18px}.rr-folder-panel small,.rr-folder-stop>span{font-size:14px;color:#4b6073}.rr-folder-panel h3 small{font-weight:500;white-space:nowrap}
+.rr-folder-stop,.rr-folder-file{display:grid;gap:4px;padding:12px 0;border-top:1px solid #e0e6ed}.rr-folder-stop:first-of-type{margin-top:12px}
+.rr-folder-panel button,.rr-folder-panel select,.rr-folder-panel summary{font:inherit}.rr-folder-panel button,.rr-folder-panel select{min-height:44px;border-radius:8px;border:1px solid #bcc9d7;padding:9px 13px;background:#f7f9fb;color:#183652;white-space:normal;text-align:start}
+.rr-folder-panel button:focus-visible,.rr-folder-panel summary:focus-visible{outline:3px solid #265bd2;outline-offset:2px}
+.rr-folder-panel .rr-folder-back{justify-self:start;padding-inline:2px;border:0;background:transparent;color:#214b99}
+.rr-folder-panel .rr-folder-primary{background:#2455ca;color:#fff;border:1px solid #2455ca;text-align:center;font-weight:650}
+.rr-folder-item+.rr-folder-item,.rr-folder-logs{border-top:1px solid #dce4eb}.rr-folder-card>h3+.rr-folder-item{margin-top:7px}
+.rr-folder-panel .rr-folder-row{padding:11px 0;min-height:56px;width:100%;border:0;border-radius:0;background:transparent}
+.rr-folder-row>span:nth-last-child(2){flex:1;display:grid;gap:3px}.rr-folder-row>span:last-child{color:#526b81;font-size:23px}
+.rr-folder-icon{display:grid;place-items:center;flex:0 0 28px;height:28px;border-radius:50%;font-weight:750}.rr-folder-icon.ok{color:#126142;background:#ddf3e8}.rr-folder-icon.warn{color:#814807;background:#fff0d5}.rr-folder-icon.neutral{background:#edf1f5;color:#536777}
+.rr-folder-panel .rr-folder-note{background:#fff4dc;border-color:#e7c58b;color:#69410c}.rr-folder-panel .rr-folder-note p,.rr-folder-card>p{margin-block:7px}
+.rr-folder-options{padding:0 0 12px}.rr-folder-intake,.rr-folder-file>div{display:flex;gap:7px;flex-wrap:wrap}.rr-folder-logs summary,.rr-folder-card>summary{cursor:pointer;min-height:44px;align-content:center;font-weight:650}.rr-folder-logs button,.rr-folder-card a{display:block;margin-top:5px}.rr-folder-logs small{font-weight:400}
+.rr-folder-panel .rr-manual-controls{margin:0;background:#fff;border-color:#dbe2ea;color:#183652}.rr-folder-panel .rr-manual-controls p,.rr-folder-panel .rr-manual-controls label{color:#243e55}.rr-folder-panel .rr-manual-controls:empty{display:none}
+.rr-folder-panel .rr-folder-error{background:#fff1ed;border-radius:8px;padding:10px;color:#8e2f1e}.rr-folder-panel label{display:grid;gap:6px;margin-block:8px}
+.rr-smart.rr-driver-folders>.rr-smart-muted,.rr-smart.rr-driver-folders>.rr-smart-search,.rr-smart.rr-driver-folders>h2{color:#183652}
+
+
+/* Inbox rows keep the existing navy surface in both color schemes. */
+.rr-driver-folders .rr-inbox-list .rr-smart-card small {
+  color:#bfcede; font-size:.8125rem; line-height:1.35;
+}
+.rr-driver-folders .rr-inbox-list .rr-smart-card-bottom {
+  flex-wrap:wrap; align-items:baseline; row-gap:2px;
+}
+.rr-driver-folders .rr-inbox-list .rr-smart-card-bottom strong {
+  color:#ffd896; font-size:.8125rem; line-height:1.35;
+}
+.rr-driver-folders .rr-folder-panel .rr-folder-head>small { color:#d8e5ef; }
+.rr-driver-folders .rr-folder-card h3.rr-smart-summary {
+  color:#15283c; background:transparent; border:0; padding:0;
+}
+.rr-driver-folders .rr-folder-card h3.rr-smart-summary small { color:#425b70; }

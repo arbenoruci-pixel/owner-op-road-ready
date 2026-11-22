@@ -1,7 +1,9 @@
 import {normalizeCanonicalLoadNoV105} from '../../source/src/modules/documents/documentFoundationV105.js';
 const text=v=>String(v??'').trim();
 export const loadKey=v=>text(v).toUpperCase().replace(/[^A-Z0-9]/g,'');
-export const closedLoad=l=>/^(delivered|completed|complete|closed|archived|invoiced|paid|cancelled|canceled|tonu|deleted|removed|superseded)$/i.test(text(l?.operationalStatus||l?.status));
+const terminalStatus=/^(delivered|completed|complete|closed|archived|invoice_ready|invoiced|submitted|paid|cancelled|canceled|tonu|deleted|removed|superseded|dismissed)$/i;
+export const closedLoad=load=>Boolean(load?.shipmentCompletionReview)||
+ [load?.status,load?.operationalStatus,load?.documentWorkflowStage,load?.serviceStatus].some(value=>terminalStatus.test(text(value)));
 export function exactLoad(store,id,no){
  const rows=(store.loads||[]).filter(l=>loadKey(l.canonicalLoadNo||l.loadNo)===loadKey(no));
  if(rows.length!==1||rows[0].id!==id||rows[0].deleted||rows[0].deletedAt)throw Error('This load changed. Reopen its folder before saving.');
@@ -33,11 +35,11 @@ export function activeFolderLoad(loads,current){
  const matched=current?.identity==='load'?open.filter(l=>loadKey(l.loadNo||l.canonicalLoadNo)===loadKey(current.loadNo)):[];
  return matched.length===1?matched[0]:open.length===1?open[0]:null;
 }
-export function assertManualOriginal(store,{id,loadNo,type,day,signed,sha256}){
+export function assertManualOriginal(store,{id,loadNo,type,day,signed,pendingSignature=false,sha256}){
  exactLoad(store,id,loadNo);
  if(!normalizeCanonicalLoadNoV105(loadNo))throw Error('This load number cannot be linked to documents. Correct its number before filing.');
  if(!['rate_confirmation','bol','pod','fuel_receipt','other'].includes(type))throw Error('Choose a document type.');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(day))throw Error('Choose the document date.');
- if(type==='pod'&&!signed)throw Error('Check the receiver signature before saving this as POD.');
+ if(type==='pod'&&!signed&&!pendingSignature)throw Error('Check the receiver signature before saving this as POD.');
  if((store.documents||[]).some(d=>d.sha256===sha256))throw Error('This original is already saved. Open it from Documents instead of adding a duplicate.');
 }
