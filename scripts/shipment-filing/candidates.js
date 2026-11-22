@@ -9,11 +9,12 @@ const hidden=e=>e.deleted===true||e.deletedAt||/^(deleted|removed|cancelled|canc
 const activity=e=>[e.note,e.description,...list(e.reasons)].join(' ');
 const refs=e=>[e.loadNo,e.shippingDocs,e.bol,e.pickedUpLoadNo,e.deliveredLoadNo].map(number).filter(Boolean);
 const own=(candidate,ref)=>key(candidate.loadNo)===key(ref)||list(candidate.aliases).some(a=>key(a.value)===key(ref)&&a.source!=='load_info');
-export function collectShipmentScanCandidates(state={},store={}){
+export function collectShipmentScanCandidates(state={},store={},at=null){
  const clean={...state,loadInfo:{}};
  const rows=libraryScanCandidates(collectLoadCandidatesV105(clean,store),store)
   .filter(c=>list(c.sourceKinds).some(s=>s!=='live_duty_event'));
- const entries=Object.entries(state.eventsByDay||{}).flatMap(([day,events])=>list(events).filter(e=>e&&!hidden(e)).map(event=>({day,event})))
+ const entries=Object.entries(state.eventsByDay||{}).flatMap(([day,events])=>list(events).filter(e=>e&&!hidden(e)&&
+  (!at||day<at.day||day===at.day&&Number(e.startMin)<=at.minute)).map(event=>({day,event})))
   .sort((a,b)=>a.day.localeCompare(b.day)||Number(a.event.startMin)-Number(b.event.startMin));
  const routes=Object.values(state.routeLegsByDay||{}).flatMap(list).filter(e=>e&&!hidden(e));
  const shipments=new Map();

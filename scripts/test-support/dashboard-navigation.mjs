@@ -1,18 +1,42 @@
 // Exercise the current visible navigation, without changing app or stored state.
+const secondaryTools = new Set([
+ 'Active Load','Billing','Documents','Drive','Export & Backup','Import','Maintenance',
+ 'Manage load details','My month','Settings','Wallet',
+]);
+
 export async function missionPage(page){
- await page.getByRole('button',{name:'Active Load',exact:true}).or(page.getByRole('button',{name:'Back to Home',exact:true})).or(page.getByRole('button',{name:/Home/i})).first().waitFor();
- if(!await page.locator('.rr-driver-mission').isVisible()){
-  if(!await page.locator('.rr-driver-home').isVisible())await page.getByRole('button',{name:/Home/i}).first().click();
-  await page.getByRole('button',{name:'Active Load',exact:true}).click();
+ const mission=page.locator('.rr-driver-mission');
+ const driver=page.getByRole('navigation',{name:'Driver navigation'});
+ const home=page.getByRole('button',{name:/Home/i}).first();
+ await mission.or(driver).or(home).first().waitFor();
+ if(!await mission.isVisible()){
+  if(!await driver.isVisible())await home.click();
+  await (await homeControl(page,'Active Load')).click();
  }
- await page.locator('.rr-driver-mission').waitFor();
+ await mission.waitFor();
  return page;
 }
+
 export async function homeControl(page,name){
  const control=page.getByRole('button',{name,exact:true});
- if(await page.locator('.rr-driver-mission').isVisible()&&!await control.isVisible())await page.getByRole('button',{name:'Back to Home',exact:true}).click();
+ if(await page.locator('.rr-driver-mission').isVisible()&&!await control.isVisible()){
+  await page.getByRole('button',{name:'Back to Home',exact:true}).click();
+ }
+ const nav=page.getByRole('navigation',{name:'Driver navigation'});
+ if(['Smart Scan','Continue saved scan','DOT Mode'].includes(name)&&!await control.isVisible()){
+  const more=nav.getByRole('button',{name:'More tools',exact:true});
+  if(await more.isVisible()&&await more.getAttribute('aria-current')==='page'){
+   await nav.getByRole('button',{name:'Today',exact:true}).click();
+  }
+ }
+ if(secondaryTools.has(name)){
+  const more=nav.getByRole('button',{name:'More tools',exact:true});
+  await control.or(more).first().waitFor();
+  if(!await control.isVisible())await more.click();
+ }
  return control;
 }
+
 export async function searchContrast(locator){
  return locator.evaluate(el=>{
   const rgb=value=>value.match(/[\d.]+/g).slice(0,3).map(Number);

@@ -38,7 +38,9 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   await page.getByRole('button',{name:'Open active load · Documents',exact:true}).click();
   async function add(type,label){
    const pdf=simplePdf('Synthetic '+type+' for MANUAL-128\nTest-only original.'),sha=createHash('sha256').update(pdf).digest('hex');
-   await page.getByRole('button',{name:'+ '+label+' manually',exact:true}).click();
+   const slot={rate_confirmation:'Rate confirmation',bol:'Bill of lading (BOL)',pod:'Signed POD'}[type];
+   await page.getByRole('button',{name:slot,exact:true}).click();
+   await page.getByRole('button',{name:'Choose photo or PDF',exact:true}).click();
    if(type==='pod'){assert.ok(await page.getByRole('button',{name:'Choose photo or PDF',exact:true}).isDisabled());await page.getByRole('checkbox',{name:'I checked that the receiver signed this delivery document.',exact:true}).check();}
    await page.getByRole('button',{name:'Choose photo or PDF',exact:true}).click();
    await page.locator('input[type=file][accept="application/pdf,.pdf"]').setInputFiles({name:type+'.pdf',mimeType:'application/pdf',buffer:pdf});
@@ -51,9 +53,12 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   await add('rate_confirmation','Ratecon');
   await page.getByRole('button',{name:'Mark delivered',exact:true}).click();await page.getByLabel('Actual delivery date',{exact:true}).fill('2026-11-15');await page.getByRole('button',{name:'Confirm delivered',exact:true}).click();
   assert.equal((await readStore()).loads.find(l=>l.loadNo==='MANUAL-128').status,'delivered');
-  assert.match(await page.locator('.rr-smart-summary').innerText(),/Missing: Pickup BOL, POD/);
+  assert.match(await page.locator('.rr-smart-summary').innerText(),/1 of 3 on file/);
+  for(const slot of ['Bill of lading (BOL)','Signed POD']){
+   assert.match(await page.getByRole('button',{name:slot,exact:true}).innerText(),/missing/i,slot+' is visibly missing after delivery');
+  }
   await add('bol','Pickup BOL');await add('pod','POD');
-  await page.getByText('3 / 3 document types saved',{exact:true}).waitFor();
+  await page.getByText('3 of 3 on file',{exact:true}).waitFor();
   await page.screenshot({path:out+'/'+name+'-completed.png'});
   await page.getByRole('button',{name:'‹ Home',exact:true}).click();await page.reload();
   await page.locator('.rr-driver-home').or(page.getByRole('button',{name:/Home/}).first()).first().waitFor();
@@ -61,9 +66,22 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   await page.getByRole('heading',{name:'No active load',exact:true}).waitFor();
   const store=await readStore();assert.equal(store.documents.filter(d=>d.canonicalLoadNo==='MANUAL-128').length,3);assert.equal(store.loads.find(l=>l.id==='done').gross,104770.09);
   assert.deepEqual(protectedData(await snapshot(page)),before);assert.deepEqual(readerRequests,[]);assert.deepEqual(errors,[]);
-  for(const width of [320,390,430,820]){await page.setViewportSize({width,height:844});assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'full revenue fits '+width);assert.ok(await page.locator('.rrd-icon-grid button>span:last-child').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'shortcut labels fit '+width);}
+  const driver=page.getByRole('navigation',{name:'Driver navigation'});
+  assert.equal(await driver.getByRole('button').count(),4);
+  for(const width of [320,390,430,820]){
+   await page.setViewportSize({width,height:844});
+   assert.ok(await driver.getByRole('button').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'navigation labels fit '+width);
+  }
+  await driver.getByRole('button',{name:'More tools',exact:true}).click();
+  await page.getByRole('region',{name:'Gross revenue dashboard'}).waitFor();
+  assert.equal(await page.locator('.rr-gross-card strong').count(),3);
+  for(const width of [320,390,430,820]){
+   await page.setViewportSize({width,height:844});
+   assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(es=>es.every(e=>e.scrollWidth<=e.clientWidth+1)),'full revenue fits '+width);
+  }
+  await driver.getByRole('button',{name:'Today',exact:true}).click();
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:out+'/'+name+'-home.png'});
   console.log('PASS '+name+' — four phone/tablet widths, manual folder, active Home access, original hashes, signed-POD confirmation, delivery with missing docs, reload and unchanged driver records');
- }catch(e){console.error(await page.locator('.rrd-icon-grid button>span:last-child').evaluateAll(es=>es.map(e=>({text:e.textContent,width:e.clientWidth,scroll:e.scrollWidth,font:getComputedStyle(e).fontSize,wrap:getComputedStyle(e).whiteSpace}))));await page.screenshot({path:out+'/'+name+'-failure.png',fullPage:true});fs.writeFileSync(out+'/'+name+'-failure.txt',e.stack+'\n'+await page.locator('body').innerText());throw e;}finally{await browser.close();}
+ }catch(e){console.error(await page.locator('[aria-label="Driver navigation"] button').evaluateAll(es=>es.map(e=>({text:e.textContent,width:e.clientWidth,scroll:e.scrollWidth,font:getComputedStyle(e).fontSize,wrap:getComputedStyle(e).whiteSpace}))));await page.screenshot({path:out+'/'+name+'-failure.png',fullPage:true});fs.writeFileSync(out+'/'+name+'-failure.txt',e.stack+'\n'+await page.locator('body').innerText());throw e;}finally{await browser.close();}
 }

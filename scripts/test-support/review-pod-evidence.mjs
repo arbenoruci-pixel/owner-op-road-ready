@@ -1,3 +1,4 @@
+import {homeControl} from './dashboard-navigation.mjs';
 // Synthetic browser helper: perform the same explicit evidence review as a driver.
 // Reading confirmation alone deliberately does not certify delivery evidence.
 import assert from 'node:assert/strict';
@@ -10,7 +11,7 @@ export async function reviewFixturePodEvidence(page,{loadNo,date,reference,outpu
  assert.ok(before?.client_document_id);assert.equal(before.type,'pod');
  assert.equal(before.extracted.linkToLogbook,false);
  assert.ok(!before.extracted.evidenceFactsV1?.reviewedAt,'reader-only save is not an evidence-facts review');
- await page.getByRole('button',{name:'Documents',exact:true}).click();
+ await (await homeControl(page,'Documents')).click();
  await page.getByRole('navigation',{name:'Records views'}).getByRole('button',{name:'Loads',exact:true}).click();
  await openLegacyLoadArchive(page);
  const docs=page.locator('.rr-docs-browser');

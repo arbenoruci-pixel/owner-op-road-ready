@@ -1,5 +1,4 @@
 // Dashboard navigation adapted
-import {missionPage,homeControl,searchContrast,readingDetails} from '../test-support/dashboard-navigation.mjs';
 // Synthetic localhost fixtures only; no real mailbox, account or production data.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,22 +15,30 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
   await page.clock.setFixedTime(new Date('2026-11-08T18:00:00Z'));
   await seed(page,state,[]);const before=protectedData(await snapshot(page));
   const fit=async label=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),label+' fits viewport');
+  const driver=page.getByRole('navigation',{name:'Driver navigation'});
+  await driver.waitFor();
+  assert.equal(await page.getByRole('region',{name:'Gross revenue dashboard'}).count(),0,'Today prioritizes the next stop');
+  assert.equal(await driver.getByRole('button').count(),4);
+  for(const button of await driver.getByRole('button').all()){
+    await button.scrollIntoViewIfNeeded();
+    assert.ok(await button.evaluate(button=>{const r=button.getBoundingClientRect();return button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),'Every navigation action is unobstructed');
+  }
+  await page.screenshot({path:out+'/'+name+'-home.png'});
+  await driver.getByRole('button',{name:'More tools',exact:true}).click();
   await page.getByRole('region',{name:'Gross revenue dashboard'}).waitFor();
   const homeAmounts=await page.locator('.rr-gross-card strong').allTextContents();
-  for(const width of [320,390,430,820,1024]){await page.setViewportSize({width,height:844});await fit('Home '+width);assert.equal(await page.locator('.rr-gross-card').count(),3);assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(rows=>rows.every(r=>r.scrollWidth<=r.clientWidth+1)),'Gross numbers remain inside cards');}
+  for(const width of [320,390,430,820,1024]){await page.setViewportSize({width,height:844});await fit('More '+width);assert.equal(await page.locator('.rr-gross-card').count(),3);assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(rows=>rows.every(r=>r.scrollWidth<=r.clientWidth+1)),'Gross numbers remain inside cards');}
   await page.setViewportSize({width:390,height:844});
-  // Home now includes the active folder above revenue. Check every shortcut after scrolling it into view.
-  for(const button of await page.locator('.rrd-icon-grid button').all()){await button.scrollIntoViewIfNeeded();assert.ok(await button.evaluate(button=>{const r=button.getBoundingClientRect();return button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),'Every navigation action is unobstructed when visible');}
-  await page.getByRole('region',{name:'Gross revenue dashboard'}).scrollIntoViewIfNeeded();
-  await page.screenshot({path:out+'/'+name+'-home.png'});
   await page.getByRole('button',{name:'Loads',exact:true}).click();await page.getByRole('region',{name:'Smart load folders'}).waitFor();
   await page.getByRole('button',{name:/^Completed/}).click();
-  assert.ok(await page.locator('.rr-smart-tabs button').evaluateAll(rows=>rows.every(e=>getComputedStyle(e).backgroundColor===(e.getAttribute('aria-pressed')==='true'?'rgb(21, 61, 110)':'rgba(0, 0, 0, 0)'))),'Filter highlight follows its selected state');
+  const filters=page.getByRole('group',{name:'Load status'});
+  assert.match(await filters.getByRole('button',{pressed:true}).innerText(),/Completed/);
+  assert.ok(await filters.getByRole('button').evaluateAll(rows=>{const selected=rows.find(e=>e.getAttribute('aria-pressed')==='true');return selected&&rows.filter(e=>e!==selected).every(e=>getComputedStyle(e).backgroundColor!==getComputedStyle(selected).backgroundColor);}), 'Selected filter has a distinct visible highlight');
   for(const width of [320,390,820]){await page.setViewportSize({width,height:844});await fit('Inbox '+width);assert.ok(await page.locator('.rr-smart-card').first().evaluate(e=>e.getBoundingClientRect().height<155),'Inbox row is compact');}
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:out+'/'+name+'-loads.png'});
   await page.getByRole('button',{name:/Load 82011/}).click();await page.locator('.rr-inbox-detail').waitFor();assert.equal(await page.locator('.rr-inbox-list').isVisible(),false);
   await page.setViewportSize({width:1024,height:850});await fit('Split inbox');assert.ok(await page.locator('.rr-inbox-list').isVisible());await page.screenshot({path:out+'/'+name+'-split.png'});
-  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Open billing ›',exact:true}).click();await page.locator('.billing-checklist-v102').waitFor();
+  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Review factoring packet',exact:true}).click();await page.getByRole('button',{name:'Open billing for this load',exact:true}).click();await page.locator('.billing-checklist-v102').waitFor();
   await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
   assert.equal(await page.evaluate(()=>scrollY),0,'Billing opens at the top');
   // Native select innerText is empty in WebKit and includes all options in Chromium.
