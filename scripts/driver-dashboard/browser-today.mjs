@@ -30,6 +30,15 @@ async function checkWidth(page, screen) {
   for (const width of [320, 390, 430, 820]) {
     await page.setViewportSize({ width, height: 844 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${screen} overflows at ${width}px`);
+    const controls = page.locator('nav.rr-today-nav button, .owner-auth-account-button');
+    assert.ok(await controls.count() >= 5, `${screen} exposes the driver tabs and account control`);
+    for (const control of await controls.all()) {
+      assert.ok(await control.evaluate(button => {
+        const rect = button.getBoundingClientRect();
+        const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return rect.width >= 44 && rect.height >= 44 && button.contains(target);
+      }), `${screen} overlapping or undersized control at ${width}px: ${await control.getAttribute('aria-label')}`);
+    }
   }
   await page.setViewportSize({ width: 390, height: 844 });
 }
@@ -59,6 +68,11 @@ for (const [name, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {
         } else {
           await card.getByRole('heading', {name: '#QA-117', exact: true}).waitFor();
           await checkWidth(page, 'Today');
+          const account = page.locator('.owner-auth-account-button');
+          await account.click();
+          await page.locator('.owner-auth-account-menu').waitFor();
+          await account.click();
+          await page.locator('.owner-auth-account-menu').waitFor({state: 'hidden'});
           const url = new URL(await card.getByRole('link', {name: 'Directions'}).getAttribute('href'));
           assert.equal(url.searchParams.get('destination'), loads[0].origin);
           const clocks = today.getByRole('region', {name: 'Hours of service'});
@@ -68,6 +82,7 @@ for (const [name, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {
           assert.equal(await nav.getByRole('button').count(), 4);
           await nav.getByRole('button', {name: 'More tools'}).click();
           await page.getByRole('heading', {name: 'More', exact: true}).waitFor();
+          await checkWidth(page, 'More');
           await nav.getByRole('button', {name: 'Today'}).click();
           await card.getByRole('button', {name: 'Open active load · Documents'}).click();
           const folder = page.locator('.rr-inbox-detail');

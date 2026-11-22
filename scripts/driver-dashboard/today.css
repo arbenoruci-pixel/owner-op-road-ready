@@ -84,3 +84,18 @@ nav.rr-today-nav>button[aria-current=page] { color:var(--today-blue)!important; 
   .rr-driver-home.rr-today .rr-gross-card { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; min-height:0!important; gap:2px 9px; padding:9px 13px!important; }
   .rr-today .rr-gross-card strong { grid-column:2; grid-row:1/3; }
 }
+/* The authenticated app mounts its account button outside the driver nav.
+   Give that existing control its own space beside the tabs, including on iPhones. */
+body:has(.owner-auth-account-button) nav.rr-today-nav {
+  padding-left:max(8px, env(safe-area-inset-left, 0px))!important;
+  padding-right:calc(64px + env(safe-area-inset-right, 0px))!important;
+}
+body:has(nav.rr-today-nav) .owner-auth-account-button {
+  right:calc(9px + env(safe-area-inset-right, 0px))!important;
+  bottom:calc(9px + env(safe-area-inset-bottom, 0px))!important;
+  width:44px!important; height:44px!important; min-width:44px!important;
+}
+body:has(nav.rr-today-nav) .owner-auth-account-menu,
+body:has(nav.rr-today-nav) .owner-auth-offline-badge {
+  bottom:calc(70px + env(safe-area-inset-bottom, 0px))!important;
+}
