@@ -58,7 +58,8 @@ for(const[name,type]of[['chromium',chromium],['webkit',webkit]]){
    assert.equal(await page.getByRole('slider',{name:'start time handle',exact:true}).getAttribute('aria-valuenow'),'0');
    assert.equal(await page.getByRole('slider',{name:'end time handle',exact:true}).getAttribute('aria-valuenow'),String(end));
    assert.equal(await page.getByLabel('End at 24:00',{exact:true}).isChecked(),scenario==='full-day');
-   assert.equal(await page.locator('.save-main').innerText(),`Save OFF · ${end}m`);
+   const expectedSaveLabel={prefix:'Save OFF · 10h 17m','full-day':'Save OFF · 24h','current-prefix':'Save OFF · 1h 30m'}[scenario];
+   assert.equal(await page.locator('.save-main').innerText(),expectedSaveLabel);
    await page.locator('.editor-duty-grid [data-status="SB"]').tap();
    await page.locator('.cancel-main').tap();
    const canceled=await stored(page);
