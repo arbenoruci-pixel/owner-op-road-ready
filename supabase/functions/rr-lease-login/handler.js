@@ -1,3 +1,5 @@
+import { sendPilotCode } from '../_shared/operator-outlook.js';
+
 const portalOrigin = 'https://owner-op-road-ready.vercel.app';
 const project = 'https://ghwkcgczuwctzxsxmqzx.supabase.co';
 
@@ -38,9 +40,13 @@ async function sendForInvitedMailbox(email, challenge, { getEnv, request }) {
     const reason = await user.json().catch(() => ({}));
     const duplicate =
       [409, 422].includes(user.status) &&
-      ['email_exists', 'user_already_exists'].includes(reason.code || reason.error_code);
+      [reason.error_code, reason.code].some(
+        (code) => code === 'email_exists' || code === 'user_already_exists'
+      );
     if (!duplicate) throw new Error('provisioning');
   }
+  if (await sendPilotCode(email, { getEnv, request })) return;
+
   const endpoint = new URL(project + '/auth/v1/otp');
   endpoint.searchParams.set('redirect_to', portalOrigin + '/operator');
   const otp = await request(endpoint, {
@@ -99,7 +105,17 @@ export function makeLoginHandler({ getEnv, request, waitUntil, logFailure }) {
       waitUntil(
         sendForInvitedMailbox(email, payload.code_challenge, { getEnv, request }).catch((e) =>
           logFailure(
-            ['configuration', 'membership', 'provisioning', 'delivery'].includes(e?.message)
+            [
+              'configuration',
+              'membership',
+              'provisioning',
+              'delivery',
+              'sender_store',
+              'microsoft_token',
+              'mail_scope',
+              'code_generation',
+              'mail_delivery',
+            ].includes(e?.message)
               ? e.message
               : 'network'
           )

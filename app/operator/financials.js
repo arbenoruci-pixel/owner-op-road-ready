@@ -17,12 +17,16 @@ export function weekStart(value) {
   return moveDay(value, -((dayOfWeek + 6) % 7));
 }
 
-export function currentWeek(now = new Date()) {
+export function chicagoDay(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(now);
   const field = (name) => parts.find((part) => part.type === name).value;
-  return weekStart([field('year'), field('month'), field('day')].join('-'));
+  return [field('year'), field('month'), field('day')].join('-');
+}
+
+export function currentWeek(now = new Date()) {
+  return weekStart(chicagoDay(now));
 }
 
 export function recordedRevenue(loads) {

@@ -1,0 +1,23 @@
+.tools { display: grid; gap: .85rem; min-width: 0; }
+.period, .card, .status { background: #fff; border: 1px solid #cbd9d5; border-radius: .8rem; padding: 1rem; color: #172e35; }
+.period { display: flex; align-items: center; justify-content: space-between; text-align: center; }
+.period strong, .period small, .list small { display: block; }
+.period button { font-size: 1.35rem; border: 1px solid #afc2bc; border-radius: .5rem; min-width: 44px; min-height: 44px; color: #17483f; background: #fff; }
+.card h3 { margin: 0 0 .65rem; font-size: 1.12rem; }
+.card p { margin: .65rem 0; }
+.metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); margin: 0; gap: .55rem; }
+.metrics div { padding: .6rem; background: #f0f5f3; border-radius: .4rem; }
+.metrics dt, .note, .list small, .period small { color: #435d63; font-size: .89rem; line-height: 1.45; }
+.metrics dd, .rows dd { margin: 0; font-weight: 650; }
+.rows { margin: .55rem 0; }
+.rows div { display: flex; justify-content: space-between; gap: .75rem; padding: .2rem 0; }
+.card details { margin: .75rem 0; }
+.card summary { cursor: pointer; font-weight: 600; padding: .25rem 0; }
+.list { list-style: none; margin: .25rem 0; padding: 0; }
+.list li { padding: .65rem 0; border-bottom: 1px solid #e1e9e6; overflow-wrap: anywhere; }
+.link { display: inline-block; border: 0; background: transparent; color: #155448; font: inherit; text-decoration: underline; cursor: pointer; padding: .3rem; }
+.primary { border: 0; border-radius: .5rem; padding: .7rem 1rem; background: #20594e; color: white; font: inherit; font-weight: 650; cursor: pointer; }
+.tools button:disabled { opacity: .6; cursor: default; }
+.status { overflow-wrap: anywhere; position: sticky; bottom: .5rem; box-shadow: 0 2px 8px #152d3422; }
+.status a { color: #124b40; font-weight: 650; }
+@media (max-width: 340px) { .metrics { grid-template-columns: 1fr; } }
