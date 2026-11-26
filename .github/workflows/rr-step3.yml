@@ -87,7 +87,10 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f scripts/lease-operator/step2c.rollback.test.sql
       - name: Apply Step 3 and test owner decisions
         run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126144151_driver_tools_pilot.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126144203_driver_tools.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126200000_rr_phase1_step3_financial_bridge.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126200500_rr_phase1_step3_maintenance.sql
           psql -v ON_ERROR_STOP=1 -f scripts/lease-operator/step3.rollback.test.sql
       - name: Install pinned dependencies for HTTP/AI adapters
         run: npm ci --ignore-scripts --no-audit --no-fund
