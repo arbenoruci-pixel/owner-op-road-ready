@@ -10,6 +10,7 @@ import OwnerEarnings from './OwnerEarnings.jsx';
 import LegacyHistory from './LegacyHistory.jsx';
 import { activityDays, formatDay as dateOnly, paymentRecorded, recordedRevenue } from './financials.js';
 import styles from './operator.module.css';
+import RateconDriverTest from './RateconDriverTest.jsx';
 
 const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const labels = {
@@ -154,7 +155,7 @@ function Pair({ name, value }) {
   return (
     <div className={styles.pair}>
       <dt>{name}</dt>
-      <dd>{value}</dd>
+      <dd style={typeof value === "string" && /^\$/.test(value) ? {whiteSpace:"nowrap",flexShrink:0} : undefined}>{value}</dd>
     </div>
   );
 }
@@ -269,7 +270,7 @@ function Stop({ label, address, at, zone, reference }) {
     <section className={styles.stop}>
       <h4>{label}</h4>
       <strong>{appointment(at, zone) || 'Appointment pending'}</strong>
-      {address && <div className={styles.address}>{address}</div>}
+      {address?.trim() && <a className={styles.address} href={"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(address.trim())} target="_blank" rel="noreferrer">{address}<small style={{display:"block"}}>Open in Google Maps</small></a>}
       {reference && (
         <div>
           {label} # <b>{reference}</b>
@@ -342,6 +343,7 @@ function LoadCard({ load, refresh, owner = false }) {
               )}
             </dl>
           )}
+          {!owner && load.load_number === "TEST-AGREE-03" && <RateconDriverTest key={load.id} loadId={load.id} loadNumber={load.load_number} refresh={refresh} />}
           <Documents loadId={load.id} refresh={refresh} />
         </div>
       )}
