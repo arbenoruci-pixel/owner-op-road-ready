@@ -36,10 +36,38 @@ test('unidentified, conflicting and shared-card receipts stay in owner review', 
   assert.equal(routed.status,'MATCHED_DRAFT');
   assert.equal(routed.postAllowed,false);
 });
-test('lumper is included once in credits and net comes from the database', () => {
-  const row = {invoice_gross_cents:120000,fee_eligible_gross_cents:105000,lumper_reimbursement_cents:15000,credit_cents:15000,estimated_net_cents:111600,net_cents:null};
-  assert.deepEqual(settlementDisplay(row),{invoiceGrossCents:120000,feeEligibleGrossCents:105000,lumperCents:15000,otherCreditsCents:0,totalCreditsCents:15000,netCents:111600});
-  assert.equal(settlementDisplay({...row,net_cents:96600}).netCents,96600);
-  assert.throws(() => settlementDisplay({...row,invoice_gross_cents:120001}));
-  assert.throws(() => settlementDisplay({...row,credit_cents:14999}));
+const draft = {invoice_gross_cents:120000,fee_eligible_gross_cents:105000,lumper_reimbursement_cents:15000,credit_cents:15000,estimated_net_cents:111600,verified_net_cents:0,negative_balance_cents:0,net_cents:null};
+test('lumper is included once and draft never masquerades as confirmed net', () => {
+  assert.deepEqual(settlementDisplay(draft),{invoiceGrossCents:120000,feeEligibleGrossCents:105000,lumperCents:15000,otherCreditsCents:0,totalCreditsCents:15000,isConfirmed:false,estimatedNetCents:111600,verifiedNetCents:0,negativeBalanceCents:0,netCents:null});
+  assert.throws(() => settlementDisplay({...draft,invoice_gross_cents:120001}));
+  assert.throws(() => settlementDisplay({...draft,credit_cents:14999}));
+});
+test('PostgREST integer strings and zero fractional numeric scale are exact', () => {
+  const strings = Object.fromEntries(Object.entries(draft).map(([k,v])=>[k,v===null?null:String(v)]));
+  assert.deepEqual(settlementDisplay(strings),settlementDisplay(draft));
+  assert.deepEqual(settlementDisplay({...strings,invoice_gross_cents:'120000.000'}),settlementDisplay(draft));
+});
+test('confirmed payable is separate from estimates and posted subtotals', () => {
+  const row = settlementDisplay({...draft,estimated_net_cents:'111600',verified_net_cents:'96600',net_cents:'96600'});
+  assert.equal(row.isConfirmed,true);
+  assert.equal(row.netCents,96600);
+  assert.equal(row.estimatedNetCents,111600);
+  assert.equal(row.verifiedNetCents,96600);
+  assert.throws(() => settlementDisplay({...draft,verified_net_cents:96600,net_cents:96601}));
+  assert.throws(() => settlementDisplay({...draft,net_cents:undefined}));
+});
+test('negative balance remains explicit, zero payable is confirmed only when present', () => {
+  const row = settlementDisplay({...draft,estimated_net_cents:'-2000',verified_net_cents:'-2000',negative_balance_cents:'2000',net_cents:'0'});
+  assert.equal(row.isConfirmed,true);
+  assert.equal(row.netCents,0);
+  assert.equal(row.verifiedNetCents,-2000);
+  assert.equal(row.negativeBalanceCents,2000);
+  assert.equal(settlementDisplay({...draft,estimated_net_cents:-2000,verified_net_cents:-2000}).isConfirmed,false);
+  assert.throws(()=>settlementDisplay({...draft,verified_net_cents:-2000,net_cents:0,negative_balance_cents:1999}));
+});
+test('reject malformed, fractional and unsafe numbers, and unsafe reconciliation', () => {
+  for (const v of [undefined,null,'',' ','1e3','1.01','NaN','Infinity','9007199254740992',9007199254740992,1.01,true,{},' 10 ','+10'])
+    assert.throws(()=>settlementDisplay({...draft,verified_net_cents:v}));
+  assert.equal(settlementDisplay({...draft,verified_net_cents:'9007199254740991'}).verifiedNetCents,Number.MAX_SAFE_INTEGER);
+  assert.throws(()=>settlementDisplay({...draft,invoice_gross_cents:Number.MAX_SAFE_INTEGER,fee_eligible_gross_cents:Number.MAX_SAFE_INTEGER,lumper_reimbursement_cents:1}));
 });
