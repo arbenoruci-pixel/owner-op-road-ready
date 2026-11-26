@@ -34,7 +34,7 @@ alter table public.rr_lease_amazon_import_rows add column amazon_load_id text;
 alter table public.rr_lease_amazon_import_rows drop constraint rr_lease_amazon_import_rows_check;
 alter table public.rr_lease_amazon_import_rows add constraint rr_step2c_amazon_identity check(
  (amazon_trip_id is not null or amazon_block_id is not null) and amazon_load_id is null
- or (amazon_trip_id is null and amazon_block_id is null and amazon_load_id ~ '^[A-Z0-9][A-Z0-9._:-]{0,119}$'));
+ or (amazon_trip_id is null and amazon_block_id is null and amazon_load_id is not null and amazon_load_id ~ '^[A-Z0-9][A-Z0-9._:-]{0,119}$'));
 -- Standalone IDs remain unallocated until their verified load identity is implemented.
 alter table public.rr_lease_amazon_import_rows add constraint rr_step2c_standalone_hold check(
  amazon_load_id is null or (load_id is null and verified_at is null and verified_by is null));
@@ -232,3 +232,17 @@ begin
  'amazon',coalesce((select jsonb_agg(to_jsonb(x)) from (select a.id,a.amazon_trip_id,a.amazon_block_id,a.amazon_load_id,a.report_status,a.amount_cents,a.event_date,a.created_at
  from public.rr_lease_amazon_import_rows a where a.carrier_user_id=v_actor and a.operator_id is null and (p_before is null or a.created_at<p_before) order by a.created_at desc,a.id limit p_limit) x),'[]'::jsonb));
 end $$;
+
+-- Retain malformed/unsupported original files without inventing financial rows.
+create function public.rr_lease_step2c_hold_report(p_carrier uuid,p_kind text,p_format text,p_bytes text,p_sha256 text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare a uuid;
+begin
+ perform rr_lease_private.step2c_lock_carrier(p_carrier);
+ if p_kind is null or p_kind not in ('amazon','firstline') or p_format is null or p_format not in ('csv','xlsx') or p_kind='firstline' and p_format<>'csv' then raise exception 'Unsupported report';end if;
+ a:=rr_lease_private.step2c_archive(p_carrier,p_kind,p_format,p_bytes,p_sha256,'{"review":"Schema or reconciliation failed; do not post"}'::jsonb);
+ insert into rr_lease_private.step2c_report_observations(archive_id,canonical_key,payload,result_kind,reason) values(a,'REPORT','{}'::jsonb,'NEEDS_REVIEW','Report schema or reconciliation failed') on conflict do nothing;
+ return jsonb_build_object('archiveId',a,'sha256',p_sha256,'postAllowed',false,'archived',true);
+end $$;
+revoke all on function public.rr_lease_step2c_hold_report(uuid,text,text,text,text) from public,anon,authenticated,service_role;
+grant execute on function public.rr_lease_step2c_hold_report(uuid,text,text,text,text) to service_role;

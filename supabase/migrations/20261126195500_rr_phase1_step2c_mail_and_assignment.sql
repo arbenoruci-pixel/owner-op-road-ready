@@ -85,7 +85,7 @@ begin
   if p_proposal->>'sha256' is distinct from p_sha256 then raise exception 'Proposal must refer to original hash';end if;
   v_format:=case when p_part_id='@message' then 'message' else 'attachment' end;
   a:=rr_lease_private.step2c_archive(p_carrier,'email',v_format,p_bytes,p_sha256,'{}'::jsonb);
- elsif nullif(btrim(p_hold_reason),'') is null or length(p_hold_reason)>1000 or p_sha256 is not null or p_proposal->>'amountCents' is not null then raise exception 'Unavailable original requires durable review without amount';end if;
+ elsif nullif(btrim(p_hold_reason),'') is null or length(p_hold_reason)>1000 or p_sha256 is not null or p_proposal->>'sha256' is not null or p_proposal->>'kind' is distinct from 'unknown' or p_proposal->>'amountCents' is not null then raise exception 'Unavailable original requires durable review without amount';end if;
  select * into old from rr_lease_private.step2c_mail_sources where carrier_user_id=p_carrier and source_ref=sr and attachment_ref=ar;
  if found then
   if row(old.provider,old.mailbox,old.message_id,old.part_id,old.archive_id,old.received_at,old.sender,old.file_name,old.mime_type) is distinct from row(p_provider,p_mailbox,p_message_id,p_part_id,a,p_received_at,p_sender,p_file_name,p_mime) then raise exception 'Mail original replay conflicts' using errcode='23505';end if;
