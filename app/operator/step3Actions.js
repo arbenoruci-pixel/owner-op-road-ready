@@ -7,7 +7,7 @@ async function call(client,name,args){const {data,error}=await client.rpc(name,a
 export async function submitTonu(client,loadId,form){
  if(!form.has('confirmCancellation'))throw Error('Confirm cancellation and original evidence');
  const date=val(form,'cancelledAt'),reason=val(form,'reason'),amount=parseUSDCents(val(form,'amount'));
- if(!/^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d)?(?:Z|[+-]\d\d:\d\d)$/.test(date)||!Number.isFinite(Date.parse(date))||Date.parse(date)>Date.now())throw Error('Actual cancellation time and explicit offset required');
+ if(!/^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d{1,3})?)?(?:Z|[+-]\d\d:\d\d)$/.test(date)||!Number.isFinite(Date.parse(date))||Date.parse(date)>Date.now())throw Error('Actual cancellation time and explicit offset required');
  if(amount<=0||!reason||reason.length>1000)throw Error('Exact positive amount and reason required');
  return call(client,'rr_lease_step3_approve_tonu',{p_load_id:id(loadId),p_document_id:id(val(form,'documentId')),p_amount_cents:amount,p_cancelled_at:date,p_reason:reason});
 }

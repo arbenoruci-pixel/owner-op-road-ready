@@ -166,7 +166,7 @@ try{
  const f=form({category:'PM',date,unit:'228',description:'Manual oil service',odometer:'500000',nextOdometer:'520000',vendor:'Fixture shop',amount:'125.50'});
  const file=new File([await actualPdf('Service receipt 125.50 USD')],'service.pdf',{type:'application/pdf'});
  const png=new File([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/Kf0AAAAASUVORK5CYII=','base64')],'service.png',{type:'image/png'});
- const m0=await submitMaintenance(a,op1,randomUUID(),f,null);
+ const m0=await submitMaintenance(a,op1,randomUUID(),form({category:'defect',date,unit:'228',description:'Manual separate defect record',odometer:'499999'}),null);
  const rkey=randomUUID(),m1=await submitMaintenance(a,op1,rkey,f,file);assert.equal(await submitMaintenance(a,op1,rkey,f,file),m1);
  const m2=await submitMaintenance(a,op1,randomUUID(),form({category:'service',date,unit:'228',description:'Manual photo repair',odometer:'500001'}),png);
  assert.equal(new Set([m0,m1,m2]).size,3);
