@@ -130,6 +130,16 @@ export default function AuthGate({ children }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const [offlineAccess, setOfflineAccess] = useState(false);
   const onMainScreen = typeof window !== 'undefined' && window.location.pathname === '/';
+  const [workspaceAccount, setWorkspaceAccount] = useState(null);
+  const accountId = session?.user?.id;
+  useEffect(() => {
+    if (!onMainScreen || !accountOpen || offlineAccess || stage !== 'approved' || !accountId) return;
+    let active = true;
+    supabase.from('rr_lease_operators').select('id').eq('carrier_user_id', accountId).limit(1)
+      .then(({ data }) => { if (active) setWorkspaceAccount(data?.length ? accountId : null); },
+        () => { if (active) setWorkspaceAccount(null); });
+    return () => { active = false; };
+  }, [accountId, accountOpen, offlineAccess, onMainScreen, stage, supabase]);
   const recruitingToken = stage === 'approved' && !offlineAccess && onMainScreen ? session?.access_token : null;
   const recruitingFeed = useInboxFeed(recruitingToken, '?count=1');
   const newApplications = recruitingFeed?.data?.unread;
@@ -403,6 +413,8 @@ export default function AuthGate({ children }) {
       {accountOpen && <div className="owner-auth-account-menu">
         <b>{session?.user?.email}</b>
         <span>{offlineAccess ? 'Approved · cached secure session' : 'Approved · secure session'}</span>
+        {accountId && workspaceAccount === accountId && !offlineAccess &&
+          <a href="/operator/carrier" className={recruitingStyles.menuLink}>Loads, income &amp; driver wallets</a>}
         {typeof newApplications === 'number' && <a href="/recruiting" className={recruitingStyles.menuLink}>
           Owner-operator applications{newApplications > 0 ? ` · ${newApplications} new` : ''}
         </a>}

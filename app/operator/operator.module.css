@@ -1,0 +1,365 @@
+.page {
+  min-height: 100dvh;
+  background: #f4f6f5;
+  color: #182f3a;
+  color-scheme: light;
+  font:
+    400 1rem/1.54 Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+.page * {
+  box-sizing: border-box;
+}
+.wrap {
+  width: min(100%, 54rem);
+  margin: auto;
+  padding: 0 clamp(1rem, 4vw, 2.25rem);
+}
+.header {
+  padding: max(0.8rem, env(safe-area-inset-top)) 0 0.8rem;
+  background: #102a38;
+  color: #fff;
+}
+.header .wrap,
+.sectionHeading,
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-weight: 760;
+  font-size: 1.2rem;
+  letter-spacing: -0.04em;
+}
+.brand i {
+  width: 19px;
+  height: 20px;
+  background: repeating-linear-gradient(110deg, #ffbf60 0 4px, transparent 4px 7px);
+  clip-path: polygon(0 71%, 100% 0, 100% 100%, 0 100%);
+}
+.page button,
+.page input,
+.page select {
+  font: inherit;
+}
+.page button {
+  border: 1px solid #aab9bf;
+  background: #fff;
+  color: #174650;
+  cursor: pointer;
+  padding: 0.48rem 0.9rem;
+  border-radius: 0.52rem;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+.page button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+.page :is(button, summary, input, select, a):focus-visible {
+  outline: 3px solid #cf7904;
+  outline-offset: 2px;
+}
+.header button {
+  background: transparent;
+  color: white;
+  border-color: #79929b;
+}
+.page h1,
+.page h2,
+.page h3,
+.page h4,
+.page p,
+.page dl {
+  margin: 0;
+  color: inherit;
+}
+.page h1 {
+  font-size: clamp(1.6rem, 5vw, 2.35rem);
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+}
+.page h2 {
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+.page h4 {
+  font-size: 0.92rem;
+}
+.page a,
+.page .link {
+  color: #09635d;
+  font-weight: 630;
+}
+.page .link {
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0.45rem 0.2rem;
+}
+.signin,
+.notice {
+  max-width: 31rem;
+  margin: clamp(1.25rem, 6vh, 4rem) auto;
+  padding: 0 1rem;
+}
+.cover {
+  background:
+    linear-gradient(0deg, #102a38, #102a3840),
+    url('/driver-dashboard/highway-sunset.webp') center 66% / cover;
+  color: #fff;
+  padding: 4.8rem 1.25rem 1.25rem;
+  border-radius: 0.85rem 0.85rem 0 0;
+}
+.form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.4rem;
+  background: #fff;
+  border: 1px solid #d2dbdb;
+  border-radius: 0 0 0.85rem 0.85rem;
+}
+.form label,
+.select {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+.form input,
+.select select {
+  border: 1px solid #a7b7be;
+  padding: 0.7rem;
+  border-radius: 0.5rem;
+  background: white;
+  color: #142e3c;
+  width: 100%;
+  min-height: 44px;
+}
+.page .primary {
+  background: #075e58;
+  border-color: #075e58;
+  color: white;
+  padding: 0.75rem;
+  font-weight: 650;
+}
+.notice p {
+  margin: 0.7rem 0;
+}
+.hero {
+  padding: 1.55rem 0;
+  background: #dfeae7;
+  border-bottom: 1px solid #c4d5d2;
+}
+.hero p {
+  font-size: 0.93rem;
+}
+.hero p:first-child {
+  margin: 0 0 0.35rem;
+}
+.hero p:last-child {
+  margin-top: 0.45rem;
+}
+.tabs {
+  display: flex;
+  gap: 0.6rem;
+  margin: 1.1rem 0;
+}
+.tabs button {
+  flex: 1;
+  background: transparent;
+  border-color: #bacbc8;
+  min-height: 44px;
+  font-weight: 650;
+}
+.tabs button[aria-pressed='true'] {
+  background: #0b6059;
+  color: white;
+  border-color: #0b6059;
+}
+.sectionHeading {
+  margin: 1rem 0 0.55rem;
+}
+.list {
+  display: grid;
+  gap: 0.55rem;
+}
+.card {
+  background: white;
+  border: 1px solid #cdd9d8;
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+.card summary {
+  display: flex;
+  cursor: pointer;
+  list-style: none;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+}
+.card summary::-webkit-details-marker {
+  display: none;
+}
+.card summary::after {
+  content: '⌄';
+  font-size: 1.2rem;
+}
+.card[open] > summary::after {
+  transform: rotate(180deg);
+}
+.card summary > :first-child {
+  margin-right: auto;
+  overflow-wrap: anywhere;
+}
+.card summary small {
+  display: block;
+  color: #50616b;
+}
+.card summary > span:nth-child(2) {
+  font-size: 0.82rem;
+  color: #475c66;
+}
+.detail {
+  display: grid;
+  gap: 0.95rem;
+  border-top: 1px solid #d8e1e0;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+.detail h4 {
+  margin-bottom: 0.22rem;
+}
+.stops {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 1rem;
+}
+.stop {
+  padding-left: 0.7rem;
+  border-left: 3px solid #378378;
+}
+.address,
+.reefer,
+.steps li > div {
+  white-space: pre-line;
+}
+.reefer {
+  background: #edf5f2;
+  padding: 0.7rem;
+  border-radius: 0.3rem;
+}
+.steps {
+  margin: 0.3rem 0;
+  padding-left: 1.4rem;
+}
+.steps li {
+  padding: 0.22rem 0;
+}
+.pair {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e0e7e6;
+}
+.pair dt {
+  color: #435a63;
+}
+.pair dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+}
+.document {
+  padding: 0.25rem 0;
+}
+.preview {
+  width: 100%;
+  height: min(70vh, 38rem);
+  border: 1px solid #cfdbd6;
+}
+.photo {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+.empty,
+.pager {
+  margin: 1rem 0 !important;
+}
+.select {
+  max-width: 32rem;
+  margin: 0.75rem auto;
+  padding: 0 1rem;
+}
+
+.statementHead, .weekPicker {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.statementHead h3 { margin: .2rem 0; }
+.meta { display: block; color: #52666c; }
+.entry { margin-bottom: .6rem; }
+.dailyLoads { display: grid; gap: 1rem; }
+.dailyLoads h4 { color: #205c55; }
+.loadLine, .legacyRow {
+  display: grid;
+  gap: .25rem;
+  padding: .65rem 0;
+  border-top: 1px solid #d8e1e0;
+}
+.loadLine dl { display: flex; gap: 1.2rem; flex-wrap: wrap; }
+.loadLine .pair { font-size: .85rem; padding: .25rem 0; gap: .4rem; }
+.loadLine details summary { display: list-item; padding: .25rem 0; color: #09635d; font-size: .85rem; }
+.loadLine details summary::after { display: none; }
+.weekPicker { justify-content: start; margin: 1rem 0; }
+.weekPicker label { display: flex; align-items: center; gap: .5rem; font-weight: 650; }
+.weekPicker input { min-width: 0; border: 1px solid #a7b7be; border-radius: .4rem; padding: .35rem; }
+.summaryGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .6rem; padding: 0 0 1rem; }
+.summaryGrid > div { background: white; border: 1px solid #cdd9d8; border-radius: .65rem; padding: .8rem; }
+.summaryGrid dt { font-size: .8rem; color: #435a63; }
+.summaryGrid dd { margin: .2rem 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.header .back { color: white; }
+.noPrint { display: block; }
+
+@media (max-width: 460px) {
+  .tabs { gap: .32rem; }
+  .tabs button { padding: .45rem .15rem; }
+  .statementHead { align-items: start; }
+}
+@media print {
+  .page:has([data-print-statement]) *:not(:has([data-print-statement]), [data-print-statement], [data-print-statement] *) {
+    display: none !important;
+  }
+  .page:has([data-print-statement]), .page:has([data-print-statement]) .wrap,
+  .page:has([data-print-statement]) .card, .page [data-print-statement] {
+    background: white;
+    color: #111;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .page:has([data-print-statement]) .list, .page [data-print-statement] { display: block; }
+  .page [data-print-statement] > * { margin-bottom: .7rem; }
+  .page [data-print-statement] :is(button, .noPrint) { display: none !important; }
+  .page [data-print-statement] .pair, .page [data-print-statement] .loadLine { break-inside: avoid; }
+}
