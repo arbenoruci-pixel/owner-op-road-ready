@@ -3,11 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { allRows, appointment, loadFields, loadOriginal, operatorClient, rows, usd } from './portalData.js';
 import { PortalSession, usePortalClient } from './PortalSession.jsx';
+import DriverLoadAlerts from './DriverLoadAlerts.jsx';
+import Step3Workspace from './Step3Workspace.jsx';
+import { unsubscribeLoadAlerts } from './loadAlerts.js';
 import OperatorWallet, { WalletProof } from './OperatorWallet.jsx';
 import OwnerEarnings from './OwnerEarnings.jsx';
 import LegacyHistory from './LegacyHistory.jsx';
+import DriverTools from './DriverTools.jsx';
 import { activityDays, formatDay as dateOnly, paymentRecorded, recordedRevenue } from './financials.js';
 import styles from './operator.module.css';
+import RateconDriverTest from './RateconDriverTest.jsx';
 
 const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const labels = {
@@ -152,7 +157,7 @@ function Pair({ name, value }) {
   return (
     <div className={styles.pair}>
       <dt>{name}</dt>
-      <dd>{value}</dd>
+      <dd style={typeof value === "string" && /^\$/.test(value) ? {whiteSpace:"nowrap",flexShrink:0} : undefined}>{value}</dd>
     </div>
   );
 }
@@ -267,7 +272,7 @@ function Stop({ label, address, at, zone, reference }) {
     <section className={styles.stop}>
       <h4>{label}</h4>
       <strong>{appointment(at, zone) || 'Appointment pending'}</strong>
-      {address && <div className={styles.address}>{address}</div>}
+      {address?.trim() && <a className={styles.address} href={"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(address.trim())} target="_blank" rel="noreferrer">{address}<small style={{display:"block"}}>Open in Google Maps</small></a>}
       {reference && (
         <div>
           {label} # <b>{reference}</b>
@@ -340,6 +345,7 @@ function LoadCard({ load, refresh, owner = false }) {
               )}
             </dl>
           )}
+          {!owner && load.load_number === "TEST-AGREE-03" && <RateconDriverTest key={load.id} loadId={load.id} loadNumber={load.load_number} refresh={refresh} />}
           <Documents loadId={load.id} refresh={refresh} />
         </div>
       )}
@@ -524,27 +530,57 @@ function Week({ statement, operator, refresh }) {
   );
 }
 
-function Workspace({ operator }) {
+function Workspace({ operator, userId }) {
   const client = usePortalClient();
   const owner = operator.workspace_kind === 'carrier';
-  const [tab, setTab] = useState('loads');
+  const [selectedTab, setTab] = useState('loads');
+  const choseTab = useRef(false);
+  const [access, setAccess] = useState(null);
+  const [accessCheck, setAccessCheck] = useState(0);
+  const ownWorkspace = owner && operator.carrier_user_id === userId;
+  const pilot = ownWorkspace && access?.client === client && access.userId === userId &&
+    access.operatorId === operator.id && access.check === accessCheck;
+  const tab = selectedTab === 'tools' && !pilot ? 'loads' : selectedTab;
+  useEffect(() => {
+    if (!ownWorkspace) return;
+    let active = true;
+    async function checkAccess() {
+      try {
+        const { data, error } = await client.rpc('rr_driver_tools_enabled', { p_operator_id: operator.id });
+        if (active && !error && data === true) {
+          setAccess({ client, userId, operatorId: operator.id, check: accessCheck });
+          if (!choseTab.current && window.location.hash === '#tools') {
+            choseTab.current = true;
+            setTab('tools');
+          }
+        }
+      } catch {
+        // The existing portal remains available if the pilot check cannot be completed.
+      }
+    }
+    checkAccess();
+    return () => { active = false; };
+  }, [client, userId, operator.id, ownWorkspace, accessCheck]);
+  const [toolsQuarter, setToolsQuarter] = useState(null);
   const [page, setPage] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const pageSize = 12;
   const listTab = tab === 'loads' || tab === 'history' || (tab === 'pay' && !owner);
-  const headings = { loads: 'Active loads', history: 'Load history', pay: owner ? 'Income & expenses' : 'Weekly settlements', wallet: 'Digital wallet' };
+  const headings = { loads: 'Active loads', history: 'Load history', pay: owner ? 'Income & expenses' : 'Weekly settlements', wallet: pilot ? 'Road document checklist' : 'Digital wallet', tools: 'Quarterly records' };
   useEffect(() => {
     function check() {
       if (document.visibilityState === 'visible') setRefresh((v) => v + 1);
     }
     const timer = window.setInterval(check, 60000);
     window.addEventListener('online', check);
+    window.addEventListener('rr-driver-load-assigned',check);
     document.addEventListener('visibilitychange', check);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('online', check);
+      window.removeEventListener('rr-driver-load-assigned',check);
       document.removeEventListener('visibilitychange', check);
     };
   }, []);
@@ -592,8 +628,20 @@ function Workspace({ operator }) {
   }, [client, listTab, operator.id, tab, page, refresh]);
   const displayed = listTab && data?.tab === tab && data?.page === page ? data : null;
   function switchTo(nextTab) {
+    choseTab.current = true;
+    if (pilot && nextTab !== 'tools' && window.location.hash === '#tools')
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
     setPage(0);
+    setToolsQuarter(null);
     setTab(nextTab);
+  }
+  function refreshWorkspace() {
+    setRefresh((v) => v + 1);
+    if (ownWorkspace) setAccessCheck((v) => v + 1);
+  }
+  function reviewQuarter(quarter) {
+    switchTo('tools');
+    setToolsQuarter(quarter);
   }
   return (
     <section>
@@ -605,8 +653,8 @@ function Workspace({ operator }) {
         </div>
       </div>
       <div className={styles.wrap}>
-        <nav className={styles.tabs} aria-label="Operator workspace">
-          {Object.entries({ loads: 'Loads', history: 'History', pay: owner ? 'Income' : 'Pay', wallet: 'Wallet' }).map(([key, name]) => (
+        <nav className={pilot ? styles.tabs + ' ' + styles.pilotTabs : styles.tabs} aria-label="Operator workspace">
+          {Object.entries({ loads: 'Loads', history: 'History', pay: owner ? 'Income' : 'Pay', ...(pilot ? { wallet: 'Road docs', tools: 'Tools' } : { wallet: 'Wallet' }) }).map(([key, name]) => (
             <button key={key} type="button" aria-pressed={tab === key} onClick={() => switchTo(key)}>{name}</button>
           ))}
         </nav>
@@ -615,12 +663,13 @@ function Workspace({ operator }) {
             {headings[tab]}
             {displayed && ' (' + displayed.count + ')'}
           </h2>
-          <button type="button" className={styles.link} onClick={() => setRefresh((v) => v + 1)}>
+          <button type="button" className={styles.link} onClick={refreshWorkspace}>
             Refresh
           </button>
         </div>
-        {tab === 'wallet' && <OperatorWallet operatorId={operator.id} refresh={refresh} />}
-        {tab === 'pay' && owner && <OwnerEarnings operatorId={operator.id} refresh={refresh} />}
+        {tab === 'wallet' && <OperatorWallet operatorId={operator.id} refresh={refresh} pilot={pilot} />}
+        {pilot && tab === 'tools' && <DriverTools key={operator.id} operatorId={operator.id} owner={owner} refresh={refresh} initialQuarter={toolsQuarter} />}
+        {tab === 'pay' && owner && <OwnerEarnings operatorId={operator.id} refresh={refresh} onReviewQuarter={pilot ? reviewQuarter : undefined} />}
         {listTab && error ? (
           <p role="alert">Could not refresh your records. Tap Refresh to try again.</p>
         ) : listTab && !displayed ? (
@@ -680,7 +729,7 @@ function Membership({ session, carrierEntry }) {
         if (claimError) throw claimError;
       }
       let membership = client.from('rr_lease_operators')
-        .select('id,company_name,driver_name,pay_weekday,carrier_user_id,workspace_kind');
+        .select('id,company_name,driver_name,pay_weekday,carrier_user_id,driver_user_id,workspace_kind');
       if (carrierEntry) membership = membership.eq('carrier_user_id', session.user.id);
       const list = await rows(membership.order('company_name').order('id'));
       if (active) {
@@ -729,7 +778,10 @@ function Membership({ session, carrierEntry }) {
           </select>
         </label>
       )}
-      {operator && <Workspace key={operator.id} operator={operator} />}
+      {carrierEntry && operator && operator.workspace_kind === 'leased' && operator.driver_user_id === session.user.id && <DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={() => window.dispatchEvent(new Event('rr-driver-load-assigned'))} />}
+      {operator && (carrierEntry
+        ? <Workspace key={operator.id} operator={operator} userId={session.user.id} />
+        : <Step3Workspace key={operator.id} operator={operator} session={session} operators={operators} />)}
     </>
   );
 }
@@ -747,6 +799,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
     return () => subscription.unsubscribe();
   }, [client]);
   async function signOut() {
+    await unsubscribeLoadAlerts(client || operatorClient()).catch(() => {});
     const { error } = await operatorClient().auth.signOut({ scope: 'local' });
     setSignoutError(Boolean(error));
   }

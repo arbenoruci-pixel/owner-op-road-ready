@@ -173,6 +173,12 @@
   gap: 0.6rem;
   margin: 1.1rem 0;
 }
+.pilotTabs {
+  flex-wrap: wrap;
+}
+.pilotTabs button {
+  min-width: max-content;
+}
 .tabs button {
   flex: 1;
   background: transparent;
@@ -191,6 +197,12 @@
 .list {
   display: grid;
   gap: 0.55rem;
+}
+.checkItem {
+  border: 1px solid #cdd9d8;
+  border-radius: .65rem;
+  background: white;
+  padding: .85rem 1rem;
 }
 .card {
   background: white;
@@ -362,4 +374,9 @@
   .page [data-print-statement] > * { margin-bottom: .7rem; }
   .page [data-print-statement] :is(button, .noPrint) { display: none !important; }
   .page [data-print-statement] .pair, .page [data-print-statement] .loadLine { break-inside: avoid; }
+}
+
+.stop a.address {
+  display: block;
+  margin-block: 0.25rem;
 }

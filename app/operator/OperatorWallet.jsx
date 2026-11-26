@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { allRows, loadOriginal } from './portalData.js';
 import { usePortalClient } from './PortalSession.jsx';
 import { emailReceiptText } from './walletReceipt.js';
+import { chicagoDay, formatDay } from './financials.js';
+import { instructionsSlot, reviewDocuments } from './roadDocuments.js';
 import styles from './operator.module.css';
 
 const fields = 'id,operator_id,slot_key,category,title,file_name,mime_type,byte_size,sha256,chunk_count,is_ready,is_current,revision,issued_on,expires_on';
@@ -12,20 +14,6 @@ const names = {
   insurance: 'Insurance', permit: 'Permit', inspection: 'Inspection', lease: 'Lease',
   carrier_document: 'Carrier document', eld: 'ELD', other: 'Document',
 };
-
-function formatDate(value) {
-  return new Date(value + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-}
-
-function localDay() {
-  const today = new Date();
-  return [today.getFullYear(), String(today.getMonth()+1).padStart(2,'0'), String(today.getDate()).padStart(2,'0')].join('-');
-}
-
-function expiryText(value, required = false) {
-  if (!value) return required ? 'Expiry needs verification' : 'Expiry not recorded';
-  return (value < localDay() ? 'Expired ' : 'Expires ') + formatDate(value);
-}
 
 function WalletFile({ doc }) {
   const client = usePortalClient();
@@ -103,26 +91,46 @@ export function WalletProof({ documentId, operatorId }) {
   </details>;
 }
 
-function WalletEntries({ operatorId, refresh }) {
-  const client = usePortalClient();
-  const [wallet, setWallet] = useState(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let active = true;
-    setFailed(false);
-    Promise.all([
-      allRows(() => client.from('rr_lease_wallet_documents').select(fields)
-        .eq('operator_id', operatorId).eq('is_ready', true).not('category', 'in', '(fuel_receipt,expense_receipt)')
-        .order('slot_key').order('revision', { ascending: false }).order('id')),
-      allRows(() => client.from('rr_lease_wallet_requirements').select('slot_key,title,expiry_required')
-        .eq('operator_id', operatorId).eq('active', true).order('slot_key')),
-    ])
-      .then(([docs, requirements]) => { if (active) setWallet({ docs, requirements }); })
-      .catch(() => { if (active) setFailed(true); });
-    return () => { active = false; };
-  }, [operatorId, refresh, client]);
-  if (failed) return <p role="alert">Could not load the wallet. Tap Refresh to try again.</p>;
-  if (!wallet) return <p role="status">Loading wallet…</p>;
+function RoadDocument({ item }) {
+  const { doc, title, status, versions, action } = item;
+  const older = versions.filter((file) => !file.is_current);
+  if (!doc && !older.length) return <div className={styles.checkItem}>
+    <strong>{title}</strong><p>{status}</p><p>{action}</p>
+  </div>;
+  return <details className={styles.card}>
+    <summary><span><strong>{title}</strong><small>{action || (doc && names[doc.category])}</small></span>
+      <span>{status}</span></summary>
+    <div className={styles.detail}>
+      {doc?.issued_on && <p>Issued {formatDay(doc.issued_on)}</p>}
+      {doc && <WalletFile key={doc.id} doc={doc} />}
+      {older.length > 0 && <details><summary>Previous versions ({older.length})</summary>
+        {older.map((version) => (
+          <section key={version.id}>
+            <h4>Version {version.revision}</h4>
+            <p>{version.expires_on ? 'Expiration date ' + formatDay(version.expires_on) : 'Expiry not recorded'}</p>
+            <WalletFile doc={version} />
+          </section>
+        ))}
+      </details>}
+    </div>
+  </details>;
+}
+
+function formatDate(value) {
+  return new Date(value + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function localDay() {
+  const today = new Date();
+  return [today.getFullYear(), String(today.getMonth()+1).padStart(2,'0'), String(today.getDate()).padStart(2,'0')].join('-');
+}
+
+function expiryText(value, required = false) {
+  if (!value) return required ? 'Expiry needs verification' : 'Expiry not recorded';
+  return (value < localDay() ? 'Expired ' : 'Expires ') + formatDate(value);
+}
+
+function WalletDocuments({ wallet }) {
   const { docs, requirements } = wallet;
   if (!docs.length && !requirements.length) return <p className={styles.empty}>Verified road documents will appear here.</p>;
   const groups = new Map();
@@ -157,6 +165,56 @@ function WalletEntries({ operatorId, refresh }) {
   })}</div>;
 }
 
-export default function OperatorWallet({ operatorId, refresh }) {
-  return <WalletEntries key={operatorId} operatorId={operatorId} refresh={refresh} />;
+function WalletEntries({ operatorId, refresh, pilot }) {
+  const client = usePortalClient();
+  const [wallet, setWallet] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setFailed(false);
+    Promise.all([
+      allRows(() => client.from('rr_lease_wallet_documents').select(fields)
+        .eq('operator_id', operatorId).eq('is_ready', true).not('category', 'in', '(fuel_receipt,expense_receipt)')
+        .order('slot_key').order('revision', { ascending: false }).order('id')),
+      allRows(() => client.from('rr_lease_wallet_requirements').select('slot_key,title,expiry_required')
+        .eq('operator_id', operatorId).eq('active', true).order('slot_key')),
+    ])
+      .then(([docs, requirements]) => { if (active) setWallet({ docs, requirements }); })
+      .catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, [operatorId, refresh, client]);
+  if (failed) return <p role="alert">{pilot ? 'Could not load road documents. Tap Refresh to try again.' : 'Could not load the wallet. Tap Refresh to try again.'}</p>;
+  if (!wallet) return <p role="status">{pilot ? 'Loading road documents…' : 'Loading wallet…'}</p>;
+  if (!pilot) return <WalletDocuments wallet={wallet} />;
+  const today = chicagoDay();
+  const items = reviewDocuments(wallet.docs, wallet.requirements, today);
+  const required = items.filter((item) => item.required);
+  const needed = required.filter((item) => item.action);
+  const guide = items.find((item) => item.key === instructionsSlot && item.doc && !item.action);
+  const remaining = items.filter((item) => !item.required && item !== guide);
+  return <div className={styles.list}>
+    <div className={styles.checkItem}>
+      <strong>{required.length
+        ? `${required.length - needed.length} of ${required.length} required documents current`
+        : 'Dispatch checklist pending'}</strong>
+      <p>{required.length ? `Dispatch checklist as of ${formatDay(today)} (Chicago time).`
+        : 'Ask dispatch which documents this driver and equipment need.'}</p>
+    </div>
+    {needed.length > 0 && <>
+      <h3>What to email dispatch</h3>
+      <p>Email clear copies from your registered address. Include your name, company, and the unit number for equipment documents.</p>
+      <p>{guide ? 'Open the dispatch guide below for the receiving email address.'
+        : 'Confirm the receiving email address with your dispatcher before sending documents.'}</p>
+    </>}
+    {guide && <RoadDocument item={guide} />}
+    {needed.filter((item) => item !== guide).map((item) => <RoadDocument key={item.key} item={item} />)}
+    {required.some((item) => !item.action && item !== guide) && <h3>Required documents on file</h3>}
+    {required.filter((item) => !item.action && item !== guide).map((item) => <RoadDocument key={item.key} item={item} />)}
+    {remaining.length > 0 && <h3>Additional documents</h3>}
+    {remaining.map((item) => <RoadDocument key={item.key} item={item} />)}
+  </div>;
+}
+
+export default function OperatorWallet({ operatorId, refresh, pilot = false }) {
+  return <WalletEntries key={operatorId} operatorId={operatorId} refresh={refresh} pilot={pilot} />;
 }
