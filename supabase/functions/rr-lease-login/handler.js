@@ -38,7 +38,7 @@ async function sendForInvitedMailbox(email, challenge, { getEnv, request }) {
     const reason = await user.json().catch(() => ({}));
     const duplicate =
       [409, 422].includes(user.status) &&
-      ['email_exists', 'user_already_exists'].includes(reason.code || reason.error_code);
+      [reason.error_code, reason.code].some((code) => code === 'email_exists' || code === 'user_already_exists');
     if (!duplicate) throw new Error('provisioning');
   }
   const endpoint = new URL(project + '/auth/v1/otp');
