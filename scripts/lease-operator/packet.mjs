@@ -45,6 +45,9 @@ export async function buildLeaseFactoringPacket(manifest, readOriginal) {
   if (invoice.amount_cents !== load.gross_cents) throw Error("Invoice total must match the current gross rate.");
   if (!Array.isArray(documents) || documents.filter(d => d.kind === "ratecon").length !== 1 || !documents.some(d => d.kind === "pod"))
     throw Error("Provide one current rate confirmation and the signed delivery evidence.");
+  const pods = documents.filter(d => d.kind === 'pod');
+  if (!load.final_pod_id || pods.length !== 1 || pods[0].id !== load.final_pod_id || pods[0].rejected_at != null || pods[0].source_kind === 'driver_upload' && pods[0].set_as_final !== true)
+    throw Error('Only the approved final POD may appear in the factoring packet.');
   const seen = new Set();
   const checksums = new Set();
   for (const doc of documents) {

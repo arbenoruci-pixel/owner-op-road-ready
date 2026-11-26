@@ -14,7 +14,7 @@ async function fixture(){
     files.set(id,bytes);
     docs.push({id,load_id:"load-1",kind,is_current:true,verified_for_billing:true,sha256:createHash("sha256").update(bytes).digest("hex"),byte_size:bytes.length,mime_type:"application/pdf"});
   }
-  const manifest={load:{id:"load-1",broker_name:"Example Freight",load_number:"EX-1",gross_cents:250000},invoice:{number:"TEST-1",date:"2026-11-26",amount_cents:250000},documents:docs};
+  const manifest={load:{id:"load-1",final_pod_id:"doc-1",broker_name:"Example Freight",load_number:"EX-1",gross_cents:250000},invoice:{number:"TEST-1",date:"2026-11-26",amount_cents:250000},documents:docs};
   return {manifest,read:d=>files.get(d.id)};
 }
 test("packet preserves original pages and bills the full broker amount",async()=>{
@@ -47,4 +47,15 @@ test("renders a phone photo from verified WebP bytes",async()=>{
   const corrupt=Buffer.from("not a webp");
   Object.assign(doc,{byte_size:corrupt.length,sha256:createHash("sha256").update(corrupt).digest("hex")});
   await assert.rejects(()=>buildLeaseFactoringPacket(manifest,d=>d===doc?corrupt:read(d)),/decode/);
+});
+
+test("blocks intermediate, rejected and unclassified phone PODs",async()=>{
+ const {manifest,read}=await fixture(),pod=manifest.documents[1];
+ pod.source_kind='driver_upload';pod.set_as_final=false;
+ await assert.rejects(()=>buildLeaseFactoringPacket(manifest,read),/approved final POD/);
+ pod.set_as_final=true;pod.rejected_at='2026-11-26T00:00:00Z';
+ await assert.rejects(()=>buildLeaseFactoringPacket(manifest,read),/approved final POD/);
+ pod.rejected_at=null;
+ manifest.documents.push({...pod,id:'intermediate'});
+ await assert.rejects(()=>buildLeaseFactoringPacket(manifest,read),/approved final POD/);
 });
