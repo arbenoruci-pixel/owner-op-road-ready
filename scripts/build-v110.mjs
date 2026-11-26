@@ -188,6 +188,7 @@ steps.push('logbook-restore/install.mjs','logbook-restore/core.test.mjs','logboo
 steps.push('live-duty/install.mjs','live-duty/release.mjs');
 steps.push('recruiting/server.test.mjs','recruiting/release.mjs');
 steps.push('editor-duration/release.mjs');
+steps.push('live-pickup-save/install.mjs','live-pickup-save/runtime.test.mjs','live-pickup-save/release.mjs','verify-isolation-locks-v110.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")

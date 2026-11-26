@@ -38,7 +38,8 @@
       "fix/restore-original-logbook": false,
       "fix/logbook-signout-recovery": false,
       "fix/logbook-indexed-originals": false,
-      "fix/duty-duration-hours-minutes": false
+      "fix/duty-duration-hours-minutes": false,
+      "fix/live-pickup-save-20261123": false
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",

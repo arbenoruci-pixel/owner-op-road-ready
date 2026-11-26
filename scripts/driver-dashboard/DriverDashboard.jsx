@@ -62,7 +62,7 @@ function deriveHistory(store,state,activeNo){
  return [...found.values()].sort((a,b)=>b.date.localeCompare(a.date)||a.number.localeCompare(b.number)).slice(0,60);
 }
 function LoadHistory({store,state,activeNo,onOpenLoads}){
- const [open,setOpen]=useState(true);
+ const [open,setOpen]=useState(false);
  const timezone=getHomeTerminalTimeZone(state),today=homeTerminalDayKey(new Date(),timezone),thisWeek=monday(today),prior=addWeek(thisWeek,-7);
  const rows=useMemo(()=>deriveHistory(store,state,activeNo),[store,state,activeNo]);
  const groups=useMemo(()=>{
@@ -72,7 +72,7 @@ function LoadHistory({store,state,activeNo,onOpenLoads}){
  },[rows,thisWeek,prior]);
  return <section className="rrd-history" aria-label="Recent loads">
   <header><button type="button" className="rrd-history-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><span className="rrd-history-icon"><AppIcon name="loads"/></span><b>Recent Loads</b><small>{rows.length} saved</small><span className={open?'rrd-arrow open':'rrd-arrow'}><Glyph name="chevron" size={17}/></span></button><button type="button" className="rrd-all-link" onClick={onOpenLoads}>View all</button></header>
-  {open?<div className="rrd-history-body">{groups.length?groups.map((group,index)=><details key={group.key} className="rrd-week" open={index===0?true:undefined}>
+  {open?<div className="rrd-history-body">{groups.length?groups.map(group=><details key={group.key} className="rrd-week">
    <summary><span>{group.title}</span><small>{group.loads.length} loads</small><Glyph name="chevron" size={15}/></summary>
    <div>{group.loads.slice(0,8).map(item=><button type="button" className="rrd-history-row" key={item.key} onClick={onOpenLoads} aria-label={'Open load folder '+item.number}>
      <span className={'rrd-status-dot '+item.tone} aria-hidden="true">{item.tone==='done'?'✓':item.tone==='active'?'→':'·'}</span>
@@ -149,9 +149,13 @@ export default function DriverDashboard(props){
    <button type="button" onClick={onTrailer} aria-label={'Equipment '+summary.vehicle}><AppIcon name="loads"/><span>{summary.vehicle}</span></button>
   </div>
   {savedScan?<aside className="rrd-saved-scan"><b>Continue your load</b><p>Your original document is saved.</p><button type="button" disabled={savedScanBusy} onClick={()=>onContinueSavedScan?.(savedScan)}>{savedScanBusy?'Opening saved original…':'Continue saved scan'}</button>{savedScanMessage?<p role="alert">{savedScanMessage}</p>:null}</aside>:null}
-  <GrossBoard store={businessStore} state={state} onOpen={()=>goSection('overview')}/>
   <Shortcuts operatorProfile={operatorProfile} actions={{onLog:onOpenLogbook||onLog,onWallet,onScan:()=>onScan('auto'),onLoads:()=>goSection('load_documents'),onDocs:()=>goSection('documents'),onDot,onActive:()=>setMissionOpen(true),onMaintenance:()=>goSection('maintenance')}}/>
+  <details className="rrd-disclosure"><summary>Gross revenue</summary>
+  <GrossBoard store={businessStore} state={state} onOpen={()=>goSection('overview')}/>
+  </details>
+  <details className="rrd-disclosure rrd-tools-disclosure"><summary>Additional tools</summary>
   <SecondaryTools operatorProfile={operatorProfile} onSection={goSection} onDrive={onDrive} onOpenBackup={onOpenBackup}/>
+  </details>
   <LoadHistory store={businessStore} state={state} activeNo={activeLoad?.loadNo||getActiveLoadGuideV103(state)?.loadNo} onOpenLoads={()=>goSection('load_documents')}/>
   <footer className="rrd-version">Road Ready · v110.4.116</footer>
  </section>;
