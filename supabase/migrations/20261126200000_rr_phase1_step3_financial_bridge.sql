@@ -280,6 +280,7 @@ begin
  if actor is null or not exists(select 1 from public.rr_lease_operators where carrier_user_id=actor and workspace_kind='carrier') then raise exception 'Carrier required' using errcode='42501';end if;
  return jsonb_build_object(
  'rates',coalesce((select jsonb_agg(to_jsonb(q)) from (select d.id,d.load_id,l.operator_id,l.broker_name,l.load_number,d.file_name,d.sha256,l.ledger_mode,(select id from public.rr_lease_documents where load_id=l.id and kind='ratecon' and is_current and id<>d.id limit 1) previous_ratecon_id from public.rr_lease_documents d join public.rr_lease_loads l on l.id=d.load_id join public.rr_lease_operators o on o.id=l.operator_id where o.carrier_user_id=actor and d.kind='ratecon' and d.is_ready and exists(select 1 from rr_lease_private.intake_review r where r.carrier_user_id=actor and r.load_document_id=d.id and r.resolved_at is not null) and not exists(select 1 from public.rr_lease_mail_events e where e.document_id=d.id and e.verified_for_billing) order by d.id limit 100) q),'[]'::jsonb),
+ 'attachments',coalesce((select jsonb_agg(to_jsonb(q)) from (select d.id,d.load_id,l.operator_id,l.broker_name,l.load_number,d.kind,d.file_name from public.rr_lease_documents d join public.rr_lease_loads l on l.id=d.load_id join public.rr_lease_operators o on o.id=l.operator_id where o.carrier_user_id=actor and d.kind in ('pod','bol','supporting') and d.is_ready and exists(select 1 from rr_lease_private.intake_review r where r.carrier_user_id=actor and r.load_document_id=d.id and r.resolved_at is not null) and not exists(select 1 from public.rr_lease_mail_events e where e.document_id=d.id) order by d.id limit 100) q),'[]'::jsonb),
  'expenses',coalesce((select jsonb_agg(to_jsonb(q)) from (select a.id,a.operator_id,a.settlement_id,a.amount_cents,a.kind,a.paid_by,a.description,a.wallet_document_id from public.rr_lease_adjustments a join public.rr_lease_operators o on o.id=a.operator_id where o.carrier_user_id=actor and a.intake_status='DRAFT' order by a.id limit 100) q),'[]'::jsonb),
  'settlements',coalesce((select jsonb_agg(to_jsonb(q)) from (select s.id,s.operator_id,o.driver_name,s.week_start,s.status from public.rr_lease_settlements s join public.rr_lease_operators o on o.id=s.operator_id where o.carrier_user_id=actor and s.status='draft' order by s.week_start desc,s.id limit 100) q),'[]'::jsonb));
 end $$;
@@ -332,3 +333,253 @@ grant execute on function public.rr_lease_step3_verify_ratecon(uuid,jsonb,uuid,t
  public.rr_lease_step3_pod_status(uuid),
  public.rr_lease_step3_worklist(),
  public.rr_lease_step3_company_summary(date) to authenticated;
+
+
+-- Own-truck upload is permitted only on the authenticated carrier's own
+-- workspace; other leased workspaces still require the assigned driver.
+-- The same pending review and provenance pipeline is used.
+create or replace function rr_lease_private.phase1_driver_pod_event_guard() returns trigger
+language plpgsql set search_path='' as $$
+declare d record; actor uuid:=auth.uid();
+begin
+ if tg_op='DELETE' then
+  if old.source_kind='driver_upload' then raise exception 'Retain driver upload provenance; add a new original for correction'; end if;
+  return old;
+ end if;
+ if tg_op='UPDATE' and (old.source_kind='driver_upload' or new.source_kind='driver_upload') then
+  if row(new.id,new.carrier_user_id,new.load_id,new.document_id,new.message_id,new.source_kind,new.sender_email,new.sha256,new.uploaded_by,new.upload_received_at,new.created_at)
+    is distinct from row(old.id,old.carrier_user_id,old.load_id,old.document_id,old.message_id,old.source_kind,old.sender_email,old.sha256,old.uploaded_by,old.upload_received_at,old.created_at) then raise exception 'Driver POD provenance is immutable'; end if;
+  if old.verified_for_billing and row(new.verified_for_billing,new.approved_by,new.approved_at,new.approval_reason,new.evidence)
+     is distinct from row(old.verified_for_billing,old.approved_by,old.approved_at,old.approval_reason,old.evidence) then raise exception 'Retain approved POD provenance; review a new original'; end if;
+ end if;
+ if new.source_kind<>'driver_upload' then return new; end if;
+ select l.id as load_id,l.status,l.billing_channel,l.load_type,l.settlement_id,o.driver_user_id,o.carrier_user_id,o.workspace_kind,d0.sha256,d0.is_ready,d0.kind
+ into strict d from public.rr_lease_documents d0 join public.rr_lease_loads l on l.id=d0.load_id join public.rr_lease_operators o on o.id=l.operator_id where d0.id=new.document_id;
+ if d.load_id<>new.load_id or d.kind<>'pod' or not d.is_ready or d.sha256<>new.sha256 or d.carrier_user_id<>new.carrier_user_id or d.billing_channel<>'FIRSTLINE_FACTORED' or d.load_type<>'FREIGHT' then raise exception 'Driver POD must be a matched verified original for this load'; end if;
+ if tg_op='INSERT' then
+  if actor is null or not ((d.workspace_kind='leased' and actor is not distinct from d.driver_user_id) or (d.workspace_kind='carrier' and actor=d.carrier_user_id)) or new.uploaded_by is distinct from actor or new.verified_for_billing then raise exception 'Register a pending POD using the assigned driver identity' using errcode='42501'; end if;
+  if new.upload_received_at>clock_timestamp() then raise exception 'Invalid POD arrival timestamp'; end if;
+ end if;
+ if new.verified_for_billing and (tg_op='INSERT' or not old.verified_for_billing) then
+  if actor is null or actor is distinct from d.carrier_user_id or new.approved_by is distinct from actor or new.approved_at>clock_timestamp() then raise exception 'Only the authenticated carrier may approve a driver POD' using errcode='42501'; end if;
+ end if;
+ if d.status not in ('assigned','picked_up','delivered') or exists(select 1 from public.rr_lease_settlements s where s.id=d.settlement_id and s.status<>'draft') or exists(select 1 from public.rr_lease_factoring f where f.load_id=d.load_id) then raise exception 'Driver POD requires an open unfactored load; route changes to review'; end if;
+ return new;
+end $$;
+CREATE OR REPLACE FUNCTION public.rr_lease_register_driver_pod(p_document_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare actor uuid:=auth.uid(); d public.rr_lease_documents; l public.rr_lease_loads; o public.rr_lease_operators; ev public.rr_lease_mail_events; received timestamptz;
+begin
+ if actor is null then raise exception 'Driver authentication required' using errcode='42501'; end if;
+ select * into d from public.rr_lease_documents where id=p_document_id;
+ if not found then raise exception 'POD unavailable' using errcode='42501'; end if;
+ select * into strict l from public.rr_lease_loads where id=d.load_id for update;
+ select * into strict o from public.rr_lease_operators where id=l.operator_id;
+ if not ((o.workspace_kind='leased' and o.driver_user_id is not distinct from actor) or (o.workspace_kind='carrier' and o.carrier_user_id=actor)) then raise exception 'POD unavailable for this driver' using errcode='42501'; end if;
+ if d.kind<>'pod' or not public.rr_lease_original_ready(d.id) or l.billing_channel<>'FIRSTLINE_FACTORED' or l.load_type<>'FREIGHT' then raise exception 'Matched ready freight POD required'; end if;
+ select * into ev from public.rr_lease_mail_events where document_id=d.id;
+ if found then
+  if ev.source_kind='driver_upload' and ev.uploaded_by=actor then return jsonb_build_object('event_id',ev.id,'verified_for_billing',ev.verified_for_billing,'received_at',ev.upload_received_at,'review_status',case when ev.rejected_at is not null then 'REJECTED' when ev.verified_for_billing then 'APPROVED' else 'PENDING' end); end if;
+  raise exception 'Original already registered through another source; use existing evidence';
+ end if;
+ perform rr_lease_private.step2a_assert_pod_review_open(l.id);
+ perform pg_advisory_xact_lock(hashtextextended(o.carrier_user_id::text||':'||d.sha256,0));
+ if exists(select 1 from public.rr_lease_mail_events m where m.carrier_user_id=o.carrier_user_id and m.sha256=d.sha256 and m.load_id<>l.id) then raise exception 'POD original already assigned to a different load'; end if;
+ received:=clock_timestamp();
+ update public.rr_lease_documents set operator_visible=true,is_current=true where id=d.id;
+ insert into public.rr_lease_mail_events(carrier_user_id,load_id,document_id,message_id,source_kind,sender_email,sha256,verified_for_billing,evidence,uploaded_by,upload_received_at)
+ values(o.carrier_user_id,l.id,d.id,'app:'||d.id::text,'driver_upload',null,d.sha256,false,'Authenticated driver app upload; pending carrier review',actor,received)
+ returning * into ev;
+ perform rr_lease_private.phase1_record_pod_receipt(l.id,received,ev.message_id);
+ return jsonb_build_object('event_id',ev.id,'verified_for_billing',false,'received_at',received,'review_status','PENDING');
+end $function$;
+create or replace function public.rr_lease_step2b_create_upload(p_request_id uuid,p_load_id uuid,p_broker text,p_load_number text,p_file_name text,p_mime text,p_size integer)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare v_actor uuid:=auth.uid(); o public.rr_lease_operators; l public.rr_lease_loads; i rr_lease_private.step2b_upload_intents; n int;
+begin
+ if v_actor is null then raise exception 'Authentication required' using errcode='42501'; end if;
+ if p_request_id is null or p_size is null or p_size not between 1 and 3145728
+ or p_mime is null or p_mime not in ('application/pdf','image/jpeg','image/png','image/webp')
+ or p_file_name is null or length(p_file_name) not between 1 and 255 or p_file_name ~ '[[:cntrl:]/\\]' then raise exception 'Invalid file metadata' using errcode='22023'; end if;
+ perform pg_advisory_xact_lock(hashtextextended('rr-step2b-intent:'||v_actor::text,0));
+ if p_load_id is not null then
+   select * into l from public.rr_lease_loads where id=p_load_id for update;
+   if not found then raise exception 'Upload unavailable' using errcode='42501'; end if;
+   select * into o from public.rr_lease_operators where id=l.operator_id and ((driver_user_id=v_actor and workspace_kind='leased') or (carrier_user_id=v_actor and workspace_kind='carrier')) for share;
+   if not found then raise exception 'Upload unavailable' using errcode='42501'; end if;
+   if p_broker is not null or p_load_number is not null then raise exception 'Use load selector or orphan reference' using errcode='22023'; end if;
+ else
+   select count(*) into n from public.rr_lease_operators where ((driver_user_id=v_actor and workspace_kind='leased') or (carrier_user_id=v_actor and workspace_kind='carrier'));
+   if n<>1 then raise exception 'An unambiguous driver workspace is required' using errcode='42501'; end if;
+   select * into o from public.rr_lease_operators where ((driver_user_id=v_actor and workspace_kind='leased') or (carrier_user_id=v_actor and workspace_kind='carrier')) for share;
+   if not found then raise exception 'Upload unavailable' using errcode='42501'; end if;
+   if nullif(btrim(p_broker),'') is null or nullif(btrim(p_load_number),'') is null or length(p_broker)>200 or length(p_load_number)>120
+      or p_broker ~ '[[:cntrl:]]' or p_load_number ~ '[[:cntrl:]]' then raise exception 'Broker and load reference required for orphan' using errcode='22023'; end if;
+   p_broker:=btrim(p_broker); p_load_number:=btrim(p_load_number);
+ end if;
+ select * into i from rr_lease_private.step2b_upload_intents where actor=v_actor and request_id=p_request_id for update;
+ if found then
+   if row(i.operator_id,i.load_id,i.broker_name,i.load_number,i.file_name,i.mime_type,i.byte_size)
+      is distinct from row(o.id,p_load_id,p_broker,p_load_number,p_file_name,p_mime,p_size) then raise exception 'Request ID already used for another upload' using errcode='23505'; end if;
+   if i.document_id is null and i.created_at<clock_timestamp()-interval '15 minutes' then raise exception 'Upload expired' using errcode='22023'; end if;
+   return jsonb_build_object('uploadId',i.id,'maxBytes',3145728,'committed',i.document_id is not null);
+ end if;
+ if p_load_id is not null then
+   perform rr_lease_private.step2a_assert_pod_review_open(l.id);
+   if l.billing_channel<>'FIRSTLINE_FACTORED' or l.load_type<>'FREIGHT' then raise exception 'Unsupported load channel or type' using errcode='22023'; end if;
+ end if;
+ if (select count(*) from rr_lease_private.step2b_upload_intents where actor=v_actor and created_at>clock_timestamp()-interval '24 hours')>=30
+ or (select count(*) from rr_lease_private.step2b_upload_intents where actor=v_actor and created_at>clock_timestamp()-interval '15 minutes' and document_id is null)>=5 then raise exception 'Upload limit reached' using errcode='22023'; end if;
+ insert into rr_lease_private.step2b_upload_intents(actor,operator_id,request_id,load_id,broker_name,load_number,file_name,mime_type,byte_size)
+ values(v_actor,o.id,p_request_id,p_load_id,p_broker,p_load_number,p_file_name,p_mime,p_size) returning * into i;
+ return jsonb_build_object('uploadId',i.id,'maxBytes',3145728,'committed',false);
+end $$;
+create or replace function public.rr_lease_step2b_commit_upload(p_upload_id uuid,p_base64 text,p_sha256 text,p_mime text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare v_actor uuid:=auth.uid(); i rr_lease_private.step2b_upload_intents; o public.rr_lease_operators; l public.rr_lease_loads;
+ d public.rr_lease_documents; v_load uuid; v_doc uuid; v_bytes bytea; v_hash text; v_result jsonb; v_part int; v_orphan boolean;
+begin
+ if v_actor is null then raise exception 'Authentication required' using errcode='42501'; end if;
+ -- Same actor lock as reservation creation: consistent lock ordering for concurrent retries.
+ perform pg_advisory_xact_lock(hashtextextended('rr-step2b-intent:'||v_actor::text,0));
+ select * into i from rr_lease_private.step2b_upload_intents where id=p_upload_id and actor=v_actor for update;
+ if not found then raise exception 'Upload unavailable' using errcode='42501'; end if;
+ if p_base64 is null or length(p_base64)>4194304 or p_sha256 is null or p_sha256 !~ '^[a-f0-9]{64}$' or p_mime is distinct from i.mime_type then raise exception 'Invalid upload payload' using errcode='22023'; end if;
+ v_bytes:=decode(p_base64,'base64'); v_hash:=encode(sha256(v_bytes),'hex');
+ if octet_length(v_bytes)<>i.byte_size or v_hash<>p_sha256 or not rr_lease_private.step2b_magic(v_bytes,p_mime) then raise exception 'Original size, MIME or checksum mismatch' using errcode='22023'; end if;
+ -- For an existing load acquire load then operator, matching owner review.
+ if i.load_id is not null then
+   select * into l from public.rr_lease_loads where id=i.load_id for update;
+   if not found or l.operator_id<>i.operator_id then raise exception 'Upload unavailable' using errcode='42501'; end if;
+ end if;
+ select * into o from public.rr_lease_operators where id=i.operator_id and ((driver_user_id=v_actor and workspace_kind='leased') or (carrier_user_id=v_actor and workspace_kind='carrier')) for share;
+ if not found then raise exception 'Upload unavailable' using errcode='42501'; end if;
+ if i.document_id is not null then
+   if i.digest<>v_hash then raise exception 'Upload replay has different bytes' using errcode='23505'; end if;
+   return i.result;
+ end if;
+ if i.created_at<clock_timestamp()-interval '15 minutes' then raise exception 'Upload expired' using errcode='22023'; end if;
+ if i.load_id is null then
+   v_load:=public.rr_lease_stage_load(o.id,i.broker_name,i.load_number);
+   select * into strict l from public.rr_lease_loads where id=v_load for update;
+   if l.operator_id<>o.id then raise exception 'Upload unavailable' using errcode='42501'; end if;
+   if l.status='staging' then
+     if l.gross_cents is not null or l.settlement_id is not null then raise exception 'Staged financial load needs owner review' using errcode='22023'; end if;
+     update public.rr_lease_loads set status='assigned' where id=l.id returning * into l;
+   end if;
+ end if;
+ perform rr_lease_private.step2a_assert_pod_review_open(l.id);
+ if l.billing_channel<>'FIRSTLINE_FACTORED' or l.load_type<>'FREIGHT' then raise exception 'Unsupported load channel or type' using errcode='22023'; end if;
+ v_orphan:=not exists(select 1 from public.rr_lease_documents r join public.rr_lease_mail_events m on m.document_id=r.id where r.load_id=l.id and r.kind='ratecon' and r.is_current and r.is_ready and m.verified_for_billing);
+ if v_orphan and (l.gross_cents is not null or l.settlement_id is not null) then raise exception 'Unverified financial load requires carrier review' using errcode='22023'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(o.carrier_user_id::text||':'||v_hash,0));
+ if exists(select 1 from public.rr_lease_mail_events e where e.carrier_user_id=o.carrier_user_id and e.sha256=v_hash and e.load_id<>l.id) then raise exception 'Original already filed; carrier review required' using errcode='23505'; end if;
+ select * into d from public.rr_lease_documents where load_id=l.id and kind='pod' and sha256=v_hash;
+ if found then
+   -- Do not let a driver claim an unrelated, pre-existing worker original.
+   if not exists(select 1 from public.rr_lease_mail_events e where e.document_id=d.id and e.source_kind='driver_upload' and e.uploaded_by=v_actor) then raise exception 'Original already filed; carrier review required' using errcode='23505'; end if;
+   v_doc:=d.id;
+ else
+   v_doc:=gen_random_uuid();
+   insert into public.rr_lease_documents(id,load_id,kind,file_name,mime_type,byte_size,sha256,storage_backend,storage_path)
+   values(v_doc,l.id,'pod',i.file_name,p_mime,i.byte_size,v_hash,'database',o.id::text||'/'||l.id::text||'/'||v_doc::text);
+   for v_part in 0..((i.byte_size-1)/49152) loop
+     perform public.rr_lease_put_chunk(v_doc,v_part,encode(substring(v_bytes from v_part*49152+1 for 49152),'base64'));
+   end loop;
+   perform public.rr_lease_finish_original(v_doc);
+ end if;
+ -- Invoked under the driver's JWT claims, within the same locked transaction.
+ v_result:=public.rr_lease_register_driver_pod(v_doc)||jsonb_build_object('documentId',v_doc,'loadId',l.id,'orphan',v_orphan);
+ if v_orphan then
+   insert into rr_lease_private.intake_review(carrier_user_id,source_ref,attachment_ref,reason)
+   values(o.carrier_user_id,'driver_upload:'||v_doc::text,v_hash,'Orphan POD: independently confirm broker/load and rate confirmation; no gross or settlement') on conflict do nothing;
+ end if;
+ update rr_lease_private.step2b_upload_intents set document_id=v_doc,digest=v_hash,result=v_result where id=i.id;
+ return v_result;
+end $$;
+
+-- Verify a separately filed supporting/BOL/email POD. The owner explicitly
+-- classifies a final POD. Never convert an intermediate phone POD via this RPC.
+create function public.rr_lease_step3_verify_attachment(p_document_id uuid,p_set_as_final boolean,p_reason text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare actor uuid:=auth.uid(); d public.rr_lease_documents; l public.rr_lease_loads; r rr_lease_private.intake_review; src rr_lease_private.step2c_mail_sources; fresh boolean;
+begin
+ perform rr_lease_private.step2c_lock_carrier(actor);
+ select z.* into d from public.rr_lease_documents z join public.rr_lease_loads l0 on l0.id=z.load_id join public.rr_lease_operators o on o.id=l0.operator_id where z.id=p_document_id and o.carrier_user_id=actor and z.kind in ('pod','bol','supporting');
+ if not found then raise exception 'Attachment unavailable' using errcode='42501';end if;
+ select * into strict l from public.rr_lease_loads where id=d.load_id for update;
+ if p_set_as_final is null or p_set_as_final and d.kind<>'pod' then raise exception 'Explicit final POD classification required';end if;
+ select q.* into r from rr_lease_private.intake_review q join rr_lease_private.step2c_assignment_execution x using(carrier_user_id,source_ref,attachment_ref) where q.carrier_user_id=actor and q.load_document_id=d.id and q.resolved_at is not null and x.result->>'documentId'=d.id::text order by q.created_at limit 1;
+ if not found then raise exception 'File archived attachment first';end if;
+ select * into strict src from rr_lease_private.step2c_mail_sources where carrier_user_id=actor and source_ref=r.source_ref and attachment_ref=r.attachment_ref;
+ if not exists(select 1 from rr_lease_private.step2c_archives a where a.id=src.archive_id and a.carrier_user_id=actor and a.sha256=d.sha256) or not public.rr_lease_original_ready(d.id) then raise exception 'Archived original required';end if;
+ fresh:=rr_lease_private.step3_decide(actor,'ATTACHMENT',d.id,jsonb_build_object('final',p_set_as_final),p_reason);
+ if not fresh then return jsonb_build_object('documentId',d.id,'replay',true);end if;
+ perform rr_lease_private.step2a_assert_pod_review_open(l.id);
+ if exists(select 1 from public.rr_lease_mail_events e where e.document_id=d.id or (e.carrier_user_id=actor and e.sha256=d.sha256 and e.load_id<>l.id)) then raise exception 'Original already reviewed; use original review workflow';end if;
+ if p_set_as_final and l.final_pod_id is not null and l.final_pod_id<>d.id then raise exception 'Different final POD already exists; separate correction review';end if;
+ update public.rr_lease_documents set is_current=true,operator_visible=true where id=d.id;
+ insert into public.rr_lease_mail_events(carrier_user_id,load_id,document_id,message_id,source_kind,sender_email,sha256,verified_for_billing,evidence)
+ values(actor,l.id,d.id,src.source_ref,'email',src.sender,d.sha256,true,'Owner reviewed archived original: '||btrim(p_reason));
+ if p_set_as_final then
+  perform rr_lease_private.phase1_record_pod_receipt(l.id,src.received_at,src.source_ref||':'||src.attachment_ref);
+  update public.rr_lease_loads set final_pod_id=d.id where id=l.id;
+ end if;
+ return jsonb_build_object('documentId',d.id,'loadId',l.id,'replay',false);
+end $$;
+
+-- Owner-only original preview for the inbox. A private archive ID is not a
+-- capability; each read rechecks carrier membership. Never return message bodies.
+create function public.rr_lease_step3_intake_original(p_source_ref text,p_attachment_ref text)
+returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare actor uuid:=auth.uid(); a rr_lease_private.step2c_archives; s rr_lease_private.step2c_mail_sources;
+begin
+ if actor is null or not exists(select 1 from public.rr_lease_operators where carrier_user_id=actor and workspace_kind='carrier') then raise exception 'Carrier required' using errcode='42501';end if;
+ select * into s from rr_lease_private.step2c_mail_sources where carrier_user_id=actor and source_ref=p_source_ref and attachment_ref=p_attachment_ref and part_id<>'@message';
+ if not found then raise exception 'Original unavailable' using errcode='42501';end if;
+ select * into a from rr_lease_private.step2c_archives where id=s.archive_id and carrier_user_id=actor and kind='email' and format='attachment';
+ if not found then raise exception 'Original unavailable' using errcode='42501';end if;
+ return jsonb_build_object('archiveId',a.id,'name',s.file_name,'mime',s.mime_type,'sha256',a.sha256,'bytes',encode(a.original,'base64'));
+end $$;
+create function public.rr_lease_step3_firstline_proofs()
+returns table(archive_id uuid,file_name text,source_ref text,attachment_ref text,received_at timestamptz)
+language plpgsql stable security definer set search_path='' as $$
+declare actor uuid:=auth.uid();
+begin
+ if actor is null or not exists(select 1 from public.rr_lease_operators where carrier_user_id=actor and workspace_kind='carrier') then raise exception 'Carrier required' using errcode='42501';end if;
+ return query select m.archive_id,m.file_name,m.source_ref,m.attachment_ref,m.received_at from rr_lease_private.step2c_mail_sources m where m.carrier_user_id=actor and m.part_id<>'@message' and m.archive_id is not null order by m.received_at desc limit 100;
+end $$;
+-- Assign an initially unmatched FirstLine event only to an exact invoice
+-- previously claimed in this carrier, with a separately reviewed reason.
+create function public.rr_lease_step3_match_firstline(p_event_id uuid,p_load_id uuid,p_reason text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare actor uuid:=auth.uid(); e public.rr_lease_factoring_events; l public.rr_lease_loads; fresh boolean;
+begin
+ perform rr_lease_private.step2c_lock_carrier(actor);
+ select * into e from public.rr_lease_factoring_events where id=p_event_id and carrier_user_id=actor for update;
+ if not found then raise exception 'Event unavailable' using errcode='42501';end if;
+ select x.* into l from public.rr_lease_loads x join public.rr_lease_operators o on o.id=x.operator_id where x.id=p_load_id and o.carrier_user_id=actor and x.billing_channel='FIRSTLINE_FACTORED' for update of x;
+ if not found then raise exception 'Load unavailable' using errcode='42501';end if;
+ fresh:=rr_lease_private.step3_decide(actor,'FIRSTLINE_MATCH',e.id,jsonb_build_object('load',l.id),p_reason);
+ if not fresh then return jsonb_build_object('eventId',e.id,'replay',true);end if;
+ if e.review_status<>'PENDING_PROOF' or e.operator_id is not null or not exists(select 1 from public.rr_lease_factoring f where f.load_id=l.id and upper(btrim(f.invoice_no))=e.invoice_reference) then raise exception 'Exact unassigned invoice match required';end if;
+ if e.reverses_id is not null or exists(select 1 from public.rr_lease_factoring_events z where z.reverses_id=e.id) then raise exception 'Linked reversal needs paired review';end if;
+ update public.rr_lease_factoring_events set operator_id=l.operator_id,load_id=l.id where id=e.id;
+ return jsonb_build_object('eventId',e.id,'loadId',l.id,'replay',false);
+end $$;
+create function public.rr_lease_step3_apply_weekly_cost(p_settlement_id uuid,p_kind text,p_reason text)
+returns uuid language plpgsql security definer set search_path='' as $$
+declare actor uuid:=auth.uid(); s public.rr_lease_settlements;
+begin
+ perform rr_lease_private.step2c_lock_carrier(actor);
+ select x.* into s from public.rr_lease_settlements x join public.rr_lease_operators o on o.id=x.operator_id where x.id=p_settlement_id and o.carrier_user_id=actor for update of x;
+ if not found then raise exception 'Settlement unavailable' using errcode='42501';end if;
+ if p_kind not in ('insurance','eld') or p_reason is null or length(btrim(p_reason)) not between 1 and 1000 then raise exception 'Scheduled cost and evidence required';end if;
+ return public.rr_lease_apply_weekly_cost(s.id,p_kind,btrim(p_reason));
+end $$;
+revoke all on function public.rr_lease_step3_verify_attachment(uuid,boolean,text),public.rr_lease_step3_intake_original(text,text),public.rr_lease_step3_firstline_proofs(),public.rr_lease_step3_match_firstline(uuid,uuid,text),public.rr_lease_step3_apply_weekly_cost(uuid,text,text) from public,anon,authenticated,service_role;
+grant execute on function public.rr_lease_step3_verify_attachment(uuid,boolean,text),public.rr_lease_step3_intake_original(text,text),public.rr_lease_step3_firstline_proofs(),public.rr_lease_step3_match_firstline(uuid,uuid,text),public.rr_lease_step3_apply_weekly_cost(uuid,text,text) to authenticated;
