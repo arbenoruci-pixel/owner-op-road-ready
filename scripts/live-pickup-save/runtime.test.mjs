@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {previewLogbookEditorOverride,applyLogbookEditorEdit} from '../../source/src/modules/logbook/eventEditingV110.js';
+import {logbookClock,previewLogbookEditorOverride,applyLogbookEditorEdit} from '../../source/src/modules/logbook/eventEditingV110.js';
 
 const day='2026-10-21', prior='2026-10-20', at=new Date('2026-10-21T16:30:00Z');
 const expected={id:'pickup',source:'live_status',status:'ON',startMin:720,endMin:721,city:'Example City',state:'IL',note:'Pickup / Loading',reasons:['Pickup / Loading'],shippingDocs:'',loadNo:'',bol:'',destination:'',destinationState:'',loadDetailsExplicit:true};
@@ -44,9 +44,12 @@ for(const [name,alter,patch] of [
   ['clock reversed',s=>{s.eventsByDay[day][1].endMin=720;},change],
   ['explicit timing patch',s=>{}, {...change,startMin:719}],
   ['explicit notes patch',s=>{}, {...change,note:'Changed'}],
-  ['end later than clock',s=>{s.eventsByDay[day][1].endMin=740;},change]
+  ['end later than clock',s=>{s.eventsByDay[day][1].endMin=logbookClock(s,at).minute+1;},change]
 ])test('still rejects '+name,()=>{
-  const state=fixture(),before=structuredClone(state);
+  const state=fixture();
+  alter(state);
+  const before=structuredClone(state);
+  assert.equal(previewLogbookEditorOverride(state,command(patch),at).ok,false);
   assert.equal(applyLogbookEditorEdit(state,command(patch),at).ok,false);
   assert.deepEqual(state,before);
 });

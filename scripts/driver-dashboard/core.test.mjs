@@ -33,3 +33,10 @@ test('shortcut navigation uses two readable rows on narrow phones',()=>{
  assert.ok(css.includes('grid-template-rows:repeat(2,auto)!important'));
  assert.ok(css.includes('white-space:normal!important'));
 });
+
+test('Home starts with secondary details closed and primary shortcuts visible',()=>{
+ assert.match(d,/\[open,setOpen\]=useState\(false\)/);
+ assert.match(d,/details key=\{group.key\} className="rrd-week">/);
+ assert.match(d,/<details className="rrd-disclosure"><summary>Gross revenue<\/summary>/);
+ assert.match(d,/<details className="rrd-disclosure rrd-tools-disclosure"><summary>Additional tools<\/summary>/);
+});

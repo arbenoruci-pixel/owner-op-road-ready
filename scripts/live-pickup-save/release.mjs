@@ -14,8 +14,8 @@ const build = 'v1104136-live-pickup-save-' + previous.sourceCommit.slice(0, 12);
 for (const file of ['release-version.json', 'public/app-version.json']) {
   saveJson(file, {
     ...readJson(file), version, build, force: false,
-    label: 'Live pickup load details save',
-    notes: ['Keep the exact live pickup editable when only its active clock has advanced; preserve all saved minutes and reject other concurrent changes.'],
+    label: 'Live pickup save and compact Home',
+    notes: ['Keep the exact live pickup editable when only its active clock has advanced; preserve all saved minutes and reject other concurrent changes.', 'Recent loads, gross revenue and additional tools start collapsed on Home.'],
   });
 }
 for (const file of ['package.json', 'package-lock.json']) {
