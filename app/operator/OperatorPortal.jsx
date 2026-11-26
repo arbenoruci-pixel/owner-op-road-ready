@@ -6,6 +6,7 @@ import { PortalSession, usePortalClient } from './PortalSession.jsx';
 import OperatorWallet, { WalletProof } from './OperatorWallet.jsx';
 import OwnerEarnings from './OwnerEarnings.jsx';
 import LegacyHistory from './LegacyHistory.jsx';
+import Step3Workspace from './Step3Workspace.jsx';
 import { activityDays, formatDay as dateOnly, paymentRecorded, recordedRevenue } from './financials.js';
 import styles from './operator.module.css';
 
@@ -729,7 +730,7 @@ function Membership({ session, carrierEntry }) {
           </select>
         </label>
       )}
-      {operator && <Workspace key={operator.id} operator={operator} />}
+      {operator && <Step3Workspace key={operator.id} operator={operator} session={session} operators={operators} />}
     </>
   );
 }
