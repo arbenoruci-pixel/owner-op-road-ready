@@ -68,3 +68,12 @@ test('XLSX proposal source is draft and cannot assert verification or assignment
  const p=makeIntakeProposal({source:INTAKE_SOURCE.AMAZON_XLSX,sourceRef:'amazon_relay_xlsx:test',attachmentRef:'1',kind:'amazon_report',sha256:'a'.repeat(64),amountCents:17500,status:'POSTED',operatorId:'forged'});
  assert.equal(p.status,'DRAFT');assert.equal(p.requiresVerification,true);assert.equal(p.operatorId,undefined);
 });
+
+test('official Relay payment date footer is report metadata, never another payout',()=>{
+ const paid=Array(20).fill('');paid[17]='Paid Nov 25, 2026';
+ const a=parseAmazon(xlsx([...rows,paid]),'xlsx');
+ assert.equal(a.paymentReportedOn,'2026-11-25');assert.equal(a.reportTotalCents,17500);assert.equal(a.rows.length,3);assert.equal(a.issues.length,0);
+ assert.equal(a.rows[0].status,'COMPLETED');assert.throws(()=>parseAmazon(csv([...rows,paid,paid]),'csv'),/Multiple Relay payment date/);
+ const note=Array(20).fill('');note[17]='Other adjustment requires review';
+ const held=parseAmazon(csv([...rows,note]),'csv');assert.equal(held.issues.length,1);assert.equal(held.reportTotalCents,17500);
+});
