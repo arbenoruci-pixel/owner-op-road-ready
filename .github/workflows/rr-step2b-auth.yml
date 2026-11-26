@@ -43,6 +43,9 @@ jobs:
       - name: Start real GoTrue Auth
         run: |
           set -euo pipefail
+          # GoTrue migrations use unqualified names as well as auth-qualified names.
+          # Give only the disposable Auth migration connection an auth-first search path.
+          psql -v ON_ERROR_STOP=1 -c "create role step2b_auth_admin login superuser password 'local-auth-only'; alter role step2b_auth_admin in database rr_step2b_auth set search_path to auth,public;"
           secret="$(openssl rand -hex 32)"
           echo "::add-mask::$secret"
           echo "TEST_JWT_SECRET=$secret" >> "$GITHUB_ENV"
@@ -50,13 +53,14 @@ jobs:
             -e GOTRUE_API_HOST=0.0.0.0 -e GOTRUE_API_PORT=9999 \
             -e API_EXTERNAL_URL=http://127.0.0.1:9999 -e GOTRUE_SITE_URL=http://localhost \
             -e GOTRUE_DB_DRIVER=postgres -e GOTRUE_DB_NAMESPACE=auth \
-            -e GOTRUE_DB_DATABASE_URL=postgres://postgres:local-test-only@127.0.0.1:5432/rr_step2b_auth \
+            -e GOTRUE_DB_DATABASE_URL=postgres://step2b_auth_admin:local-auth-only@127.0.0.1:5432/rr_step2b_auth \
             -e GOTRUE_JWT_SECRET="$secret" -e GOTRUE_JWT_AUD=authenticated \
             -e GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated -e GOTRUE_JWT_EXP=3600 \
             -e GOTRUE_EXTERNAL_EMAIL_ENABLED=true -e GOTRUE_MAILER_AUTOCONFIRM=true \
             -e GOTRUE_DISABLE_SIGNUP=false supabase/gotrue:v2.158.1
           for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:9999/health >/dev/null; then exit 0; fi
+            if [ "$(docker inspect --format '{{.State.Running}}' step2b-auth)" = false ]; then docker logs step2b-auth; exit 1; fi
             sleep 2
           done
           docker logs step2b-auth
