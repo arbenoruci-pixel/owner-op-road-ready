@@ -15,12 +15,8 @@ for(const file of files('scripts').filter(p=>/browser[^/]*\.mjs$/.test(p)&&!p.in
  if(file==='scripts/browser-ratecon-one-way-v11029.mjs')s=s.replace("page.locator('.phone-app-grid').innerText()","(await homeControl(page,'Smart Scan')).innerText()");
  s=s.replaceAll("'.adaptive-home-v1038'","'.rr-driver-home'").replaceAll("'.phone-app-grid'","'.rrd-icon-grid'").replaceAll("'.phone-app-grid>button'","'.rrd-icon-grid>button'");
  s=s.replace(/(page|target)\.getByRole\('button',\{name:'(Full mission|Open shipment log)',exact:true\}\)/g,"(await missionPage($1)).getByRole('button',{name:'$2',exact:true})");
- s=s.replaceAll("page.getByRole('button',{name:/Export & Backup/})","(await homeControl(page,'Export & Backup'))");
+ if(file==='scripts/v110430/browser-export.mjs')s=s.replace("page.getByRole('button',{name:/Export & Backup/})","(await homeControl(page,'Export & Backup'))");
  if(file==='scripts/workspace-navigation/browser-navigation.mjs')s=s.replaceAll("page.getByRole('button',{name:button,exact:true})","(await homeControl(page,button))");
- if(file==='scripts/compact-business/browser.mjs'){
-  const firstRevenue="await page.getByRole('region',{name:'Gross revenue dashboard'}).waitFor();";
-  s=s.replace(firstRevenue,"await page.locator('.rr-driver-home').waitFor();assert.equal(await page.getByRole('region',{name:'Gross revenue dashboard'}).isVisible(),false);await page.locator('summary').filter({hasText:/^Gross revenue$/}).click();"+firstRevenue);
- }
  for(const name of ['Documents','Smart Scan','Continue saved scan','Open logbook','Import','Export & Backup','Drive','Billing','More tools'])s=s.replaceAll(`page.getByRole('button',{name:'${name}',exact:true})`,`(await homeControl(page,'${name}'))`);
  s=s.replaceAll("page.getByRole('button',{name:/Smart Scan/}).first()","(await homeControl(page,'Smart Scan'))");
  if(file==='scripts/browser-fullscreen-reader-v110369.mjs'){

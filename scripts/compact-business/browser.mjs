@@ -16,7 +16,11 @@ for(const [name,engine] of [['chromium',chromium],['webkit',webkit]].filter(([na
   await page.clock.setFixedTime(new Date('2026-11-08T18:00:00Z'));
   await seed(page,state,[]);const before=protectedData(await snapshot(page));
   const fit=async label=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),label+' fits viewport');
-  await page.getByRole('region',{name:'Gross revenue dashboard'}).waitFor();
+  await page.locator('.rr-driver-home').waitFor();
+  const gross=page.getByRole('region',{name:'Gross revenue dashboard'});
+  assert.equal(await gross.isVisible(),false,'Home starts with gross revenue collapsed');
+  await page.locator('summary').filter({hasText:/^Gross revenue$/}).click();
+  await gross.waitFor();
   const homeAmounts=await page.locator('.rr-gross-card strong').allTextContents();
   for(const width of [320,390,430,820,1024]){await page.setViewportSize({width,height:844});await fit('Home '+width);assert.equal(await page.locator('.rr-gross-card').count(),3);assert.ok(await page.locator('.rr-gross-card strong').evaluateAll(rows=>rows.every(r=>r.scrollWidth<=r.clientWidth+1)),'Gross numbers remain inside cards');}
   await page.setViewportSize({width:390,height:844});
