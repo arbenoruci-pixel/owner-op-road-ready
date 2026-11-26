@@ -6,20 +6,22 @@ curl -fsSL --retry 2 https://github.com/arbenoruci-pixel/owner-op-road-ready/com
 echo "4c83f4a0c13d4089eea087162ec279132b710d6ef69eeeba305f8b895e4d8986  $patch" | sha256sum -c -
 git apply --include='app/operator/loadAlerts.js' --include='app/operator/DriverLoadAlerts.jsx' --include='public/operator-load-alerts-sw.js' "$patch"
 node - <<'NODE'
-const fs = require('node:fs');
-const path = 'app/operator/OperatorPortal.jsx';
-let text = fs.readFileSync(path,'utf8');
-function replaceOnce(needle, replacement) {
-  if (text.split(needle).length !== 2) throw new Error('Unexpected production source: '+needle);
-  text = text.replace(needle,replacement);
+const fs=require('node:fs');
+const path='app/operator/OperatorPortal.jsx';
+let source=fs.readFileSync(path,'utf8');
+function replace(pattern,sub) {
+ const matches=[...source.matchAll(new RegExp(pattern.source,'g'))];
+ if(matches.length!==1)throw Error('Production portal integration anchor '+pattern+' matched '+matches.length);
+ source=source.replace(pattern,sub);
 }
-replaceOnce("import { PortalSession, usePortalClient } from './PortalSession.jsx';","import { PortalSession, usePortalClient } from './PortalSession.jsx';\nimport DriverLoadAlerts from './DriverLoadAlerts.jsx';\nimport { unsubscribeLoadAlerts } from './loadAlerts.js';");
-replaceOnce("function Workspace({ operator }) {","function Workspace({ operator, driverView }) {");
-replaceOnce('<div className={styles.sectionHeading}>',"{driverView && <DriverLoadAlerts operatorId={operator.id} onRefresh={() => setRefresh(v => v + 1)} />}\n        <div className={styles.sectionHeading}>");
-replaceOnce('pay_weekday,carrier_user_id,workspace_kind','pay_weekday,carrier_user_id,driver_user_id,workspace_kind');
-replaceOnce('<Workspace key={operator.id} operator={operator} />',"<Workspace key={operator.id} operator={operator} driverView={operator.workspace_kind === 'leased' && operator.driver_user_id === session.user.id} />");
-replaceOnce("const { error } = await operatorClient().auth.signOut({ scope: 'local' });","await unsubscribeLoadAlerts(client || operatorClient()).catch(() => {});\n    const { error } = await operatorClient().auth.signOut({ scope: 'local' });");
-fs.writeFileSync(path,text);
+replace(/import \{ PortalSession, usePortalClient \} from '\.\/PortalSession\.jsx';/,m=>m+"\nimport DriverLoadAlerts from './DriverLoadAlerts.jsx';\nimport { unsubscribeLoadAlerts } from './loadAlerts.js';");
+if (!/\.select\('[^']*driver_user_id[^']*'\)/.test(source)) replace(/pay_weekday,carrier_user_id,workspace_kind/,'pay_weekday,carrier_user_id,driver_user_id,workspace_kind');
+replace(/\{operator && <Workspace\b/,m=>"{operator && operator.workspace_kind === 'leased' && operator.driver_user_id === session.user.id && <DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={() => window.dispatchEvent(new Event('rr-driver-load-assigned'))} />}\n      "+m);
+replace(/window\.addEventListener\('online', check\);/,m=>m+"\n    window.addEventListener('rr-driver-load-assigned',check);");
+replace(/window\.removeEventListener\('online', check\);/,m=>m+"\n      window.removeEventListener('rr-driver-load-assigned',check);");
+replace(/const \{ error \} = await operatorClient\(\)\.auth\.signOut\(\{ scope: 'local' \}\);/,m=>"await unsubscribeLoadAlerts(client || operatorClient()).catch(() => {});\n    "+m);
+fs.writeFileSync(path,source);
+console.log('Added scoped notifications to the deployed driver portal.');
 NODE
 export GITHUB_SHA=49a26df84b968b54c7cfc72a92ad61b45314c1fb VERCEL_GIT_COMMIT_SHA=49a26df84b968b54c7cfc72a92ad61b45314c1fb
 node scripts/build-v110.mjs
