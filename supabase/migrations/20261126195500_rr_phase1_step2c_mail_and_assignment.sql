@@ -211,7 +211,7 @@ begin
   return ex.result;
  end if;
  if r.resolved_at is not null then raise exception 'Intake already resolved' using errcode='23505';end if;
- select * into o from public.rr_lease_operators where id=p_operator_id and carrier_user_id=actor for update;
+ select * into o from public.rr_lease_operators where id=p_operator_id and carrier_user_id=actor for share;
  if not found then raise exception 'Assignment unavailable' using errcode='42501';end if;
  v_load:=p_load_id;
  if p_kind='ratecon' and v_load is null then
@@ -308,4 +308,24 @@ begin
  where row(rr_lease_ledger_entries.entry_type,rr_lease_ledger_entries.amount_cents,rr_lease_ledger_entries.paid_by,rr_lease_ledger_entries.description,rr_lease_ledger_entries.source_wallet_document_id,rr_lease_ledger_entries.source_reference)
  is distinct from row(excluded.entry_type,excluded.amount_cents,excluded.paid_by,excluded.description,excluded.source_wallet_document_id,excluded.source_reference)
  or rr_lease_ledger_entries.status='VOID';
+end $$;
+
+create or replace function public.rr_lease_step2b_owner_inbox(p_limit integer default 50,p_before timestamptz default null)
+returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare v_actor uuid:=auth.uid();
+begin
+ if v_actor is null or not exists(select 1 from public.rr_lease_operators o where o.carrier_user_id=v_actor and o.workspace_kind='carrier') then raise exception 'Carrier access required' using errcode='42501'; end if;
+ if p_limit is null or p_limit not between 1 and 100 then raise exception 'Invalid page limit' using errcode='22023'; end if;
+ return jsonb_build_object(
+ 'intake',coalesce((select jsonb_agg(to_jsonb(x)) from (select r.source_ref,r.attachment_ref,r.reason,r.created_at,m.proposal,m.file_name,m.mime_type,m.archive_id is not null as original_archived,m.hold_reason,a.operator_id,a.load_id,a.kind,a.accessorials,a.reason as assignment_reason,case when a.operator_id is not null then 'MATCHED_DRAFT' else 'NEEDS_OWNER_REVIEW' end as status
+ from rr_lease_private.intake_review r left join rr_lease_private.step2b_assignment_drafts a using(carrier_user_id,source_ref,attachment_ref)
+ left join rr_lease_private.step2c_mail_sources m using(carrier_user_id,source_ref,attachment_ref)
+ where r.carrier_user_id=v_actor and r.resolved_at is null and (p_before is null or r.created_at<p_before)
+ order by r.created_at desc,r.source_ref,r.attachment_ref limit p_limit) x),'[]'::jsonb),
+ 'pods',coalesce((select jsonb_agg(to_jsonb(x)) from (select e.document_id,e.load_id,l.operator_id,l.broker_name,l.load_number,l.final_pod_id,d.file_name,d.mime_type,d.byte_size,e.upload_received_at,e.sha256,l.gross_cents is null as no_gross
+ from public.rr_lease_mail_events e join public.rr_lease_documents d on d.id=e.document_id join public.rr_lease_loads l on l.id=e.load_id
+ where e.carrier_user_id=v_actor and e.source_kind='driver_upload' and e.rejected_at is null and not exists(select 1 from rr_lease_private.step2b_pod_decisions z where z.document_id=e.document_id)
+ and (p_before is null or e.upload_received_at<p_before) order by e.upload_received_at desc,e.id limit p_limit) x),'[]'::jsonb),
+ 'amazon',coalesce((select jsonb_agg(to_jsonb(x)) from (select a.id,a.amazon_trip_id,a.amazon_block_id,a.amazon_load_id,a.report_status,a.amount_cents,a.event_date,a.created_at
+ from public.rr_lease_amazon_import_rows a where a.carrier_user_id=v_actor and a.operator_id is null and (p_before is null or a.created_at<p_before) order by a.created_at desc,a.id limit p_limit) x),'[]'::jsonb));
 end $$;
