@@ -7,6 +7,7 @@ import OperatorWallet, { WalletProof } from './OperatorWallet.jsx';
 import OwnerEarnings from './OwnerEarnings.jsx';
 import LegacyHistory from './LegacyHistory.jsx';
 import Step3Workspace from './Step3Workspace.jsx';
+import { unsubscribeLoadAlerts } from './loadAlerts.js';
 import { activityDays, formatDay as dateOnly, paymentRecorded, recordedRevenue } from './financials.js';
 import styles from './operator.module.css';
 
@@ -681,7 +682,7 @@ function Membership({ session, carrierEntry }) {
         if (claimError) throw claimError;
       }
       let membership = client.from('rr_lease_operators')
-        .select('id,company_name,driver_name,pay_weekday,carrier_user_id,workspace_kind');
+        .select('id,company_name,driver_name,pay_weekday,carrier_user_id,driver_user_id,workspace_kind');
       if (carrierEntry) membership = membership.eq('carrier_user_id', session.user.id);
       const list = await rows(membership.order('company_name').order('id'));
       if (active) {
@@ -748,6 +749,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
     return () => subscription.unsubscribe();
   }, [client]);
   async function signOut() {
+    await unsubscribeLoadAlerts(client || operatorClient()).catch(() => {});
     const { error } = await operatorClient().auth.signOut({ scope: 'local' });
     setSignoutError(Boolean(error));
   }

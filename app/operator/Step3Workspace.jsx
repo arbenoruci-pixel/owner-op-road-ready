@@ -6,6 +6,7 @@ import {currentWeek,moveDay,formatDay,weekStart} from './financials.js';
 import {parseUSDCents,settlementDisplay} from '../../lib/rr-lease/intake-contract.js';
 import OperatorWallet,{WalletProof} from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
+import DriverLoadAlerts from './DriverLoadAlerts.jsx';
 import DotOffline from './Step3Dot.jsx';
 import TruckTools from './Step3Truck.jsx';
 import css from './step3.module.css';
@@ -114,6 +115,7 @@ export default function Step3Workspace({operator,session,operators}){
  <nav className={css.tabs} aria-label="Operator tabs">{[['load','LOAD'],['pay','PAY'],['docs','DOCS'],['truck','TRUCK']].map(([key,label])=><button key={key} aria-pressed={tab===key} type="button" onClick={()=>setTab(key)}>{label}</button>)}</nav>
  {company&&<button className={css.companySwitch} type="button" aria-pressed={tab==='company'} onClick={()=>setTab('company')}>Company control</button>}
  <div className={css.content}><div className={css.bar}><small>{tab==='company'?'Private carrier controls':operator.company_name}</small><button type="button" onClick={reload}>Refresh</button></div>
+ {operator.workspace_kind==='leased'&&operator.driver_user_id===session.user.id&&<DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={reload}/>}
  {tab==='load'&&<Loads operator={operator} refresh={refresh} done={reload}/>}
  {tab==='pay'&&(own?<OwnPay refresh={refresh}/>:<DriverPay operator={operator} refresh={refresh}/>)}
  {tab==='docs'&&<><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/><OperatorWallet operatorId={operator.id} refresh={refresh}/></>}
