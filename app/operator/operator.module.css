@@ -363,3 +363,8 @@
   .page [data-print-statement] :is(button, .noPrint) { display: none !important; }
   .page [data-print-statement] .pair, .page [data-print-statement] .loadLine { break-inside: avoid; }
 }
+
+.stop a.address {
+  display: block;
+  margin-block: 0.25rem;
+}
