@@ -8,6 +8,8 @@ on:
       - 'scripts/lease-operator/step2c*'
       - 'lib/rr-lease/report-*.js'
       - 'lib/rr-lease/email-pipeline.js'
+      - 'lib/rr-lease/intake-extractor.js'
+      - 'scripts/lease-operator/mail-window.mjs'
       - 'lib/rr-lease/operator-api.js'
       - 'app/api/operator/imports/**'
       - 'scripts/lease-operator/pod-replacement*.sql'
@@ -81,7 +83,9 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126195000_rr_phase1_step2c_report_archive.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126195500_rr_phase1_step2c_mail_and_assignment.sql
           psql -v ON_ERROR_STOP=1 -f scripts/lease-operator/step2c.rollback.test.sql
-      - name: Relay CSV/XLSX and mail worker tests
-        run: node --test scripts/lease-operator/step2c.report.test.mjs scripts/lease-operator/step2c.mail.test.mjs
+      - name: Install pinned dependencies for HTTP/AI adapters
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Relay CSV/XLSX, mail worker and AI proposal tests
+        run: node --test scripts/lease-operator/step2c.report.test.mjs scripts/lease-operator/step2c.mail.test.mjs scripts/lease-operator/step2c.extractor.test.mjs
       - name: Execute settlement contract tests
         run: node --test scripts/lease-operator/intake-contract.test.mjs
