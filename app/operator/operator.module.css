@@ -380,3 +380,28 @@
   display: block;
   margin-block: 0.25rem;
 }
+
+
+.rateconTest .form {
+  background: var(--surface, #fff);
+  color: var(--fg, #182f3a);
+  border-color: var(--line, #d2dbdb);
+}
+.page .rateconTest .link,
+.page .rateconTest a {
+  color: var(--accent, #09635d);
+}
+.rateconTest .form .consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+.rateconTest .consent input[type='checkbox'] {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  accent-color: var(--accent, #075e58);
+}

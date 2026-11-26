@@ -70,7 +70,7 @@ function DriverTestConfirmation({loadId, loadNumber, refresh}) {
   }
   if(!step) return error ? <p role="alert">{error}</p>:null;
   const accepted=Boolean(step.receipt.accepted_at);
-  return <section className={styles.stop}><h4>Driver acceptance · Test</h4>
+  return <section className={styles.stop + " " + styles.rateconTest}><h4>Driver acceptance · Test</h4>
     {accepted ? <>
       <p>Accepted by <strong>{step.receipt.signer}</strong> · {new Date(step.receipt.accepted_at).toLocaleString()}</p>
       <p>Broker email preview<br/>Subject: Accepted rate confirmation · {loadNumber}</p>
@@ -81,7 +81,7 @@ function DriverTestConfirmation({loadId, loadNumber, refresh}) {
       {review ? <a href={review.url} target="_blank" rel="noreferrer">Open test rate confirmation (PDF)</a> : <button className={styles.link} disabled={busy} onClick={()=>act('review')}>Review rate confirmation</button>}
       {review && <form className={styles.form} onSubmit={e=>{e.preventDefault();if(confirmed && signer.trim().length>=2)act('accept');}}>
         <label>Your full name<input required maxLength={90} value={signer} onChange={e=>setSigner(e.target.value)}/></label>
-        <label><span><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> I reviewed this rate confirmation and agree to this test load.</span></label>
+        <label className={styles.consent}><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>I reviewed this rate confirmation and agree to this test load.</span></label>
         <button className={styles.primary} disabled={busy||!confirmed||signer.trim().length<2}>Agree &amp; sign test confirmation</button>
       </form>}
     </>}
