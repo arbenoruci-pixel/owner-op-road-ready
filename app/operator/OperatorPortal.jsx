@@ -345,7 +345,7 @@ function LoadCard({ load, refresh, owner = false }) {
               )}
             </dl>
           )}
-          {!owner && load.load_number === "TEST-AGREE-03" && <RateconDriverTest key={load.id} loadId={load.id} loadNumber={load.load_number} refresh={refresh} />}
+          {!owner && <RateconDriverTest load={load} refresh={refresh} />}
           <Documents loadId={load.id} refresh={refresh} />
         </div>
       )}
