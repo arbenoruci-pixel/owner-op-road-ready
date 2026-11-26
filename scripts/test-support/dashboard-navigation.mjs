@@ -12,7 +12,7 @@ export async function homeControl(page,name){
  const control=page.getByRole('button',{name,exact:true});
  if(await page.locator('.rr-driver-mission').isVisible()&&!await control.isVisible())await page.getByRole('button',{name:'Back to Home',exact:true}).click();
  const tools = page.locator('.rrd-tools-disclosure');
- if(await tools.isVisible() && await tools.getByRole('button',{name,exact:true,includeHidden:true}).count() && !await tools.evaluate(el=>el.open)){
+ if(await tools.isVisible() && ['Billing','Drive','My month','Import','Export & Backup','More tools'].includes(name) && !await tools.evaluate(el=>el.open)){
   await tools.locator('summary').click();
  }
  return control;

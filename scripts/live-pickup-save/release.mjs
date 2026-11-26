@@ -1,9 +1,25 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 
 const read = file => fs.readFileSync(file, 'utf8');
 const readJson = file => JSON.parse(read(file));
 const saveJson = (file, value) => fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
+// Preserve the legacy installers' exact-byte rerun checks for the reviewed editor.
+const editor = 'source/src/modules/logbook/eventEditingV110.js';
+const priorEditorHash = 'e21061950b1ed45e8c9cb037f98e4d1168155a9bf6fcdfb034378a501000017e';
+const pickupEditorHash = '60f7402302dc26155d3b31bd2a46bd632cddd7116266db9505b9d6dd1f2254b6';
+assert.equal(createHash('sha256').update(read(editor)).digest('hex'), pickupEditorHash);
+const beforeGuard = JSON.stringify(editor) + ':' + JSON.stringify(priorEditorHash);
+const afterGuard = JSON.stringify(editor) + ':' + JSON.stringify(pickupEditorHash);
+const compatibility = ['install', 'finish-mobile', 'finish-interaction'].map(stage => {
+  const file = 'scripts/v110378/' + stage + '.mjs';
+  const source = read(file);
+  assert.equal(source.split(beforeGuard).length, 2, 'Expected preceding editor guard in ' + file);
+  return [file, source.replace(beforeGuard, afterGuard)];
+});
+for (const [file, source] of compatibility) fs.writeFileSync(file, source);
+
 const previous = readJson('release-version.json');
 assert.equal(previous.version, '110.4.135');
 assert.match(previous.sourceCommit, /^[a-f0-9]{40}$/);
