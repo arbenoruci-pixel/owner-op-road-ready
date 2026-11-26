@@ -29,7 +29,10 @@ export async function exchange(fields, { getEnv, request }) {
   });
   if (!response.ok) throw Error('microsoft_token');
   const token = await response.json();
-  if (!token.access_token || !token.scope?.toLowerCase().split(' ').includes('mail.send'))
+  // Microsoft may qualify Graph scopes. An omitted scope means the requested scopes were granted (RFC 6749 §5.1).
+  const grants = typeof token.scope === 'string' ? token.scope.trim().toLowerCase().split(/\s+/) : [];
+  const canSend = token.scope === undefined || grants.includes('mail.send') || grants.includes('https://graph.microsoft.com/mail.send');
+  if (typeof token.access_token !== 'string' || !token.access_token || !canSend)
     throw Error('mail_scope');
   return token;
 }
