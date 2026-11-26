@@ -50,3 +50,16 @@ test('installed driver entry uses the four-tab workspace and keeps carrier acces
   assert.match(portal, /operator && \(carrierEntry\s*\? <Workspace\b[^\n]+\s*: <Step3Workspace\b/);
   assert.doesNotMatch(portal, /\{operator && <Workspace\b/);
 });
+
+test('each assigned training candidate checks the server using its own load identity', async () => {
+  const {default: RateconDriverTest} = await import('../../app/operator/RateconDriverTest.jsx');
+  const candidate = (id, number, status = 'assigned') =>
+    RateconDriverTest({load: {id, load_number: number, status}, refresh: 0});
+  for (const [id, number] of [['first', 'TEST-AGREE-03'], ['second', 'TEST-RC-EXAMPLE']]) {
+    const confirmation = candidate(id, number);
+    assert.equal(confirmation.props.loadId, id);
+    assert.equal(confirmation.props.loadNumber, number);
+  }
+  assert.equal(candidate('live', 'RC-EXAMPLE'), null);
+  assert.equal(candidate('finished', 'TEST-RC-EXAMPLE', 'delivered'), null);
+});

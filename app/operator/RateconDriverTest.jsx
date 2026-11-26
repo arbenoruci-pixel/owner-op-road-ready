@@ -26,7 +26,13 @@ async function brokerCopy(original, receipt, doc, loadNumber) {
   return new Blob([await pdf.save()], {type:'application/pdf'});
 }
 
-export default function RateconDriverTest({loadId, loadNumber, refresh}) {
+export default function RateconDriverTest({load, refresh}) {
+  // The prefix avoids querying live freight. The RPC verifies enrollment, driver and revision.
+  if (load.status !== 'assigned' || !load.load_number?.startsWith('TEST-')) return null;
+  return <DriverTestConfirmation key={load.id} loadId={load.id} loadNumber={load.load_number} refresh={refresh} />;
+}
+
+function DriverTestConfirmation({loadId, loadNumber, refresh}) {
   const client=usePortalClient();
   const [step,setStep]=useState(null),[signer,setSigner]=useState(''),[confirmed,setConfirmed]=useState(false);
   const [review,setReview]=useState(null),[copy,setCopy]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
