@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { allRows, appointment, loadFields, loadOriginal, operatorClient, rows, usd } from './portalData.js';
 import { PortalSession, usePortalClient } from './PortalSession.jsx';
+import DriverLoadAlerts from './DriverLoadAlerts.jsx';
+import { unsubscribeLoadAlerts } from './loadAlerts.js';
 import OperatorWallet, { WalletProof } from './OperatorWallet.jsx';
 import OwnerEarnings from './OwnerEarnings.jsx';
 import LegacyHistory from './LegacyHistory.jsx';
@@ -524,7 +526,7 @@ function Week({ statement, operator, refresh }) {
   );
 }
 
-function Workspace({ operator }) {
+function Workspace({ operator, driverView }) {
   const client = usePortalClient();
   const owner = operator.workspace_kind === 'carrier';
   const [tab, setTab] = useState('loads');
@@ -610,6 +612,7 @@ function Workspace({ operator }) {
             <button key={key} type="button" aria-pressed={tab === key} onClick={() => switchTo(key)}>{name}</button>
           ))}
         </nav>
+        {driverView && <DriverLoadAlerts operatorId={operator.id} onRefresh={() => setRefresh(v => v + 1)} />}
         <div className={styles.sectionHeading}>
           <h2>
             {headings[tab]}
@@ -680,7 +683,7 @@ function Membership({ session, carrierEntry }) {
         if (claimError) throw claimError;
       }
       let membership = client.from('rr_lease_operators')
-        .select('id,company_name,driver_name,pay_weekday,carrier_user_id,workspace_kind');
+        .select('id,company_name,driver_name,pay_weekday,carrier_user_id,driver_user_id,workspace_kind');
       if (carrierEntry) membership = membership.eq('carrier_user_id', session.user.id);
       const list = await rows(membership.order('company_name').order('id'));
       if (active) {
@@ -729,7 +732,7 @@ function Membership({ session, carrierEntry }) {
           </select>
         </label>
       )}
-      {operator && <Workspace key={operator.id} operator={operator} />}
+      {operator && <Workspace key={operator.id} operator={operator} driverView={operator.workspace_kind === 'leased' && operator.driver_user_id === session.user.id} />}
     </>
   );
 }
@@ -747,6 +750,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
     return () => subscription.unsubscribe();
   }, [client]);
   async function signOut() {
+    await unsubscribeLoadAlerts(client || operatorClient()).catch(() => {});
     const { error } = await operatorClient().auth.signOut({ scope: 'local' });
     setSignoutError(Boolean(error));
   }
