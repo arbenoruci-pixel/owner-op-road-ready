@@ -1,0 +1,72 @@
+name: Phase 1 Step 2B isolated SQL
+on:
+  push:
+    branches:
+      - roadready/phase1-step2-document-pipeline
+    paths:
+      - '.github/workflows/rr-step2b-rollback.yml'
+      - 'scripts/lease-operator/pod-replacement*.sql'
+      - 'scripts/lease-operator/step2b*.sql'
+      - 'scripts/lease-operator/intake-contract.test.mjs'
+      - 'lib/rr-lease/intake-contract.js'
+      - 'supabase/migrations/20261126*_rr_phase1_*.sql'
+permissions:
+  contents: read
+jobs:
+  isolated-sql:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: rr_step2a_audit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rr_step2a_audit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: local-test-only
+      PGDATABASE: rr_step2a_audit
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify disposable database and bootstrap
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -c 'select version(), current_database()'
+          psql -v ON_ERROR_STOP=1 -f scripts/lease-operator/pod-replacement.bootstrap.sql
+      - name: Apply exact relevant migration chain
+        run: |
+          set -euo pipefail
+          for m in supabase/migrations/20261126073000_* \
+            supabase/migrations/20261126111000_* \
+            supabase/migrations/20261126120000_* \
+            supabase/migrations/20261126130000_* \
+            supabase/migrations/20261126143000_* \
+            supabase/migrations/20261126153849_* \
+            supabase/migrations/20261126153937_* \
+            supabase/migrations/20261126154155_* \
+            supabase/migrations/20261126154238_* \
+            supabase/migrations/20261126161056_* \
+            supabase/migrations/20261126173000_*; do
+            echo "Applying $m"
+            psql -v ON_ERROR_STOP=1 -f "$m"
+          done
+      - name: Execute POD replacement and rollback assertions
+        run: psql -v ON_ERROR_STOP=1 -f scripts/lease-operator/pod-replacement.rollback.test.sql
+      - name: Apply Step 2B and run rollback
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126184000_rr_phase1_step2b_atomic_intake.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/lease-operator/step2b.rollback.test.sql
+      - name: Execute settlement contract tests
+        run: node --test scripts/lease-operator/intake-contract.test.mjs

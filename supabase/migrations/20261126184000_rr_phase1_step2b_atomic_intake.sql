@@ -104,6 +104,8 @@ declare v_actor uuid:=auth.uid(); i rr_lease_private.step2b_upload_intents; o pu
  d public.rr_lease_documents; v_load uuid; v_doc uuid; v_bytes bytea; v_hash text; v_result jsonb; v_part int; v_orphan boolean;
 begin
  if v_actor is null then raise exception 'Authentication required' using errcode='42501'; end if;
+ -- Same actor lock as reservation creation: consistent lock ordering for concurrent retries.
+ perform pg_advisory_xact_lock(hashtextextended('rr-step2b-intent:'||v_actor::text,0));
  select * into i from rr_lease_private.step2b_upload_intents where id=p_upload_id and actor=v_actor for update;
  if not found then raise exception 'Upload unavailable' using errcode='42501'; end if;
  if p_base64 is null or length(p_base64)>4194304 or p_sha256 is null or p_sha256 !~ '^[a-f0-9]{64}$' or p_mime is distinct from i.mime_type then raise exception 'Invalid upload payload' using errcode='22023'; end if;
@@ -532,3 +534,15 @@ begin
     returning document_id into result_id;
   return result_id;
 end $function$;
+
+-- Keep the original first receipt reference paired with its timestamp.
+create or replace function rr_lease_private.phase1_record_pod_receipt(p_load uuid,p_received_at timestamptz,p_reference text)
+returns void language plpgsql set search_path='' as $$
+begin
+ if p_received_at is null or not isfinite(p_received_at) or p_received_at>clock_timestamp() or nullif(btrim(p_reference),'') is null then raise exception 'Actual POD receipt time and proof required'; end if;
+ update public.rr_lease_loads
+ set pod_received_at=case when pod_received_at is null or p_received_at<pod_received_at then p_received_at else pod_received_at end,
+ pod_receipt_reference=case when pod_received_at is null or p_received_at<pod_received_at then btrim(p_reference) else pod_receipt_reference end
+ where id=p_load and billing_channel='FIRSTLINE_FACTORED' and load_type='FREIGHT';
+ if not found then raise exception 'POD receipt applies to a freight load only'; end if;
+end $$;
