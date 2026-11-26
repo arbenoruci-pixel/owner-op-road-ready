@@ -25,3 +25,15 @@ test('encrypted six-document pack requires PIN, exact scope and authenticated ci
  await assert.rejects(()=>sealDotPack('driver:workspace','111111',docs));await assert.rejects(()=>sealDotPack('driver:workspace','49273518',docs.slice(1)));
  const bad={...p,cipher:p.cipher.slice(0)};new Uint8Array(bad.cipher)[0]^=1;await assert.rejects(()=>openDotPack('driver:workspace','49273518',bad));
 });
+
+const {TonuApprovalForm}=await import('../../app/operator/Step3Carrier.jsx');
+const {default:TruckTools}=await import('../../app/operator/Step3Truck.jsx');
+const renderPart=(component,props)=>renderToStaticMarkup(React.createElement(PortalSession.Provider,{value:fake},React.createElement(component,props)));
+test('actual carrier cancellation form requires independent original, amount, actual date and confirmation',()=>{
+ const html=renderPart(TonuApprovalForm,{load:{id:'fixture'},documents:[{id:'proof',file_name:'cancellation.pdf'}]});
+ assert.match(html,/name="documentId"/);assert.match(html,/cancellation.pdf/);assert.match(html,/name="amount"/);assert.match(html,/name="cancelledAt"/);assert.match(html,/name="confirmCancellation"/);assert.match(html,/Approve confirmed OTR TONU/);
+});
+test('actual TRUCK manual form has receipt/photo/PDF and odometer fields without OCR',()=>{
+ const html=renderPart(TruckTools,{operator:op,refresh:0});
+ assert.match(html,/OCR is not required/);assert.match(html,/name="odometer"/);assert.match(html,/name="nextOdometer"/);assert.match(html,/application\/pdf,image\/jpeg,image\/png/);assert.match(html,/Save maintenance record/);
+});

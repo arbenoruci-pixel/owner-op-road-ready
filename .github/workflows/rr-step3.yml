@@ -91,6 +91,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126144203_driver_tools.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126200000_rr_phase1_step3_financial_bridge.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126200500_rr_phase1_step3_maintenance.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261126201500_rr_phase1_step3_otr_tonu.sql
           psql -v ON_ERROR_STOP=1 -f scripts/lease-operator/step3.rollback.test.sql
       - name: Install pinned dependencies for HTTP/AI adapters
         run: npm ci --ignore-scripts --no-audit --no-fund
