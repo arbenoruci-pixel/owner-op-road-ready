@@ -220,10 +220,33 @@ begin
  if (select count(*) from public.rr_lease_ledger_entries)<>v_before or not exists(select 1 from public.rr_lease_factoring_events where id=v_fact and review_status='VERIFIED') then raise exception 'FirstLine review booked driver deduction';end if;
  raise notice 'PASS FirstLine proof decision without driver ledger mutation';
 
+
+ -- Maintenance is available to workspace members without enabling the old
+ -- Phase 2 pilot. It cannot write logbook/mileage/IFTA records or ledger rows.
+ v_file:=convert_to('%PDF-1.4 synthetic maintenance receipt','UTF8');
+ select count(*) into v_before from public.rr_lease_ledger_entries;
+ perform set_config('request.jwt.claim.sub',drv::text,true);perform set_config('request.jwt.claims',jsonb_build_object('sub',drv,'role','authenticated')::text,true);
+ execute 'set local role authenticated';
+ v_intent:=gen_random_uuid();
+ v_fields:=jsonb_build_object('kind','maintenance','record_date',(now() at time zone 'America/Chicago')::date,'description','Oil service fixture','odometer',500000,'next_service_odometer',520000,'expense_category','PM','file_name','maintenance.pdf','mime_type','application/pdf');
+ v_pod:=public.rr_lease_step3_save_maintenance(op,v_intent,v_fields,encode(v_file,'base64'));
+ if public.rr_lease_step3_save_maintenance(op,v_intent,v_fields,encode(v_file,'base64'))<>v_pod or decode(public.rr_lease_step3_maintenance_original(v_pod),'base64')<>v_file then raise exception 'Maintenance replay/original mismatch';end if;
+ denied:=false;begin perform public.rr_lease_step3_save_maintenance(op2,gen_random_uuid(),v_fields,encode(v_file,'base64'));exception when insufficient_privilege then denied:=true;end;if not denied then raise exception 'Cross-driver maintenance write';end if;
+ denied:=false;begin perform public.rr_lease_step3_save_maintenance(op,gen_random_uuid(),v_fields||'{"kind":"logbook"}'::jsonb,encode(v_file,'base64'));exception when invalid_parameter_value then denied:=true;end;if not denied then raise exception 'Maintenance RPC wrote logbook';end if;
+ execute 'reset role';
+ perform set_config('request.jwt.claim.sub',drv2::text,true);perform set_config('request.jwt.claims',jsonb_build_object('sub',drv2,'role','authenticated')::text,true);
+ execute 'set local role authenticated';
+ if exists(select 1 from public.rr_driver_tool_records where id=v_pod) then raise exception 'Cross-driver maintenance read';end if;
+ denied:=false;begin perform public.rr_lease_step3_maintenance_original(v_pod);exception when insufficient_privilege then denied:=true;end;if not denied then raise exception 'Cross-driver maintenance original read';end if;
+ execute 'reset role';
+ if (select count(*) from public.rr_driver_tool_records)<>1 or exists(select 1 from public.rr_driver_tool_records where kind<>'maintenance') or exists(select 1 from rr_lease_private.driver_tools_pilot) or (select count(*) from public.rr_lease_ledger_entries)<>v_before then raise exception 'Maintenance changed out-of-scope records';end if;
+ raise notice 'PASS maintenance-only save, exact original, replay, cross-driver isolation and no logbook/ledger/Phase2 writes';
+
 end $test$;
 rollback;
 do $$begin
  if exists(select 1 from auth.users) or exists(select 1 from public.rr_lease_loads) or exists(select 1 from public.rr_lease_ledger_entries) or exists(select 1 from public.rr_lease_amazon_import_rows) or exists(select 1 from public.rr_lease_factoring_events) or exists(select 1 from rr_lease_private.step2c_archives) or exists(select 1 from rr_lease_private.step2c_mail_sources) or exists(select 1 from rr_lease_private.step2c_assignment_execution) then raise exception 'Rollback leaked Step2C fixtures';end if;
  if exists(select 1 from rr_lease_private.step3_decisions) or exists(select 1 from public.rr_lease_settlement_snapshots) then raise exception 'Step 3 rollback leaked';end if;
+ if exists(select 1 from public.rr_driver_tool_records) or exists(select 1 from rr_lease_private.driver_tool_files) then raise exception 'Maintenance rollback leaked';end if;
  raise notice 'PASS Step 3 rollback zero fixture data';
 end $$;

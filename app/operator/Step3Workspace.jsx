@@ -2,7 +2,7 @@
 import React,{useEffect,useState,useRef} from 'react';
 import {usePortalClient} from './PortalSession.jsx';
 import {allRows,rows,loadOriginal,appointment,loadFields} from './portalData.js';
-import {currentWeek,moveDay,formatDay} from './financials.js';
+import {currentWeek,moveDay,formatDay,weekStart} from './financials.js';
 import {parseUSDCents,settlementDisplay} from '../../lib/rr-lease/intake-contract.js';
 import OperatorWallet,{WalletProof} from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
@@ -77,14 +77,14 @@ function LoadDetails({load,pods,operator,refresh,done}){
  </div></details>;
 }
 function Loads({operator,refresh,done}){
- const c=usePortalClient(),state=useRead(async()=>{const [loads,pods]=await Promise.all([allRows(()=>c.from('rr_lease_loads').select(loadFields+',billing_channel,broker_rules,final_pod_id,ledger_mode').eq('operator_id',operator.id).order('updated_at',{ascending:false}).order('id')),rpc(c,'rr_lease_step3_pod_status',{p_operator_id:operator.id})]);return {loads,pods}},[c,operator.id,refresh]);
+ const c=usePortalClient(),state=useRead(async()=>{const [loads,pods]=await Promise.all([allRows(()=>c.from('rr_lease_loads').select(loadFields+',billing_channel,broker_rules,final_pod_id,ledger_mode,cancelled_at').eq('operator_id',operator.id).order('updated_at',{ascending:false}).order('id')),rpc(c,'rr_lease_step3_pod_status',{p_operator_id:operator.id})]);return {loads,pods}},[c,operator.id,refresh]);
  const [week,setWeek]=useState(()=>currentWeek());
  return <div className={css.stack}><details className={css.panel}><summary>Upload POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details>
  <ReadState state={state}>{({loads,pods})=>{
  const active=loads.filter(l=>['staging','assigned','picked_up'].includes(l.status));
- const history=loads.filter(l=>!active.includes(l)&&((l.actual_delivery_date&&l.actual_delivery_date>=week&&l.actual_delivery_date<moveDay(week,7))||(!l.actual_delivery_date&&pods.some(p=>p.load_id===l.id&&p.review_status==='REJECTED'))));
+ const history=loads.filter(l=>!active.includes(l)&&(((l.actual_delivery_date||l.cancelled_at?.slice(0,10))>=''+week&&(l.actual_delivery_date||l.cancelled_at?.slice(0,10))<moveDay(week,7))||(!l.actual_delivery_date&&pods.some(p=>p.load_id===l.id&&p.review_status==='REJECTED'))));
  const card=l=><LoadDetails key={l.id} load={l} pods={pods.filter(p=>p.load_id===l.id)} operator={operator} refresh={refresh} done={done}/>;
- return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}<label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(e.target.value)}}/></label><h2>Delivery history</h2>{history.length?history.map(card):<p>No completed loads in this week.</p>}</>}}</ReadState></div>;
+ return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}<label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><h2>Delivery history</h2>{history.length?history.map(card):<p>No completed loads in this week.</p>}</>}}</ReadState></div>;
 }
 function DriverPay({operator,refresh}){
  const c=usePortalClient(),[selected,setSelected]=useState('');
@@ -101,9 +101,9 @@ function DriverPay({operator,refresh}){
 }
 export function CompanyNumbers({week,refresh,ownOnly=false}){
  const c=usePortalClient(),state=useRead(()=>rpc(c,'rr_lease_step3_company_summary',{p_week:week}),[c,week,refresh]);
- return <ReadState state={state}>{s=><div className={css.stack}><dl className={css.pairs}>{[['Own truck verified revenue',s.ownGrossCents],['Own recorded expenses',s.recordedOwnExpensesCents],...(!ownOnly?[['Leased operator commissions',s.commissionCents],['Verified FirstLine fees',s.verifiedFirstLineFeesCents],['Recorded company margin',s.recordedMarginCents]]:[])].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>{!ownOnly&&<p className={css.yellow}>{s.pendingFirstLineEvents} factor events pending review. Recorded margin excludes unrecorded costs and unverified events; full net profit is not yet confirmed.</p>}</div>}</ReadState>;
+ return <ReadState state={state}>{s=><div className={css.stack}><dl className={css.pairs}>{[['Own truck verified revenue',s.ownGrossCents],['Own recorded expenses',s.recordedOwnExpensesCents],['Own recorded margin',s.ownRecordedMarginCents],...(!ownOnly?[['Leased operator commissions',s.commissionCents],['Verified FirstLine fees',s.verifiedFirstLineFeesCents],['Recorded company margin',s.recordedMarginCents]]:[])].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>{!ownOnly&&<p className={css.yellow}>{s.pendingFirstLineEvents} factor events pending review. Recorded margin excludes unrecorded costs and unverified events; full net profit is not yet confirmed.</p>}</div>}</ReadState>;
 }
-function OwnPay({refresh}){const [week,setWeek]=useState(()=>currentWeek());return <div className={css.stack}><p>Own truck · 100% company revenue. No contractor settlement.</p><label>Monday week start<input type="date" value={week} onChange={e=>setWeek(e.target.value)}/></label><CompanyNumbers week={week} refresh={refresh} ownOnly/></div>}
+function OwnPay({refresh}){const [week,setWeek]=useState(()=>currentWeek());return <div className={css.stack}><p>Own truck · 100% company revenue. No contractor settlement.</p><label>Monday week start<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><CompanyNumbers week={week} refresh={refresh} ownOnly/></div>}
 export default function Step3Workspace({operator,session,operators}){
  const [tab,setTab]=useState('load'),[refresh,setRefresh]=useState(0),[dark,setDark]=useState(true);
  const own=operator.workspace_kind==='carrier'&&operator.carrier_user_id===session.user.id;

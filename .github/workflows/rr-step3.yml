@@ -96,5 +96,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Relay CSV/XLSX, mail worker and AI proposal tests
         run: node --test scripts/lease-operator/step2c.report.test.mjs scripts/lease-operator/step2c.mail.test.mjs scripts/lease-operator/step2c.extractor.test.mjs
+      - name: Render four-tab UI and verify encrypted DOT pack
+        run: node --test scripts/lease-operator/step3.ui.test.mjs
       - name: Execute settlement contract tests
         run: node --test scripts/lease-operator/intake-contract.test.mjs

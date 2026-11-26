@@ -295,7 +295,7 @@ begin
  select coalesce(sum(e.carrier_effect_cents),0) into commissions from public.rr_lease_ledger_entries e join public.rr_lease_settlements s on s.id=e.settlement_id join public.rr_lease_operators o on o.id=e.operator_id where o.carrier_user_id=actor and s.week_start=p_week and e.status='POSTED';
  select coalesce(sum(abs(e.amount_cents)),0) into fees from public.rr_lease_factoring_events e where e.carrier_user_id=actor and e.event_type='FEE' and e.review_status='VERIFIED' and (e.event_at at time zone 'America/Chicago')::date>=p_week and (e.event_at at time zone 'America/Chicago')::date<p_week+7;
  select count(*) into pending from public.rr_lease_factoring_events e where e.carrier_user_id=actor and e.review_status='PENDING_PROOF' and (e.event_at at time zone 'America/Chicago')::date>=p_week and (e.event_at at time zone 'America/Chicago')::date<p_week+7;
- return jsonb_build_object('ownGrossCents',own_gross,'recordedOwnExpensesCents',expenses,'commissionCents',commissions,'verifiedFirstLineFeesCents',fees,'recordedMarginCents',own_gross-expenses+commissions-fees,'pendingFirstLineEvents',pending,'isCompleteProfit',false);
+ return jsonb_build_object('ownGrossCents',own_gross,'recordedOwnExpensesCents',expenses,'ownRecordedMarginCents',own_gross-expenses,'commissionCents',commissions,'verifiedFirstLineFeesCents',fees,'recordedMarginCents',own_gross-expenses+commissions-fees,'pendingFirstLineEvents',pending,'isCompleteProfit',false);
 end $$;
 
 create or replace function rr_lease_private.phase1_sync_adjustment(p_id uuid) returns void
