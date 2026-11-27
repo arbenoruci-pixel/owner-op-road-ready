@@ -53,7 +53,7 @@ export function OriginalLink({id,operatorId,wallet=false,label='Open original'})
 }
 const podFileTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-function PodUpload({loadId, loadNumber, done}) {
+function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
   const client = usePortalClient();
   const readOnly = client.podUploadsReadOnly === true;
   const canScan = process.env.NEXT_PUBLIC_OPERATOR_POD_SCANNER !== 'false';
@@ -122,6 +122,17 @@ function PodUpload({loadId, loadNumber, done}) {
     requestAnimationFrame(() => focusTarget.current?.focus());
   }
 
+  async function uploadOriginal(requestId) {
+    const {uploadId} = await api(client, 'pod/create-upload', {
+      requestId, loadId:loadId || null,
+      ...(loadId ? {} : {broker:broker.trim(), loadNumber:number.trim()}),
+      fileName:file.name, mimeType:file.type, byteSize:file.size,
+    });
+    return api(client, 'pod/commit-upload', file, {
+      'Content-Type':file.type, 'X-Upload-Id':uploadId,
+    });
+  }
+
   async function submit(event) {
     event.preventDefault();
     if (readOnly || lock.current || opening || Scanner || !file) return;
@@ -131,14 +142,13 @@ function PodUpload({loadId, loadNumber, done}) {
     try {
       const key = JSON.stringify([loadId, broker, number, file.name, file.size, file.lastModified]);
       if (intent.current?.key !== key) intent.current = {key, id:crypto.randomUUID()};
-      const {uploadId} = await api(client, 'pod/create-upload', {
-        requestId:intent.current.id, loadId:loadId || null,
-        ...(loadId ? {} : {broker:broker.trim(), loadNumber:number.trim()}),
-        fileName:file.name, mimeType:file.type, byteSize:file.size,
-      });
-      const result = await api(client, 'pod/commit-upload', file, {
-        'Content-Type':file.type, 'X-Upload-Id':uploadId,
-      });
+      const requestId = intent.current.id;
+      const result = addendum
+        ? await api(client, 'pod/addendum', file, {
+            'Content-Type':file.type, 'X-Load-Id':loadId, 'X-Request-Id':requestId,
+            'X-File-Name':encodeURIComponent(file.name),
+          })
+        : await uploadOriginal(requestId);
       if (result.review_status === 'REJECTED') {
         throw Error('This exact original was rejected. Upload a corrected document.');
       }
@@ -177,6 +187,7 @@ function PodUpload({loadId, loadNumber, done}) {
       {file ? <>
         <div ref={selection} tabIndex={-1} role="status" className={css.podSelection}>
           <small>Ready to upload</small><strong>{file.name}</strong>
+          {loadId && <small>{brokerName} · Load #{loadNumber}</small>}
           {readOnly && <small>Preview only. This file stays on your device.</small>}
         </div>
         {file.type === 'application/pdf' && <button type="button" ref={viewButton} aria-haspopup="dialog"
@@ -185,7 +196,7 @@ function PodUpload({loadId, loadNumber, done}) {
           {busy ? 'Uploading…' : 'Upload POD'}
         </button>
       </> : <small>PDF, JPEG, PNG or WebP · Up to 3 MiB</small>}
-      {sent && <p role="status">Original received · pending carrier review</p>}
+      {sent && <p role="status">{addendum ? 'Additional document received · pending office review' : 'POD received · pending office review'}</p>}
       {error && <p role="alert">{error}</p>}
     </form>
     {viewing && file && <PdfDialog heading="Signed POD" cachedBlob={file} onClose={() => {
@@ -199,11 +210,11 @@ function PodUpload({loadId, loadNumber, done}) {
   </>;
   if (!loadId) return content;
   return <details className={css.uploadControl}>
-    <summary onClick={openAssignedUpload}>Upload POD</summary>
+    <summary onClick={openAssignedUpload}>{addendum ? 'Add corrected POD' : 'Upload POD'}</summary>
     {content}
   </details>;
 }
-function LoadDetails({load,pods,driverView,refresh,done,initialOpen}){
+function LoadDetails({load,pods,driverView,refresh,done,initialOpen,acceptsAddendum}){
  const c=usePortalClient();
  const docs=useRead(()=>rows(c.from('rr_lease_documents').select(docFields).eq('load_id',load.id).eq('is_ready',true).order('is_current',{ascending:false}).order('id')),[c,load.id,refresh]);
  const [review,setReview]=useState(null);
@@ -216,7 +227,7 @@ function LoadDetails({load,pods,driverView,refresh,done,initialOpen}){
      {acceptance?.control || (ratecon && <PilotRateconReview key={ratecon.id} client={c} doc={ratecon} review={review?.id===ratecon.id?review:null} onReviewed={cacheReview} label="Rate Con PDF"/>)}
      {acceptance?.issue}
      {docs.error&&<p role="alert">{docs.error}</p>}
-     {allowPod&&<PodUpload loadId={load.id} loadNumber={load.load_number} done={done}/>}
+     {(acceptsAddendum || allowPod)&&<PodUpload addendum={acceptsAddendum} loadId={load.id} loadNumber={load.load_number} brokerName={load.broker_name} done={done}/>}
    </>;
    return <LoadCard load={load} status={acceptance?.status || status} controls={controls} initialOpen={initialOpen} gross={money(load.gross_cents)}>
      {acceptance?.broker}
@@ -234,13 +245,20 @@ function LoadDetails({load,pods,driverView,refresh,done,initialOpen}){
 function Loads({operator,driverView,refresh,done}){
  // Keep the active POD scan mounted when load alerts refresh this workspace.
  const c=usePortalClient(),state=useRead(async()=>{const [loads,pods]=await Promise.all([allRows(()=>c.from('rr_lease_loads').select(loadFields+',billing_channel,broker_rules,final_pod_id,ledger_mode,cancelled_at,load_type,tonu_confirmation_id').eq('operator_id',operator.id).order('updated_at',{ascending:false}).order('id')),rpc(c,'rr_lease_step3_pod_status',{p_operator_id:operator.id})]);return {loads,pods}},[c,operator.id,refresh],{keepWhileRefreshing:true});
+ const corrections = useRead(async () => {
+   if (c.podUploadsReadOnly) return [];
+   const {data, error} = await c.rpc('rr_lease_pod_correction_loads', {p_operator_id:operator.id});
+   if (error?.code === 'PGRST202' || error?.code === '42883') return [];
+   if (error) throw Error('Could not check which deliveries accept corrections.');
+   return data || [];
+ }, [c,operator.id,refresh], {keepWhileRefreshing:true});
  const [week,setWeek]=useState(()=>currentWeek());
  return <div className={css.stack}>
  <ReadState state={state}>{({loads,pods})=>{
  const active=loads.filter(l=>['staging','assigned','picked_up'].includes(l.status));
  const history=loads.filter(l=>!active.includes(l)&&(((l.actual_delivery_date||l.cancelled_at?.slice(0,10))>=''+week&&(l.actual_delivery_date||l.cancelled_at?.slice(0,10))<moveDay(week,7))||(!l.actual_delivery_date&&pods.some(p=>p.load_id===l.id&&p.review_status==='REJECTED'))));
- const card=l=><LoadDetails initialOpen={l.id===active[0]?.id} key={l.id} load={l} pods={pods.filter(p=>p.load_id===l.id)} driverView={driverView} refresh={refresh} done={done}/>;
- return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}<details className={css.panel}><summary>Delivery History</summary><div className={css.detail}><label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label>{history.length?history.map(card):<p>No completed loads in this week.</p>}</div></details></>}}</ReadState><details className={css.panel}><summary>Upload POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details></div>;
+ const card=l=><LoadDetails acceptsAddendum={corrections.value?.includes(l.id) || false} initialOpen={l.id===active[0]?.id} key={l.id} load={l} pods={pods.filter(p=>p.load_id===l.id)} driverView={driverView} refresh={refresh} done={done}/>;
+ return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}<details className={css.panel}><summary>Delivery History</summary><div className={css.detail}>{corrections.error && <p role="alert">{corrections.error}</p>}<label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label>{history.length?history.map(card):<p>No completed loads in this week.</p>}</div></details></>}}</ReadState><details className={css.panel}><summary>Upload POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details></div>;
 }
 function feeLabel(entries) {
  const revenue = (entries || []).filter(e=>['FREIGHT','FSC','DETENTION','LAYOVER','TONU','STOP_OFF'].includes(e.entry_type));
@@ -300,6 +318,22 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  const own=operator.workspace_kind==='carrier'&&operator.carrier_user_id===session.user.id;
  const company=operators.some(o=>o.workspace_kind==='carrier'&&o.carrier_user_id===session.user.id);
  const driverView=operator.workspace_kind==='leased' && operator.driver_user_id===session.user.id;
+ const [podLoadId,setPodLoadId]=useState(null);
+ useEffect(()=>{
+   if (!company) return;
+   const value=new URL(window.location.href).searchParams.get('podInvoice');
+   if (value && /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)) {
+     setPodLoadId(value);
+     setTab('company');
+   }
+ },[company,session.user.id]);
+ function clearPodLoad(){
+   if (!podLoadId) return;
+   setPodLoadId(null);
+   const url=new URL(window.location.href);
+   url.searchParams.delete('podInvoice');
+   window.history.replaceState(window.history.state,'',url);
+ }
  const profile=useRef(null);
  useEffect(()=>{
    const dismiss=e=>{if(!profile.current?.open)return;
@@ -311,6 +345,7 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  },[]);
  const reload=()=>setRefresh(n=>n+1);
  function selectTab(key){
+   clearPodLoad();
    profile.current.open=false;
    setTab(key);
    window.scrollTo(0,0);
@@ -340,6 +375,6 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  {tab==='pay'&&(own?<OwnPay refresh={refresh}/>:<DriverPay operator={operator} refresh={refresh}/>)}
  {tab==='docs'&&<OperatorWallet operatorId={operator.id} refresh={refresh} layout="driver"><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/></OperatorWallet>}
  {tab==='truck'&&<TruckTools operator={operator} refresh={refresh} done={reload}/>}
- {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload}/>}
+ {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload} podLoadId={podLoadId} onClearPodLoad={clearPodLoad}/>}
  </div></section>;
 }

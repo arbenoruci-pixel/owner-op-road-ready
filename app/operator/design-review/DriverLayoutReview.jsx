@@ -4,6 +4,7 @@ import {useState} from 'react';
 import Step3Workspace from '../Step3Workspace.jsx';
 import {PortalSession} from '../PortalSession.jsx';
 import styles from '../operator.module.css';
+import fixtureStyles from './podInvoiceExercise.module.css';
 import sample from './sample.json';
 
 // Staging-only read adapter. Every row and PDF is a bundled fictional example.
@@ -57,5 +58,7 @@ export default function DriverLayoutReview() {
     {open ? <Step3Workspace operator={sample.operator} operators={[sample.operator]}
       session={{user:{id:sample.operator.driver_user_id}}} onSignOut={()=>setOpen(false)}/> :
       <button type="button" onClick={()=>setOpen(true)}>Reopen driver preview</button>}
-  </PortalSession.Provider></main>;
+  </PortalSession.Provider>
+    <footer className={fixtureStyles.fixtureLink}><a href="/operator/design-review?test=pod-invoice">Try the POD and invoice test</a></footer>
+  </main>;
 }
