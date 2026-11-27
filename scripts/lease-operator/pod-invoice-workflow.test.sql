@@ -243,11 +243,20 @@ begin
   result:=public.rr_lease_claim_factoring(current_setting('qa.load')::uuid,current_setting('qa.archive')::uuid,
     'TEST-042',320000,current_setting('qa.rate')::uuid,array[current_setting('qa.pod2')::uuid]);
   assert result->>'send'='true';
-  perform public.rr_lease_finish_factoring((result->>'claim_id')::uuid,'sent','Local synthetic fixture acknowledgement');
+  perform set_config('qa.historical_claim',result->>'claim_id',true);
 end $$;
 reset role;
 insert into rr_lease_private.pod_workflow_carriers(carrier_user_id)
 values ('ab000000-0000-4000-8000-000000000001');
+set local role service_role;
+do $$begin
+  begin
+    perform public.rr_lease_retry_rejected(current_setting('qa.historical_claim')::uuid,'Synthetic provider refusal');
+    assert false,'An enrolled draft retried a live FirstLine send';
+  exception when sqlstate '55000' then null; end;
+  assert public.rr_lease_finish_factoring(current_setting('qa.historical_claim')::uuid,'sent','Local synthetic acknowledgement')='sent';
+end $$;
+reset role;
 select set_config('qa.packet',(select to_jsonb(f)::text from public.rr_lease_factoring f where load_id=current_setting('qa.load')::uuid),true);
 set local role authenticated;
 select pg_temp.sign_in('ab000000-0000-4000-8000-000000000002');
