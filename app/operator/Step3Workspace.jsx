@@ -7,8 +7,8 @@ import PilotRateconReview, {PdfDialog} from './PilotRateconReview.jsx';
 import {usePortalClient} from './PortalSession.jsx';
 import {allRows,rows,loadOriginal,appointment,loadFields} from './portalData.js';
 import {currentWeek,moveDay,formatDay,weekStart} from './financials.js';
-import {parseUSDCents,settlementDisplay} from '../../lib/rr-lease/intake-contract.js';
-import OperatorWallet,{WalletProof} from './OperatorWallet.jsx';
+import DriverPay, {OwnPay} from './DriverPay.jsx';
+import OperatorWallet from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
 import LoadCard from './TrainingLoadCard.jsx';
@@ -294,24 +294,10 @@ function Loads({operator,driverView,refresh,done}){
      : <>{historyWeek}<h2>Delivery history</h2>{previous}</>}
  </>}}</ReadState>{driverView && unassignedUpload}</div>;
 }
-function DriverPay({operator,refresh}){
- const c=usePortalClient(),[selected,setSelected]=useState('');
- const data=useRead(()=>allRows(()=>c.from('rr_lease_settlement_totals').select('*').eq('operator_id',operator.id).order('week_start',{ascending:false}).order('settlement_id')),[c,operator.id,refresh]);
- const current=data.value?.find(s=>s.settlement_id===selected)||data.value?.[0];
- const ledger=useRead(()=>current?allRows(()=>c.from('v_driver_ledger_entries').select('*').eq('operator_id',operator.id).eq('settlement_id',current.settlement_id).order('created_at').order('id')):Promise.resolve([]),[c,operator.id,current?.settlement_id,refresh]);
- const taxes=useRead(()=>allRows(()=>c.from('rr_lease_adjustments').select('id,description,amount_cents,kind,intake_status,wallet_document_id,settlement_id').eq('operator_id',operator.id).eq('paid_by','operator').order('id')),[c,operator.id,refresh]);
- return <ReadState state={data}>{list=>{if(!current)return <p>No weekly settlements yet.</p>;let t;try{t=settlementDisplay(current)}catch{return <p role="alert">Totals require reconciliation. No estimated amount displayed.</p>}
- return <div className={css.stack}><label>Settlement week<select value={current.settlement_id} onChange={e=>setSelected(e.target.value)}>{list.map(s=><option key={s.settlement_id} value={s.settlement_id}>{s.week_start} · {s.status}</option>)}</select></label>
- <div className={css.payHero}><small>{current.status==='paid'?'Paid statement':current.status==='issued'?'Issued · locked':t.isConfirmed?'Confirmed payable · draft statement':'Estimated · pending verification'}</small><h2>{money(t.isConfirmed?t.netCents:t.estimatedNetCents)}</h2><p>Verified net: {money(t.verifiedNetCents)}</p>{t.negativeBalanceCents>0&&<p>Negative balance: {money(t.negativeBalanceCents)}</p>}</div>
- <dl className={css.pairs}>{[['Invoice gross',t.invoiceGrossCents],['Fee eligible gross',t.feeEligibleGrossCents],['Carrier commission',current.carrier_share_cents],['Carrier deductions',current.carrier_deduction_cents],['Lumper reimbursement · 0% fee',t.lumperCents],['Other credits',t.otherCreditsCents],['Driver-paid costs · tax records',current.operator_paid_cents]].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>
- <h2>Ledger entries</h2><ReadState state={ledger}>{rs=>rs.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.entry_type.replaceAll('_',' ')} · {money(r.amount_cents)}</strong><p>{r.description}</p><span className={r.status==='POSTED'?css.green:css.yellow}>{r.status} · Driver effect {money(r.driver_effect_cents)}</span>{r.source_document_id?<OriginalLink id={r.source_document_id}/>:r.source_wallet_document_id?<OriginalLink id={r.source_wallet_document_id} operatorId={operator.id} wallet/>:<small>Carrier report / schedule · proof may require carrier review</small>}</div></article>)}</ReadState>
- <h2>Tax folder · driver-paid expenses</h2><ReadState state={taxes}>{rs=>rs.length?rs.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.description} · {money(r.amount_cents)}</strong><p>{r.intake_status} · No settlement deduction</p>{r.wallet_document_id&&<WalletProof operatorId={operator.id} documentId={r.wallet_document_id}/>}</div></article>):<p>No recorded driver-paid receipts.</p>}</ReadState></div>}}</ReadState>;
-}
 export function CompanyNumbers({week,refresh,ownOnly=false}){
  const c=usePortalClient(),state=useRead(()=>rpc(c,'rr_lease_step3_company_summary',{p_week:week}),[c,week,refresh]);
  return <ReadState state={state}>{s=><div className={css.stack}><dl className={css.pairs}>{[['Own truck verified revenue',s.ownGrossCents],['Own recorded expenses',s.recordedOwnExpensesCents],['Own recorded margin',s.ownRecordedMarginCents],...(!ownOnly?[['Leased operator commissions',s.commissionCents],['Verified FirstLine fees',s.verifiedFirstLineFeesCents],['Recorded company margin',s.recordedMarginCents]]:[])].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>{!ownOnly&&<p className={css.yellow}>{s.pendingFirstLineEvents} factor events pending review. Recorded margin excludes unrecorded costs and unverified events; full net profit is not yet confirmed.</p>}</div>}</ReadState>;
 }
-function OwnPay({refresh}){const [week,setWeek]=useState(()=>currentWeek());return <div className={css.stack}><p>Own truck · 100% company revenue. No contractor settlement.</p><label>Monday week start<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><CompanyNumbers week={week} refresh={refresh} ownOnly/></div>}
 const driverTabs = [
   {key:'load', label:'LOAD', icon:<><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M9 6h6.5a3.5 3.5 0 0 1 0 7h-7a2.5 2.5 0 0 0 0 5h6.5"/></>},
   {key:'pay', label:'PAY', icon:<><path d="M4 7.5V6a2 2 0 0 1 2-2h11v3M4 8h15a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2Z"/><path d="M20 12h-4a2 2 0 0 0 0 4h4"/></>},
@@ -395,7 +381,10 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  </aside>}
  {tab==='load'&&<Loads operator={operator} driverView={driverView} refresh={refresh} done={received=>{setReceipt(received);reload()}}/>}
  {tab==='pay'&&(own?<OwnPay refresh={refresh}/>:<DriverPay operator={operator} refresh={refresh}/>)}
- {tab==='docs'&&<><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/><OperatorWallet operatorId={operator.id} refresh={refresh}/></>}
+ {tab==='docs' && (driverView ? <>
+   <OperatorWallet operatorId={operator.id} refresh={refresh} portal/>
+   <DotOffline operator={operator} userId={session.user.id} refresh={refresh} walletShown/>
+ </> : <><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/><OperatorWallet operatorId={operator.id} refresh={refresh}/></>)}
  {tab==='truck'&&<TruckTools operator={operator} refresh={refresh} done={reload}/>}
  {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload} podLoadId={podLoadId} onClearPodLoad={clearPodLoad}/>}
  </div></section>;
