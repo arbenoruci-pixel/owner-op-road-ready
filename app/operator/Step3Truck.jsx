@@ -12,7 +12,7 @@ function ServiceReceipt({record}) {
  const client=usePortalClient();
  const [file,setFile]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const button=useRef(null);
- useEffect(()=>()=>{if(file)URL.revokeObjectURL(file.url)},[file]);
+ useEffect(()=>()=>{if(file?.url)URL.revokeObjectURL(file.url)},[file]);
  async function view(){
    setBusy(true);setError('');
    try {
@@ -21,14 +21,14 @@ function ServiceReceipt({record}) {
      const sum=await crypto.subtle.digest('SHA-256',bytes);
      if(Array.from(new Uint8Array(sum),x=>x.toString(16).padStart(2,'0')).join('')!==record.sha256)throw Error('Original checksum mismatch');
      const blob=new Blob([bytes],{type:record.mime_type});
-     setFile({blob,url:URL.createObjectURL(blob),name:record.file_name});
+     setFile({blob,url:blob.type==='application/pdf'?null:URL.createObjectURL(blob)});
    }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  function close(){setFile(null);requestAnimationFrame(()=>button.current?.focus({preventScroll:true}));}
  return <div className={css.original}>
    <button type="button" ref={button} disabled={busy} onClick={view}>{busy?'Opening…':'View Receipt'}</button>
-   {file && (file.blob.type==='application/pdf' ? <PdfDialog cachedBlob={file.blob} heading="Service receipt" fileName={file} onClose={close}/> :
-     <div><img src={file.url} alt={record.file_name}/><div className={css.row}><a href={file.url} download={file.name}>Save receipt</a><button type="button" onClick={close}>Close</button></div></div>)}
+   {file && (file.blob.type==='application/pdf' ? <PdfDialog cachedBlob={file.blob} heading="Service receipt" onClose={close}/> :
+     <div><img src={file.url} alt={record.file_name}/><button type="button" onClick={close}>Close</button></div>)}
    {error && <p role="alert">{error}</p>}
  </div>;
 }

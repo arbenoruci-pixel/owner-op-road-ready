@@ -4,7 +4,7 @@ import {useEffect, useId, useRef, useState} from 'react';
 import {loadOriginal} from './portalData.js';
 import styles from './operator.module.css';
 
-export function PdfDialog({client, doc, cachedBlob, onReviewed, onClose, heading = "Rate confirmation", fileName}) {
+export function PdfDialog({client, doc, cachedBlob, onReviewed, onClose, heading = "Rate confirmation"}) {
   const dialog = useRef(null);
   const pages = useRef(null);
   const title = useId();
@@ -74,7 +74,6 @@ export function PdfDialog({client, doc, cachedBlob, onReviewed, onClose, heading
     onCancel={event => { event.preventDefault(); onClose(); }}>
     <header className={styles.pdfToolbar}>
       <h3 id={title}>{heading}</h3>
-      {fileName && <a href={fileName.url} download={fileName.name}>Save</a>}
       <button type="button" autoFocus onClick={onClose}>Close</button>
     </header>
     <div className={styles.pdfScroll}>
