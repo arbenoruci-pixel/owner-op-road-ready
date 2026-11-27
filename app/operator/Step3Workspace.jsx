@@ -11,6 +11,7 @@ import DriverPay, {OwnPay} from './DriverPay.jsx';
 import OperatorWallet from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
+import DriverPassword from './DriverPassword.jsx';
 import LoadCard from './TrainingLoadCard.jsx';
 import RateconDriverTest from './RateconDriverTest.jsx';
 import DotOffline from './Step3Dot.jsx';
@@ -355,6 +356,7 @@ export default function Step3Workspace({operator,session,operators,workspacePick
        <button type="button" onClick={reload}>Refresh</button>
        <DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={reload} noticeTarget={noticeTarget}/>
        {company&&<button type="button" onClick={()=>selectTab('company')}>Company control</button>}
+       {session.user.email && <DriverPassword key={session.user.id} email={session.user.email} />}
        <button type="button" onClick={onSignOut}>Sign out</button>
      </div>
    </details>
