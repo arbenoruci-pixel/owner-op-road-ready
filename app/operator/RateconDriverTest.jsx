@@ -27,13 +27,13 @@ async function brokerCopy(original, receipt, doc, loadNumber) {
   return new Blob([await pdf.save()], {type:'application/pdf'});
 }
 
-export default function RateconDriverTest({load, refresh, onReviewStatus}) {
+export default function RateconDriverTest({load, refresh, children}) {
   // The prefix avoids querying live freight. The RPC verifies enrollment, driver and revision.
-  if (load.status !== 'assigned' || !load.load_number?.startsWith('TEST-')) return null;
-  return <DriverTestConfirmation key={load.id} loadId={load.id} loadNumber={load.load_number} refresh={refresh} onReviewStatus={onReviewStatus} />;
+  if (load.status !== 'assigned' || !load.load_number?.startsWith('TEST-')) return children ? children(null) : null;
+  return <DriverTestConfirmation key={load.id} loadId={load.id} loadNumber={load.load_number} refresh={refresh} children={children} />;
 }
 
-function DriverTestConfirmation({loadId, loadNumber, refresh, onReviewStatus}) {
+function DriverTestConfirmation({loadId, loadNumber, refresh, children}) {
   const client=usePortalClient();
   const [step,setStep]=useState(null),[signer,setSigner]=useState(''),[confirmed,setConfirmed]=useState(false);
   const [review,setReview]=useState(null),[copy,setCopy]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -70,26 +70,30 @@ function DriverTestConfirmation({loadId, loadNumber, refresh, onReviewStatus}) {
     finally{setBusy(false);}
   }
   const accepted=Boolean(step?.receipt.accepted_at);
-  useEffect(() => {
-    onReviewStatus?.(step ? (accepted ? 'Accepted' : 'Needs your review') : 'Training load');
-  }, [step, accepted, onReviewStatus]);
-  if(!step) return error ? <p role="alert">{error}</p>:null;
-  return <section className={(onReviewStatus ? styles.pilotReview : styles.stop) + " " + styles.rateconTest}>{(!onReviewStatus || accepted || review) && <h4>Driver acceptance · Test</h4>}
-    {onReviewStatus && <PilotRateconReview key={step.doc.id + ':' + step.doc.sha256} client={client} doc={step.doc} review={review} onReviewed={setReview} accepted={accepted}/>}
-    {accepted ? <>
-      <p>Accepted by <strong>{step.receipt.signer}</strong> · {new Date(step.receipt.accepted_at).toLocaleString()}</p>
-      <p>Broker email preview<br/>Subject: Accepted rate confirmation · {loadNumber}</p>
-      {copy ? <a href={copy} download={loadNumber+'-signed-test.pdf'}>Download signed test PDF</a> : <button type="button" className={styles.link} disabled={busy} onClick={()=>act('copy')}>Prepare broker copy</button>}
-      <p>Test only. No broker email is sent.</p>
-    </> : <>
-      {!onReviewStatus && <p>Review the rate confirmation before accepting this test load.</p>}
-      {!onReviewStatus && (review ? <a href={review.url} target="_blank" rel="noreferrer">Open test rate confirmation (PDF)</a> : <button className={styles.link} disabled={busy} onClick={()=>act('review')}>Review rate confirmation</button>)}
-      {review && <form className={styles.form} onSubmit={e=>{e.preventDefault();if(confirmed && signer.trim().length>=2)act('accept');}}>
+  if(!step) {
+    const issue = error ? <p role="alert">{error}</p> : null;
+    return children ? children({issue}) : issue;
+  }
+  const broker = accepted && <div className={styles.rateconTest}>
+    <p>Accepted by <strong>{step.receipt.signer}</strong> · {new Date(step.receipt.accepted_at).toLocaleString()}</p>
+    <h4>Broker email preview</h4><p>Subject: Accepted rate confirmation · {loadNumber}</p>
+    {copy ? <a href={copy} download={loadNumber+'-signed-test.pdf'}>Download signed test PDF</a> : <button type="button" className={styles.link} disabled={busy} onClick={()=>act('copy')}>Prepare broker copy</button>}
+    <p>Test only. No broker email is sent.</p>
+  </div>;
+  const form = review && <form className={styles.form} onSubmit={e=>{e.preventDefault();if(confirmed && signer.trim().length>=2)act('accept');}}>
         <label>Your full name<input required maxLength={90} value={signer} onChange={e=>setSigner(e.target.value)}/></label>
         <label className={styles.consent}><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>I reviewed this rate confirmation and agree to this test load.</span></label>
         <button className={styles.primary} disabled={busy||!confirmed||signer.trim().length<2}>Agree &amp; sign test confirmation</button>
-      </form>}
-    </>}
-    {error && <p role="alert">{error}</p>}
-  </section>;
+      </form>;
+  const issue = error && <p role="alert">{error}</p>;
+  if(children) return children({
+    status: accepted ? 'Accepted' : 'Needs your review',
+    control: <><PilotRateconReview key={step.doc.id + ':' + step.doc.sha256} client={client} doc={step.doc} review={review} onReviewed={setReview} label="Rate Con PDF"/>
+      {!accepted && form && <section className={styles.rateconTest}>{form}</section>}</>,
+    broker, issue,
+  });
+  return <section className={styles.stop+' '+styles.rateconTest}><h4>Driver acceptance · Test</h4>
+    {accepted ? broker : <><p>Review the rate confirmation before accepting this test load.</p>
+      {review ? <a href={review.url} target="_blank" rel="noreferrer">Open test rate confirmation (PDF)</a> : <button className={styles.link} disabled={busy} onClick={()=>act('review')}>Review rate confirmation</button>}
+      {form}</>}{issue}</section>;
 }
