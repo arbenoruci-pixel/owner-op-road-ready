@@ -37,7 +37,7 @@ export function framedPaperEvidence(image) {
 // A paper boundary separates the sheet from its surroundings. A printed table
 // has matching paper on both sides. Probe past narrow rules and handwriting,
 // and retain the full image whenever a proposed crop has no outside boundary.
-export function paperContinuation(image,corners,{shadows=false}={}) {
+export function paperContinuation(image,corners,{shadows=false,dimPaperOnly=false}={}) {
   if(!validBoundary(corners))return [];
   const w=image.width-1,h=image.height-1,unit=Math.min(w,h);
   return corners.map((p,index)=>{
@@ -47,7 +47,10 @@ export function paperContinuation(image,corners,{shadows=false}={}) {
     for(let k=2;k<=18;k++) {
       const t=k/20,x=(p.x+(q.x-p.x)*t)*w,y=(p.y+(q.y-p.y)*t)*h;
       const inside=[.018,.035,.055].map(d=>pixel(image,(x+nx*d*unit)/w,(y+ny*d*unit)/h)).sort((a,b)=>b.light-a.light)[0];
-      if(inside.light<(shadows?100:125))continue;
+      // In a dark truck cab the lower half of a POD can sit inside a deep
+      // shadow. The optional second pass looks only at dim paper on both
+      // sides of a line; it does not reinterpret a bright desk as more paper.
+      if(dimPaperOnly ? inside.light<65||inside.light>140 : inside.light<(shadows?100:125))continue;
       let same=0,available=0;
       for(const d of [.014,.030,.050,.075,.10]) {
         const ox=x-nx*d*unit,oy=y-ny*d*unit;
@@ -62,7 +65,7 @@ export function paperContinuation(image,corners,{shadows=false}={}) {
         const blueCast=p=>p.rgb[2]/p.light>1.07&&p.rgb[0]<=p.rgb[1]&&p.rgb[1]<=p.rgb[2]&&(p.rgb[1]-p.rgb[0])/p.light<.20;
         const neutral=p=>(Math.max(...p.rgb)-Math.min(...p.rgb))/p.light<.22;
         const blueShadow=(blueCast(inside)&&(neutral(outside)||blueCast(outside)))||(blueCast(outside)&&neutral(inside));
-        const shadowPaper=shadows&&outside.light>=105&&inside.light>=100&&outside.light>=inside.light*.60&&outside.light<=inside.light*1.75&&(chroma<.040||blueShadow&&chroma<.24);
+        const shadowPaper=shadows&&outside.light>=(dimPaperOnly?65:105)&&inside.light>=(dimPaperOnly?65:100)&&outside.light>=inside.light*.60&&outside.light<=inside.light*1.75&&(chroma<.040||blueShadow&&chroma<.24);
         if(similar||shadowPaper)same++;
       }
       if(available>=3){tested++;if(same>=Math.max(3,available-1))matches++;}

@@ -13,6 +13,7 @@ const url=code=>'data:text/javascript;base64,'+Buffer.from(code).toString('base6
 const file=path=>pathToFileURL(require.resolve(path)).href;
 let source=fs.readFileSync('scripts/scanner-paper/CameraAdapter.jsx','utf8');
 const modules={
+ './podFramePolicy.js':file('../scanner-paper/podFramePolicy.js'),
  'react':file('react'),
  './documentBoundaryV110329.js':url('export const trackBoundary=(_,d)=>({corners:d.corners});'),
  './imageUtilsV3.js':url('export const canvasToFileV3=async()=>new File(["synthetic live frame"],"camera.jpg",{type:"image/jpeg"});'),
@@ -95,4 +96,58 @@ test('native original → delayed live auto capture → next sheet → backgroun
   await act(async()=>root?.unmount());t.mock.timers.reset();
   for(const key of keys){if(saved[key])Object.defineProperty(globalThis,key,saved[key]);else delete globalThis[key];}
  }
+});
+
+test('POD stable single frame and legacy burst use the same quality checks', async t => {
+  const keys=['window','document','navigator','performance','__cameraFixture'];
+  const saved=Object.fromEntries(keys.map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
+  let now=0, quality, readings, constraints, camera;
+  const video={videoWidth:1440,videoHeight:1920,readyState:3,play:async()=>{},pause(){}};
+  const doc=new EventTarget();doc.hidden=false;
+  doc.createElement=()=>({getContext:()=>({drawImage(){},getImageData:()=>({})})});
+  const stream={getVideoTracks:()=>[{readyState:'live'}],getTracks:()=>[]};
+  const nav={mediaDevices:{getUserMedia:async settings=>{constraints=settings;return stream}}};
+  const fixture={analyzer:()=>({busy:()=>false,degraded:()=>false,dispose(){},analyze:async(_,width,height,options)=>{
+    if (!options) readings++;
+    return {detection,width,height,quality,signature:!options&&fixture.changedPage?[.9,.9,.9]:[.1,.3,.1]};
+  }})};
+  for(const [key,value] of Object.entries({window:new EventTarget(),document:doc,navigator:nav,performance:{now:()=>now},__cameraFixture:fixture}))
+    Object.defineProperty(globalThis,key,{value,configurable:true});
+  t.mock.timers.enable({apis:['setTimeout']});
+  const advance=async()=>{await act(async()=>{now+=10;t.mock.timers.tick(10);});};
+  async function run(profile,shortEdge,contrast=64,changedPage=false) {
+    now=0;readings=0;fixture.changedPage=changedPage;
+    quality={ready:shortEdge>=950,score:.8,issues:shortEdge>=950?[]:['Move closer for sharper small print'],metrics:{shortEdge,textSharpness:100,textTileCount:20,contrast,mean:110,area:.6,edgeRatio:.075}};
+    const captures=[];
+    await act(async()=>{camera=TestRenderer.create(React.createElement(Camera,{
+      profile,onCapture:(file,meta)=>captures.push({ms:now,method:meta.method,smallPrintReview:meta.smallPrintReview}),
+    }),{createNodeMock:e=>e.type==='video'?video:e.type==='div'?{clientWidth:390,clientHeight:844}:null});});
+    for(let i=0;i<200&&!captures.length;i++)await advance();
+    await act(async()=>camera.unmount());
+    return {captures,readings,constraints};
+  }
+  try {
+    const legacy=await run(undefined,1110), pod=await run('pod',1110);
+    assert.equal(legacy.readings,3);
+    assert.equal(legacy.captures[0].method,'video-burst');
+    assert.equal(pod.readings,1);
+    assert.equal(pod.captures[0].method,'pod-single-frame');
+    assert.equal(pod.constraints.video.height.ideal,1440);
+    assert.equal(legacy.constraints.video.height.ideal,1080);
+    assert.ok(legacy.captures[0].ms - pod.captures[0].ms >= 400,'fast path saves two captures and two frame waits');
+    t.diagnostic('simulated stable camera: legacy '+legacy.captures[0].ms+' ms, POD '+pod.captures[0].ms+' ms');
+    const burst=await run('pod',970);
+    assert.equal(burst.captures[0].method,'video-burst');
+    assert.equal(burst.readings,3);
+    const close=await run('pod',833);
+    assert.equal(close.captures[0].smallPrintReview,true,'only soft resolution warning must reach visual review');
+    assert.equal(close.readings,1);
+    assert.equal((await run(undefined,833)).captures.length,0,'general scanner does not enter review automatically');
+    assert.equal((await run('pod',777)).captures.length,0,'insufficient source detail remains a manual decision');
+    assert.equal((await run('pod',833,30)).captures.length,0,'weaker contrast still needs a better photo');
+    assert.equal((await run('pod',833,64,true)).captures.length,0,'swapped sheet cannot bypass capture confirmation');
+  } finally {
+    t.mock.timers.reset();
+    for(const key of keys){if(saved[key])Object.defineProperty(globalThis,key,saved[key]);else delete globalThis[key];}
+  }
 });

@@ -2,6 +2,7 @@
 import React,{useEffect,useState,useRef} from 'react';
 import {flushSync} from 'react-dom';
 import {trackPodUpload} from './operatorUpdate.js';
+import {podUploadMessage, sendReservedPod} from './podUpload.js';
 import PilotRateconReview, {PdfDialog} from './PilotRateconReview.jsx';
 import {usePortalClient} from './PortalSession.jsx';
 import {allRows,rows,loadOriginal,appointment,loadFields} from './portalData.js';
@@ -147,7 +148,7 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
             'Content-Type':file.type, 'X-Load-Id':loadId, 'X-Request-Id':requestId,
             'X-File-Name':encodeURIComponent(file.name),
           })
-        : uploadOriginal(requestId));
+        : sendReservedPod(intent.current, uploadOriginal));
       if (result.review_status === 'REJECTED') {
         throw Error('This exact original was rejected. Upload a corrected document.');
       }
@@ -156,7 +157,7 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
       intent.current = null;
       done?.();
     } catch (err) {
-      setError(err.message || 'Upload failed. Try again.');
+      setError(podUploadMessage(err));
     } finally {
       lock.current = false;
       setBusy(false);

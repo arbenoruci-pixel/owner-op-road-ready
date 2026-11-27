@@ -4,7 +4,7 @@ const root='source/src/modules/scan/',v3=root+'v3/',read=p=>fs.readFileSync(p,'u
 function patch(path,before,after){const source=read(path);if(source.includes(after))return;assert.equal(source.split(before).length,2,'Scanner capture anchor: '+path+' '+before.slice(0,50));fs.writeFileSync(path,source.replace(before,after));}
 const files={
   'paperQuality.js':'paperQualityV110345.js','safeDocumentBoundary.js':'safeDocumentBoundaryV110428.js','CameraAdapter.jsx':'CameraAdapterV3.jsx',
-  'captureGeometry.js':'captureGeometryV1104110.js','cameraAnalysis.js':'cameraAnalysisV1104110.js','cameraAnalysisClient.js':'cameraAnalysisClientV1104110.js','cameraAnalysisWorker.js':'cameraAnalysisWorkerV1104110.js',
+  'captureGeometry.js':'captureGeometryV1104110.js','podFramePolicy.js':'podFramePolicy.js','cameraAnalysis.js':'cameraAnalysisV1104110.js','cameraAnalysisClient.js':'cameraAnalysisClientV1104110.js','cameraAnalysisWorker.js':'cameraAnalysisWorkerV1104110.js',
   'cameraRuntime.js':'cameraRuntimeV1104117.js',
   'cameraRecovery.css':'cameraRecoveryV1104117.css',
   'processDocument.js':'processDocumentV110330.js','processDocumentClient.js':'processDocumentClientV110330.js','documentProcessingWorker.js':'documentProcessingWorkerV110330.js',
