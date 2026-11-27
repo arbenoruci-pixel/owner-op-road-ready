@@ -1,5 +1,6 @@
 'use client';
 import React,{useEffect,useState,useRef} from 'react';
+import {flushSync} from 'react-dom';
 import {usePortalClient} from './PortalSession.jsx';
 import {allRows,rows,loadOriginal,loadFields} from './portalData.js';
 import {currentWeek,moveDay,formatDay,weekStart} from './financials.js';
@@ -66,6 +67,8 @@ function PodUpload({loadId, loadNumber, done}) {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const fileInput = useRef(null);
+  const chooseButton = useRef(null);
+  const scannerPending = useRef(false);
   const scanButton = useRef(null);
   const selection = useRef(null);
   const viewButton = useRef(null);
@@ -83,6 +86,8 @@ function PodUpload({loadId, loadNumber, done}) {
   }
 
   async function openScanner() {
+    if (!canScan || scannerPending.current || Scanner || lock.current) return;
+    scannerPending.current = true;
     setError('');
     setOpening(true);
     try {
@@ -92,8 +97,24 @@ function PodUpload({loadId, loadNumber, done}) {
     } catch {
       setError('The scanner could not open. Try again or choose a file.');
     } finally {
+      scannerPending.current = false;
       setOpening(false);
     }
+  }
+
+  function openAssignedUpload(event) {
+    const disclosure = event.currentTarget.parentElement;
+    if (disclosure.open || file || !canScan) return;
+    event.preventDefault();
+    disclosure.open = true;
+    void openScanner();
+  }
+
+  function chooseOriginalFromScanner() {
+    // The file picker needs the original tap, with the modal already dismissed on iOS.
+    flushSync(() => setScanner(null));
+    chooseButton.current?.focus({preventScroll:true});
+    fileInput.current?.click();
   }
 
   function closeScanner(focusTarget) {
@@ -133,7 +154,7 @@ function PodUpload({loadId, loadNumber, done}) {
     }
   }
 
-  return <>
+  const content = <>
     <form className={css.form} onSubmit={submit}>
       {!loadId && <>
         <p>No rate confirmation yet? Enter the exact broker and load number. Gross stays unknown.</p>
@@ -143,7 +164,7 @@ function PodUpload({loadId, loadNumber, done}) {
       <div className={css.podSources}>
         {canScan && <button type="button" className={file ? undefined : css.primary} ref={scanButton} aria-haspopup="dialog"
           disabled={busy || opening} onClick={openScanner}>{opening ? 'Opening scanner…' : 'Scan POD'}</button>}
-        <button type="button" disabled={busy || opening} onClick={() => fileInput.current.click()}>Choose file</button>
+        <button type="button" ref={chooseButton} disabled={busy || opening} onClick={() => fileInput.current.click()}>Choose file</button>
       </div>
       <input ref={fileInput} type="file" hidden accept={podFileTypes.join(',')} aria-label="Choose signed POD file"
         onChange={e => {
@@ -171,11 +192,16 @@ function PodUpload({loadId, loadNumber, done}) {
       setViewing(false);
       requestAnimationFrame(() => viewButton.current?.focus({preventScroll:true}));
     }}/>}
-    {Scanner && <Scanner loadLabel={loadNumber || number.trim()} onCancel={() => closeScanner(scanButton)} onReady={reviewedFile => {
+    {Scanner && <Scanner loadLabel={loadNumber || number.trim()} onChooseFile={chooseOriginalFromScanner} onCancel={() => closeScanner(scanButton)} onReady={reviewedFile => {
       selectFile(reviewedFile);
       closeScanner(selection);
     }}/>}
   </>;
+  if (!loadId) return content;
+  return <details className={css.uploadControl}>
+    <summary onClick={openAssignedUpload}>Upload POD</summary>
+    {content}
+  </details>;
 }
 function LoadDetails({load,pods,driverView,refresh,done,initialOpen}){
  const c=usePortalClient();
@@ -190,7 +216,7 @@ function LoadDetails({load,pods,driverView,refresh,done,initialOpen}){
      {acceptance?.control || (ratecon && <PilotRateconReview key={ratecon.id} client={c} doc={ratecon} review={review?.id===ratecon.id?review:null} onReviewed={cacheReview} label="Rate Con PDF"/>)}
      {acceptance?.issue}
      {docs.error&&<p role="alert">{docs.error}</p>}
-     {allowPod&&<details className={css.uploadControl}><summary>Upload POD</summary><PodUpload loadId={load.id} loadNumber={load.load_number} done={done}/></details>}
+     {allowPod&&<PodUpload loadId={load.id} loadNumber={load.load_number} done={done}/>}
    </>;
    return <LoadCard load={load} status={acceptance?.status || status} controls={controls} initialOpen={initialOpen} gross={money(load.gross_cents)}>
      {acceptance?.broker}

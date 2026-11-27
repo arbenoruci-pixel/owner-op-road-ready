@@ -39,7 +39,7 @@ function scannedPage(original, result, corners, rotation) {
   };
 }
 
-export default function PodScanner({onCancel, onReady, loadLabel}) {
+export default function PodScanner({onCancel, onReady, onChooseFile, loadLabel}) {
   const dialog = useRef(null);
   const photos = useRef(null);
   const native = useRef(null);
@@ -217,13 +217,14 @@ export default function PodScanner({onCancel, onReady, loadLabel}) {
             <div className={css.actions}>
               <button type="button" className={css.primary} disabled={Boolean(busy)} onClick={openCamera}><ScanIcon name="camera"/>Open camera</button>
               <button type="button" disabled={Boolean(busy)} onClick={() => photos.current.click()}><ScanIcon name="gallery"/>{replacing ? 'Choose a replacement photo' : 'Choose photos'}</button>
+              {!replacing && onChooseFile && <button type="button" className={css.existing} disabled={Boolean(busy)} onClick={onChooseFile}>Choose an existing file</button>}
             </div>
           </> : <section className={css.review} aria-label="Page review">
             <div className={css.reviewHeading}><h3>Review scan</h3><strong>Page {selected + 1} of {pages.length}</strong></div>
             <button type="button" className={css.paper} disabled={Boolean(busy)} onClick={() => setView('zoom')} aria-label="Enlarge selected page">
-              <PagePhoto file={current.preview} alt={'Scanned POD page ' + (selected + 1)}/><span><ScanIcon name="expand"/></span>
+              <PagePhoto file={current.preview} alt={'Scanned POD page ' + (selected + 1)}/><span><ScanIcon name="expand"/>Tap to zoom and check the signature</span>
             </button>
-            {current.needsReview || current.issue ? <p className={css.note}>{current.needsReview ? 'Full photo kept. Check the corners and signature.' : current.issue}</p> : null}
+            {current.needsReview || current.issue ? <p className={css.note}>{current.needsReview ? 'Full photo kept. Adjust edges if needed.' : current.issue}</p> : null}
             <div className={css.tools}>
               <button type="button" disabled={Boolean(busy)} onClick={adjust}>Adjust edges</button>
               <button type="button" disabled={Boolean(busy)} onClick={() => { setError(''); setReplaceIndex(selected); setView('replace'); }}>Retake</button>
