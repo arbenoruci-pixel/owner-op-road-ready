@@ -1,13 +1,14 @@
 'use client';
 import React,{useEffect,useState,useRef} from 'react';
 import {usePortalClient} from './PortalSession.jsx';
-import {allRows,rows,loadOriginal,appointment,loadFields} from './portalData.js';
+import {allRows,rows,loadOriginal,loadFields} from './portalData.js';
 import {currentWeek,moveDay,formatDay,weekStart} from './financials.js';
-import {parseUSDCents,settlementDisplay} from '../../lib/rr-lease/intake-contract.js';
+import {settlementDisplay} from '../../lib/rr-lease/intake-contract.js';
 import OperatorWallet,{WalletProof} from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
-import TrainingLoadCard, {trainingCardLoadId} from './TrainingLoadCard.jsx';
+import LoadCard from './TrainingLoadCard.jsx';
+import PilotRateconReview from './PilotRateconReview.jsx';
 import RateconDriverTest from './RateconDriverTest.jsx';
 import DotOffline from './Step3Dot.jsx';
 import TruckTools from './Step3Truck.jsx';
@@ -63,37 +64,49 @@ function PodUpload({loadId,done}){
  <label>Signed POD · PDF or photo<input type="file" required accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e=>{setFile(e.target.files?.[0]||null);intent.current=null;setSent(false)}}/></label><button className={css.primary} disabled={busy||!file}>{busy?'Uploading…':'Upload POD'}</button>{sent&&<p role="status">Original received · pending carrier review</p>}{error&&<p role="alert">{error}</p>}
  </form>;
 }
-function Stop({label,address,at,zone,reference}){
- return <section className={css.stop}><small>{label}</small><strong>{address||'Address pending'}</strong><p>{appointment(at,zone)||'Appointment pending'}</p>{reference&&<p>Reference: {reference}</p>}{address&&<a target="_blank" rel="noreferrer" href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(address)}>Open in Google Maps</a>}</section>;
-}
-function LoadDetails({load,pods,driverView,refresh,done}){
- const c=usePortalClient(),docs=useRead(()=>rows(c.from('rr_lease_documents').select(docFields).eq('load_id',load.id).eq('is_ready',true).order('is_current',{ascending:false}).order('id')),[c,load.id,refresh]);
+function LoadDetails({load,pods,driverView,refresh,done,initialOpen}){
+ const c=usePortalClient();
+ const docs=useRead(()=>rows(c.from('rr_lease_documents').select(docFields).eq('load_id',load.id).eq('is_ready',true).order('is_current',{ascending:false}).order('id')),[c,load.id,refresh]);
+ const [review,setReview]=useState(null);
+ const ratecon=docs.value?.find(d=>d.kind==='ratecon' && d.is_current && d.mime_type==='application/pdf');
  const pending=pods.some(x=>x.review_status==='PENDING'),approved=pods.some(x=>x.review_status==='APPROVED'&&x.document_id===load.final_pod_id),rejected=!approved&&!pending&&pods.some(x=>x.review_status==='REJECTED');
- const pilot = driverView && load.id === trainingCardLoadId && load.status === 'assigned';
- const more = <>
- <h3>Broker rules</h3><dl className={css.pairs}>{['tracking','detention','layover','lumper','podDeadline'].map(k=><div key={k}><dt>{k==='podDeadline'?'POD deadline':k}</dt><dd>{load.broker_rules?.[k]||'Not confirmed'}</dd></div>)}</dl>
- {load.reefer_instructions&&<p>{load.reefer_instructions}</p>}{load.steps?.map((s,i)=><p key={i}><strong>{s.title}</strong> · {s.detail}</p>)}
- <p>{!pilot && <>Recorded gross: {money(load.gross_cents)} · </>}{load.payment_deadline?'Payment deadline '+formatDay(load.payment_deadline):'Payment deadline pending'}</p>
- {driverView && !pilot && <RateconDriverTest load={load} refresh={refresh}/>}
- <ReadState state={docs}>{ds=><div className={css.stack}>{ds.map(d=><OriginalLink key={d.id} id={d.id} label={d.kind==='ratecon'?'View Rate Con PDF':d.kind+' · '+d.file_name}/>)}</div>}</ReadState>
- {pods.filter(x=>x.review_status==='REJECTED').map(x=><p className={css.red} key={x.document_id}>Rejected: {x.rejection_reason}</p>)}
- {load.load_type!=='TONU'&&['assigned','picked_up','delivered'].includes(load.status)&&load.billing_channel==='FIRSTLINE_FACTORED'&&<PodUpload loadId={load.id} done={done}/>}
- </>;
- if (pilot) return <TrainingLoadCard load={load} refresh={refresh} gross={money(load.gross_cents)}><div className={css.detail}>{more}</div></TrainingLoadCard>;
- return <details className={css.panel}><summary><span><strong>{load.load_number}</strong><small>{load.broker_name} · {load.status.replaceAll('_',' ')}</small></span><span className={load.load_type==='TONU'||approved?css.green:rejected?css.red:css.yellow}>{load.load_type==='TONU'?'TONU · cancelled':approved?'POD approved':rejected?'POD rejected':pending?'POD review':'Awaiting documents'}</span></summary><div className={css.detail}>
- <div className={css.grid}><Stop label="Pickup" address={load.pickup_address} at={load.pickup_at} zone={load.pickup_timezone} reference={load.pickup_number}/><Stop label="Delivery" address={load.delivery_address} at={load.delivery_at} zone={load.delivery_timezone} reference={load.delivery_number}/></div>
- {more}
- </div></details>;
+ const status=load.load_type==='TONU'?'TONU · cancelled':approved?'POD approved':rejected?'POD rejected':pending?'POD review':load.status.replaceAll('_',' ');
+ const allowPod=load.load_type!=='TONU'&&['assigned','picked_up','delivered'].includes(load.status)&&load.billing_channel==='FIRSTLINE_FACTORED';
+ function card(acceptance) {
+   const controls=<>
+     {acceptance?.control || (ratecon && <PilotRateconReview key={ratecon.id} client={c} doc={ratecon} review={review?.id===ratecon.id?review:null} onReviewed={cacheReview} label="Rate Con PDF"/>)}
+     {acceptance?.issue}
+     {docs.error&&<p role="alert">{docs.error}</p>}
+     {allowPod&&<details className={css.uploadControl}><summary>Upload POD</summary><PodUpload loadId={load.id} done={done}/></details>}
+   </>;
+   return <LoadCard load={load} status={acceptance?.status || status} controls={controls} initialOpen={initialOpen} gross={money(load.gross_cents)}>
+     {acceptance?.broker}
+     <h3>Broker rules</h3><dl className={css.pairs}>{['tracking','detention','layover','lumper','podDeadline'].map(k=><div key={k}><dt>{k==='podDeadline'?'POD deadline':k}</dt><dd>{load.broker_rules?.[k]||'Not confirmed'}</dd></div>)}</dl>
+     {load.reefer_instructions&&<p>{load.reefer_instructions}</p>}{load.steps?.map((s,i)=><p key={i}><strong>{s.title}</strong> · {s.detail}</p>)}
+     <p>{load.payment_deadline?'Payment deadline '+formatDay(load.payment_deadline):'Payment deadline pending'}</p>
+     <ReadState state={docs}>{ds=><div className={css.stack}>{ds.filter(d=>d!==ratecon).map(d=><OriginalLink key={d.id} id={d.id} label={d.kind+' · '+d.file_name}/>)}</div>}</ReadState>
+     {pods.filter(x=>x.review_status==='REJECTED').map(x=><p className={css.red} key={x.document_id}>Rejected: {x.rejection_reason}</p>)}
+   </LoadCard>;
+ }
+ // The viewer effect uses a stable callback throughout each document revision.
+ const cacheReview=React.useCallback(result=>setReview({...result,id:ratecon?.id}),[ratecon?.id]);
+ return driverView ? <RateconDriverTest load={load} refresh={refresh}>{card}</RateconDriverTest> : card(null);
 }
 function Loads({operator,driverView,refresh,done}){
  const c=usePortalClient(),state=useRead(async()=>{const [loads,pods]=await Promise.all([allRows(()=>c.from('rr_lease_loads').select(loadFields+',billing_channel,broker_rules,final_pod_id,ledger_mode,cancelled_at,load_type,tonu_confirmation_id').eq('operator_id',operator.id).order('updated_at',{ascending:false}).order('id')),rpc(c,'rr_lease_step3_pod_status',{p_operator_id:operator.id})]);return {loads,pods}},[c,operator.id,refresh]);
  const [week,setWeek]=useState(()=>currentWeek());
- return <div className={css.stack}><details className={css.panel}><summary>Upload POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details>
+ return <div className={css.stack}>
  <ReadState state={state}>{({loads,pods})=>{
  const active=loads.filter(l=>['staging','assigned','picked_up'].includes(l.status));
  const history=loads.filter(l=>!active.includes(l)&&(((l.actual_delivery_date||l.cancelled_at?.slice(0,10))>=''+week&&(l.actual_delivery_date||l.cancelled_at?.slice(0,10))<moveDay(week,7))||(!l.actual_delivery_date&&pods.some(p=>p.load_id===l.id&&p.review_status==='REJECTED'))));
- const card=l=><LoadDetails key={l.id} load={l} pods={pods.filter(p=>p.load_id===l.id)} driverView={driverView} refresh={refresh} done={done}/>;
- return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}<label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><h2>Delivery history</h2>{history.length?history.map(card):<p>No completed loads in this week.</p>}</>}}</ReadState></div>;
+ const card=l=><LoadDetails initialOpen={l.id===active[0]?.id} key={l.id} load={l} pods={pods.filter(p=>p.load_id===l.id)} driverView={driverView} refresh={refresh} done={done}/>;
+ return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}<details className={css.panel}><summary>Delivery History</summary><div className={css.detail}><label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label>{history.length?history.map(card):<p>No completed loads in this week.</p>}</div></details></>}}</ReadState><details className={css.panel}><summary>Upload POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details></div>;
+}
+function feeLabel(entries) {
+ const revenue = (entries || []).filter(e=>['FREIGHT','FSC','DETENTION','LAYOVER','TONU','STOP_OFF'].includes(e.entry_type));
+ const rates = new Set(revenue.map(e=>e.fee_bps));
+ const [rate] = rates;
+ return rates.size===1 && rate!=null && Number.isFinite(Number(rate)) ? (Number(rate)/100)+'% Fee' : 'Fee';
 }
 function DriverPay({operator,refresh}){
  const c=usePortalClient(),[selected,setSelected]=useState('');
@@ -103,8 +116,21 @@ function DriverPay({operator,refresh}){
  const taxes=useRead(()=>allRows(()=>c.from('rr_lease_adjustments').select('id,description,amount_cents,kind,intake_status,wallet_document_id,settlement_id').eq('operator_id',operator.id).eq('paid_by','operator').order('id')),[c,operator.id,refresh]);
  return <ReadState state={data}>{list=>{if(!current)return <p>No weekly settlements yet.</p>;let t;try{t=settlementDisplay(current)}catch{return <p role="alert">Totals require reconciliation. No estimated amount displayed.</p>}
  return <div className={css.stack}><label>Settlement week<select value={current.settlement_id} onChange={e=>setSelected(e.target.value)}>{list.map(s=><option key={s.settlement_id} value={s.settlement_id}>{s.week_start} · {s.status}</option>)}</select></label>
- <div className={css.payHero}><small>{current.status==='paid'?'Paid statement':current.status==='issued'?'Issued · locked':t.isConfirmed?'Confirmed payable · draft statement':'Estimated · pending verification'}</small><h2>{money(t.isConfirmed?t.netCents:t.estimatedNetCents)}</h2><p>Verified net: {money(t.verifiedNetCents)}</p>{t.negativeBalanceCents>0&&<p>Negative balance: {money(t.negativeBalanceCents)}</p>}</div>
- <dl className={css.pairs}>{[['Invoice gross',t.invoiceGrossCents],['Fee eligible gross',t.feeEligibleGrossCents],['Carrier commission',current.carrier_share_cents],['Carrier deductions',current.carrier_deduction_cents],['Lumper reimbursement · 0% fee',t.lumperCents],['Other credits',t.otherCreditsCents],['Driver-paid costs · tax records',current.operator_paid_cents]].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>
+ <section className={css.paySummary} aria-label="Weekly settlement">
+   <div className={css.amounts}>
+     <div><span>Estimated Net</span><strong>{money(t.estimatedNetCents)}</strong><small>{current.status==='draft'?'Draft':current.status==='issued'?'Issued':'Paid'}</small></div>
+     <div><span>Verified Payable</span><strong>{money(t.netCents ?? 0)}</strong><small>{t.isConfirmed?'Verified':'Pending verification'}</small></div>
+   </div>
+   <dl className={css.breakdown}>
+     <div><dt>Gross</dt><dd>{money(t.feeEligibleGrossCents)}</dd></div>
+     <div><dt>{feeLabel(ledger.value)}</dt><dd>− {money(current.carrier_share_cents)}</dd></div>
+     <div><dt>Deductions</dt><dd>− {money(current.carrier_deduction_cents)}</dd></div>
+     <div><dt>0% Reimbursements</dt><dd>+ {money(t.lumperCents)}</dd></div>
+     {t.otherCreditsCents!==0&&<div><dt>Other credits</dt><dd>+ {money(t.otherCreditsCents)}</dd></div>}
+   </dl>
+   {t.negativeBalanceCents>0&&<p>Negative balance: {money(t.negativeBalanceCents)}</p>}
+   <details><summary>Statement details</summary><p>Invoice gross: {money(t.invoiceGrossCents)}</p><p>Verified net to date: {money(t.verifiedNetCents)}</p><p>Driver-paid costs · tax records: {money(current.operator_paid_cents)}</p></details>
+ </section>
  <h2>Ledger entries</h2><ReadState state={ledger}>{rs=>rs.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.entry_type.replaceAll('_',' ')} · {money(r.amount_cents)}</strong><p>{r.description}</p><span className={r.status==='POSTED'?css.green:css.yellow}>{r.status} · Driver effect {money(r.driver_effect_cents)}</span>{r.source_document_id?<OriginalLink id={r.source_document_id}/>:r.source_wallet_document_id?<OriginalLink id={r.source_wallet_document_id} operatorId={operator.id} wallet/>:<small>Carrier report / schedule · proof may require carrier review</small>}</div></article>)}</ReadState>
  <h2>Tax folder · driver-paid expenses</h2><ReadState state={taxes}>{rs=>rs.length?rs.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.description} · {money(r.amount_cents)}</strong><p>{r.intake_status} · No settlement deduction</p>{r.wallet_document_id&&<WalletProof operatorId={operator.id} documentId={r.wallet_document_id}/>}</div></article>):<p>No recorded driver-paid receipts.</p>}</ReadState></div>}}</ReadState>;
 }
@@ -113,21 +139,39 @@ export function CompanyNumbers({week,refresh,ownOnly=false}){
  return <ReadState state={state}>{s=><div className={css.stack}><dl className={css.pairs}>{[['Own truck verified revenue',s.ownGrossCents],['Own recorded expenses',s.recordedOwnExpensesCents],['Own recorded margin',s.ownRecordedMarginCents],...(!ownOnly?[['Leased operator commissions',s.commissionCents],['Verified FirstLine fees',s.verifiedFirstLineFeesCents],['Recorded company margin',s.recordedMarginCents]]:[])].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>{!ownOnly&&<p className={css.yellow}>{s.pendingFirstLineEvents} factor events pending review. Recorded margin excludes unrecorded costs and unverified events; full net profit is not yet confirmed.</p>}</div>}</ReadState>;
 }
 function OwnPay({refresh}){const [week,setWeek]=useState(()=>currentWeek());return <div className={css.stack}><p>Own truck · 100% company revenue. No contractor settlement.</p><label>Monday week start<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><CompanyNumbers week={week} refresh={refresh} ownOnly/></div>}
-export default function Step3Workspace({operator,session,operators}){
+export default function Step3Workspace({operator,session,operators,workspacePicker,onSignOut}){
  const [tab,setTab]=useState('load'),[refresh,setRefresh]=useState(0),[dark,setDark]=useState(true);
  const own=operator.workspace_kind==='carrier'&&operator.carrier_user_id===session.user.id;
  const company=operators.some(o=>o.workspace_kind==='carrier'&&o.carrier_user_id===session.user.id);
  const driverView=operator.workspace_kind==='leased' && operator.driver_user_id===session.user.id;
+ const profile=useRef(null);
+ useEffect(()=>{
+   const dismiss=e=>{if(!profile.current?.open)return;
+     if(e.type==='keydown' && e.key==='Escape'){profile.current.open=false;profile.current.querySelector('summary').focus();}
+     if(e.type==='pointerdown' && !profile.current.contains(e.target))profile.current.open=false;
+   };
+   document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',dismiss);
+   return ()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',dismiss)};
+ },[]);
  const reload=()=>setRefresh(n=>n+1);
  return <section className={css.shell} data-theme={dark?'dark':'light'}>
- <header className={css.hero}><div><small>{operator.driver_name}</small><h1>{operator.company_name}</h1></div><button type="button" aria-pressed={dark} onClick={()=>setDark(v=>!v)}>{dark?'Light mode':'Dark mode'}</button></header>
- <nav className={css.tabs} aria-label="Operator tabs">{[['load','LOAD'],['pay','PAY'],['docs','DOCS'],['truck','TRUCK']].map(([key,label])=><button key={key} aria-pressed={tab===key} type="button" onClick={()=>setTab(key)}>{label}</button>)}</nav>
- {company&&<button className={css.companySwitch} type="button" aria-pressed={tab==='company'} onClick={()=>setTab('company')}>Company control</button>}
- <div className={css.content}><div className={css.bar}><small>{tab==='company'?'Private carrier controls':operator.company_name}</small><button type="button" onClick={reload}>Refresh</button></div>
- {driverView&&<DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={reload}/>}
+ <div className={css.topRow}>
+   <nav className={css.tabs} aria-label="Operator tabs">{[['load','LOAD'],['pay','PAY'],['docs','DOCS'],['truck','TRUCK']].map(([key,label])=><button key={key} aria-pressed={tab===key} type="button" onClick={()=>{profile.current.open=false;setTab(key)}}>{label}</button>)}</nav>
+   <details className={css.profile} ref={profile}><summary>Profile</summary>
+     <div className={css.profileMenu}><strong>{operator.driver_name}</strong><small>{operator.company_name}</small>
+       {workspacePicker}
+       <button type="button" onClick={()=>setDark(v=>!v)}>{dark?'Light mode':'Dark mode'}</button>
+       <button type="button" onClick={reload}>Refresh</button>
+       {driverView&&<DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={reload}/>}
+       {company&&<button type="button" onClick={e=>{e.currentTarget.closest('details').open=false;setTab('company')}}>Company control</button>}
+       <button type="button" onClick={onSignOut}>Sign out</button>
+     </div>
+   </details>
+ </div>
+ <div className={css.content}>
  {tab==='load'&&<Loads operator={operator} driverView={driverView} refresh={refresh} done={reload}/>}
  {tab==='pay'&&(own?<OwnPay refresh={refresh}/>:<DriverPay operator={operator} refresh={refresh}/>)}
- {tab==='docs'&&<><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/><OperatorWallet operatorId={operator.id} refresh={refresh}/></>}
+ {tab==='docs'&&<OperatorWallet operatorId={operator.id} refresh={refresh} layout="driver"><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/></OperatorWallet>}
  {tab==='truck'&&<TruckTools operator={operator} refresh={refresh} done={reload}/>}
  {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload}/>}
  </div></section>;

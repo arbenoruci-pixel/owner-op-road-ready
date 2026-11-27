@@ -44,3 +44,5 @@
 .gross { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
 .more { padding-bottom: 0; }
 .more > summary { min-height: 44px; align-content: center; font-size: .87rem; }
+.controls { display:grid; gap:8px; padding:2px 0 12px; }
+.detailContent { display:grid; gap:10px; }

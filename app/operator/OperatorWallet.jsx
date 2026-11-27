@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { allRows, loadOriginal } from './portalData.js';
 import { usePortalClient } from './PortalSession.jsx';
 import { emailReceiptText } from './walletReceipt.js';
@@ -165,7 +165,35 @@ function WalletDocuments({ wallet }) {
   })}</div>;
 }
 
-function WalletEntries({ operatorId, refresh, pilot }) {
+function ReplacementPdf({items}) {
+  const picker = useRef(null);
+  const [file, setFile] = useState(null);
+  const [error, setError] = useState('');
+  const subject = 'Road document replacement · ' + (file?.name || 'PDF');
+  const handoff = typeof navigator !== 'undefined' && file && navigator.canShare?.({files:[file]});
+  return <section className={styles.requiredCard} aria-label="Action Required">
+    <h2>Action Required</h2>
+    <ul>{items.map(item=><li key={item.key}><strong>{item.title}</strong><span>{item.status}</span></li>)}</ul>
+    <button type="button" onClick={()=>picker.current.click()}>Upload PDF</button>
+    <input ref={picker} aria-label="Replacement PDF" type="file" accept=".pdf,application/pdf" hidden onChange={e=>{
+      const chosen=e.target.files?.[0];
+      if(!chosen) return;
+      const pdf=chosen.type==='application/pdf' || (!chosen.type && /\.pdf$/i.test(chosen.name));
+      setError(pdf?'':'Choose a PDF document.');setFile(pdf?chosen:null);
+      e.target.value='';
+    }}/>
+    {file ? <div className={styles.handoff}><strong>{file.name}</strong>
+      {handoff ? <button type="button" onClick={async()=>{
+        try{await navigator.share({files:[file],title:subject});}
+        catch(e){if(e.name!=='AbortError')setError('Open your mail app and attach this PDF to your dispatch email.');}
+      }}>Share PDF with dispatch</button> : <a href={'mailto:?subject='+encodeURIComponent(subject)}>Open email to dispatch</a>}
+      <small>{handoff ? 'Choose your dispatcher to send the PDF for review.' : 'Address the email to your dispatcher and attach the selected PDF for review.'}</small>
+    </div> : <small>Choose a replacement to send to dispatch for review.</small>}
+    {error && <p role="alert">{error}</p>}
+  </section>;
+}
+
+function WalletEntries({ operatorId, refresh, pilot, layout, children }) {
   const client = usePortalClient();
   const [wallet, setWallet] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -183,6 +211,20 @@ function WalletEntries({ operatorId, refresh, pilot }) {
       .catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [operatorId, refresh, client]);
+  if (layout === 'driver') {
+    const today = chicagoDay();
+    const items = wallet ? reviewDocuments(wallet.docs,wallet.requirements,today) : [];
+    const urgent = items.filter(({doc,required})=>doc ? doc.expires_on && doc.expires_on < today : required);
+    return <div className={styles.driverWallet}>
+      {!failed && urgent.length>0 && <ReplacementPdf items={urgent}/>}
+      {children}
+      <h2>Wallet documents</h2>
+      {failed ? <p role="alert">Could not load wallet documents. Open Profile to refresh.</p> :
+        !wallet ? <p role="status">Loading wallet…</p> :
+        items.length ? items.filter(item=>item.doc || item.versions.length).map(item=><RoadDocument key={item.key} item={item}/>) :
+        <p>Verified road documents will appear here.</p>}
+    </div>;
+  }
   if (failed) return <p role="alert">{pilot ? 'Could not load road documents. Tap Refresh to try again.' : 'Could not load the wallet. Tap Refresh to try again.'}</p>;
   if (!wallet) return <p role="status">{pilot ? 'Loading road documents…' : 'Loading wallet…'}</p>;
   if (!pilot) return <WalletDocuments wallet={wallet} />;
@@ -215,6 +257,6 @@ function WalletEntries({ operatorId, refresh, pilot }) {
   </div>;
 }
 
-export default function OperatorWallet({ operatorId, refresh, pilot = false }) {
-  return <WalletEntries key={operatorId} operatorId={operatorId} refresh={refresh} pilot={pilot} />;
+export default function OperatorWallet({ operatorId, refresh, pilot = false, layout, children }) {
+  return <WalletEntries key={operatorId} operatorId={operatorId} refresh={refresh} pilot={pilot} layout={layout}>{children}</WalletEntries>;
 }

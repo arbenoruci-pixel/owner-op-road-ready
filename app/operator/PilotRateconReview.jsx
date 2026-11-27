@@ -4,7 +4,7 @@ import {useEffect, useId, useRef, useState} from 'react';
 import {loadOriginal} from './portalData.js';
 import styles from './operator.module.css';
 
-function PdfDialog({client, doc, cachedBlob, onReviewed, onClose}) {
+export function PdfDialog({client, doc, cachedBlob, onReviewed, onClose, heading = "Rate confirmation", fileName}) {
   const dialog = useRef(null);
   const pages = useRef(null);
   const title = useId();
@@ -55,7 +55,7 @@ function PdfDialog({client, doc, cachedBlob, onReviewed, onClose}) {
       }
       if (active) {
         setMessage('');
-        onReviewed({blob});
+        onReviewed?.({blob});
       }
     }
     render().catch(e => {
@@ -73,7 +73,8 @@ function PdfDialog({client, doc, cachedBlob, onReviewed, onClose}) {
   return <dialog ref={dialog} className={styles.pdfDialog} aria-labelledby={title}
     onCancel={event => { event.preventDefault(); onClose(); }}>
     <header className={styles.pdfToolbar}>
-      <h3 id={title}>Rate confirmation</h3>
+      <h3 id={title}>{heading}</h3>
+      {fileName && <a href={fileName.url} download={fileName.name}>Save</a>}
       <button type="button" autoFocus onClick={onClose}>Close</button>
     </header>
     <div className={styles.pdfScroll}>
@@ -84,7 +85,7 @@ function PdfDialog({client, doc, cachedBlob, onReviewed, onClose}) {
   </dialog>;
 }
 
-export default function PilotRateconReview({client, doc, review, onReviewed, accepted}) {
+export default function PilotRateconReview({client, doc, review, onReviewed, accepted, label}) {
   const [open, setOpen] = useState(false);
   const opener = useRef(null);
   function close() {
@@ -94,7 +95,7 @@ export default function PilotRateconReview({client, doc, review, onReviewed, acc
   return <>
     <button ref={opener} type="button" className={styles.pilotReviewButton}
       aria-haspopup="dialog" onClick={() => setOpen(true)}>
-      {accepted || review ? 'View rate confirmation' : 'Review rate confirmation'}
+      {label || (accepted || review ? 'View rate confirmation' : 'Review rate confirmation')}
     </button>
     {open && <PdfDialog client={client} doc={doc} cachedBlob={review?.blob} onReviewed={onReviewed} onClose={close}/>}
   </>;
