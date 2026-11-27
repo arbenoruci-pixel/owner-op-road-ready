@@ -7,7 +7,8 @@
 .breakdownCard {
   min-width: 0;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-lift);
   border-radius: 14px;
 }
 
@@ -33,9 +34,9 @@
 .estimate strong {
   grid-column: 1 / -1;
   color: var(--valid);
-  font-size: clamp(2rem, 8.5vw, 2.75rem);
+  font-size: clamp(2.2rem, 9.25vw, 2.9rem);
   line-height: 1.12;
-  font-weight: 750;
+  font-weight: 800;
   letter-spacing: -.035em;
   overflow-wrap: anywhere;
 }

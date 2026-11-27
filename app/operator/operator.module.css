@@ -449,6 +449,7 @@
 
 .driverWallet { display:grid; gap:12px; }
 .page .driverWallet .card, .page .driverWallet .checkItem { background:var(--surface); color:var(--fg); border-color:var(--line); }
+.page .driverWallet .card { border-color:var(--card-edge); box-shadow:var(--card-lift); }
 .page .driverWallet .card summary strong { color:var(--fg); }
 .page .driverWallet .card summary small, .page .driverWallet .card summary > span:nth-child(2) { color:var(--muted); }
 .page .driverWallet .detail { border-color:var(--line); }
@@ -463,6 +464,6 @@
 .page .requiredCard a { color:#fff; }
 .handoff { display:grid; gap:6px; padding-top:8px; overflow-wrap:anywhere; }
 
-.page:has([data-driver-portal][data-theme='dark']) { background: #0A0D14; }
-.page:has([data-driver-portal][data-theme='light']) { background: #f5f7fb; }
+.page:has([data-driver-portal][data-theme='dark']) { background: #1a2129; }
+.page:has([data-driver-portal][data-theme='light']) { background: #f0f3f7; }
 .page [data-driver-portal] :is(button, summary, input, select, a, textarea):focus-visible { outline-color: var(--accent); }

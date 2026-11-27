@@ -2,7 +2,8 @@
   display: grid;
   gap: 14px;
   padding: 16px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-lift);
   border-radius: 12px;
   background: var(--surface);
 }
