@@ -4,6 +4,7 @@ import {usePortalClient} from './PortalSession.jsx';
 import {allRows,rows,loadOriginal,loadFields} from './portalData.js';
 import {currentWeek,moveDay,formatDay,weekStart} from './financials.js';
 import {settlementDisplay} from '../../lib/rr-lease/intake-contract.js';
+import payStyles from './driverPay.module.css';
 import OperatorWallet,{WalletProof} from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
@@ -116,12 +117,20 @@ function DriverPay({operator,refresh}){
  const taxes=useRead(()=>allRows(()=>c.from('rr_lease_adjustments').select('id,description,amount_cents,kind,intake_status,wallet_document_id,settlement_id').eq('operator_id',operator.id).eq('paid_by','operator').order('id')),[c,operator.id,refresh]);
  return <ReadState state={data}>{list=>{if(!current)return <p>No weekly settlements yet.</p>;let t;try{t=settlementDisplay(current)}catch{return <p role="alert">Totals require reconciliation. No estimated amount displayed.</p>}
  return <div className={css.stack}><label>Settlement week<select value={current.settlement_id} onChange={e=>setSelected(e.target.value)}>{list.map(s=><option key={s.settlement_id} value={s.settlement_id}>{s.week_start} · {s.status}</option>)}</select></label>
- <section className={css.paySummary} aria-label="Weekly settlement">
-   <div className={css.amounts}>
-     <div><span>Estimated Net</span><strong>{money(t.estimatedNetCents)}</strong><small>{current.status==='draft'?'Draft':current.status==='issued'?'Issued':'Paid'}</small></div>
-     <div><span>Verified Payable</span><strong>{money(t.netCents ?? 0)}</strong><small>{t.isConfirmed?'Verified':'Pending verification'}</small></div>
+ <section className={payStyles.summary} aria-label="Weekly settlement">
+   <div className={payStyles.totals}>
+     <div className={payStyles.estimate}>
+       <span>Estimated Net</span>
+       <small className={payStyles.status}>{current.status==='draft'?'Draft':current.status==='issued'?'Issued':'Paid'}</small>
+       <strong>{money(t.estimatedNetCents)}</strong>
+     </div>
+     <div className={payStyles.payable}>
+       <div><span>Verified Payable</span><small>{t.isConfirmed?'Verified':'Pending verification'}</small></div>
+       <strong>{money(t.netCents ?? 0)}</strong>
+     </div>
    </div>
-   <dl className={css.breakdown}>
+   <div className={payStyles.breakdownCard}>
+   <dl className={payStyles.breakdown} aria-label="Settlement breakdown">
      <div><dt>Gross</dt><dd>{money(t.feeEligibleGrossCents)}</dd></div>
      <div><dt>{feeLabel(ledger.value)}</dt><dd>− {money(current.carrier_share_cents)}</dd></div>
      <div><dt>Deductions</dt><dd>− {money(current.carrier_deduction_cents)}</dd></div>
@@ -130,6 +139,7 @@ function DriverPay({operator,refresh}){
    </dl>
    {t.negativeBalanceCents>0&&<p>Negative balance: {money(t.negativeBalanceCents)}</p>}
    <details><summary>Statement details</summary><p>Invoice gross: {money(t.invoiceGrossCents)}</p><p>Verified net to date: {money(t.verifiedNetCents)}</p><p>Driver-paid costs · tax records: {money(current.operator_paid_cents)}</p></details>
+   </div>
  </section>
  <h2>Ledger entries</h2><ReadState state={ledger}>{rs=>rs.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.entry_type.replaceAll('_',' ')} · {money(r.amount_cents)}</strong><p>{r.description}</p><span className={r.status==='POSTED'?css.green:css.yellow}>{r.status} · Driver effect {money(r.driver_effect_cents)}</span>{r.source_document_id?<OriginalLink id={r.source_document_id}/>:r.source_wallet_document_id?<OriginalLink id={r.source_wallet_document_id} operatorId={operator.id} wallet/>:<small>Carrier report / schedule · proof may require carrier review</small>}</div></article>)}</ReadState>
  <h2>Tax folder · driver-paid expenses</h2><ReadState state={taxes}>{rs=>rs.length?rs.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.description} · {money(r.amount_cents)}</strong><p>{r.intake_status} · No settlement deduction</p>{r.wallet_document_id&&<WalletProof operatorId={operator.id} documentId={r.wallet_document_id}/>}</div></article>):<p>No recorded driver-paid receipts.</p>}</ReadState></div>}}</ReadState>;
@@ -139,6 +149,13 @@ export function CompanyNumbers({week,refresh,ownOnly=false}){
  return <ReadState state={state}>{s=><div className={css.stack}><dl className={css.pairs}>{[['Own truck verified revenue',s.ownGrossCents],['Own recorded expenses',s.recordedOwnExpensesCents],['Own recorded margin',s.ownRecordedMarginCents],...(!ownOnly?[['Leased operator commissions',s.commissionCents],['Verified FirstLine fees',s.verifiedFirstLineFeesCents],['Recorded company margin',s.recordedMarginCents]]:[])].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>{!ownOnly&&<p className={css.yellow}>{s.pendingFirstLineEvents} factor events pending review. Recorded margin excludes unrecorded costs and unverified events; full net profit is not yet confirmed.</p>}</div>}</ReadState>;
 }
 function OwnPay({refresh}){const [week,setWeek]=useState(()=>currentWeek());return <div className={css.stack}><p>Own truck · 100% company revenue. No contractor settlement.</p><label>Monday week start<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><CompanyNumbers week={week} refresh={refresh} ownOnly/></div>}
+const driverTabs = [
+  {key:'load', label:'LOAD', icon:<><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M9 6h6.5a3.5 3.5 0 0 1 0 7h-7a2.5 2.5 0 0 0 0 5h6.5"/></>},
+  {key:'pay', label:'PAY', icon:<><path d="M4 7.5V6a2 2 0 0 1 2-2h11v3M4 8h15a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2Z"/><path d="M20 12h-4a2 2 0 0 0 0 4h4"/></>},
+  {key:'docs', label:'DOCS', icon:<><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h4M9 12h6M9 16h6"/></>},
+  {key:'truck', label:'TRUCK', icon:<><path d="M2 6h12v10H8m-4 0H2V6m12 3h4l4 5v3h-2m-4 0h-2"/><circle cx="6" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></>},
+];
+
 export default function Step3Workspace({operator,session,operators,workspacePicker,onSignOut}){
  const [tab,setTab]=useState('load'),[refresh,setRefresh]=useState(0),[dark,setDark]=useState(true);
  const own=operator.workspace_kind==='carrier'&&operator.carrier_user_id===session.user.id;
@@ -154,20 +171,31 @@ export default function Step3Workspace({operator,session,operators,workspacePick
    return ()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',dismiss)};
  },[]);
  const reload=()=>setRefresh(n=>n+1);
- return <section className={css.shell} data-theme={dark?'dark':'light'}>
- <div className={css.topRow}>
-   <nav className={css.tabs} aria-label="Operator tabs">{[['load','LOAD'],['pay','PAY'],['docs','DOCS'],['truck','TRUCK']].map(([key,label])=><button key={key} aria-pressed={tab===key} type="button" onClick={()=>{profile.current.open=false;setTab(key)}}>{label}</button>)}</nav>
+ function selectTab(key){
+   profile.current.open=false;
+   setTab(key);
+   window.scrollTo(0,0);
+ }
+ return <section className={css.shell} data-driver-portal data-theme={dark?'dark':'light'}>
+ <header className={css.topRow}>
+   <h1 className={css.wordmark}>RoadReady</h1>
    <details className={css.profile} ref={profile}><summary>Profile</summary>
      <div className={css.profileMenu}><strong>{operator.driver_name}</strong><small>{operator.company_name}</small>
        {workspacePicker}
        <button type="button" onClick={()=>setDark(v=>!v)}>{dark?'Light mode':'Dark mode'}</button>
        <button type="button" onClick={reload}>Refresh</button>
        {driverView&&<DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={reload}/>}
-       {company&&<button type="button" onClick={e=>{e.currentTarget.closest('details').open=false;setTab('company')}}>Company control</button>}
+       {company&&<button type="button" onClick={()=>selectTab('company')}>Company control</button>}
        <button type="button" onClick={onSignOut}>Sign out</button>
      </div>
    </details>
- </div>
+ </header>
+ <nav className={css.tabs} aria-label="Operator tabs">
+   {driverTabs.map(({key,label,icon})=><button key={key} type="button" aria-pressed={tab===key} onClick={()=>selectTab(key)}>
+     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{icon}</svg>
+     <span>{label}</span>
+   </button>)}
+ </nav>
  <div className={css.content}>
  {tab==='load'&&<Loads operator={operator} driverView={driverView} refresh={refresh} done={reload}/>}
  {tab==='pay'&&(own?<OwnPay refresh={refresh}/>:<DriverPay operator={operator} refresh={refresh}/>)}

@@ -1,0 +1,92 @@
+.summary {
+  display: grid;
+  gap: .75rem;
+}
+
+.totals,
+.breakdownCard {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.totals { padding: 1rem 1.125rem; }
+.estimate,
+.payable {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .25rem .75rem;
+  align-items: center;
+}
+
+.estimate span,
+.payable span {
+  color: var(--fg);
+  font-size: .94rem;
+  font-weight: 600;
+}
+
+.totals strong,
+.breakdown dd { font-variant-numeric: tabular-nums; }
+
+.estimate strong {
+  grid-column: 1 / -1;
+  color: var(--valid);
+  font-size: clamp(2rem, 8.5vw, 2.75rem);
+  line-height: 1.12;
+  font-weight: 750;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+}
+
+.status {
+  padding: .12rem .55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 650;
+}
+
+.payable {
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  margin-top: .8rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--line);
+}
+
+.payable small { font-size: .81rem; }
+.payable strong {
+  text-align: right;
+  font-size: 1.28rem;
+  overflow-wrap: anywhere;
+}
+
+.breakdownCard { padding: .15rem 1.125rem; }
+.breakdownCard .breakdown { margin: 0; }
+.breakdown > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  gap: .7rem;
+  align-items: baseline;
+  padding: .54rem 0;
+  font-size: .92rem;
+}
+
+.breakdown > div + div,
+.breakdownCard details { border-top: 1px solid var(--line); }
+.breakdown dt { color: var(--muted); }
+.breakdown dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.breakdownCard summary {
+  align-content: center;
+  min-height: 44px;
+  font-size: .86rem;
+  font-weight: 600;
+}
+.breakdownCard details[open] { padding-bottom: .55rem; }

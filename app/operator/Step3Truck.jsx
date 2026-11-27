@@ -5,6 +5,7 @@ import {allRows} from './portalData.js';
 import {submitMaintenance} from './step3Actions.js';
 import {ReadState,useRead,rpc,money} from './Step3Workspace.jsx';
 import css from './step3.module.css';
+import truck from './truck.module.css';
 import {PdfDialog} from './PilotRateconReview.jsx';
 import {formatDay} from './financials.js';
 const miles = value => Number(value).toLocaleString('en-US')+' mi';
@@ -45,24 +46,34 @@ function MaintenanceSummary({records}){
  const plans=new Map();
  for(const r of records){
    const unit=r.unit || '';
-   if(!plans.has(unit)) plans.set(unit,{mileage:null,date:null});
+   if(!plans.has(unit)) plans.set(unit,{mileage:null,date:null,odometer:null});
    const plan=plans.get(unit);
+   // Records are newest first. Unassigned units can only pair readings from the same record.
+   if(unit) plan.odometer ??= r.odometer;
+   else if(plan.mileage==null && r.next_service_odometer!=null) plan.odometer=r.odometer;
    plan.mileage ??= r.next_service_odometer;
    plan.date ||= r.next_service_date;
  }
  if(!plans.size)plans.set('',{});
- return <section className={css.paySummary} aria-label="Maintenance status"><h2>Maintenance status</h2>{[...plans].map(([unit,plan])=>
-   <div key={unit}>{unit&&<small>{unit}</small>}<div className={css.amounts}>
+ return <section className={truck.summary} aria-label="Maintenance status"><h2>Maintenance status</h2>{[...plans].map(([unit,plan])=>
+   <div key={unit} className={truck.unit}>{unit&&<small>{unit}</small>}<div className={truck.schedule}>
      <div><span>Next PM</span><b>{plan.mileage!=null?miles(plan.mileage):'Unscheduled'}</b></div>
      <div><span>Next Date</span><b>{plan.date?formatDay(plan.date):'Unscheduled'}</b></div>
-   </div></div>)}</section>;
+   </div>
+   {plan.odometer!=null && plan.mileage!=null && <div className={truck.mileage}>
+     <div><span>Recorded mileage</span><strong>{plan.odometer.toLocaleString('en-US')} / {miles(plan.mileage)}</strong></div>
+     {plan.mileage>0 && <progress aria-label={unit ? 'Mileage toward next PM for '+unit : 'Mileage toward next PM'}
+       aria-valuetext={miles(plan.odometer)+' recorded, next PM at '+miles(plan.mileage)}
+       value={Math.min(plan.odometer,plan.mileage)} max={plan.mileage}/>}
+     {plan.odometer>=plan.mileage && <small>{plan.odometer===plan.mileage ? 'PM due at the recorded mileage' : 'PM overdue by '+miles(plan.odometer-plan.mileage)}</small>}
+   </div>}</div>)}</section>;
 }
 export default function TruckTools({operator,refresh,done}){
  const c=usePortalClient(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[file,setFile]=useState(null),[message,setMessage]=useState(''),request=useRef(crypto.randomUUID()),lock=useRef(false);
  const state=useRead(()=>allRows(()=>c.from('rr_driver_tool_records').select('id,record_date,description,unit,vendor,amount_cents,odometer,next_service_odometer,next_service_date,expense_category,file_name,mime_type,byte_size,sha256').eq('operator_id',operator.id).eq('kind','maintenance').order('record_date',{ascending:false}).order('id')),[c,operator.id,refresh]);
  return <div className={css.stack}>
  <ReadState state={state}>{records=><><MaintenanceSummary records={records}/><h2>Latest service</h2>{records.length?<ServiceRecord record={records[0]}/>:<p>No maintenance records.</p>}</>}</ReadState>
- <details className={css.panel}><summary>+ Add Service</summary><div className={css.detail}><p>Enter your service details and attach a photo or PDF. OCR is not required.</p>
+ <details className={css.panel+' '+truck.serviceForm}><summary className={truck.addService}>+ Add Service</summary><div className={css.detail}><p>Enter your service details and attach a photo or PDF. OCR is not required.</p>
  <form className={css.form} onSubmit={async e=>{e.preventDefault();if(lock.current)return;lock.current=true;setBusy(true);setError('');setMessage('');const form=e.currentTarget,f=new FormData(form);try{
  await submitMaintenance(c,operator.id,request.current,f,file);request.current=crypto.randomUUID();form.reset();setFile(null);setMessage('Maintenance record saved');done?.();
  }catch(e){setError(e.message)}finally{lock.current=false;setBusy(false)}}}>
