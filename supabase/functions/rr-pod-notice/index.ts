@@ -5,14 +5,22 @@ import {project as productionProject} from '../_shared/operator-outlook.js';
 const getEnv = (name: string) => Deno.env.get(name);
 const request = (input: RequestInfo | URL, init?: RequestInit) => fetch(input, {...init, redirect: 'error', signal: AbortSignal.timeout(10000)});
 
+const podTestPreview = {
+  projectRef: 'qlyxwrcmjeikdpnzipnx',
+  carrierId: '49090e24-07c1-489a-99e4-8103951bc677',
+  portalUrl: 'https://owner-op-road-ready-pjli2bkry-tepiha.vercel.app/operator',
+};
+
 // This function is deployed only to a separately authorized staging project.
 // The service role is used only against that project's own PostgREST origin.
 Deno.serve(async req => {
-  const ref = getEnv('RR_POD_STAGING_PROJECT_REF') || '';
-  const base = (getEnv('SUPABASE_URL') || '').replace(/\/$/, '');
+  const projectUrl = getEnv('SUPABASE_URL') || '';
+  const base = projectUrl.replace(/\/$/, '');
+  const preview = projectUrl === `https://${podTestPreview.projectRef}.supabase.co` ? podTestPreview : undefined;
+  const ref = getEnv('RR_POD_STAGING_PROJECT_REF') || preview?.projectRef || '';
   const key = getEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const carrierId = getEnv('RR_POD_STAGING_CARRIER_ID');
-  const portalUrl = getEnv('RR_POD_STAGING_PORTAL_URL');
+  const carrierId = getEnv('RR_POD_STAGING_CARRIER_ID') || preview?.carrierId;
+  const portalUrl = getEnv('RR_POD_STAGING_PORTAL_URL') || preview?.portalUrl;
   if (!/^[a-z0-9]{20}$/.test(ref) || base !== 'https://' + ref + '.supabase.co' || base === productionProject ||
       !key || !carrierId || !portalUrl) return new Response(null, {status: 503});
 
