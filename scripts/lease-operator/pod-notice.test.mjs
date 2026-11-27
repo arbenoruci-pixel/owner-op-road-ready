@@ -123,3 +123,49 @@ test('a correction and a committed load with incomplete descriptive fields still
   assert.match(message.body.content,/Driver not listed/);
   assert.match(message.body.content,/Review the correction/);
 });
+
+test('callback diagnostics include only the failure stage, HTTP status and recognized token errors', async t => {
+  const setup = 'https://abcdefghijklmnopqrst.supabase.co/functions/v1/rr-pod-notice';
+  const marker = 'private-fixture-value';
+  const log = t.mock.method(console, 'warn', () => {});
+  let failAt;
+  const deps = {
+    base: new URL(setup).origin, getEnv: () => marker,
+    async call(name) {
+      if (name === failAt) throw Error(marker, {cause:503});
+      return {sender:'nartaexpress@hotmail.com', revision:'fixture'};
+    },
+    async request(url) {
+      if (failAt === 'network') throw Error(marker);
+      if (url.endsWith('/token')) {
+        if (failAt === 'exchange') return Response.json({
+          error_codes:[7000215,99999999,'7000222',7000215], error_description:marker, trace_id:marker
+        }, {status:401});
+        if (failAt === 'scope') return Response.json({access_token:marker, scope:'User.Read'});
+        return Response.json({access_token:marker, refresh_token:marker, scope:'Mail.Send'});
+      }
+      if (failAt === 'identity') return new Response(marker, {status:403});
+      return Response.json({id:marker, mail:'nartaexpress@hotmail.com'});
+    }
+  };
+  const cases = [
+    ['exchange', {stage:'token_exchange', http_status:401, aadsts:[7000215]}],
+    ['scope', {stage:'token_exchange', http_status:200}],
+    ['network', {stage:'token_exchange'}],
+    ['identity', {stage:'graph_identity', http_status:403}],
+    ['rr_operator_mail_config', {stage:'sender_config', http_status:503}],
+    ['rr_operator_mail_save', {stage:'grant_save', http_status:503}],
+  ];
+  for (const [failure,expected] of cases) {
+    failAt = undefined;
+    const start = await stagingConsent(new Request(setup+'/connect'),deps);
+    const state = new URL(start.headers.get('location')).searchParams.get('state');
+    const cookie = start.headers.get('set-cookie').split(';')[0];
+    failAt = failure;
+    const callback = new Request(setup+'/callback?code='+marker+'&state='+state, {headers:{cookie}});
+    await assert.rejects(stagingConsent(callback,deps), {message:'Staging sender setup unavailable'});
+    assert.deepEqual(log.mock.calls.at(-1).arguments, ['rr_pod_staging_consent',JSON.stringify(expected)]);
+  }
+  assert.equal(log.mock.callCount(), cases.length);
+});
+

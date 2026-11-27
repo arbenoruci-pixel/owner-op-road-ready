@@ -15,6 +15,36 @@ function done(message, status) {
   return new Response(message, {status, headers: {...headers, 'Set-Cookie': cookieName + '=; Max-Age=0' + cookieOptions}});
 }
 
+// Only these documented Entra error numbers may appear in staging diagnostics.
+const knownTokenErrors = [50011, 54005, 65001, 70000, 700016, 7000215, 7000218, 7000222, 9002325, 9002326];
+
+async function callbackStep(stage, operation, request) {
+  let httpStatus;
+  let aadsts;
+  const observeRequest = async (url, init) => {
+    const response = await request(url, init);
+    httpStatus = response.status;
+    if (stage === 'token_exchange' && !response.ok) {
+      const payload = await response.clone().json().catch(() => null);
+      if (Array.isArray(payload?.error_codes)) {
+        aadsts = knownTokenErrors.filter(code => payload.error_codes.includes(code));
+      }
+    }
+    return response;
+  };
+  try {
+    return await operation(observeRequest);
+  } catch (error) {
+    // PostgREST calls expose only the numeric HTTP status through their cause.
+    if (stage === 'sender_config' || stage === 'grant_save') httpStatus = error?.cause;
+    const event = {stage};
+    if (Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599) event.http_status = httpStatus;
+    if (aadsts?.length) event.aadsts = aadsts;
+    console.warn('rr_pod_staging_consent', JSON.stringify(event));
+    throw Error('Staging sender setup unavailable');
+  }
+}
+
 // Invoked by the stage-ref-checked entry point. Microsoft consent is dedicated to the staging Vault.
 export async function stagingConsent(req, {base, call, getEnv, request}) {
   const url = new URL(req.url);
@@ -23,7 +53,8 @@ export async function stagingConsent(req, {base, call, getEnv, request}) {
   if (!secret) return done('Staging sender configuration is incomplete.', 503);
   const key = await crypto.subtle.importKey('raw', encode(secret), {name:'HMAC', hash:'SHA-256'}, false, ['sign']);
   const sign = async payload => base64url(await crypto.subtle.sign('HMAC', key, encode(callback + ':' + payload)));
-  const config = await call('rr_operator_mail_config', {});
+  const readConfig = () => call('rr_operator_mail_config', {});
+  const config = url.pathname.endsWith('/callback') ? await callbackStep('sender_config', readConfig) : await readConfig();
   if (config?.sender !== narta || !config.revision) return done('The staging Hotmail sender is not configured.', 503);
   if (url.pathname.endsWith('/connect')) {
     const state = random(), verifier = random();
@@ -46,13 +77,17 @@ export async function stagingConsent(req, {base, call, getEnv, request}) {
   const remaining = Number(expiry) - Date.now();
   if (remaining <= 0 || remaining > 600_000 || state !== url.searchParams.get('state') ||
       signature !== await sign([expiry,state,verifier].join('.'))) return done('The staging setup session expired.', 400);
-  const token = await exchange({grant_type:'authorization_code', code, code_verifier:verifier, redirect_uri:callback}, {getEnv, request});
+  const token = await callbackStep('token_exchange', observedRequest =>
+    exchange({grant_type:'authorization_code', code, code_verifier:verifier, redirect_uri:callback}, {getEnv, request:observedRequest}), request);
   if (!token.refresh_token) return done('Microsoft did not grant ongoing Hotmail access.', 403);
-  const me = await mailbox(token.access_token, request);
+  const me = await callbackStep('graph_identity', observedRequest => mailbox(token.access_token, observedRequest), request);
   if (!me.id || ![me.mail,me.userPrincipalName].some(addr=>addr?.toLowerCase() === narta)) {
     return done('Choose the Narta Express Hotmail account to authorize staging.', 403);
   }
-  const saved = await call('rr_operator_mail_save', {p_sender:narta, p_subject:me.id, p_refresh:token.refresh_token, p_revision:config.revision});
+  const saved = await callbackStep('grant_save', () => call('rr_operator_mail_save', {
+    p_sender:narta, p_subject:me.id, p_refresh:token.refresh_token, p_revision:config.revision
+  }));
   return saved ? done('Narta Express Hotmail is connected for RoadReady staging POD notifications.', 200) :
     done('Staging sender configuration changed. Reopen setup to try again.', 409);
 }
+

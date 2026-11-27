@@ -29,7 +29,7 @@ Deno.serve(async req => {
       method: 'POST', redirect: 'error', headers: {apikey: key!, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json'},
       body: JSON.stringify(args),
     });
-    if (!response.ok) throw Error('Staging job store unavailable');
+    if (!response.ok) throw Error('Staging job store unavailable', {cause: response.status});
     return response.json();
   }
   try {
@@ -57,3 +57,4 @@ Deno.serve(async req => {
     return new Response(null, {status: 503});
   }
 });
+
