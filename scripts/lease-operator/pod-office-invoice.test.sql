@@ -71,6 +71,84 @@ end $$;
 create function pg_temp.sign_in(actor uuid) returns void language sql as $$
   select set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role','authenticated')::text,true);
 $$;
+-- The office already assigned a priced load. Its rate original has not yet
+-- been verified. Receiving a POD must not approve, deliver or bill this load.
+savepoint before_pending_rate;
+update public.rr_lease_loads set status='assigned',gross_cents=216000
+where id=current_setting('qa.load')::uuid;
+select pg_temp.attach('ratecon','Unverified rate original');
+set local role authenticated;
+select pg_temp.sign_in('ab000000-0000-4000-8000-000000000003');
+do $$begin
+  perform pg_temp.phone_upload(gen_random_uuid(),'Unrelated driver');
+  raise exception 'Unrelated driver could upload';
+exception when insufficient_privilege then null; end $$;
+select pg_temp.sign_in('ab000000-0000-4000-8000-000000000002');
+do $$
+declare
+  original bytea:=pg_temp.proof('Reference only');
+  reservation jsonb;
+  request_id uuid:=gen_random_uuid();
+  doc uuid:=pg_temp.phone_upload(request_id,'Pending signed POD');
+begin
+  assert doc=pg_temp.phone_upload(request_id,'Pending signed POD');
+  assert doc=pg_temp.phone_upload(gen_random_uuid(),'Pending signed POD');
+  begin
+    reservation:=public.rr_lease_step2b_create_upload(gen_random_uuid(),null,'Demo Freight','RR-POD-TEST-042',
+      'reference.pdf','application/pdf',octet_length(original));
+    perform public.rr_lease_step2b_commit_upload((reservation->>'uploadId')::uuid,encode(original,'base64'),
+      encode(sha256(original),'hex'),'application/pdf');
+    raise exception 'Reference-only upload bypassed the financial review';
+  exception when invalid_parameter_value then
+    assert sqlerrm='Unverified financial load requires carrier review',sqlerrm;
+  end;
+end $$;
+select pg_temp.sign_in('ab000000-0000-4000-8000-000000000001');
+do $$
+declare dr jsonb:=public.rr_lease_pod_invoice_drafts(p_load_id=>current_setting('qa.load')::uuid)->0;
+begin
+  assert dr->>'status'='pending_review' and dr->>'gross_cents' is null;
+  assert (dr->'blocking_reasons') ? 'Verify the current rate confirmation';
+  assert (dr->'blocking_reasons') ? 'Review the pending driver POD';
+end $$;
+reset role;
+do $$
+declare load_id_ uuid:=current_setting('qa.load')::uuid;
+begin
+  assert (select count(*)=1 from public.rr_lease_documents where load_id=load_id_ and kind='pod' and is_ready);
+  assert (select count(*)=1 from public.rr_lease_mail_events where load_id=load_id_ and source_kind='driver_upload' and not verified_for_billing);
+  assert (select count(*)=1 from rr_lease_private.pod_mail_outbox where load_id=load_id_ and assigned_upload and status='pending');
+  assert (select count(*)=1 from rr_lease_private.pod_invoice_drafts where load_id=load_id_);
+  assert (select gross_cents=216000 and status='assigned' and final_pod_id is null and settlement_id is null
+    and pod_received_at is not null from public.rr_lease_loads where id=load_id_);
+  assert not exists(select from public.rr_lease_factoring where load_id=load_id_);
+  assert not exists(select from public.rr_lease_ledger_entries where load_id=load_id_);
+end $$;
+create function pg_temp.expect_unverified_rate_block() returns void language plpgsql as $$
+begin
+  perform pg_temp.phone_upload(gen_random_uuid(),'A fresh POD receipt');
+  raise exception 'Unexpectedly accepted an unverified financial load';
+exception when invalid_parameter_value then
+  assert sqlerrm='Unverified financial load requires carrier review',sqlerrm;
+end $$;
+
+savepoint before_disabling;
+delete from rr_lease_private.pod_workflow_carriers
+where carrier_user_id='ab000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select pg_temp.sign_in('ab000000-0000-4000-8000-000000000002');
+select pg_temp.expect_unverified_rate_block();
+rollback to savepoint before_disabling;
+with draft as (
+  insert into public.rr_lease_settlements(operator_id,week_start)
+  values ('ac000000-0000-4000-8000-000000000001','2026-11-23') returning id
+)
+update public.rr_lease_loads set settlement_id=draft.id from draft
+where rr_lease_loads.id=current_setting('qa.load')::uuid;
+set local role authenticated;
+select pg_temp.sign_in('ab000000-0000-4000-8000-000000000002');
+select pg_temp.expect_unverified_rate_block();
+rollback to savepoint before_pending_rate;
 set local role service_role;
 do $$
 declare rate uuid:=pg_temp.attach('ratecon','TEST - RR-POD-TEST-042 - USD 3200.00');

@@ -2,12 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {cleanupDocumentPaper} from './paperQuality.js';
+import {canUseSinglePodFrame,needsSmallPrintReview} from './podFramePolicy.js';
 
 // Load the exact proposed modules without depending on generated app files.
 const url=source=>'data:text/javascript;base64,'+Buffer.from(source).toString('base64');
 const coreUrl=url(fs.readFileSync('scripts/v110334/documentBoundary.js','utf8'));
-const load=path=>import(url(fs.readFileSync(path,'utf8').replaceAll("'./documentBoundaryV110329.js'",JSON.stringify(coreUrl))));
-const {captureGeometry,bindCapture}=await load('scripts/scanner-paper/captureGeometry.js');
+const safeUrl=url(fs.readFileSync('scripts/scanner-paper/safeDocumentBoundary.js','utf8').replaceAll("'./documentBoundaryV110329.js'",JSON.stringify(coreUrl)));
+const load=path=>import(url(fs.readFileSync(path,'utf8').replaceAll("'./documentBoundaryV110329.js'",JSON.stringify(coreUrl)).replaceAll("'./safeDocumentBoundaryV110428.js'",JSON.stringify(safeUrl))));
+const {captureGeometry,bindCapture,podCaptureGeometry}=await load('scripts/scanner-paper/captureGeometry.js');
 const {detectSafeDocumentBoundary,paperContinuation}=await load('scripts/scanner-paper/safeDocumentBoundary.js');
 const {FULL_FRAME}=await import(coreUrl);
 const analysisStub=url('export function analyzeCameraFrame(pixels,width,height){return {width,height,pixels,fallback:true};}');
@@ -82,3 +84,70 @@ test('camera worker reuses one instance, releases work and falls back on errors'
 const legacy=fs.readFileSync('scripts/scanner-clear/core.test.mjs','utf8');
 const inkTest=legacy.slice(legacy.indexOf("test('warm paper shadows"),legacy.indexOf("test('sparse sharp print"));
 await import(url("import test from 'node:test';import assert from 'node:assert/strict';import {cleanupDocumentPaper} from '"+new URL('./paperQuality.js',import.meta.url).href+"';\n"+inkTest));
+
+test('POD outer-edge recovery uses the same captured pixels and protects ambiguous signatures', () => {
+  const file = new File(['synthetic'],'pod.jpg',{type:'image/jpeg',lastModified:1795700000});
+  const width=240, height=320;
+  const corners=[{x:.12,y:.12},{x:.88,y:.12},{x:.88,y:.88},{x:.12,y:.88}];
+  const detection={found:true,confidence:.94,corners};
+  const capture=bindCapture(file,{width,height,detection});
+  const image={width,height,data:new Uint8ClampedArray(width*height*4)};
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    const paper=x>=width*.12&&x<=width*.88&&y>=height*.12&&y<=height*.88;
+    const signature=paper&&x>60&&x<160&&Math.abs(y-(.855*height+2*Math.sin(x/8)))<1.5;
+    image.data.set(signature?[25,40,110,255]:paper?[100,103,105,255]:[19,21,22,255],(y*width+x)*4);
+  }
+  const before=image.data.slice();
+  const lost={found:false,method:'insufficient-line-support'};
+  const recovered=podCaptureGeometry(file,image,capture,lost);
+  assert.equal(recovered.reason,'pod-verified-outer-edges');
+  assert.equal(recovered.review,false);
+  assert.ok(recovered.corners[0].x<=.12&&recovered.corners[2].y>.88,'keep fine print and signature inside');
+  assert.equal(captureGeometry(file,image,capture,lost).review,true,'ordinary scanner unchanged');
+
+  const inner={...detection,corners:[{x:.24,y:.24},{x:.76,y:.24},{x:.76,y:.76},{x:.24,y:.76}]};
+  const unsafe=podCaptureGeometry(file,image,bindCapture(file,{width,height,detection:inner}),lost);
+  assert.equal(unsafe.review,true);
+  assert.deepEqual(unsafe.corners,FULL_FRAME);
+  assert.equal(unsafe.suggestedCorners,undefined,'do not propose an edge crossing the signature sheet');
+  assert.equal(podCaptureGeometry(file,image,bindCapture(file,{width,height,detection:inner}),inner).reason,'pod-paper-beyond-edge');
+  assert.equal(podCaptureGeometry(file,image,null,inner).reason,'pod-paper-beyond-edge');
+  assert.equal(podCaptureGeometry(file,image,null,detection).review,false,'complete native photo still crops');
+  const conflict=podCaptureGeometry(file,image,capture,inner);
+  assert.equal(conflict.review,true);
+  assert.deepEqual(conflict.corners,FULL_FRAME);
+  const wrongFile=podCaptureGeometry(new File(['other'],'new.jpg',{type:'image/jpeg'}),image,capture,lost);
+  assert.equal(wrongFile.suggestedCorners,undefined);
+  assert.deepEqual(wrongFile.corners,FULL_FRAME);
+  assert.ok(podCaptureGeometry(file,{...image,width:height,height:width},capture,lost).review);
+  assert.ok(podCaptureGeometry(file,image,capture,{...lost,method:'internal-rule-rejected'}).review);
+  const faint=podCaptureGeometry(file,image,null,{...detection,confidence:.5});
+  assert.equal(faint.review,true);
+  assert.deepEqual(faint.corners,FULL_FRAME);
+  assert.deepEqual(image.data,before);
+});
+
+test('single POD frame requires complete matching sharp page with real small-print resolution', () => {
+  const detection={found:true,confidence:.91,corners:[{x:.1,y:.15},{x:.9,y:.15},{x:.9,y:.85},{x:.1,y:.85}]};
+  const quality={ready:true,metrics:{shortEdge:1130,textSharpness:108,textTileCount:13}};
+  assert.ok(canUseSinglePodFrame({quality,detection},detection));
+  assert.equal(canUseSinglePodFrame({quality:{...quality,ready:false},detection},detection),false);
+  for(const [metric,value] of Object.entries({shortEdge:810,textSharpness:15,textTileCount:1})){
+    assert.equal(canUseSinglePodFrame({quality:{...quality,metrics:{...quality.metrics,[metric]:value}},detection},detection),false);
+  }
+  assert.equal(canUseSinglePodFrame({quality,detection},{...detection,corners:detection.corners.map(p=>({...p,y:p.y+.05}))}),false);
+  assert.equal(canUseSinglePodFrame({quality,detection},{...detection,confidence:.75}),false);
+});
+
+test('POD review-only resolution exception rejects low light, blur, small text evidence and missing corners', () => {
+  const detection={found:true,confidence:.90,corners:[{x:.08,y:.21},{x:.87,y:.20},{x:.93,y:.77},{x:.08,y:.79}]};
+  const metrics={shortEdge:833,textSharpness:139,textTileCount:23,contrast:69,mean:89,area:.46,edgeRatio:.074};
+  const quality={ready:false,issues:['Move closer for sharper small print'],metrics};
+  assert.ok(needsSmallPrintReview({quality,detection}));
+  assert.ok(canUseSinglePodFrame({quality,detection},detection));
+  for(const [metric,value] of Object.entries({shortEdge:776,textSharpness:68,textTileCount:4,contrast:29,mean:75,area:.17,edgeRatio:.003})){
+    assert.equal(needsSmallPrintReview({detection,quality:{...quality,metrics:{...metrics,[metric]:value}}}),false,metric);
+  }
+  assert.equal(needsSmallPrintReview({detection:{...detection,corners:[{x:0,y:.1},...detection.corners.slice(1)]},quality}),false);
+  assert.equal(needsSmallPrintReview({detection,quality:{...quality,issues:[...quality.issues,'Hold steady — text looks blurred']}}),false);
+});
