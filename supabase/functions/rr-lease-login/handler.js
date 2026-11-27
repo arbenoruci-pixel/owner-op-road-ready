@@ -45,7 +45,10 @@ async function sendForInvitedMailbox(email, challenge, { getEnv, request }) {
       );
     if (!duplicate) throw new Error('provisioning');
   }
-  if (await sendPilotCode(email, { getEnv, request })) return;
+  if (await sendPilotCode(email, { getEnv, request })) {
+    console.info('Outlook accepted operator sign-in email');
+    return;
+  }
 
   const endpoint = new URL(project + '/auth/v1/otp');
   endpoint.searchParams.set('redirect_to', portalOrigin + '/operator');
