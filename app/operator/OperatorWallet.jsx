@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { allRows, loadOriginal } from './portalData.js';
 import { usePortalClient } from './PortalSession.jsx';
 import { emailReceiptText } from './walletReceipt.js';
-import { chicagoDay, formatDay } from './financials.js';
-import { instructionsSlot, reviewDocuments } from './roadDocuments.js';
+import { chicagoDay, formatDay, moveDay } from './financials.js';
+import { instructionsSlot, reviewDocuments, walletAttention } from './roadDocuments.js';
 import styles from './operator.module.css';
+import portalStyles from './payWallet.module.css';
 
 const fields = 'id,operator_id,slot_key,category,title,file_name,mime_type,byte_size,sha256,chunk_count,is_ready,is_current,revision,issued_on,expires_on';
 const names = {
@@ -44,7 +45,7 @@ function WalletFile({ doc }) {
     };
   }, [requested, client, doc.id, doc.sha256]);
   return (
-    <div className={styles.document}>
+    <div className={styles.document + ' ' + portalStyles.file}>
       {file ? (
         <div>
           {file.receipt && <div>
@@ -165,7 +166,53 @@ function WalletDocuments({ wallet }) {
   })}</div>;
 }
 
-function WalletEntries({ operatorId, refresh, pilot }) {
+function PortalDocument({item, tone}) {
+  const {doc, versions, title, status, action} = item;
+  const older = versions.filter(version => !version.is_current);
+  return <details className={portalStyles.document}>
+    <summary>
+      <span className={portalStyles.docIcon} data-tone={tone || 'current'} aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {tone === 'urgent' ? <><path d="m12 3 10 17H2z"/><path d="M12 9v4m0 3h.01"/></> : tone === 'warn'
+            ? <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></> : <><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></>}
+        </svg>
+      </span>
+      <span className={portalStyles.docLabel}><strong>{title}</strong><small>{doc && names[doc.category]}</small></span>
+      <span className={portalStyles.docStatus} data-tone={tone || 'current'}>{status}</span>
+    </summary>
+    <div className={portalStyles.docDetail}>
+      {action && <p>{action}</p>}
+      {doc?.issued_on && <p>Issued {formatDay(doc.issued_on)}</p>}
+      {doc && <WalletFile key={doc.id} doc={doc}/>}
+      {older.length > 0 && <details><summary>Previous versions ({older.length})</summary>
+        {older.map(version => <section key={version.id}><strong>Version {version.revision}</strong>
+          <p>{version.expires_on ? 'Expiration date ' + formatDay(version.expires_on) : 'Expiry not recorded'}</p>
+          <WalletFile doc={version}/></section>)}
+      </details>}
+    </div>
+  </details>;
+}
+
+export function PortalWallet({wallet, today = chicagoDay()}) {
+  const expiryLimit = moveDay(today, 30);
+  const docs = reviewDocuments(wallet.docs, wallet.requirements, today);
+  const attention = [], current = [];
+  for (const item of docs) {
+    const tone = walletAttention(item, today, expiryLimit);
+    (tone ? attention : current).push(<PortalDocument key={item.key} item={item} tone={tone}/>);
+  }
+  return <div className={portalStyles.screen}>
+    <header><h2>Documents</h2><p>Equipment and driver credentials</p></header>
+    <section><div className={portalStyles.sectionHead}><h3>Needs attention</h3><small>{attention.length} {attention.length === 1 ? 'document' : 'documents'}</small></div>
+      {attention.length ? <div className={portalStyles.docGroup}>{attention}</div> : <p>{docs.length ? 'No documents need attention.' : 'No road documents on file.'}</p>}
+    </section>
+    <details className={portalStyles.disclosure}><summary>Current documents <span>{current.length}</span></summary>
+      {current.length ? <div className={portalStyles.docGroup}>{current}</div> : <p>No current documents.</p>}
+    </details>
+  </div>;
+}
+
+function WalletEntries({ operatorId, refresh, pilot, portal }) {
   const client = usePortalClient();
   const [wallet, setWallet] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -185,6 +232,7 @@ function WalletEntries({ operatorId, refresh, pilot }) {
   }, [operatorId, refresh, client]);
   if (failed) return <p role="alert">{pilot ? 'Could not load road documents. Tap Refresh to try again.' : 'Could not load the wallet. Tap Refresh to try again.'}</p>;
   if (!wallet) return <p role="status">{pilot ? 'Loading road documents…' : 'Loading wallet…'}</p>;
+  if (portal) return <PortalWallet wallet={wallet}/>;
   if (!pilot) return <WalletDocuments wallet={wallet} />;
   const today = chicagoDay();
   const items = reviewDocuments(wallet.docs, wallet.requirements, today);
@@ -215,6 +263,6 @@ function WalletEntries({ operatorId, refresh, pilot }) {
   </div>;
 }
 
-export default function OperatorWallet({ operatorId, refresh, pilot = false }) {
-  return <WalletEntries key={operatorId} operatorId={operatorId} refresh={refresh} pilot={pilot} />;
+export default function OperatorWallet({ operatorId, refresh, pilot = false, portal = false }) {
+  return <WalletEntries key={operatorId} operatorId={operatorId} refresh={refresh} pilot={pilot} portal={portal} />;
 }

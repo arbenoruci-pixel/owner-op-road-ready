@@ -1,7 +1,6 @@
 import { MAX_PHOTO_PAGES, photoPagesToPdf } from '../../scripts/v110328/scanIntake.js';
 
 const MAX_PDF_BYTES = 3 * 1024 * 1024;
-const TOO_LARGE = 'The complete POD exceeds 3 MiB. Retake photos against a plain background in good light or choose a smaller PDF containing all pages.';
 const EXPORT_SETTINGS = [
   { longEdge: 3000, quality: .91 },
   { longEdge: 2400, quality: .84 },
@@ -44,9 +43,11 @@ async function fitPage(page, budget) {
   }
 }
 
-export async function buildPodScanPdf(pages, loadLabel = '') {
+export async function buildPodScanPdf(pages, loadLabel = '', purpose = 'pod') {
+  const label = purpose === 'maintenance' ? 'receipt' : 'POD';
+  const tooLarge = `The complete ${label} exceeds 3 MiB. Retake photos against a plain background in good light or choose a smaller PDF containing all pages.`;
   if (!pages.length || pages.length > MAX_PHOTO_PAGES) {
-    throw new Error(`Choose between 1 and ${MAX_PHOTO_PAGES} pages for this POD.`);
+    throw new Error(`Choose between 1 and ${MAX_PHOTO_PAGES} pages for this ${label}.`);
   }
   const images = pages.map(({ preview, width, height }) => {
     if (preview?.type !== 'image/jpeg' || !preview.size ||
@@ -59,7 +60,7 @@ export async function buildPodScanPdf(pages, loadLabel = '') {
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
   const loadNumber = String(loadLabel ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-/, '').slice(0, 48).replace(/-$/, '');
-  const name = ['POD', loadNumber, date].filter(Boolean).join('-') + '.pdf';
+  const name = [purpose === 'maintenance' ? 'Maintenance-receipt' : 'POD', loadNumber, date].filter(Boolean).join('-') + '.pdf';
   if (images.reduce((total, page) => total + page.file.size, 0) <= MAX_PDF_BYTES) {
     const pdf = await photoPagesToPdf(images, name);
     if (pdf.size <= MAX_PDF_BYTES) return pdf;
@@ -74,9 +75,9 @@ export async function buildPodScanPdf(pages, loadLabel = '') {
     const page = await fitPage(images[index], budget);
     images[index] = page;
     remaining -= page.file.size;
-    if (remaining < -pdfOverhead) throw new Error(TOO_LARGE);
+    if (remaining < -pdfOverhead) throw new Error(tooLarge);
   }
   const pdf = await photoPagesToPdf(images, name);
-  if (pdf.size > MAX_PDF_BYTES) throw new Error(TOO_LARGE);
+  if (pdf.size > MAX_PDF_BYTES) throw new Error(tooLarge);
   return pdf;
 }

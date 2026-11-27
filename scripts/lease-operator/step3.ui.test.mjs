@@ -33,9 +33,15 @@ test('actual carrier cancellation form requires independent original, amount, ac
  const html=renderPart(TonuApprovalForm,{load:{id:'fixture'},documents:[{id:'proof',file_name:'cancellation.pdf'}]});
  assert.match(html,/name="documentId"/);assert.match(html,/cancellation.pdf/);assert.match(html,/name="amount"/);assert.match(html,/name="cancelledAt"/);assert.match(html,/name="confirmCancellation"/);assert.match(html,/Approve confirmed OTR TONU/);
 });
-test('actual TRUCK manual form has receipt/photo/PDF and odometer fields without OCR',()=>{
+test('TRUCK offers receipt capture and manual maintenance with mileage, service reminders and optional cost',async()=>{
  const html=renderPart(TruckTools,{operator:op,refresh:0});
- assert.match(html,/OCR is not required/);assert.match(html,/name="odometer"/);assert.match(html,/name="nextOdometer"/);assert.match(html,/application\/pdf,image\/jpeg,image\/png/);assert.match(html,/Save maintenance record/);
+ assert.match(html,/Scan receipt/);assert.match(html,/Manual entry/);assert.match(html,/application\/pdf,image\/jpeg,image\/png/);
+ const {default:Editor}=await import('../../app/operator/MaintenanceEditor.jsx');
+ const {maintenanceDraft}=await import('../../app/operator/maintenanceReview.js');
+ const draft={...maintenanceDraft(),mode:'service_only'};
+ const form=renderPart(Editor,{draft,setDraft(){},onBack(){},onSubmit(){}});
+ for(const field of ['date','unit','assetType','category','vendor','odometer','nextOdometer','nextDate','description'])assert.match(form,new RegExp('name="'+field+'"'));
+ assert.match(form,/Save maintenance record/);
 });
 
 test('installed driver entry uses the four-tab workspace and keeps carrier access separate', async () => {

@@ -48,3 +48,9 @@ export function reviewDocuments(docs, requirements, today) {
     return { key, title, required: Boolean(requirement), doc, versions, status, action };
   });
 }
+
+export function walletAttention(item, today, expiryLimit) {
+  if (!item.doc || (item.doc.expires_on && item.doc.expires_on < today)) return 'urgent';
+  if (item.action) return 'warn';
+  return item.doc?.expires_on && item.doc.expires_on <= expiryLimit ? 'warn' : '';
+}

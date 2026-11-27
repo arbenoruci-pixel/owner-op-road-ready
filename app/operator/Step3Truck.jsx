@@ -1,17 +1,88 @@
 'use client';
-import React,{useRef,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
+import {flushSync} from 'react-dom';
 import {usePortalClient} from './PortalSession.jsx';
-import {allRows} from './portalData.js';
-import {submitMaintenance} from './step3Actions.js';
-import {Action,ReadState,useRead,rpc,money} from './Step3Workspace.jsx';
-import css from './step3.module.css';
-export default function TruckTools({operator,refresh,done}){
- const c=usePortalClient(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[file,setFile]=useState(null),[message,setMessage]=useState(''),request=useRef(crypto.randomUUID()),lock=useRef(false);
- const state=useRead(()=>allRows(()=>c.from('rr_driver_tool_records').select('id,record_date,description,unit,vendor,amount_cents,odometer,next_service_odometer,next_service_date,expense_category,file_name,mime_type,byte_size,sha256').eq('operator_id',operator.id).eq('kind','maintenance').order('record_date',{ascending:false}).order('id')),[c,operator.id,refresh]);
- return <div className={css.stack}><h2>Truck maintenance</h2><p>Service, PM, warranty and defect records. Enter the actual details manually and attach a photo or PDF; OCR is not required. These records do not alter settlement or logbook.</p>
- <form className={css.form} onSubmit={async e=>{e.preventDefault();if(lock.current)return;lock.current=true;setBusy(true);setError('');setMessage('');const form=e.currentTarget,f=new FormData(form);try{
- await submitMaintenance(c,operator.id,request.current,f,file);request.current=crypto.randomUUID();form.reset();setFile(null);setMessage('Maintenance record saved');done?.();
- }catch(e){setError(e.message)}finally{lock.current=false;setBusy(false)}}}>
- <label>Record type<select name="category"><option value="PM">Preventive maintenance</option><option value="service">Service / repair</option><option value="warranty">Warranty</option><option value="defect">Defect / safety concern</option></select></label><label>Date<input name="date" type="date" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>Unit<input name="unit" maxLength={80}/></label><label>Description<textarea name="description" required maxLength={600}/></label><label>Odometer miles<input name="odometer" type="number" min="0" max="99999999" step="1"/></label><div className={css.grid}><label>Next PM at miles<input name="nextOdometer" type="number" min="0" max="99999999" step="1"/></label><label>Next service date<input name="nextDate" type="date"/></label></div><label>Shop / vendor<input name="vendor" maxLength={160}/></label><label>Cost (USD, optional)<input name="amount" inputMode="decimal"/></label><label>Original service receipt / photo<input type="file" accept="application/pdf,image/jpeg,image/png" onChange={e=>setFile(e.target.files?.[0]||null)}/></label><button className={css.primary} disabled={busy}>{busy?'Saving…':'Save maintenance record'}</button>{error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}</form>
- <ReadState state={state}>{records=>records.length?records.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.expense_category||'Maintenance'} · {r.record_date}</strong><p>{r.description}</p><p>{r.unit||'Unit not specified'} · {r.odometer??'Unknown'} mi</p>{r.next_service_odometer!=null&&<p>Next PM: {r.next_service_odometer} mi</p>}{r.next_service_date&&<p>Next service: {r.next_service_date}</p>}{r.amount_cents!=null&&<p>Recorded expense: {money(r.amount_cents)}</p>}{r.file_name&&<Action run={async()=>{const b64=await rpc(c,'rr_lease_step3_maintenance_original',{p_record_id:r.id});const bytes=Uint8Array.from(atob(b64),x=>x.charCodeAt(0));const sum=await crypto.subtle.digest('SHA-256',bytes);if(Array.from(new Uint8Array(sum),x=>x.toString(16).padStart(2,'0')).join('')!==r.sha256)throw Error('Original checksum mismatch');const u=URL.createObjectURL(new Blob([bytes],{type:r.mime_type}));const a=document.createElement('a');a.href=u;a.download=r.file_name;a.click();setTimeout(()=>URL.revokeObjectURL(u),30000)}}>Download original receipt</Action>}</div></article>):<p>No maintenance records.</p>}</ReadState></div>;
+import {ReadState,useRead} from './Step3Workspace.jsx';
+import {listMaintenanceReceipts,saveMaintenanceReceipt} from './maintenanceReceipts.js';
+import {maintenanceDraft} from './maintenanceReview.js';
+import MaintenanceEditor from './MaintenanceEditor.jsx';
+import MaintenanceHistory,{ServiceRecord} from './MaintenanceHistory.jsx';
+import css from './maintenance.module.css';
+
+const fileTypes=['application/pdf','image/jpeg','image/png'];
+export default function TruckTools({operator,refresh,done}) {
+  const client=usePortalClient();
+  const state=useRead(()=>listMaintenanceReceipts(client,operator.id),[client,operator.id,refresh]);
+  const [draft,setDraft]=useState(null),[file,setFile]=useState(null),[url,setUrl]=useState(null);
+  const [Scanner,setScanner]=useState(null),[opening,setOpening]=useState(false),[reading,setReading]=useState(false);
+  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[duplicate,setDuplicate]=useState(null);
+  const fileInput=useRef(null),request=useRef(null),read=useRef(null),lock=useRef(false),mounted=useRef(false);
+  const canScan=process.env.NEXT_PUBLIC_OPERATOR_POD_SCANNER!=='false';
+
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;read.current?.abort();};},[]);
+  useEffect(()=>{if(!file){setUrl(null);return;}const next=URL.createObjectURL(file);setUrl(next);return()=>URL.revokeObjectURL(next);},[file]);
+  function clear() {
+    read.current?.abort();read.current=null;setReading(false);setError('');setDuplicate(null);
+    setDraft(null);setFile(null);setScanner(null);request.current=null;
+  }
+  function startManual() {clear();setMessage('');setDraft(maintenanceDraft());}
+  async function selectFile(next) {
+    if(!next)return;
+    if(!fileTypes.includes(next.type)||!next.size||next.size>3*1024*1024) {
+      throw Error('Choose a PDF, JPEG or PNG original up to 3 MiB.');
+    }
+    clear();setMessage('');setFile(next);setDraft(maintenanceDraft(null,true));
+    const control=new AbortController();read.current=control;setReading(true);
+    try {
+      const {readMaintenanceReceipt}=await import('./maintenanceReceiptReader.js');
+      const result=await readMaintenanceReceipt(next,{signal:control.signal});
+      if(!control.signal.aborted)setDraft(maintenanceDraft(result,true));
+    } catch(e) {
+      if(!control.signal.aborted)setError(e.message||'The receipt could not be read. Enter its details below.');
+    } finally {if(!control.signal.aborted){read.current=null;setReading(false);}}
+  }
+  async function openScan() {
+    if(opening||Scanner)return;
+    setOpening(true);setError('');setMessage('');
+    try {
+      const {default:Camera}=await import('roadready-pod-scanner');
+      if(!Camera)throw Error();
+      if(mounted.current)setScanner(()=>Camera);
+    } catch {if(mounted.current)setError('The scanner could not open. Choose a receipt file or enter the service manually.');}
+    finally {if(mounted.current)setOpening(false);}
+  }
+  async function save(form,details) {
+    if(lock.current)return;
+    lock.current=true;setBusy(true);setError('');
+    try {
+      request.current ||= crypto.randomUUID();
+      const result=await saveMaintenanceReceipt(client,operator.id,request.current,new FormData(form),file,details,{allowPossibleDuplicate:Boolean(duplicate)});
+      if(result.status==='possible_duplicate'){setDuplicate(result);return;}
+      if(result.status!=='saved'&&result.status!=='already_saved')throw Error('The save could not be confirmed. Retry this receipt.');
+      clear();setMessage(result.status==='already_saved'?'This service is already in your history.':
+        details.totalCents!=null?'Service and expense saved.':'Maintenance record saved.');
+      done?.();
+    } catch(e) {setError(e.message||'The save could not be confirmed. Retry this receipt.');}
+    finally {lock.current=false;setBusy(false);}
+  }
+  const matched=duplicate&&state.value?.find(r=>r.id===duplicate.recordId);
+  return <div className={css.root} data-operator-update-pending={Boolean(draft||Scanner||opening||reading||busy)}>
+    <input hidden ref={fileInput} type="file" accept={fileTypes.join(',')} aria-label="Choose service receipt" onChange={e=>{
+      const next=e.target.files?.[0];e.target.value='';void selectFile(next).catch(err=>setError(err.message));
+    }}/>
+    {draft ? <MaintenanceEditor draft={draft} setDraft={updater=>{setDuplicate(null);setError('');setDraft(updater);}} file={file}
+      originalUrl={url} reading={reading} onSkip={()=>{read.current?.abort();read.current=null;setReading(false);}}
+      busy={busy} duplicate={duplicate} matched={matched&&<ServiceRecord record={matched} client={client}/>} onSubmit={save} onBack={clear} error={error}/>
+      : <div className={css.page}><header><h2>Truck maintenance</h2></header>
+        {message && <p role="status" className={css.match}>{message}</p>}
+        <div className={css.actions}>
+          {canScan&&<button type="button" className={css.primary} disabled={opening} onClick={openScan}>{opening?'Opening camera…':'Scan receipt'}</button>}
+          <button type="button" onClick={()=>fileInput.current?.click()}>Choose file</button>
+          <button type="button" onClick={startManual}>Manual entry</button>
+        </div>
+        {error&&<p role="alert">{error}</p>}
+        <ReadState state={state}>{records=><MaintenanceHistory records={records} client={client}/>}</ReadState></div>}
+    {Scanner&&<Scanner purpose="maintenance" onCancel={()=>setScanner(null)}
+      onChooseFile={()=>{flushSync(()=>setScanner(null));fileInput.current?.click();}} onUpload={selectFile}/>}
+  </div>;
 }
