@@ -40,6 +40,7 @@ export function watchOperatorBuild(win, doc, build, report) {
   let latest = null;
   let checking = false;
   let reloading = false;
+  let lastNotice;
   let observer;
   let retryTimer;
 
@@ -63,8 +64,15 @@ export function watchOperatorBuild(win, doc, build, report) {
     return false;
   }
 
+  function setNotice(notice) {
+    if (lastNotice !== notice) {
+      lastNotice = notice;
+      report(notice);
+    }
+  }
+
   function updateNotice() {
-    if (latest && !reloading) report(hasWork() ? 'busy' : 'ready');
+    if (latest && !reloading) setNotice(hasWork() ? 'busy' : 'ready');
   }
 
   function interact(event) {
@@ -125,7 +133,7 @@ export function watchOperatorBuild(win, doc, build, report) {
       const metadata = await response.json();
       if (lifetime.signal.aborted || typeof metadata?.build !== 'string' || !/^[\w.-]{1,200}$/.test(metadata.build)) return;
       latest = metadata.build === build ? null : metadata.build;
-      if (!latest) { observer?.disconnect(); report(null); return; }
+      if (!latest) { observer?.disconnect(); setNotice(null); return; }
       if (!observer) observer = new win.MutationObserver(updateNotice);
       observer.observe(doc.body, {subtree:true, childList:true, attributes:true, attributeFilter:['disabled','aria-busy','data-operator-update-pending','open','value','checked']});
       const passiveResume = resumed && onlyNavigated && interactions === startingInteractions &&
