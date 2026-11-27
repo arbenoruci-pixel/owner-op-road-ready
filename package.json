@@ -1,6 +1,6 @@
 {
   "name": "owner-op-road-ready-next",
-  "version": "109.0.0",
+  "version": "97.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -93,11 +93,7 @@
     "verify:document-reader-isolation": "node scripts/verify-document-reader-isolation.mjs",
     "verify:records-vault": "node scripts/verify-records-vault-foundation.mjs",
     "verify:redesign": "node scripts/verify-road-ready-redesign.mjs",
-    "verify:architecture": "npm run verify:module-boundaries && npm run verify:document-reader-isolation && npm run verify:records-vault && npm run verify:redesign",
-    "verify-pretrip-after-10h-reset-v965": "node scripts/verify-pretrip-after-10h-reset-v965.mjs",
-    "verify-split-sleeper-v966": "node scripts/verify-split-sleeper-v966.mjs",
-    "verify-latest-edit-authoritative-v966": "node scripts/verify-latest-edit-authoritative-v966.mjs",
-    "verify-road-ready-scanner-v3": "node scripts/verify-road-ready-scanner-v3.mjs"
+    "verify:architecture": "npm run verify:module-boundaries && npm run verify:document-reader-isolation && npm run verify:records-vault && npm run verify:redesign"
   },
   "dependencies": {
     "@azure/msal-node": "7.2.0",
