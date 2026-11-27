@@ -3,6 +3,7 @@
 import {useEffect, useState} from 'react';
 import {usePortalClient} from './PortalSession.jsx';
 import {loadOriginal} from './portalData.js';
+import PilotRateconReview from './PilotRateconReview.jsx';
 import styles from './operator.module.css';
 
 async function brokerCopy(original, receipt, doc, loadNumber) {
@@ -50,7 +51,7 @@ function DriverTestConfirmation({loadId, loadNumber, refresh, onReviewStatus}) {
     read().catch(()=>{if(active)setError('Could not load the driver test. Tap Refresh.');});
     return ()=>{active=false;};
   },[client,loadId,refresh]);
-  useEffect(()=>()=>{if(review) URL.revokeObjectURL(review.url);},[review]);
+  useEffect(()=>()=>{if(review?.url) URL.revokeObjectURL(review.url);},[review]);
   useEffect(()=>()=>{if(copy) URL.revokeObjectURL(copy);},[copy]);
   async function act(kind) {
     setBusy(true);setError('');
@@ -74,6 +75,7 @@ function DriverTestConfirmation({loadId, loadNumber, refresh, onReviewStatus}) {
   }, [step, accepted, onReviewStatus]);
   if(!step) return error ? <p role="alert">{error}</p>:null;
   return <section className={(onReviewStatus ? styles.pilotReview : styles.stop) + " " + styles.rateconTest}>{(!onReviewStatus || accepted || review) && <h4>Driver acceptance · Test</h4>}
+    {onReviewStatus && <PilotRateconReview key={step.doc.id + ':' + step.doc.sha256} client={client} doc={step.doc} review={review} onReviewed={setReview} accepted={accepted}/>}
     {accepted ? <>
       <p>Accepted by <strong>{step.receipt.signer}</strong> · {new Date(step.receipt.accepted_at).toLocaleString()}</p>
       <p>Broker email preview<br/>Subject: Accepted rate confirmation · {loadNumber}</p>
@@ -81,7 +83,7 @@ function DriverTestConfirmation({loadId, loadNumber, refresh, onReviewStatus}) {
       <p>Test only. No broker email is sent.</p>
     </> : <>
       {!onReviewStatus && <p>Review the rate confirmation before accepting this test load.</p>}
-      {review ? <a href={review.url} target="_blank" rel="noreferrer">Open test rate confirmation (PDF)</a> : <button className={onReviewStatus ? styles.pilotReviewButton : styles.link} disabled={busy} onClick={()=>act('review')}>Review rate confirmation</button>}
+      {!onReviewStatus && (review ? <a href={review.url} target="_blank" rel="noreferrer">Open test rate confirmation (PDF)</a> : <button className={styles.link} disabled={busy} onClick={()=>act('review')}>Review rate confirmation</button>)}
       {review && <form className={styles.form} onSubmit={e=>{e.preventDefault();if(confirmed && signer.trim().length>=2)act('accept');}}>
         <label>Your full name<input required maxLength={90} value={signer} onChange={e=>setSigner(e.target.value)}/></label>
         <label className={styles.consent}><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>I reviewed this rate confirmation and agree to this test load.</span></label>
