@@ -196,3 +196,5 @@
 }
 .podReceipt div { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .podReceipt small { color: var(--muted); }
+
+.podSubmit { display: grid; gap: 8px; }

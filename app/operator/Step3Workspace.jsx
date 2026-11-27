@@ -54,7 +54,7 @@ export function OriginalLink({id,operatorId,wallet=false,label='Open original'})
 }
 const podFileTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
+function PodUpload({loadId, loadNumber, brokerName, done, addendum=false, needsCorrection=false}) {
   const client = usePortalClient();
   const canScan = process.env.NEXT_PUBLIC_OPERATOR_POD_SCANNER !== 'false';
   const [file, setFile] = useState(null);
@@ -66,6 +66,7 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const form = useRef(null);
   const fileInput = useRef(null);
   const chooseButton = useRef(null);
   const scannerPending = useRef(false);
@@ -79,7 +80,8 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
   useEffect(() => {
     if (!error || !errorBox.current) return;
     errorBox.current.focus({preventScroll:true});
-    errorBox.current.scrollIntoView({block:'nearest'});
+    const target = errorBox.current.closest('[data-pod-submit]') || errorBox.current;
+    target.scrollIntoView({block:'center'});
   }, [error]);
 
   function selectFile(next) {
@@ -94,12 +96,13 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
       const button = submitButton.current;
       if (!button) return;
       button.focus({preventScroll:true});
-      button.scrollIntoView({block:'nearest'});
+      button.scrollIntoView({block:'center'});
     });
   }
 
   async function openScanner() {
     if (!canScan || scannerPending.current || Scanner || lock.current) return;
+    if (!loadId && !form.current.reportValidity()) return;
     scannerPending.current = true;
     setError('');
     setOpening(true);
@@ -135,52 +138,62 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
     requestAnimationFrame(() => focusTarget.current?.focus());
   }
 
-  async function uploadOriginal(requestId) {
-    const {uploadId} = await api(client, 'pod/create-upload', {
-      requestId, loadId:loadId || null,
-      ...(loadId ? {} : {broker:broker.trim(), loadNumber:number.trim()}),
-      fileName:file.name, mimeType:file.type, byteSize:file.size,
-    });
-    return api(client, 'pod/commit-upload', file, {
-      'Content-Type':file.type, 'X-Upload-Id':uploadId,
-    });
-  }
-
-  async function submit(event) {
-    event.preventDefault();
-    if (lock.current || opening || Scanner || !file) return;
+  async function sendPod(original) {
+    if (lock.current) throw Error('An upload is already in progress.');
     lock.current = true;
     setBusy(true);
     setError('');
     try {
-      const key = JSON.stringify([loadId, broker, number, file.name, file.size, file.lastModified]);
-      if (intent.current?.key !== key) intent.current = {key, id:crypto.randomUUID()};
-      const requestId = intent.current.id;
+      const reference = JSON.stringify([loadId, broker.trim(), number.trim()]);
+      if (intent.current?.file !== original || intent.current.reference !== reference) {
+        intent.current = {file:original, reference, id:crypto.randomUUID()};
+      }
       const result = await trackPodUpload(addendum
-        ? api(client, 'pod/addendum', file, {
-            'Content-Type':file.type, 'X-Load-Id':loadId, 'X-Request-Id':requestId,
-            'X-File-Name':encodeURIComponent(file.name),
+        ? api(client, 'pod/addendum', original, {
+            'Content-Type':original.type, 'X-Load-Id':loadId, 'X-Request-Id':intent.current.id,
+            'X-File-Name':encodeURIComponent(original.name),
           })
-        : sendReservedPod(intent.current, uploadOriginal));
+        : sendReservedPod(intent.current, async requestId => {
+            const {uploadId} = await api(client, 'pod/create-upload', {
+              requestId, loadId:loadId || null,
+              ...(loadId ? {} : {broker:broker.trim(), loadNumber:number.trim()}),
+              fileName:original.name, mimeType:original.type, byteSize:original.size,
+            });
+            return api(client, 'pod/commit-upload', original, {
+              'Content-Type':original.type, 'X-Upload-Id':uploadId,
+            });
+          }));
       const message = confirmedPodMessage(result, loadId);
       setSent(true);
       setFile(null);
       intent.current = null;
-      done({message, loadNumber:loadNumber || number.trim(), fileName:file.name});
-    } catch (err) {
-      setError(podUploadMessage(err));
+      done({message, loadNumber:loadNumber || number.trim(), fileName:original.name});
+    } catch (cause) {
+      throw Error(podUploadMessage(cause));
     } finally {
       lock.current = false;
       setBusy(false);
     }
   }
 
+  async function submit(event) {
+    event.preventDefault();
+    if (lock.current || opening || Scanner || !file) return;
+    try { await sendPod(file); }
+    catch (cause) { setError(cause.message); }
+  }
+
+  async function uploadScan(reviewedPdf) {
+    await sendPod(reviewedPdf);
+    setScanner(null);
+  }
+
   const content = <>
-    <form className={css.form} onSubmit={submit} data-operator-update-pending={Boolean(file || busy || opening || Scanner || viewing || (!sent && (broker || number)))}>
+    <form ref={form} className={css.form} onSubmit={submit} data-operator-update-pending={Boolean(file || busy || opening || Scanner || viewing || (!sent && (broker || number)))}>
       {!loadId && <>
         <p>No rate confirmation yet? Enter the exact broker and load number. Gross stays unknown.</p>
-        <label>Broker<input required disabled={busy} maxLength={200} value={broker} onChange={e => setBroker(e.target.value)}/></label>
-        <label>Load number<input required disabled={busy} maxLength={120} value={number} onChange={e => setNumber(e.target.value)}/></label>
+        <label>Broker<input required pattern={'.*\\S.*'} disabled={busy} maxLength={200} value={broker} onChange={e => setBroker(e.target.value)}/></label>
+        <label>Load number<input required pattern={'.*\\S.*'} disabled={busy} maxLength={120} value={number} onChange={e => setNumber(e.target.value)}/></label>
       </>}
       <input ref={fileInput} type="file" hidden accept={podFileTypes.join(',')} aria-label="Choose signed POD file"
         onChange={e => {
@@ -195,10 +208,12 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
           <small>{busy ? 'Uploading POD' : 'Ready to upload'}</small><strong>{file.name}</strong>
           {loadId && <small>{brokerName} · Load #{loadNumber}</small>}
         </div>
-        {error && <p ref={errorBox} tabIndex={-1} role="alert" className={css.podError}>{error}</p>}
-        <button ref={submitButton} className={css.primary} type="submit" disabled={busy || opening}>
-          {busy ? 'Uploading…' : 'Upload POD'}
-        </button>
+        <div data-pod-submit="" className={css.podSubmit}>
+          {error && <p ref={errorBox} tabIndex={-1} role="alert" className={css.podError}>{error}</p>}
+          <button ref={submitButton} className={css.primary} type="submit" disabled={busy || opening}>
+            {busy ? 'Uploading…' : 'Upload POD'}
+          </button>
+        </div>
         {file.type === 'application/pdf' && <button type="button" ref={viewButton} aria-haspopup="dialog"
           disabled={busy || opening} onClick={() => setViewing(true)}>View PDF</button>}
       </> : <small>PDF, JPEG, PNG or WebP · Up to 3 MiB</small>}
@@ -213,15 +228,12 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
       setViewing(false);
       requestAnimationFrame(() => viewButton.current?.focus({preventScroll:true}));
     }}/>}
-    {Scanner && <Scanner loadLabel={loadNumber || number.trim()} onChooseFile={chooseOriginalFromScanner} onCancel={() => closeScanner(scanButton)} onReady={reviewedFile => {
-      selectFile(reviewedFile);
-      setScanner(null);
-    }}/>}
+    {Scanner && <Scanner loadLabel={loadNumber || number.trim()} onChooseFile={chooseOriginalFromScanner} onCancel={() => closeScanner(scanButton)} onUpload={uploadScan}/>}
   </>;
   if (!loadId) return content;
   if (file) return <div className={css.uploadControl}>{content}</div>;
   return <details className={css.uploadControl}>
-    <summary onClick={openAssignedUpload}>{addendum ? 'Add corrected POD' : 'Upload POD'}</summary>
+    <summary onClick={openAssignedUpload}>{addendum || needsCorrection ? 'Add corrected POD' : 'Add POD'}</summary>
     {content}
   </details>;
 }
@@ -234,10 +246,10 @@ function LoadDetails({load,pods,driverView,refresh,done,acceptsAddendum,initialO
  const ratecon = docs.value?.find(d => d.kind === 'ratecon' && d.is_current && d.mime_type === 'application/pdf');
  const [review,setReview] = useState(null);
  const cacheReview = React.useCallback(result => setReview({...result,id:ratecon?.id}), [ratecon?.id]);
- const podStatus = pending ? 'POD received · pending office review' : approved ? 'POD approved' : rejected ? 'POD rejected' : '';
+ const podStatus = pending || approved ? 'POD received' : rejected ? 'POD needs correction' : '';
  const status = load.load_type==='TONU'?'TONU · cancelled':load.status.replaceAll('_',' ');
  const pod = (acceptsAddendum || (load.load_type!=='TONU' && ['assigned','picked_up','delivered'].includes(load.status) && load.billing_channel==='FIRSTLINE_FACTORED'))
-   && <PodUpload loadId={load.id} loadNumber={load.load_number} brokerName={load.broker_name} addendum={acceptsAddendum} done={done}/>;
+   && <PodUpload loadId={load.id} loadNumber={load.load_number} brokerName={load.broker_name} needsCorrection={rejected} addendum={acceptsAddendum} done={done}/>;
  const more = <>
  <h3>Broker rules</h3><dl className={css.pairs}>{['tracking','detention','layover','lumper','podDeadline'].map(k=><div key={k}><dt>{k==='podDeadline'?'POD deadline':k}</dt><dd>{load.broker_rules?.[k]||'Not confirmed'}</dd></div>)}</dl>
  {load.reefer_instructions&&<p>{load.reefer_instructions}</p>}{load.steps?.map((s,i)=><p key={i}><strong>{s.title}</strong> · {s.detail}</p>)}
@@ -269,7 +281,7 @@ function Loads({operator,driverView,refresh,done}){
    return data || [];
  }, [c,operator.id,refresh], {keepWhileRefreshing:true});
  const [week,setWeek]=useState(()=>currentWeek());
- const unassignedUpload = <details className={css.panel}><summary>Upload POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details>;
+ const unassignedUpload = <details className={css.panel}><summary>Add POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details>;
  return <div className={css.stack}>{!driverView && unassignedUpload}
  <ReadState state={state}>{({loads,pods})=>{
  const active=loads.filter(l=>['staging','assigned','picked_up'].includes(l.status));
