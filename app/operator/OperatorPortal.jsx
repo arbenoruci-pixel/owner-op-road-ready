@@ -714,7 +714,7 @@ function Workspace({ operator, userId }) {
   );
 }
 
-function Membership({ session, carrierEntry }) {
+function Membership({ session, carrierEntry, onSignOut }) {
   const client = usePortalClient();
   const [operators, setOperators] = useState(null);
   const [selected, setSelected] = useState('');
@@ -756,6 +756,7 @@ function Membership({ session, carrierEntry }) {
               ? 'Dispatch has not assigned access to this email yet.'
               : 'Opening your workspace…'}
         </p>
+        {!carrierEntry && <button type="button" onClick={onSignOut}>Sign out</button>}
         {(operators || error) && (
           <button type="button" onClick={() => setRetry((v) => v + 1)}>
             Check access again
@@ -764,9 +765,7 @@ function Membership({ session, carrierEntry }) {
       </section>
     );
   const operator = operators.find((o) => o.id === selected);
-  return (
-    <>
-      {operators.length > 1 && (
+  const workspacePicker = operators.length > 1 && (
         <label className={styles.select}>
           Workspace
           <select value={selected} onChange={(e) => setSelected(e.target.value)}>
@@ -777,11 +776,14 @@ function Membership({ session, carrierEntry }) {
             ))}
           </select>
         </label>
-      )}
+      );
+  return (
+    <>
+      {carrierEntry && workspacePicker}
       {carrierEntry && operator && operator.workspace_kind === 'leased' && operator.driver_user_id === session.user.id && <DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={() => window.dispatchEvent(new Event('rr-driver-load-assigned'))} />}
       {operator && (carrierEntry
         ? <Workspace key={operator.id} operator={operator} userId={session.user.id} />
-        : <Step3Workspace key={operator.id} operator={operator} session={session} operators={operators} />)}
+        : <Step3Workspace key={operator.id} operator={operator} session={session} operators={operators} workspacePicker={workspacePicker} onSignOut={onSignOut} />)}
     </>
   );
 }
@@ -805,19 +807,12 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
   }
   return (
     <PortalSession.Provider value={client || null}><main className={styles.page}>
-      <header className={styles.header}>
+      {(carrierEntry || !auth.session) && <header className={styles.header}>
         <div className={styles.wrap}>
-          <span className={styles.brand}>
-            <i aria-hidden="true" /> Road Ready
-          </span>
+          <span className={styles.brand}><i aria-hidden="true" /> Road Ready</span>
           {carrierEntry && <a className={styles.back} href="/">Back to RoadReady</a>}
-          {!carrierEntry && auth.session && (
-            <button type="button" onClick={signOut}>
-              Sign out
-            </button>
-          )}
         </div>
-      </header>
+      </header>}
       {signoutError && (
         <p role="alert" className={styles.notice}>
           Could not sign out. Try again.
@@ -828,7 +823,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
           Opening Road Ready…
         </p>
       ) : auth.session ? (
-        <Membership key={auth.session.user.id} session={auth.session} carrierEntry={carrierEntry} />
+        <Membership key={auth.session.user.id} session={auth.session} carrierEntry={carrierEntry} onSignOut={signOut} />
       ) : carrierEntry ? (
         <section className={styles.notice}><h1>Carrier workspace</h1><p><a href="/">Sign in to your RoadReady account</a></p></section>
       ) : (

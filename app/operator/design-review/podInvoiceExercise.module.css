@@ -1,0 +1,20 @@
+.page, .fixtureLink { background: #1a2129; color: #f7f8fa; }
+.page { min-height: 100dvh; }
+.intro, .office, .card { margin-bottom: .9rem; }
+.intro p, .route p { color: var(--muted); font-size: .92rem; margin: .35rem 0 0; }
+.card { display: grid; gap: .65rem; padding: 1rem; background: var(--surface); border: 1px solid var(--card-edge); border-radius: 12px; box-shadow: var(--card-lift); }
+.route { display: grid; padding-bottom: .7rem; border-bottom: 1px solid var(--line); }
+.route > span, .card > label { color: var(--muted); font-size: .85rem; }
+.route > strong { font-size: 1.2rem; }
+.card select { width: 100%; }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.actions > button { flex: 1 1 7.5rem; }
+.controls { display: grid; gap: .6rem; margin-top: .75rem; }
+.controls label { display: flex; align-items: center; gap: .6rem; min-height: 44px; }
+.controls input[type=checkbox] { min-height: 1.1rem; height: 1.1rem; width: 1.1rem; }
+.receipt { display: grid; gap: .55rem; padding-top: .65rem; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.notice { padding: .15rem .25rem; margin: .35rem 0 .9rem; color: var(--fg); }
+.card > summary { cursor: pointer; font-weight: 650; }
+.back { display: inline-flex; align-items: center; min-height: 44px; font-size: .9rem; }
+.fixtureLink { text-align: center; padding: .75rem 1rem calc(6rem + env(safe-area-inset-bottom, 0px)); }
+.fixtureLink a { color: #a9c4ff; }

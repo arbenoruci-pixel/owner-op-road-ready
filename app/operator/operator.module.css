@@ -446,3 +446,24 @@
 .pdfScroll { flex: 1; min-height: 0; padding: .5rem .5rem max(.5rem, env(safe-area-inset-bottom)); overflow: auto; overscroll-behavior: contain; }
 .pdfPages { display: grid; gap: .5rem; }
 .pdfPages canvas { display: block; width: 100%; height: auto; background: white; }
+
+.driverWallet { display:grid; gap:12px; }
+.page .driverWallet .card, .page .driverWallet .checkItem { background:var(--surface); color:var(--fg); border-color:var(--line); }
+.page .driverWallet .card { border-color:var(--card-edge); box-shadow:var(--card-lift); }
+.page .driverWallet .card summary strong { color:var(--fg); }
+.page .driverWallet .card summary small, .page .driverWallet .card summary > span:nth-child(2) { color:var(--muted); }
+.page .driverWallet .detail { border-color:var(--line); }
+.page .driverWallet .link,.page .driverWallet a { color:var(--accent); }
+.requiredCard { border:1px solid #be5962; border-left:4px solid #ff858d; background:#391e27; color:#fff4f5; border-radius:12px; padding:14px; }
+.page .requiredCard h2 { color:#ffb7bb; }
+.requiredCard ul { list-style:none; padding:0; margin:.65rem 0; }
+.requiredCard li { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.1rem .7rem; padding:.25rem 0; }
+.requiredCard li span { color:#ffd2d3; font-size:.85rem; }
+.page .requiredCard button { color:#321319; background:#ffd1d3; border:1px solid #ffb7bb; min-height:44px; font-weight:700; }
+.page .requiredCard small { color:#ffdadd; margin-top:5px; }
+.page .requiredCard a { color:#fff; }
+.handoff { display:grid; gap:6px; padding-top:8px; overflow-wrap:anywhere; }
+
+.page:has([data-driver-portal][data-theme='dark']) { background: #1a2129; }
+.page:has([data-driver-portal][data-theme='light']) { background: #f0f3f7; }
+.page [data-driver-portal] :is(button, summary, input, select, a, textarea):focus-visible { outline-color: var(--accent); }

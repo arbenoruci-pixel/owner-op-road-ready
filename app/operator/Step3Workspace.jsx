@@ -1,13 +1,16 @@
 'use client';
 import React,{useEffect,useState,useRef} from 'react';
+import {flushSync} from 'react-dom';
 import {usePortalClient} from './PortalSession.jsx';
-import {allRows,rows,loadOriginal,appointment,loadFields} from './portalData.js';
+import {allRows,rows,loadOriginal,loadFields} from './portalData.js';
 import {currentWeek,moveDay,formatDay,weekStart} from './financials.js';
-import {parseUSDCents,settlementDisplay} from '../../lib/rr-lease/intake-contract.js';
+import {settlementDisplay} from '../../lib/rr-lease/intake-contract.js';
+import payStyles from './driverPay.module.css';
 import OperatorWallet,{WalletProof} from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
-import TrainingLoadCard, {trainingCardLoadId} from './TrainingLoadCard.jsx';
+import LoadCard from './TrainingLoadCard.jsx';
+import PilotRateconReview, {PdfDialog} from './PilotRateconReview.jsx';
 import RateconDriverTest from './RateconDriverTest.jsx';
 import DotOffline from './Step3Dot.jsx';
 import TruckTools from './Step3Truck.jsx';
@@ -27,9 +30,9 @@ export async function api(client,path,body,headers={}){
  const response=await fetch('/api/operator/'+path,{method:body===undefined?'GET':'POST',cache:'no-store',headers:{Authorization:'Bearer '+token,...(body===undefined||binary?{}:{'Content-Type':'application/json'}),...headers},...(body===undefined?{}:{body:binary?body:JSON.stringify(body)})});
  const result=await response.json();if(!response.ok)throw Error(result.error||'Request rejected');return result;
 }
-export function useRead(reader,deps){
+export function useRead(reader,deps,{keepWhileRefreshing=false}={}){
  const [state,setState]=useState({value:null,error:''});
- useEffect(()=>{let active=true;setState({value:null,error:''});Promise.resolve().then(reader).then(value=>{if(active)setState({value,error:''})},e=>{if(active)setState({value:null,error:e.message||'Could not load records'})});return()=>{active=false}},deps);
+ useEffect(()=>{let active=true;if(!keepWhileRefreshing)setState({value:null,error:''});Promise.resolve().then(reader).then(value=>{if(active)setState({value,error:''})},e=>{if(active)setState({value:null,error:e.message||'Could not load records'})});return()=>{active=false}},deps);
  return state;
 }
 export function ReadState({state,children}){return state.error?<p role="alert">{state.error}</p>:state.value===null?<p role="status">Loading…</p>:children(state.value)}
@@ -48,52 +51,220 @@ export function OriginalLink({id,operatorId,wallet=false,label='Open original'})
  setFile({url:URL.createObjectURL(blob),name:data.file_name,type:blob.type});
  }catch(e){setErr(e.message)}finally{setBusy(false)}}}>{busy?'Opening…':label}</button>}{err&&<p role="alert">{err}</p>}</div>;
 }
-function PodUpload({loadId,done}){
- const c=usePortalClient(),[file,setFile]=useState(null),[broker,setBroker]=useState(''),[number,setNumber]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[sent,setSent]=useState(false),intent=useRef(null),lock=useRef(false);
- return <form className={css.form} onSubmit={async e=>{e.preventDefault();if(lock.current||!file)return;lock.current=true;setBusy(true);setError('');try{
- const mime=file.type;if(!['application/pdf','image/jpeg','image/png','image/webp'].includes(mime)||file.size<1||file.size>3145728)throw Error('Choose PDF/JPEG/PNG/WebP up to 3 MiB');
- const key=JSON.stringify([loadId,broker,number,file.name,file.size,file.lastModified]);
- if(intent.current?.key!==key)intent.current={key,id:crypto.randomUUID()};
- const a=await api(c,'pod/create-upload',{requestId:intent.current.id,loadId:loadId||null,...(loadId?{}:{broker:broker.trim(),loadNumber:number.trim()}),fileName:file.name,mimeType:mime,byteSize:file.size});
- const result=await api(c,'pod/commit-upload',file,{'Content-Type':mime,'X-Upload-Id':a.uploadId});
- if(result.review_status==='REJECTED')throw Error('This exact original was rejected. Upload a corrected document.');
- setSent(true);setFile(null);intent.current=null;done?.();
- }catch(e){setError(e.message)}finally{lock.current=false;setBusy(false)}}}>
- {!loadId&&<><p>No rate confirmation yet? Enter the exact broker and load number. Gross stays unknown.</p><label>Broker<input required maxLength={200} value={broker} onChange={e=>setBroker(e.target.value)}/></label><label>Load number<input required maxLength={120} value={number} onChange={e=>setNumber(e.target.value)}/></label></>}
- <label>Signed POD · PDF or photo<input type="file" required accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e=>{setFile(e.target.files?.[0]||null);intent.current=null;setSent(false)}}/></label><button className={css.primary} disabled={busy||!file}>{busy?'Uploading…':'Upload POD'}</button>{sent&&<p role="status">Original received · pending carrier review</p>}{error&&<p role="alert">{error}</p>}
- </form>;
+const podFileTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
+  const client = usePortalClient();
+  const readOnly = client.podUploadsReadOnly === true;
+  const canScan = process.env.NEXT_PUBLIC_OPERATOR_POD_SCANNER !== 'false';
+  const [file, setFile] = useState(null);
+  const [broker, setBroker] = useState('');
+  const [number, setNumber] = useState('');
+  const [Scanner, setScanner] = useState(null);
+  const [opening, setOpening] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+  const fileInput = useRef(null);
+  const chooseButton = useRef(null);
+  const scannerPending = useRef(false);
+  const scanButton = useRef(null);
+  const selection = useRef(null);
+  const viewButton = useRef(null);
+  const intent = useRef(null);
+  const lock = useRef(false);
+
+  function selectFile(next) {
+    if (!podFileTypes.includes(next.type) || next.size < 1 || next.size > 3 * 1024 * 1024) {
+      throw Error('Choose a PDF, JPEG, PNG or WebP file up to 3 MiB.');
+    }
+    setFile(next);
+    intent.current = null;
+    setError('');
+    setSent(false);
+  }
+
+  async function openScanner() {
+    if (!canScan || scannerPending.current || Scanner || lock.current) return;
+    scannerPending.current = true;
+    setError('');
+    setOpening(true);
+    try {
+      const {default: PodScanner} = await import('roadready-pod-scanner');
+      if (!PodScanner) throw Error('Scanner unavailable');
+      if (scanButton.current && !scanButton.current.closest('details:not([open])')) setScanner(() => PodScanner);
+    } catch {
+      setError('The scanner could not open. Try again or choose a file.');
+    } finally {
+      scannerPending.current = false;
+      setOpening(false);
+    }
+  }
+
+  function openAssignedUpload(event) {
+    const disclosure = event.currentTarget.parentElement;
+    if (disclosure.open || file || !canScan) return;
+    event.preventDefault();
+    disclosure.open = true;
+    void openScanner();
+  }
+
+  function chooseOriginalFromScanner() {
+    // The file picker needs the original tap, with the modal already dismissed on iOS.
+    flushSync(() => setScanner(null));
+    chooseButton.current?.focus({preventScroll:true});
+    fileInput.current?.click();
+  }
+
+  function closeScanner(focusTarget) {
+    setScanner(null);
+    requestAnimationFrame(() => focusTarget.current?.focus());
+  }
+
+  async function uploadOriginal(requestId) {
+    const {uploadId} = await api(client, 'pod/create-upload', {
+      requestId, loadId:loadId || null,
+      ...(loadId ? {} : {broker:broker.trim(), loadNumber:number.trim()}),
+      fileName:file.name, mimeType:file.type, byteSize:file.size,
+    });
+    return api(client, 'pod/commit-upload', file, {
+      'Content-Type':file.type, 'X-Upload-Id':uploadId,
+    });
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (readOnly || lock.current || opening || Scanner || !file) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const key = JSON.stringify([loadId, broker, number, file.name, file.size, file.lastModified]);
+      if (intent.current?.key !== key) intent.current = {key, id:crypto.randomUUID()};
+      const requestId = intent.current.id;
+      const result = addendum
+        ? await api(client, 'pod/addendum', file, {
+            'Content-Type':file.type, 'X-Load-Id':loadId, 'X-Request-Id':requestId,
+            'X-File-Name':encodeURIComponent(file.name),
+          })
+        : await uploadOriginal(requestId);
+      if (result.review_status === 'REJECTED') {
+        throw Error('This exact original was rejected. Upload a corrected document.');
+      }
+      setSent(true);
+      setFile(null);
+      intent.current = null;
+      done?.();
+    } catch (err) {
+      setError(err.message || 'Upload failed. Try again.');
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+
+  const content = <>
+    <form className={css.form} onSubmit={submit}>
+      {!loadId && <>
+        <p>No rate confirmation yet? Enter the exact broker and load number. Gross stays unknown.</p>
+        <label>Broker<input required disabled={busy} maxLength={200} value={broker} onChange={e => setBroker(e.target.value)}/></label>
+        <label>Load number<input required disabled={busy} maxLength={120} value={number} onChange={e => setNumber(e.target.value)}/></label>
+      </>}
+      <div className={css.podSources}>
+        {canScan && <button type="button" className={file ? undefined : css.primary} ref={scanButton} aria-haspopup="dialog"
+          disabled={busy || opening} onClick={openScanner}>{opening ? 'Opening scanner…' : 'Scan POD'}</button>}
+        <button type="button" ref={chooseButton} disabled={busy || opening} onClick={() => fileInput.current.click()}>Choose file</button>
+      </div>
+      <input ref={fileInput} type="file" hidden accept={podFileTypes.join(',')} aria-label="Choose signed POD file"
+        onChange={e => {
+          const next = e.target.files?.[0];
+          e.target.value = '';
+          if (!next) return;
+          try { selectFile(next); }
+          catch (err) { setSent(false); setError(err.message); }
+        }}/>
+      {file ? <>
+        <div ref={selection} tabIndex={-1} role="status" className={css.podSelection}>
+          <small>Ready to upload</small><strong>{file.name}</strong>
+          {loadId && <small>{brokerName} · Load #{loadNumber}</small>}
+          {readOnly && <small>Preview only. This file stays on your device.</small>}
+        </div>
+        {file.type === 'application/pdf' && <button type="button" ref={viewButton} aria-haspopup="dialog"
+          disabled={busy || opening} onClick={() => setViewing(true)}>View PDF</button>}
+        <button className={css.primary} type="submit" disabled={readOnly || busy || opening}>
+          {busy ? 'Uploading…' : 'Upload POD'}
+        </button>
+      </> : <small>PDF, JPEG, PNG or WebP · Up to 3 MiB</small>}
+      {sent && <p role="status">{addendum ? 'Additional document received · pending office review' : 'POD received · pending office review'}</p>}
+      {error && <p role="alert">{error}</p>}
+    </form>
+    {viewing && file && <PdfDialog heading="Signed POD" cachedBlob={file} onClose={() => {
+      setViewing(false);
+      requestAnimationFrame(() => viewButton.current?.focus({preventScroll:true}));
+    }}/>}
+    {Scanner && <Scanner loadLabel={loadNumber || number.trim()} onChooseFile={chooseOriginalFromScanner} onCancel={() => closeScanner(scanButton)} onReady={reviewedFile => {
+      selectFile(reviewedFile);
+      closeScanner(selection);
+    }}/>}
+  </>;
+  if (!loadId) return content;
+  return <details className={css.uploadControl}>
+    <summary onClick={openAssignedUpload}>{addendum ? 'Add corrected POD' : 'Upload POD'}</summary>
+    {content}
+  </details>;
 }
-function Stop({label,address,at,zone,reference}){
- return <section className={css.stop}><small>{label}</small><strong>{address||'Address pending'}</strong><p>{appointment(at,zone)||'Appointment pending'}</p>{reference&&<p>Reference: {reference}</p>}{address&&<a target="_blank" rel="noreferrer" href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(address)}>Open in Google Maps</a>}</section>;
-}
-function LoadDetails({load,pods,driverView,refresh,done}){
- const c=usePortalClient(),docs=useRead(()=>rows(c.from('rr_lease_documents').select(docFields).eq('load_id',load.id).eq('is_ready',true).order('is_current',{ascending:false}).order('id')),[c,load.id,refresh]);
+function LoadDetails({load,pods,driverView,refresh,done,initialOpen,acceptsAddendum}){
+ const c=usePortalClient();
+ const docs=useRead(()=>rows(c.from('rr_lease_documents').select(docFields).eq('load_id',load.id).eq('is_ready',true).order('is_current',{ascending:false}).order('id')),[c,load.id,refresh]);
+ const [review,setReview]=useState(null);
+ const ratecon=docs.value?.find(d=>d.kind==='ratecon' && d.is_current && d.mime_type==='application/pdf');
  const pending=pods.some(x=>x.review_status==='PENDING'),approved=pods.some(x=>x.review_status==='APPROVED'&&x.document_id===load.final_pod_id),rejected=!approved&&!pending&&pods.some(x=>x.review_status==='REJECTED');
- const pilot = driverView && load.id === trainingCardLoadId && load.status === 'assigned';
- const more = <>
- <h3>Broker rules</h3><dl className={css.pairs}>{['tracking','detention','layover','lumper','podDeadline'].map(k=><div key={k}><dt>{k==='podDeadline'?'POD deadline':k}</dt><dd>{load.broker_rules?.[k]||'Not confirmed'}</dd></div>)}</dl>
- {load.reefer_instructions&&<p>{load.reefer_instructions}</p>}{load.steps?.map((s,i)=><p key={i}><strong>{s.title}</strong> · {s.detail}</p>)}
- <p>{!pilot && <>Recorded gross: {money(load.gross_cents)} · </>}{load.payment_deadline?'Payment deadline '+formatDay(load.payment_deadline):'Payment deadline pending'}</p>
- {driverView && !pilot && <RateconDriverTest load={load} refresh={refresh}/>}
- <ReadState state={docs}>{ds=><div className={css.stack}>{ds.map(d=><OriginalLink key={d.id} id={d.id} label={d.kind==='ratecon'?'View Rate Con PDF':d.kind+' · '+d.file_name}/>)}</div>}</ReadState>
- {pods.filter(x=>x.review_status==='REJECTED').map(x=><p className={css.red} key={x.document_id}>Rejected: {x.rejection_reason}</p>)}
- {load.load_type!=='TONU'&&['assigned','picked_up','delivered'].includes(load.status)&&load.billing_channel==='FIRSTLINE_FACTORED'&&<PodUpload loadId={load.id} done={done}/>}
- </>;
- if (pilot) return <TrainingLoadCard load={load} refresh={refresh} gross={money(load.gross_cents)}><div className={css.detail}>{more}</div></TrainingLoadCard>;
- return <details className={css.panel}><summary><span><strong>{load.load_number}</strong><small>{load.broker_name} · {load.status.replaceAll('_',' ')}</small></span><span className={load.load_type==='TONU'||approved?css.green:rejected?css.red:css.yellow}>{load.load_type==='TONU'?'TONU · cancelled':approved?'POD approved':rejected?'POD rejected':pending?'POD review':'Awaiting documents'}</span></summary><div className={css.detail}>
- <div className={css.grid}><Stop label="Pickup" address={load.pickup_address} at={load.pickup_at} zone={load.pickup_timezone} reference={load.pickup_number}/><Stop label="Delivery" address={load.delivery_address} at={load.delivery_at} zone={load.delivery_timezone} reference={load.delivery_number}/></div>
- {more}
- </div></details>;
+ const status=load.load_type==='TONU'?'TONU · cancelled':approved?'POD approved':rejected?'POD rejected':pending?'POD review':load.status.replaceAll('_',' ');
+ const allowPod=load.load_type!=='TONU'&&['assigned','picked_up','delivered'].includes(load.status)&&load.billing_channel==='FIRSTLINE_FACTORED';
+ function card(acceptance) {
+   const controls=<>
+     {acceptance?.control || (ratecon && <PilotRateconReview key={ratecon.id} client={c} doc={ratecon} review={review?.id===ratecon.id?review:null} onReviewed={cacheReview} label="Rate Con PDF"/>)}
+     {acceptance?.issue}
+     {docs.error&&<p role="alert">{docs.error}</p>}
+     {(acceptsAddendum || allowPod)&&<PodUpload addendum={acceptsAddendum} loadId={load.id} loadNumber={load.load_number} brokerName={load.broker_name} done={done}/>}
+   </>;
+   return <LoadCard load={load} status={acceptance?.status || status} controls={controls} initialOpen={initialOpen} gross={money(load.gross_cents)}>
+     {acceptance?.broker}
+     <h3>Broker rules</h3><dl className={css.pairs}>{['tracking','detention','layover','lumper','podDeadline'].map(k=><div key={k}><dt>{k==='podDeadline'?'POD deadline':k}</dt><dd>{load.broker_rules?.[k]||'Not confirmed'}</dd></div>)}</dl>
+     {load.reefer_instructions&&<p>{load.reefer_instructions}</p>}{load.steps?.map((s,i)=><p key={i}><strong>{s.title}</strong> · {s.detail}</p>)}
+     <p>{load.payment_deadline?'Payment deadline '+formatDay(load.payment_deadline):'Payment deadline pending'}</p>
+     <ReadState state={docs}>{ds=><div className={css.stack}>{ds.filter(d=>d!==ratecon).map(d=><OriginalLink key={d.id} id={d.id} label={d.kind+' · '+d.file_name}/>)}</div>}</ReadState>
+     {pods.filter(x=>x.review_status==='REJECTED').map(x=><p className={css.red} key={x.document_id}>Rejected: {x.rejection_reason}</p>)}
+   </LoadCard>;
+ }
+ // The viewer effect uses a stable callback throughout each document revision.
+ const cacheReview=React.useCallback(result=>setReview({...result,id:ratecon?.id}),[ratecon?.id]);
+ return driverView ? <RateconDriverTest load={load} refresh={refresh}>{card}</RateconDriverTest> : card(null);
 }
 function Loads({operator,driverView,refresh,done}){
- const c=usePortalClient(),state=useRead(async()=>{const [loads,pods]=await Promise.all([allRows(()=>c.from('rr_lease_loads').select(loadFields+',billing_channel,broker_rules,final_pod_id,ledger_mode,cancelled_at,load_type,tonu_confirmation_id').eq('operator_id',operator.id).order('updated_at',{ascending:false}).order('id')),rpc(c,'rr_lease_step3_pod_status',{p_operator_id:operator.id})]);return {loads,pods}},[c,operator.id,refresh]);
+ // Keep the active POD scan mounted when load alerts refresh this workspace.
+ const c=usePortalClient(),state=useRead(async()=>{const [loads,pods]=await Promise.all([allRows(()=>c.from('rr_lease_loads').select(loadFields+',billing_channel,broker_rules,final_pod_id,ledger_mode,cancelled_at,load_type,tonu_confirmation_id').eq('operator_id',operator.id).order('updated_at',{ascending:false}).order('id')),rpc(c,'rr_lease_step3_pod_status',{p_operator_id:operator.id})]);return {loads,pods}},[c,operator.id,refresh],{keepWhileRefreshing:true});
+ const corrections = useRead(async () => {
+   if (c.podUploadsReadOnly) return [];
+   const {data, error} = await c.rpc('rr_lease_pod_correction_loads', {p_operator_id:operator.id});
+   if (error?.code === 'PGRST202' || error?.code === '42883') return [];
+   if (error) throw Error('Could not check which deliveries accept corrections.');
+   return data || [];
+ }, [c,operator.id,refresh], {keepWhileRefreshing:true});
  const [week,setWeek]=useState(()=>currentWeek());
- return <div className={css.stack}><details className={css.panel}><summary>Upload POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details>
+ return <div className={css.stack}>
  <ReadState state={state}>{({loads,pods})=>{
  const active=loads.filter(l=>['staging','assigned','picked_up'].includes(l.status));
  const history=loads.filter(l=>!active.includes(l)&&(((l.actual_delivery_date||l.cancelled_at?.slice(0,10))>=''+week&&(l.actual_delivery_date||l.cancelled_at?.slice(0,10))<moveDay(week,7))||(!l.actual_delivery_date&&pods.some(p=>p.load_id===l.id&&p.review_status==='REJECTED'))));
- const card=l=><LoadDetails key={l.id} load={l} pods={pods.filter(p=>p.load_id===l.id)} driverView={driverView} refresh={refresh} done={done}/>;
- return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}<label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><h2>Delivery history</h2>{history.length?history.map(card):<p>No completed loads in this week.</p>}</>}}</ReadState></div>;
+ const card=l=><LoadDetails acceptsAddendum={corrections.value?.includes(l.id) || false} initialOpen={l.id===active[0]?.id} key={l.id} load={l} pods={pods.filter(p=>p.load_id===l.id)} driverView={driverView} refresh={refresh} done={done}/>;
+ return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}<details className={css.panel}><summary>Delivery History</summary><div className={css.detail}>{corrections.error && <p role="alert">{corrections.error}</p>}<label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label>{history.length?history.map(card):<p>No completed loads in this week.</p>}</div></details></>}}</ReadState><details className={css.panel}><summary>Upload POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details></div>;
+}
+function feeLabel(entries) {
+ const revenue = (entries || []).filter(e=>['FREIGHT','FSC','DETENTION','LAYOVER','TONU','STOP_OFF'].includes(e.entry_type));
+ const rates = new Set(revenue.map(e=>e.fee_bps));
+ const [rate] = rates;
+ return rates.size===1 && rate!=null && Number.isFinite(Number(rate)) ? (Number(rate)/100)+'% Fee' : 'Fee';
 }
 function DriverPay({operator,refresh}){
  const c=usePortalClient(),[selected,setSelected]=useState('');
@@ -103,8 +274,30 @@ function DriverPay({operator,refresh}){
  const taxes=useRead(()=>allRows(()=>c.from('rr_lease_adjustments').select('id,description,amount_cents,kind,intake_status,wallet_document_id,settlement_id').eq('operator_id',operator.id).eq('paid_by','operator').order('id')),[c,operator.id,refresh]);
  return <ReadState state={data}>{list=>{if(!current)return <p>No weekly settlements yet.</p>;let t;try{t=settlementDisplay(current)}catch{return <p role="alert">Totals require reconciliation. No estimated amount displayed.</p>}
  return <div className={css.stack}><label>Settlement week<select value={current.settlement_id} onChange={e=>setSelected(e.target.value)}>{list.map(s=><option key={s.settlement_id} value={s.settlement_id}>{s.week_start} · {s.status}</option>)}</select></label>
- <div className={css.payHero}><small>{current.status==='paid'?'Paid statement':current.status==='issued'?'Issued · locked':t.isConfirmed?'Confirmed payable · draft statement':'Estimated · pending verification'}</small><h2>{money(t.isConfirmed?t.netCents:t.estimatedNetCents)}</h2><p>Verified net: {money(t.verifiedNetCents)}</p>{t.negativeBalanceCents>0&&<p>Negative balance: {money(t.negativeBalanceCents)}</p>}</div>
- <dl className={css.pairs}>{[['Invoice gross',t.invoiceGrossCents],['Fee eligible gross',t.feeEligibleGrossCents],['Carrier commission',current.carrier_share_cents],['Carrier deductions',current.carrier_deduction_cents],['Lumper reimbursement · 0% fee',t.lumperCents],['Other credits',t.otherCreditsCents],['Driver-paid costs · tax records',current.operator_paid_cents]].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>
+ <section className={payStyles.summary} aria-label="Weekly settlement">
+   <div className={payStyles.totals}>
+     <div className={payStyles.estimate}>
+       <span>Estimated Net</span>
+       <small className={payStyles.status}>{current.status==='draft'?'Draft':current.status==='issued'?'Issued':'Paid'}</small>
+       <strong>{money(t.estimatedNetCents)}</strong>
+     </div>
+     <div className={payStyles.payable}>
+       <div><span>Verified Payable</span><small>{t.isConfirmed?'Verified':'Pending verification'}</small></div>
+       <strong>{money(t.netCents ?? 0)}</strong>
+     </div>
+   </div>
+   <div className={payStyles.breakdownCard}>
+   <dl className={payStyles.breakdown} aria-label="Settlement breakdown">
+     <div><dt>Gross</dt><dd>{money(t.feeEligibleGrossCents)}</dd></div>
+     <div><dt>{feeLabel(ledger.value)}</dt><dd>− {money(current.carrier_share_cents)}</dd></div>
+     <div><dt>Deductions</dt><dd>− {money(current.carrier_deduction_cents)}</dd></div>
+     <div><dt>0% Reimbursements</dt><dd>+ {money(t.lumperCents)}</dd></div>
+     {t.otherCreditsCents!==0&&<div><dt>Other credits</dt><dd>+ {money(t.otherCreditsCents)}</dd></div>}
+   </dl>
+   {t.negativeBalanceCents>0&&<p>Negative balance: {money(t.negativeBalanceCents)}</p>}
+   <details><summary>Statement details</summary><p>Invoice gross: {money(t.invoiceGrossCents)}</p><p>Verified net to date: {money(t.verifiedNetCents)}</p><p>Driver-paid costs · tax records: {money(current.operator_paid_cents)}</p></details>
+   </div>
+ </section>
  <h2>Ledger entries</h2><ReadState state={ledger}>{rs=>rs.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.entry_type.replaceAll('_',' ')} · {money(r.amount_cents)}</strong><p>{r.description}</p><span className={r.status==='POSTED'?css.green:css.yellow}>{r.status} · Driver effect {money(r.driver_effect_cents)}</span>{r.source_document_id?<OriginalLink id={r.source_document_id}/>:r.source_wallet_document_id?<OriginalLink id={r.source_wallet_document_id} operatorId={operator.id} wallet/>:<small>Carrier report / schedule · proof may require carrier review</small>}</div></article>)}</ReadState>
  <h2>Tax folder · driver-paid expenses</h2><ReadState state={taxes}>{rs=>rs.length?rs.map(r=><article className={css.panel} key={r.id}><div className={css.detail}><strong>{r.description} · {money(r.amount_cents)}</strong><p>{r.intake_status} · No settlement deduction</p>{r.wallet_document_id&&<WalletProof operatorId={operator.id} documentId={r.wallet_document_id}/>}</div></article>):<p>No recorded driver-paid receipts.</p>}</ReadState></div>}}</ReadState>;
 }
@@ -113,22 +306,75 @@ export function CompanyNumbers({week,refresh,ownOnly=false}){
  return <ReadState state={state}>{s=><div className={css.stack}><dl className={css.pairs}>{[['Own truck verified revenue',s.ownGrossCents],['Own recorded expenses',s.recordedOwnExpensesCents],['Own recorded margin',s.ownRecordedMarginCents],...(!ownOnly?[['Leased operator commissions',s.commissionCents],['Verified FirstLine fees',s.verifiedFirstLineFeesCents],['Recorded company margin',s.recordedMarginCents]]:[])].map(([label,val])=><div key={label}><dt>{label}</dt><dd>{money(val)}</dd></div>)}</dl>{!ownOnly&&<p className={css.yellow}>{s.pendingFirstLineEvents} factor events pending review. Recorded margin excludes unrecorded costs and unverified events; full net profit is not yet confirmed.</p>}</div>}</ReadState>;
 }
 function OwnPay({refresh}){const [week,setWeek]=useState(()=>currentWeek());return <div className={css.stack}><p>Own truck · 100% company revenue. No contractor settlement.</p><label>Monday week start<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><CompanyNumbers week={week} refresh={refresh} ownOnly/></div>}
-export default function Step3Workspace({operator,session,operators}){
+const driverTabs = [
+  {key:'load', label:'LOAD', icon:<><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M9 6h6.5a3.5 3.5 0 0 1 0 7h-7a2.5 2.5 0 0 0 0 5h6.5"/></>},
+  {key:'pay', label:'PAY', icon:<><path d="M4 7.5V6a2 2 0 0 1 2-2h11v3M4 8h15a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2Z"/><path d="M20 12h-4a2 2 0 0 0 0 4h4"/></>},
+  {key:'docs', label:'DOCS', icon:<><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h4M9 12h6M9 16h6"/></>},
+  {key:'truck', label:'TRUCK', icon:<><path d="M2 6h12v10H8m-4 0H2V6m12 3h4l4 5v3h-2m-4 0h-2"/><circle cx="6" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></>},
+];
+
+export default function Step3Workspace({operator,session,operators,workspacePicker,onSignOut}){
  const [tab,setTab]=useState('load'),[refresh,setRefresh]=useState(0),[dark,setDark]=useState(true);
  const own=operator.workspace_kind==='carrier'&&operator.carrier_user_id===session.user.id;
  const company=operators.some(o=>o.workspace_kind==='carrier'&&o.carrier_user_id===session.user.id);
  const driverView=operator.workspace_kind==='leased' && operator.driver_user_id===session.user.id;
+ const [podLoadId,setPodLoadId]=useState(null);
+ useEffect(()=>{
+   if (!company) return;
+   const value=new URL(window.location.href).searchParams.get('podInvoice');
+   if (value && /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)) {
+     setPodLoadId(value);
+     setTab('company');
+   }
+ },[company,session.user.id]);
+ function clearPodLoad(){
+   if (!podLoadId) return;
+   setPodLoadId(null);
+   const url=new URL(window.location.href);
+   url.searchParams.delete('podInvoice');
+   window.history.replaceState(window.history.state,'',url);
+ }
+ const profile=useRef(null);
+ useEffect(()=>{
+   const dismiss=e=>{if(!profile.current?.open)return;
+     if(e.type==='keydown' && e.key==='Escape'){profile.current.open=false;profile.current.querySelector('summary').focus();}
+     if(e.type==='pointerdown' && !profile.current.contains(e.target))profile.current.open=false;
+   };
+   document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',dismiss);
+   return ()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',dismiss)};
+ },[]);
  const reload=()=>setRefresh(n=>n+1);
- return <section className={css.shell} data-theme={dark?'dark':'light'}>
- <header className={css.hero}><div><small>{operator.driver_name}</small><h1>{operator.company_name}</h1></div><button type="button" aria-pressed={dark} onClick={()=>setDark(v=>!v)}>{dark?'Light mode':'Dark mode'}</button></header>
- <nav className={css.tabs} aria-label="Operator tabs">{[['load','LOAD'],['pay','PAY'],['docs','DOCS'],['truck','TRUCK']].map(([key,label])=><button key={key} aria-pressed={tab===key} type="button" onClick={()=>setTab(key)}>{label}</button>)}</nav>
- {company&&<button className={css.companySwitch} type="button" aria-pressed={tab==='company'} onClick={()=>setTab('company')}>Company control</button>}
- <div className={css.content}><div className={css.bar}><small>{tab==='company'?'Private carrier controls':operator.company_name}</small><button type="button" onClick={reload}>Refresh</button></div>
- {driverView&&<DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={reload}/>}
- {tab==='load'&&<Loads operator={operator} driverView={driverView} refresh={refresh} done={reload}/>}
+ function selectTab(key){
+   clearPodLoad();
+   profile.current.open=false;
+   setTab(key);
+   window.scrollTo(0,0);
+ }
+ return <section className={css.shell} data-driver-portal data-theme={dark?'dark':'light'}>
+ <header className={css.topRow}>
+   <h1 className={css.wordmark}>RoadReady</h1>
+   <details className={css.profile} ref={profile}><summary>Profile</summary>
+     <div className={css.profileMenu}><strong>{operator.driver_name}</strong><small>{operator.company_name}</small>
+       {workspacePicker}
+       <button type="button" onClick={()=>setDark(v=>!v)}>{dark?'Light mode':'Dark mode'}</button>
+       <button type="button" onClick={reload}>Refresh</button>
+       {driverView&&<DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={reload}/>}
+       {company&&<button type="button" onClick={()=>selectTab('company')}>Company control</button>}
+       <button type="button" onClick={onSignOut}>Sign out</button>
+     </div>
+   </details>
+ </header>
+ <nav className={css.tabs} aria-label="Operator tabs">
+   {driverTabs.map(({key,label,icon})=><button key={key} type="button" aria-pressed={tab===key} onClick={()=>selectTab(key)}>
+     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{icon}</svg>
+     <span>{label}</span>
+   </button>)}
+ </nav>
+ <div className={css.content}>
+ {tab==='load'&&<Loads key={session.user.id + ':' + operator.id} operator={operator} driverView={driverView} refresh={refresh} done={reload}/>}
  {tab==='pay'&&(own?<OwnPay refresh={refresh}/>:<DriverPay operator={operator} refresh={refresh}/>)}
- {tab==='docs'&&<><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/><OperatorWallet operatorId={operator.id} refresh={refresh}/></>}
+ {tab==='docs'&&<OperatorWallet operatorId={operator.id} refresh={refresh} layout="driver"><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/></OperatorWallet>}
  {tab==='truck'&&<TruckTools operator={operator} refresh={refresh} done={reload}/>}
- {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload}/>}
+ {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload} podLoadId={podLoadId} onClearPodLoad={clearPodLoad}/>}
  </div></section>;
 }

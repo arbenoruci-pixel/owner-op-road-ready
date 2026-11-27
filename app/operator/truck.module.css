@@ -1,0 +1,46 @@
+.summary {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-lift);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.unit { display: grid; gap: 10px; }
+.unit + .unit { padding-top: 14px; border-top: 1px solid var(--line); }
+.schedule { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.schedule > div { display: grid; align-content: start; gap: 3px; }
+.schedule > div + div { padding-left: 12px; border-left: 1px solid var(--line); }
+.schedule span, .mileage span { color: var(--muted); font-size: .84rem; }
+.schedule b { font-size: 1.06rem; }
+.schedule b, .mileage strong { font-variant-numeric: tabular-nums; }
+.mileage { display: grid; gap: 6px; margin-top: 3px; }
+.mileage > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 8px; }
+.mileage strong { font-size: .85rem; }
+.mileage progress {
+  display: block;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  background: var(--line);
+  accent-color: var(--primary);
+}
+.mileage progress::-webkit-progress-bar { background: var(--line); }
+.mileage progress::-webkit-progress-value { background: var(--primary); border-radius: 3px; }
+.mileage progress::-moz-progress-bar { background: var(--primary); border-radius: 3px; }
+.serviceForm { border-color: var(--primary); }
+.serviceForm > summary.addService {
+  justify-content: center;
+  min-height: 44px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+}
+.serviceForm > summary.addService::after { display: none; }
+.serviceForm > summary.addService:focus-visible { outline-offset: -4px; }

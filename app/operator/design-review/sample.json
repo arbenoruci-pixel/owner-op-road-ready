@@ -1,0 +1,351 @@
+{
+  "operator": {
+    "id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+    "workspace_kind": "leased",
+    "driver_name": "Test driver",
+    "driver_user_id": "sample-driver",
+    "carrier_user_id": "sample-dispatch",
+    "company_name": "RoadReady \u00b7 Design preview"
+  },
+  "tables": {
+    "rr_lease_loads": [
+      {
+        "id": "f95459d3-3526-5585-966b-75ee8d82301d",
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "load_number": "TEST-DEMO-001",
+        "broker_name": "Demo Freight",
+        "status": "assigned",
+        "billing_channel": "FIRSTLINE_FACTORED",
+        "pickup_at": "2026-11-30T16:00:00Z",
+        "delivery_at": "2026-12-01T14:00:00Z",
+        "pickup_timezone": "America/Chicago",
+        "delivery_timezone": "America/New_York",
+        "pickup_address": "100 Sample Way, Rockford, IL 61109",
+        "delivery_address": "200 Sample Way, Tallmadge, OH 44278",
+        "gross_cents": 180000
+      },
+      {
+        "id": "cb42d2fd-3cb5-53e7-983e-a83a3ffdf8bc",
+        "status": "delivered",
+        "load_type": "FREIGHT",
+        "broker_name": "TEST \u00b7 Sample freight",
+        "gross_cents": 180000,
+        "load_number": "TEST-DESIGN-101",
+        "settlement_id": "a57459ad-7b07-5a5b-a570-6278e6e5c64f",
+        "pickup_address": "Demo pickup A",
+        "billing_channel": "AMAZON_DIRECT",
+        "delivery_address": "Demo delivery A",
+        "actual_delivery_date": "2026-11-23",
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      },
+      {
+        "id": "f3d05b5c-4283-5845-b8af-cabbe228f2bb",
+        "status": "delivered",
+        "load_type": "FREIGHT",
+        "broker_name": "TEST \u00b7 Sample freight",
+        "gross_cents": 140000,
+        "load_number": "TEST-DESIGN-102",
+        "settlement_id": "a57459ad-7b07-5a5b-a570-6278e6e5c64f",
+        "pickup_address": "Demo pickup B",
+        "billing_channel": "AMAZON_DIRECT",
+        "delivery_address": "Demo delivery B",
+        "actual_delivery_date": "2026-11-24",
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      }
+    ],
+    "rr_lease_documents": [
+      {
+        "id": "sample-ratecon",
+        "load_id": "f95459d3-3526-5585-966b-75ee8d82301d",
+        "kind": "ratecon",
+        "is_current": true,
+        "is_ready": true,
+        "storage_backend": "database",
+        "byte_size": 1923,
+        "chunk_count": 1,
+        "sha256": "678943065fd649e5faf8fce01edc5dd104aedb9e80a0f77cc0dbc06bb93ea6e8",
+        "file_name": "TEST-rate-confirmation.pdf",
+        "mime_type": "application/pdf",
+        "revision": 1
+      }
+    ],
+    "rr_lease_settlement_totals": [
+      {
+        "status": "draft",
+        "currency": "USD",
+        "net_cents": null,
+        "load_count": 2,
+        "week_start": "2026-11-23",
+        "gross_cents": 320000,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "credit_cents": 0,
+        "settlement_id": "a57459ad-7b07-5a5b-a570-6278e6e5c64f",
+        "costs_reviewed": false,
+        "has_deferred_costs": false,
+        "verified_net_cents": 0,
+        "carrier_share_cents": 25600,
+        "estimated_net_cents": 279400,
+        "invoice_gross_cents": 320000,
+        "operator_paid_cents": 0,
+        "operator_share_cents": 294400,
+        "negative_balance_cents": 0,
+        "carrier_deduction_cents": 15000,
+        "fee_eligible_gross_cents": 320000,
+        "lumper_reimbursement_cents": 0
+      }
+    ],
+    "v_driver_ledger_entries": [
+      {
+        "id": "bccff89d-0899-5b80-95e9-3b9c5d569c2b",
+        "status": "DRAFT",
+        "entry_type": "FREIGHT",
+        "description": "TEST \u00b7 Sample freight \u00b7 TEST-DESIGN-101",
+        "amount_cents": 180000,
+        "settlement_id": "a57459ad-7b07-5a5b-a570-6278e6e5c64f",
+        "source_document_id": null,
+        "driver_effect_cents": 165600,
+        "source_wallet_document_id": null,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "fee_bps": 800
+      },
+      {
+        "id": "f07df24f-58b3-5984-97ed-e30642e25d3e",
+        "status": "DRAFT",
+        "entry_type": "INSURANCE",
+        "description": "TEST \u00b7 Weekly insurance",
+        "amount_cents": -15000,
+        "settlement_id": "a57459ad-7b07-5a5b-a570-6278e6e5c64f",
+        "source_document_id": null,
+        "driver_effect_cents": -15000,
+        "source_wallet_document_id": "b8ea9adb-b335-586c-84cc-a0e45b51ffa5",
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "fee_bps": 0
+      },
+      {
+        "id": "92865a23-fb99-5bd0-b888-8a7b1927f46a",
+        "status": "DRAFT",
+        "entry_type": "FREIGHT",
+        "description": "TEST \u00b7 Sample freight \u00b7 TEST-DESIGN-102",
+        "amount_cents": 140000,
+        "settlement_id": "a57459ad-7b07-5a5b-a570-6278e6e5c64f",
+        "source_document_id": null,
+        "driver_effect_cents": 128800,
+        "source_wallet_document_id": null,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "fee_bps": 800
+      }
+    ],
+    "rr_driver_tool_records": [
+      {
+        "id": "dd29b5eb-0f90-59de-8b48-8a462b44ee88",
+        "kind": "maintenance",
+        "unit": "TEST-01",
+        "miles": null,
+        "sha256": "6715f2d7bfc263a030d120fe2c0efedf7dd59e2083c70c3f97715e9f4027741a",
+        "vendor": "Demo Service Shop",
+        "gallons": null,
+        "odometer": 480000,
+        "byte_size": 2084,
+        "file_name": "TEST-pm-invoice.pdf",
+        "fuel_type": null,
+        "mime_type": "application/pdf",
+        "description": "TEST \u00b7 Engine oil and filters",
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "record_date": "2026-11-24",
+        "amount_cents": 42500,
+        "coverage_end": null,
+        "jurisdiction": null,
+        "fuel_tax_paid": null,
+        "taxable_miles": null,
+        "coverage_start": null,
+        "expense_category": "PM",
+        "next_service_date": "2027-01-15",
+        "next_service_odometer": 495000
+      }
+    ],
+    "rr_lease_wallet_documents": [
+      {
+        "id": "532b79de-3771-5c4b-8bd7-f78a4632b54b",
+        "title": "TEST \u00b7 Annual inspection",
+        "sha256": "89c5cf3958bfb373d318b4ff5a0bc24a8bfb449086a312db514088f6c1a90b7d",
+        "category": "inspection",
+        "is_ready": true,
+        "revision": 1,
+        "slot_key": "test.design.annual-inspection",
+        "byte_size": 2026,
+        "file_name": "TEST-annual-inspection.pdf",
+        "issued_on": "2026-10-01",
+        "mime_type": "application/pdf",
+        "expires_on": "2026-11-20",
+        "is_current": true,
+        "chunk_count": 1,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      },
+      {
+        "id": "62d77489-3bfb-5e43-8262-73e654d5fa76",
+        "title": "TEST \u00b7 IFTA credential",
+        "sha256": "1267c1d2788095163c9db3aeb4012e2827edd59f36ead413706ebfdee75144f7",
+        "category": "permit",
+        "is_ready": true,
+        "revision": 1,
+        "slot_key": "test.design.ifta",
+        "byte_size": 2004,
+        "file_name": "TEST-ifta.pdf",
+        "issued_on": "2026-10-01",
+        "mime_type": "application/pdf",
+        "expires_on": "2026-12-31",
+        "is_current": true,
+        "chunk_count": 1,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      },
+      {
+        "id": "8a215d06-87ba-5713-865b-6e88e2a8dac1",
+        "title": "TEST \u00b7 Insurance summary",
+        "sha256": "e968f6176d299ee326d1dffae41a7395b85d0768d33a9a4e4ae6bd1a650a6bde",
+        "category": "insurance",
+        "is_ready": true,
+        "revision": 1,
+        "slot_key": "test.design.insurance",
+        "byte_size": 2016,
+        "file_name": "TEST-insurance.pdf",
+        "issued_on": "2026-10-01",
+        "mime_type": "application/pdf",
+        "expires_on": "2026-12-12",
+        "is_current": true,
+        "chunk_count": 1,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      },
+      {
+        "id": "faee80d7-f0da-54e2-80a9-d13d4f24198d",
+        "title": "TEST \u00b7 Equipment lease",
+        "sha256": "51a63fee07ed02981933e64906af94da2cf652d8db1efb2d1d4a620dbd637e04",
+        "category": "lease",
+        "is_ready": true,
+        "revision": 1,
+        "slot_key": "test.design.lease",
+        "byte_size": 2002,
+        "file_name": "TEST-lease.pdf",
+        "issued_on": "2026-10-01",
+        "mime_type": "application/pdf",
+        "expires_on": "2027-08-31",
+        "is_current": true,
+        "chunk_count": 1,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      },
+      {
+        "id": "af89e5b1-0aef-58ab-8505-06c47c0ffebe",
+        "title": "TEST \u00b7 Cab registration",
+        "sha256": "3604675d859e870e0b072b296ac2bf3cc55339920a7d03a2edb8796d18610849",
+        "category": "registration",
+        "is_ready": true,
+        "revision": 1,
+        "slot_key": "test.design.registration",
+        "byte_size": 2018,
+        "file_name": "TEST-registration.pdf",
+        "issued_on": "2026-10-01",
+        "mime_type": "application/pdf",
+        "expires_on": "2027-06-30",
+        "is_current": true,
+        "chunk_count": 1,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      },
+      {
+        "id": "14a48397-abf9-5089-b8e3-712a7d2bdb27",
+        "title": "TEST \u00b7 Trailer registration",
+        "sha256": "62671c25fb1ecc6f40c03d33d26c639a5121cf3aa0f3645082d3ca109de14811",
+        "category": "registration",
+        "is_ready": true,
+        "revision": 1,
+        "slot_key": "test.design.trailer-registration",
+        "byte_size": 2032,
+        "file_name": "TEST-trailer-registration.pdf",
+        "issued_on": "2026-10-01",
+        "mime_type": "application/pdf",
+        "expires_on": "2027-04-30",
+        "is_current": true,
+        "chunk_count": 1,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      },
+      {
+        "id": "b8ea9adb-b335-586c-84cc-a0e45b51ffa5",
+        "title": "TEST \u00b7 Weekly insurance expense",
+        "sha256": "aefb3733d6a5a6ab29135878ec71cf0f5c82e98adaca9b0c55b57ae7bf08a419",
+        "category": "expense_receipt",
+        "is_ready": true,
+        "revision": 1,
+        "slot_key": "test.design.weekly-cost",
+        "byte_size": 2051,
+        "file_name": "TEST-weekly-cost.pdf",
+        "issued_on": "2026-10-01",
+        "mime_type": "application/pdf",
+        "expires_on": null,
+        "is_current": true,
+        "chunk_count": 1,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9"
+      }
+    ],
+    "rr_lease_wallet_requirements": [
+      {
+        "title": "TEST \u00b7 Cab registration",
+        "slot_key": "test.design.registration",
+        "expiry_required": true,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "active": true
+      },
+      {
+        "title": "TEST \u00b7 Insurance summary",
+        "slot_key": "test.design.insurance",
+        "expiry_required": true,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "active": true
+      },
+      {
+        "title": "TEST \u00b7 Annual inspection",
+        "slot_key": "test.design.annual-inspection",
+        "expiry_required": true,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "active": true
+      },
+      {
+        "title": "TEST \u00b7 IFTA credential",
+        "slot_key": "test.design.ifta",
+        "expiry_required": true,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "active": true
+      },
+      {
+        "title": "TEST \u00b7 Equipment lease",
+        "slot_key": "test.design.lease",
+        "expiry_required": true,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "active": true
+      },
+      {
+        "title": "TEST \u00b7 Trailer registration",
+        "slot_key": "test.design.trailer-registration",
+        "expiry_required": true,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "active": true
+      },
+      {
+        "title": "TEST \u00b7 Additional permit",
+        "slot_key": "test.design.permit-missing",
+        "expiry_required": true,
+        "operator_id": "8205e7d2-628a-5a03-a40e-cdfa2f37ffb9",
+        "active": true
+      }
+    ],
+    "rr_lease_adjustments": []
+  },
+  "originals": {
+    "TEST-registration.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBPTkxZIC0gQ2FiIHJlZ2lzdHJhdGlvbikgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago3IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNCAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0ZpbHRlciBbIC9BU0NJSTg1RGVjb2RlIC9GbGF0ZURlY29kZSBdIC9MZW5ndGggNjE1Cj4+CnN0cmVhbQpHYXQ9Z2dRJ2A6JjtLWk4nUVhSMmxFciJibCo+LTI8TVVwMFhYMT9AVGxrc1wzVCtGTG0rWDxmO2knKFg4N2E2WVU3I3MhKTlqZ2JkaDBLQT9OUmxBRS1qNicrSy05NUEubUFvYCttLDVpMV1UQCc7ImosIzdTRWFNaStnOTAwcGU7Oms3KVhoXmsvXG9zKTthOl5SZDdvMFxUOTVwJj48bk1RbTpNYnNhK1xkZXNGX09LcSknbER1Mm9FXUNEVFhMbUg6IXRvU0QqQy50Im5gVls5cVAnZmwyNjoyZSYwUkdoRjRwX11gRVNLSTN1WF1CZmhmLFZRTTc2YF47QCxOLVpmK1AnWjRiTGNCNlpXJDBzMmVTb0srJl1NQG1TVXVgQyQ5JS5kPDp0T15IaVcrbyRsJ2Q6VDUrOCpENmdrUzFTOT5WK2w/XUUjZjtrQSY8U2lyZzs2LkJvaXIqc0JqVT8oLWUiPGtsRTFbUSw1TztOXFg0bElhKTAyNltecyViJDZwYVA1QVkidVtkY0UzZDVuNztQS2prcFpqbzY1UV4sZm1LNScnZiU+ViRzNklabSwqNS8zLG8qOW4nUXRrIzUpWTdeL3MmW0MiK3RgZVdIVjksaW0xOkhaKTFkTGlqXkhObjZNVEVqcypTZDgmPWhRMEFCNjI6ZD9oIy9nQzQ0Szt0J1dPOTVqZ1k8OjgjRkReQEozSFlQNDsvWFdRZTJDQl83VnFdS3IiZTMrcy1bOGg0OyZAMCJjQXEkcFxzSVdGWUs3a2hVJDs0clpcOFQ1ZjQ2UTVfRz8qKmlbNyg4MXVlfj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA5CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDkgMDAwMDAgbiAKMDAwMDAwMDMyMSAwMDAwMCBuIAowMDAwMDAwNTE0IDAwMDAwIG4gCjAwMDAwMDA1ODIgMDAwMDAgbiAKMDAwMDAwMDg2MyAwMDAwMCBuIAowMDAwMDAwOTIyIDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPDc5ZWUyNjQzOWYxMDJiZDdjNGI5Zjg0MGEwZGMxYzI3Pjw3OWVlMjY0MzlmMTAyYmQ3YzRiOWY4NDBhMGRjMWMyNz5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gNiAwIFIKL1Jvb3QgNSAwIFIKL1NpemUgOQo+PgpzdGFydHhyZWYKMTYyNwolJUVPRgo=",
+    "TEST-insurance.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBPTkxZIC0gSW5zdXJhbmNlIHN1bW1hcnkpIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKNyAwIG9iago8PAovQ291bnQgMSAvS2lkcyBbIDQgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDYxMgo+PgpzdHJlYW0KR2F0PWdoLzpxMyY7QlJ1TUtASD9jIjswJXMnPSgyNnFGO1ZeZXBCPydzKF1NZlZXRXRRKy01NzVcaTZhJm5pbCNBXixVREFpKiJEbmtvQDQ8PD03QGdjWyY2NkNMMlNUb2hNXjouSVgqNHA8IVxub1ooJyNfTDVpJ2tjYnI2XidwNmklMjEnT21yOSQoKlxeRTtCXEY+cShgNWZwbXQ2IWwyNG0vS2xFYkZROk9aXT5LZUpENzZJIVAhLV5dPlIqOl5ybnFkMj1rRWtwNl5FTDtURWBqcmM1QiVOYkUhaDhKKDlTbXNMWDJ1NGs9aTpoQlFkcyRnalhiZjE2Uk9UXDYwVE1cUUxxUUxrWnJCNz9tUE0sJUtucjldUDckMGdRXjI7cDpIJ1UkVTckQUlrTkEoYlhOUF49O1J0WlNhOTFHPFFDM0lLIT89K1hnLmQ3U0krWEMpdG02WD1rPUkqPG07WmZHMy9oPHBeVkdOZWhRX1tvLUtdSjwmcicxW0FrImVKKyUiQyZEXGpdLzMwSGNca0E4KygodCJHU2BFYmRaaUxHN0Y8cVJNbVs5JjppbyRkLGxeb2ViR1JaZiosO2BDW3RRVlQ7LS1oNDNNSSFlTG5DQFcsJTtLKTcmMnNgTCMmazFpMUpkWEhnY2FLYW5uXCNQKFNTbW00I2NfMEkvZTxjQDwzQ2VpdWppVGljSD5Ram9LT0hXZmA0PDM6OVxdKVxzTWc3bGEvVjJLR0ctVCplP0JEL0NaJ15NTExKJiYnckYtdGJSZjJxIVEkU0puR3Flay9ENzU0UUFiX1MqLH4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA5IDAwMDAwIG4gCjAwMDAwMDAzMjEgMDAwMDAgbiAKMDAwMDAwMDUxNCAwMDAwMCBuIAowMDAwMDAwNTgyIDAwMDAwIG4gCjAwMDAwMDA4NjQgMDAwMDAgbiAKMDAwMDAwMDkyMyAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzw2OTVkYThlZThkMDZjMDIyYmQ1NzJmN2M0MTdlNzY3Yz48Njk1ZGE4ZWU4ZDA2YzAyMmJkNTcyZjdjNDE3ZTc2N2M+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDYgMCBSCi9Sb290IDUgMCBSCi9TaXplIDkKPj4Kc3RhcnR4cmVmCjE2MjUKJSVFT0YK",
+    "TEST-annual-inspection.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBPTkxZIC0gQW5udWFsIGluc3BlY3Rpb24pIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKNyAwIG9iago8PAovQ291bnQgMSAvS2lkcyBbIDQgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDYyMgo+PgpzdHJlYW0KR2F0PWhnTVdLRyY7S1pQJ1FfcXNvayVqTFMxXEx1T1gxZjZwL1kwR09oRlJwRiIjdEZIMkEnVlZeUVxnZzArZG9SZWMqPGRKU25GcS1hNlhqVCRBW2d0ajd1SlBIMzE6blVsJGxDIWE6OW9dQVlEPDQ7LSJAOFUoJEkyUDAhXyFfYUtcQVwzMUQ/KTFgSWAlbEwkNCwtNEJqamEoWjNeKzpISk5yOyRcT1EkT0prTEdGUHVeQ2RMQDIhazhFXCloL19XVUJlOzU1PGNhY3I9L0JuUWNpazZyLmBbcEs5SVBIWlosJFo0a3FdSkBzaWcuQklePyhaYSxyQEwlSFgyKiZsJ1gnZlJXWiptcT9JXidJbmwvJGJoXjguXVsqJWhcI0VYJ20kTlZRcyFNUTlDJkxAXnAqNHEsNWYkUmshOV9cK3FRWHF0dS4tNlU0O1gsKF9rJjJEc2hxPz0jK3UpP3B1VjMrYzAuTVk3QWgsR0xbRj5pTVJdQk50ZStSK2A2VTlqcEVtaU1TUiVPcm0sYnJSSDk1RCctWVddaismRC5PKmArJV8lR2hsPGtgTVJcUEZeZ2c2XUBLSGEiXSo5SDsyK2x1SixSJUlBWmEpQ1xJSiRrNjY1bXR0MDotSVBKZ1IxPE9iKiZATl1iKTpeRjo2MWglV0w3USpJdTpyKiksRUEkaStZTS91Ymgkcmg2MSMhZiFdMEI+JDFVVnAzUnA7ViNbO2YkayM8IUYhc1o9Y25TNyhNXElqLG9mViRtLSIvKm1CY05KIjcvVzw4WHBedXFBUnRiIUE3SG0wQVkyVE1ublpxWyJeSzd+PmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDkKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDYxIDAwMDAwIG4gCjAwMDAwMDAxMDIgMDAwMDAgbiAKMDAwMDAwMDIwOSAwMDAwMCBuIAowMDAwMDAwMzIxIDAwMDAwIG4gCjAwMDAwMDA1MTQgMDAwMDAgbiAKMDAwMDAwMDU4MiAwMDAwMCBuIAowMDAwMDAwODY0IDAwMDAwIG4gCjAwMDAwMDA5MjMgMDAwMDAgbiAKdHJhaWxlcgo8PAovSUQgCls8Y2FlZGYyMTM2ZTRkMjhhZDZjNDI1YmNjNWU1NjlkMDY+PGNhZWRmMjEzNmU0ZDI4YWQ2YzQyNWJjYzVlNTY5ZDA2Pl0KJSBSZXBvcnRMYWIgZ2VuZXJhdGVkIFBERiBkb2N1bWVudCAtLSBkaWdlc3QgKG9wZW5zb3VyY2UpCgovSW5mbyA2IDAgUgovUm9vdCA1IDAgUgovU2l6ZSA5Cj4+CnN0YXJ0eHJlZgoxNjM1CiUlRU9GCg==",
+    "TEST-ifta.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBPTkxZIC0gSUZUQSBjcmVkZW50aWFsKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCA2MDIKPj4Kc3RyZWFtCkdhdD1naDJeMkMmO0JSdU1LQElSTVYiRlpKIVtOcSgiKmpJWVoxIiQiR1hMQUtVVjgtcXQ7JFhjcGZVaCJMOF8zZEVGT14tP0JrSCs0V1BWSGYyVFJyQnJwYGJRXlpJJUosQ20lInVoOzhuLy1sa1lybD8iTVlzVlM+Qi1uOWJQIWdcKEtJRjclQXA0TGIuLk1BSXJSSWE+PTpwL1kybTxvNjU8aV9NTjdYQEo0clBSI2Y3RkBQaU44bUsnWDI5a1ZyLiIkWHBuNGhaUkYkP0kjKD1ZLTMmRS9GXmU7Tlk0O2xUQW4/ZHRuck5qbUNjJk5AVDM5VFRIXWAqNiMlY0NzQiopLW4iPEdEYkkmKD9SNm4yOThuZWpvTy5yJi8uTGFKYTFnZC9RdDZaIk1cbikjQFFyRUNnW1MrQ20lPSkpNygpaVFcM05scXJlMjI5cEw2OzpHJGVULCw0PEhOSSItPHA0aldCdCZMVHU2X2JkQEsiamdzJG0pRj9VaCknZyFAVSs7Tm8tVC9VSiMqRzEyJGVrSFxOZkYzaCF0L1VZcURMYmAxMFtNLjJhVVxyQk5uZEk0YjA1Xz4xQlZGYGk+Jic8OU1KX2wwYi1qTV8kRExnN3RVY2JjZWBSW2U0Sj5MUjY8ZyU3byJQKFNUaCpAbmthLzBqIUZiXlp1JmNaYDxVXDVkND1ndTZublwjRE1xZVFCUnAiLylwPmBgNjVfbTErOi49Y0shLjFBZHAnXFs/M1poZEtOazA/VUVZW2tGVDg+Jl8jPnEmMSReP05jIlJQXUFMNn4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA5IDAwMDAwIG4gCjAwMDAwMDAzMjEgMDAwMDAgbiAKMDAwMDAwMDUxNCAwMDAwMCBuIAowMDAwMDAwNTgyIDAwMDAwIG4gCjAwMDAwMDA4NjIgMDAwMDAgbiAKMDAwMDAwMDkyMSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzw0N2RhMzAxYjFhYzdhZGY2NDIwNDJjZWZlMjBhN2JlMz48NDdkYTMwMWIxYWM3YWRmNjQyMDQyY2VmZTIwYTdiZTM+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDYgMCBSCi9Sb290IDUgMCBSCi9TaXplIDkKPj4Kc3RhcnR4cmVmCjE2MTMKJSVFT0YK",
+    "TEST-lease.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBPTkxZIC0gRXF1aXBtZW50IGxlYXNlKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCA2MDAKPj4Kc3RyZWFtCkdhdD1nRGY7KyEmO1QwKztyI1F1PiRVcVlAKSduaVhXaD5QOGg8XGJCZEpNPUtnLFpDWGwiUjQ4TiwocFEmKE0nTUw8YDU1MkIhN1ZhaDAxXSlwb3NKX042ZSFsOlpULGEyVjomPVhRdC5fc0M5LTM+KFUhI1MlZGJ0PiIhVGBnMmxbIi0uXkg4QiZbZCU6Sz1aa1BoLSRbJzZQZVhtcklwY2s+SyhGS2VFb0s8XF1KLkouQiwyMHRua1JsX2deaGFlMEE9OzVqUWhBOFY3a2QwQ2giOCEiOUAjZ15IOUU2OCgwbE1jKj1WSDRmMkd1bFkzYiopRCFPUFVgXGVRU01RVFMqUC0ycWpOQiRWUj1wWS8xKCozcjtVM087XzpWYW5RIjcnSlRROUxAdCVqOE5AVHIlcVM+TGlYZkNWK1lrbFVhSlFvY0NfMSZBSigjTG1uN3AyNl85bjItJU1DMjZKR1Q6NUY/L0YiWDxzaStYJzZsNUVgMTIyKVxmTVNIPC5QPy4zXyljKmgrZzRMSE9bNyxMX09MT1ZASz4kWlRZVzhKP0BrXF5IcUYiL1taJkFLYmtEZW0iV2s/NDFLSGNiJWNJTFxoXS5mM1k/aipAJ2NhRSZxNkEzMDhwTyNORjtXbE87V0F0dGclJkdXQG00M20yKjFEKFZxVHA9XkVnUTdrWDRSTl1hNlRSJSIqclMxLUReaTFrTHFPQTFIJ0I0TnByaj1ZXDFuJ1tZSzcmRzsjUnI9JkNZZmszMi1DRCkpQEdZLXAiXlZONzRebGpqMj0xMCt+PmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDkKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDYxIDAwMDAwIG4gCjAwMDAwMDAxMDIgMDAwMDAgbiAKMDAwMDAwMDIwOSAwMDAwMCBuIAowMDAwMDAwMzIxIDAwMDAwIG4gCjAwMDAwMDA1MTQgMDAwMDAgbiAKMDAwMDAwMDU4MiAwMDAwMCBuIAowMDAwMDAwODYyIDAwMDAwIG4gCjAwMDAwMDA5MjEgMDAwMDAgbiAKdHJhaWxlcgo8PAovSUQgCls8ZTZlOWQ5Y2EyYmI5YWM1MDkyNjg0OTgzMTdhYTk2MDc+PGU2ZTlkOWNhMmJiOWFjNTA5MjY4NDk4MzE3YWE5NjA3Pl0KJSBSZXBvcnRMYWIgZ2VuZXJhdGVkIFBERiBkb2N1bWVudCAtLSBkaWdlc3QgKG9wZW5zb3VyY2UpCgovSW5mbyA2IDAgUgovUm9vdCA1IDAgUgovU2l6ZSA5Cj4+CnN0YXJ0eHJlZgoxNjExCiUlRU9GCg==",
+    "TEST-trailer-registration.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBPTkxZIC0gVHJhaWxlciByZWdpc3RyYXRpb24pIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKNyAwIG9iago8PAovQ291bnQgMSAvS2lkcyBbIDQgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDYyNQo+PgpzdHJlYW0KR2F0PWhEMyouIiUqLjhvO3RxWi89PiJVQlZqRSYvVkZtVU4+cE9NRlgiPmlRb21zSm9pa0BRTmYwUkBiYDI2KCI+TTI3QEQ6b10/bCVuPC9XclYhLFw6NSY0JkNeYDZBLm1CMSZpRi9dJDhEKydNKlFlWCEvPW4pPVxXM1hQVFopVS9BUSFbZ3MpMy4zKlRjZi87OG4xS2xPb0dhT3EpR0hxZ089QE1ELmheO2lOPm4wWyREUT9mYzw0cCdMQVctal8+QnNyVShSbm8pYDYlJm9aa0JvaVBTX25EWSojcTxdPl9MOVsodVdPUGssOWtHL2tzc1BVLFBlMFRlW1sxNilLbCJCcFkmO3BMOydUJmptWXRzIjA3ZDZfJV9uOWlpNDJBPzArJVhmJz1mW0g3UHMwNEg/bkpHSiFRRGQ/VDZvVWwrLjZrJyY5XTBIcUFyLlM2Vm8xVEpaRmsnX0lfRVpSJXE+T3BZOSVYIk4sIkA2ZF9qbFgjImxTI0ZxT2pzbkRsVVsxPT0sK0tlNSEwOWVrJidPUD8jMmomIV8lPC5uKFZoS2QxSm5XXWIpTj8yKC4nP2g/OjU0LzdtSTBHalpgIWhrUk0+NGRtLF1QP14yZU08amk5L3UqVG1kXU9EYCgzN1ReZ2NSIjMtKUo+QDt0JyxJK1NSIUZQWy1lYGdodSI2ZzR1aXI/c3VtU1k6T0hFSnJhU1BtPVg6Vz4la2Q6P2BjOyRgPEAiNGpaR1pZSWlaQC0rZ1VgOkBQPzlVRnFFJT5URCNGb0lvWkBmP2ckJVY1Q15US2U1L1lcQC1YJU5CW2pSWl8mOlszOjZ+PmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDkKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDYxIDAwMDAwIG4gCjAwMDAwMDAxMDIgMDAwMDAgbiAKMDAwMDAwMDIwOSAwMDAwMCBuIAowMDAwMDAwMzIxIDAwMDAwIG4gCjAwMDAwMDA1MTQgMDAwMDAgbiAKMDAwMDAwMDU4MiAwMDAwMCBuIAowMDAwMDAwODY3IDAwMDAwIG4gCjAwMDAwMDA5MjYgMDAwMDAgbiAKdHJhaWxlcgo8PAovSUQgCls8ZTQxYmY5YjYyYmM5NDJmMGVhNGNjNzg0ZmFkMGU4MWI+PGU0MWJmOWI2MmJjOTQyZjBlYTRjYzc4NGZhZDBlODFiPl0KJSBSZXBvcnRMYWIgZ2VuZXJhdGVkIFBERiBkb2N1bWVudCAtLSBkaWdlc3QgKG9wZW5zb3VyY2UpCgovSW5mbyA2IDAgUgovUm9vdCA1IDAgUgovU2l6ZSA5Cj4+CnN0YXJ0eHJlZgoxNjQxCiUlRU9GCg==",
+    "TEST-weekly-cost.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBPTkxZIC0gV2Vla2x5IGluc3VyYW5jZSBleHBlbnNlKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCA2NDAKPj4Kc3RyZWFtCkdhdD1oOTk3ZFwmQkY2ZU1FMT1VWHFuMyhFPzc8bC0rY0w/VGBSaztOW1lnNkRJLkdlPi8jRDRKW0E5SS5nOSdKVTFpW0pKJ1VhZlZeJ3BZLTNPJUFpU2RAWTVnVlMoUCJGI0Eja2EjRF5kSHVfLTlVTzYlaUJvU08pamZTXicnOTRQUTVLLEc7aiE2ZkBVLTRQUz47QWpzdU1pNiJBZyNuU15KZShEZTdVa1cwXSojNEluOmFgSkNxVkpDXGUhNTRvSFUwNypzTyxHW1cmInBbaV4yJipmLz1rWztGO2QuOGJlIjRLYiVvcmhgazgvcjhGbCVSaipZQFBdVGpoSTlUUkUtaWUjRD1jRDRncVNba0wscVxOc1YkMjdmMyosSytaX3EiKjYhWmVGIy8+QERzSUAibS9LKCg3RUp0PTgpcDljQzFOVlYlcUtTXDQ6QDkzYE9RK21sL1JpSUVBWGlaSG8sMkA3cl9CNFEvYlkyQCMrUUB1ZG5oQjM4VnVYSlBMIlI+Wm5zY3EoNXRvMkIkWWxaLTBgM2I3TnVvL2c0XHVNYTJtZ1xPTW1HL3I6YD5mO2dZbWBGOi9pMy1wNj51O2M1PihwK0BnQEssVDN0Zj1kZ0QzZztZdWIpV0loWGdldCpdcC5pLGZFU2Q7b0tmJTxjOU0oU09UUXBxKEhlZ0k4bTQmQm5EQTxHVjMjTnQ7ZE07Q3RLKWZKNEpHcGRoZmBeTDE0PS1JWC5Jb0hQbENAPEtAOzBhdEBzOWE9Om4rSVtuaVtyRzpnTks0MjEmZFNqIyNGOXAkIU1VPCI5bDklPU5ZX21HN2hzLylzUldwJi0hZXE/XjdOM2Zzfj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA5CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDkgMDAwMDAgbiAKMDAwMDAwMDMyMSAwMDAwMCBuIAowMDAwMDAwNTE0IDAwMDAwIG4gCjAwMDAwMDA1ODIgMDAwMDAgbiAKMDAwMDAwMDg3MSAwMDAwMCBuIAowMDAwMDAwOTMwIDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPGQxMGE0NDFhZDkwYTY4NDVhNTI5YmYwNDMwNWE4M2E3PjxkMTBhNDQxYWQ5MGE2ODQ1YTUyOWJmMDQzMDVhODNhNz5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gNiAwIFIKL1Jvb3QgNSAwIFIKL1NpemUgOQo+PgpzdGFydHhyZWYKMTY2MAolJUVPRgo=",
+    "TEST-pm-invoice.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBPTkxZIC0gT2lsIGFuZCBmaWx0ZXIgc2VydmljZSByZWNlaXB0KSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCA2NjcKPj4Kc3RyZWFtCkdhdD1oPyNRMmQnU2MpSi8nYypkW09RRTphKzFfRSlIbjtsOm8uaSgwME5jIkRnWigqTTpSMGtLK2c7UUFXb0JGISRSdXRdXVlJWmBQXkllWTVnYXVFLScnTUVRQUpwSmRCRj0rTmU7TDh0UT4wJkVcbiRxRVIkbW1BcmMtJkk4cjw2SEhyVy4nQDEjbz1NViJBMS86WTVfQEBcSmFEZWQzcmJcMHM0TE5cKUw7YnU9VSI5R2wjTzFsUUUoZ1ApaDtiPE4wPzYzTFlNSWNqVEImTitNNm9UOyhTPHJFNShQbzQ8WFZsXC1SS2Y6SkQucWhFWU1sPGE0M2xIU2k6USY5O1cybT03dUc4L1c9U2o7PFRkYVFYbzBIbC5uOGFMbSJKPl1Ba0cnZzlWMyQiVkcpIyYzV15OMW5RWUZXYyxGSzIqSExGKDt1Ukc6TTNvZzdvNUFsa2VeYUpVLTVhWipOTUowbE0wYU4idDxCWjU8SSFRc0hRU0coUE4rVTxDRzNBUmJvNUYpVTgvPj90JUlfQVRWOSpgSG1WVm9TKl9xMzhuLmQ3Pl0rUyYrNEdWbEZwOklWWVg6QysjdEZCaDxCcWVKRzpzKE5cTiFxZFdWNGtyPFpjKnFsXjkvWEA7U2VKdEk5V2VcOCRnYHImRFEsNjtgUT5XLWBqLGQiKUlqUEZta0VKbENiXSM3J05YTFJEJCYobDpmdEE3MnItZzpyXCE8Y1VbaDk+dGBRT2JWX0lOQjdVdVl1RWBXKz82L1l1QmttUylLK1ZILCMwOks5JWQkYDpyLSQ2MldOb3RFPFZRQWs0cl5Aa0NnL1tDRzsxYE9vWGM2OjVPWVxMNi9sYDc8cSVIcV0tP0ciVCgzZT5zOyItUWk5fj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA5CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDkgMDAwMDAgbiAKMDAwMDAwMDMyMSAwMDAwMCBuIAowMDAwMDAwNTE0IDAwMDAwIG4gCjAwMDAwMDA1ODIgMDAwMDAgbiAKMDAwMDAwMDg3NyAwMDAwMCBuIAowMDAwMDAwOTM2IDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPDU3MmE0NTQ2NWQyZmI0NmFjOGQ5ZDI0MDNlYjJhZDAwPjw1NzJhNDU0NjVkMmZiNDZhYzhkOWQyNDAzZWIyYWQwMD5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gNiAwIFIKL1Jvb3QgNSAwIFIKL1NpemUgOQo+PgpzdGFydHhyZWYKMTY5MwolJUVPRgo=",
+    "TEST-rate-confirmation.pdf": "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDQyMCA1NjUgXSAvUGFyZW50IDcgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyA3IDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKNiAwIG9iago8PAovQXV0aG9yIChhbm9ueW1vdXMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvQ3JlYXRvciAoYW5vbnltb3VzKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAwMDAxMDEwMDAwMDArMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAodW5zcGVjaWZpZWQpIC9UaXRsZSAoVEVTVCBcMjY3IFJhdGUgY29uZmlybWF0aW9uKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCA1MjEKPj4Kc3RyZWFtCkdhdD1nNXU2TXAmO0JUTyglOHFINiNFIS9PdUQ6LSRnRTdCP2trNltmcWBMPzlwNyVhPnVmbilqI1dJNi5OZkY5LSdCWEVwViZTayk8O1MxR0hoOiI4WHRoWi8wSlRgLiM4dW5hQ0hyczFuY1RsXnAtRVQ3TmcoJUheM29TN05pc0E4Nm5Zb0cxTGBqRFJsclc5MGh1QTk+biEwZVQsZmhnUFFTUCVPJTI2T1htSjBlQ0RjIjk0XmgnU08sTS1UJ1xVJVB1bHU3JztbKidZQjYmY2hJRSdnMm51T0JKOTFKK2xwMiwpb2A1WEgjZU8zV2wtUkJmZE85clcvL00zPyI4WzUqMzpbY19wXFxOWWBRUDhDMTo/THA+cUJUMTFbWDQ3IWtcU1lvYGNUNCtcMyQ4Lz04JkduRklFXiYrXEI3OT84ZklnVk4rJUNpbSNOTiNAQVBKNWcqajw3QURHajhSYlI/S2hPaCsjRF9PQiZCNnEkJSVsWi1YQTgtVllnQjBfY0MvQz5ETjkvUSpHOXFGaVVmO0M5QCQpaCtnPT08XT9uRV9gaGU5OGxhUTs0Ikg8YTxiZE07O200ZkRCZlRsUjo6UW8tIltqRlxPQjs1PGtRcCcwMlQ+KmlXIlJBRiJuTFZyK2BnL0FDR2pxQjw4NzhnQGInXCVkSmpcdFVcPXMkO3RcUX4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA5IDAwMDAwIG4gCjAwMDAwMDAzMjEgMDAwMDAgbiAKMDAwMDAwMDUxNCAwMDAwMCBuIAowMDAwMDAwNTgyIDAwMDAwIG4gCjAwMDAwMDA4NjIgMDAwMDAgbiAKMDAwMDAwMDkyMSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwzNzcwN2MwNGNhNTQwNDI5OTY2YjU5NThlZjA1MGVkND48Mzc3MDdjMDRjYTU0MDQyOTk2NmI1OTU4ZWYwNTBlZDQ+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDYgMCBSCi9Sb290IDUgMCBSCi9TaXplIDkKPj4Kc3RhcnR4cmVmCjE1MzIKJSVFT0YK"
+  }
+}
