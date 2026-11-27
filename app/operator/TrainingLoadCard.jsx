@@ -40,7 +40,7 @@ function TrainingStop({label, place, address, at, zone, reference, children}) {
   </li>;
 }
 
-export default function LoadCard({load, status, controls, initialOpen, gross, children}) {
+export default function LoadCard({load, status, podStatus, controls, initialOpen, gross, children}) {
   const rehearsal = load.id === trainingCardLoadId && load.status === 'assigned';
   const pickup = locality(load.pickup_address);
   const delivery = locality(load.delivery_address);
@@ -49,6 +49,7 @@ export default function LoadCard({load, status, controls, initialOpen, gross, ch
       <span className={css.status} data-accepted={status === 'Accepted'}>{status}</span>
       <strong className={css.route}>{pickup && delivery ? pickup + ' → ' + delivery : [load.pickup_address,load.delivery_address].filter(Boolean).join(' → ') || load.load_number}</strong>
       <span className={css.id}>{load.broker_name} · {load.load_number}</span>
+      {podStatus && <strong>{podStatus}</strong>}
       <span className={css.next}>Pickup <b>{when(load.pickup_at, load.pickup_timezone)}</b></span>
     </summary>
     <div className={css.inside}>

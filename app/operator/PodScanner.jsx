@@ -7,6 +7,7 @@ import {scannerEngineV3} from '../../source/src/modules/scan/v3/ScannerEngineV3.
 import {finalizePodCrop, preparePodCrop, processPodPage} from './podPageClient.js';
 import {MAX_PHOTO_PAGES, PHOTO_ACCEPT, normalizeScanFile, validateSelection} from '../../scripts/v110328/scanIntake.js';
 import {buildPodScanPdf} from './podScanPdf.js';
+import {uploadReviewedPod} from './podUpload.js';
 import css from './podScanner.module.css';
 
 function ScanIcon({name}) {
@@ -38,12 +39,14 @@ function scannedPage(original, result, corners, rotation, smallPrintReview) {
   };
 }
 
-export default function PodScanner({onCancel, onReady, onChooseFile, loadLabel}) {
+export default function PodScanner({onCancel, onUpload, onChooseFile, loadLabel}) {
   const dialog = useRef(null);
   const photos = useRef(null);
   const pageOptions = useRef(null);
   const mounted = useRef(true);
   const working = useRef(false);
+  const submitting = useRef(false);
+  const reviewedPdf = useRef(null);
   const [pages, setPages] = useState([]);
   const [selected, setSelected] = useState(0);
   const [replaceIndex, setReplaceIndex] = useState(null);
@@ -72,6 +75,7 @@ export default function PodScanner({onCancel, onReady, onChooseFile, loadLabel})
   }
 
   function leave() {
+    if (submitting.current) return;
     if (working.current) {
       if (window.confirm('Discard this scan and close?')) onCancel();
       return;
@@ -171,14 +175,21 @@ export default function PodScanner({onCancel, onReady, onChooseFile, loadLabel})
     });
   }
 
-  function usePdf() {
-    void run('Preparing PDF…', async () => {
-      const pdf = await buildPodScanPdf(pages, loadLabel);
-      if (mounted.current) await onReady(pdf);
-    });
+  async function upload() {
+    if (working.current) return;
+    submitting.current = true;
+    try {
+      await run('Uploading POD…', () => uploadReviewedPod(
+        reviewedPdf, pages, () => buildPodScanPdf(pages, loadLabel),
+        file => { if (mounted.current) return onUpload(file); },
+      ));
+    } finally {
+      submitting.current = false;
+    }
   }
 
   const review = view === 'pages' && current;
+  const uploading = busy === 'Uploading POD…';
   const canAdd = pages.length < MAX_PHOTO_PAGES;
   const reviewNote = [
     current?.needsReview && 'Full photo kept. Check the edges and signature.',
@@ -202,7 +213,7 @@ export default function PodScanner({onCancel, onReady, onChooseFile, loadLabel})
       <header className={css.header}>
         <div><small>{loadLabel ? 'Load ' + loadLabel : 'Proof of delivery'}</small>
           <h2>{review ? 'Page ' + (selected + 1) + ' of ' + pages.length : view === 'import' ? 'Import POD' : 'POD scanner'}</h2></div>
-        {review && <details ref={pageOptions} className={css.reviewMenu}>
+        {review && !uploading && <details ref={pageOptions} className={css.reviewMenu}>
           <summary>More</summary>
           <div className={css.menuItems} onClick={() => { if (pageOptions.current) pageOptions.current.open = false; }}>
             <button type="button" disabled={Boolean(busy)} onClick={() => setView('zoom')}>Zoom page</button>
@@ -215,7 +226,7 @@ export default function PodScanner({onCancel, onReady, onChooseFile, loadLabel})
             <button type="button" disabled={Boolean(busy)} onClick={removePage}>Remove page</button>
           </div>
         </details>}
-        <button type="button" onClick={leave}>{view === 'zoom' || view === 'import' ? 'Back' : 'Close'}</button>
+        <button type="button" disabled={uploading} onClick={leave}>{view === 'zoom' || view === 'import' ? 'Back' : 'Close'}</button>
       </header>
       {view === 'discard' ? <section className={css.body}>
         <h3>Discard this scan?</h3><p>Your {pages.length === 1 ? 'page has' : 'pages have'} not been attached.</p>
@@ -245,12 +256,12 @@ export default function PodScanner({onCancel, onReady, onChooseFile, loadLabel})
             {!pages.length && onChooseFile && <button type="button" onClick={onChooseFile}>Choose an existing file</button>}
           </div>}
           {busy && <p className={css.status} role="status">{busy}</p>}
-          {error && <p className={css.error} role="alert">{error}</p>}
         </main>
+        {error && <p className={css.error} role="alert">{error}</p>}
         {review && <footer className={css.footer}>
           <button type="button" disabled={Boolean(busy)} onClick={adjust}><ScanIcon name="frame"/>Adjust edges</button>
           {canAdd && <button type="button" disabled={Boolean(busy)} onClick={() => openCamera()}><ScanIcon name="camera"/>Add page</button>}
-          <button type="button" disabled={Boolean(busy)} className={css.primary} onClick={usePdf}>Use PDF</button>
+          <button type="button" disabled={Boolean(busy)} className={css.primary} onClick={upload}>{uploading ? 'Uploading…' : 'Upload POD'}</button>
         </footer>}
       </>}
     </div>}

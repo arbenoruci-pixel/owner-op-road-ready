@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {PDFDict, PDFDocument, PDFName, PDFRawStream} from 'pdf-lib';
+import {uploadReviewedPod} from '../../app/operator/podUpload.js';
 import {buildPodScanPdf} from '../../app/operator/podScanPdf.js';
 import {MAX_PHOTO_PAGES} from '../v110328/scanIntake.js';
 
@@ -40,4 +41,39 @@ test('empty or over-limit scans cannot become an incomplete POD attachment', asy
   await assert.rejects(buildPodScanPdf([]), /Choose between 1 and/);
   const tooMany = Array.from({length: MAX_PHOTO_PAGES + 1}, (_, i) => page(i));
   await assert.rejects(buildPodScanPdf(tooMany), /Choose between 1 and/);
+});
+
+test('a lost upload response retries the reviewed PDF and an edited scan builds the corrected pages', async () => {
+  const cache = {current:null};
+  const pages = [page(1), page(2)];
+  const sent = [];
+  let builds = 0;
+  async function upload(review) {
+    return uploadReviewedPod(cache, review, () => {
+      builds++;
+      return buildPodScanPdf(review, 'FIXTURE');
+    }, async pdf => {
+      sent.push(pdf);
+      if (sent.length === 1) throw Error('Response lost');
+      return pdf;
+    });
+  }
+  await assert.rejects(upload(pages), /Response lost/);
+  const retried = await upload(pages);
+  assert.equal(retried, sent[0]);
+  assert.equal(builds, 1);
+  assert.equal((await PDFDocument.load(await retried.arrayBuffer())).getPageCount(), 2);
+
+  const edited = await upload(pages.slice(1));
+  assert.notEqual(edited, retried);
+  assert.equal(builds, 2);
+  assert.equal((await PDFDocument.load(await edited.arrayBuffer())).getPageCount(), 1);
+});
+
+test('a failed PDF export never sends a partial document', async () => {
+  const cache = {current:null};
+  let sends = 0;
+  await assert.rejects(uploadReviewedPod(cache, [], () => buildPodScanPdf([]), () => { sends++; }));
+  assert.equal(cache.current, null);
+  assert.equal(sends, 0);
 });
