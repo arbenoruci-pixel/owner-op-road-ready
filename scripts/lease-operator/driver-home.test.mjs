@@ -38,12 +38,13 @@ test('load card puts actual stops and assigned POD controls ahead of broker copy
       steps:[],
     };
     return renderToStaticMarkup(React.createElement(LoadCard, {
-      load, status:'Accepted', gross:'$1,000.00', initialOpen:true,
+      load, status:'Accepted', podStatus:'POD received · pending office review', gross:'$1,000.00', initialOpen:true,
       controls:React.createElement('button', null, 'Upload POD'),
     }, React.createElement('p', null, 'Broker email preview')));
   }
   const real = card('separate-live-load');
   assert.match(real,/Dallas, TX → Austin, TX/);
+  assert.match(real.split('</summary>')[0], /Accepted.*POD received · pending office review/s);
   const order = ['Route stops','Upload POD','Load Details','$1,000.00','Broker email preview'];
   const positions=order.map(text=>real.indexOf(text));
   assert.ok(positions.every((pos,i)=>pos>=0 && (i===0 || pos>positions[i-1])));

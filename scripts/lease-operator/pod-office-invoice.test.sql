@@ -168,6 +168,45 @@ begin
   assert (select count(*)=1 from rr_lease_private.pod_invoice_drafts where load_id=load_id_);
 end $$;
 rollback to savepoint before_expired_retry;
+-- Send canonical browser base64 for a valid PDF at chunk and upload boundaries.
+savepoint before_multi_chunk;
+reset role;
+do $$
+declare
+  load_id_ uuid:=current_setting('qa.load')::uuid;
+  template text:=convert_from(pg_temp.proof('Chunked phone scan'),'UTF8');
+  original bytea;
+  payload text;
+  digest_ text;
+  bytes_ integer;
+  upload_id uuid;
+  doc_id uuid;
+  receipt jsonb;
+begin
+  foreach bytes_ in array array[49151,49152,49153,1807755,3145728] loop
+    -- A PDF comment before startxref preserves every object and xref offset.
+    original:=convert_to(replace(template,'startxref','%'||repeat('x',bytes_-octet_length(template)-2)||chr(10)||'startxref'),'UTF8');
+    payload:=replace(encode(original,'base64'),chr(10),'');
+    digest_:=encode(sha256(original),'hex');
+    assert octet_length(original)=bytes_;
+    set local role authenticated;
+    upload_id:=(public.rr_lease_step2b_create_upload(gen_random_uuid(),load_id_,null,null,'scan.pdf','application/pdf',bytes_)->>'uploadId')::uuid;
+    receipt:=public.rr_lease_step2b_commit_upload(upload_id,payload,digest_,'application/pdf');
+    doc_id:=(receipt->>'documentId')::uuid;
+    assert receipt->>'review_status'='PENDING';
+    assert public.rr_lease_step2b_commit_upload(upload_id,payload,digest_,'application/pdf')=receipt;
+    perform pg_temp.sign_in('ab000000-0000-4000-8000-000000000001');
+    assert (select string_agg(decode(public.rr_lease_pod_workflow_original(doc_id,part)->>'base64','base64'),''::bytea order by part)=original
+      from generate_series(0,(bytes_-1)/49152) part);
+    perform pg_temp.sign_in('ab000000-0000-4000-8000-000000000002');
+    reset role;
+    assert (select count(*)=(bytes_+49151)/49152 and string_agg(bytes,''::bytea order by chunk_index)=original
+      from rr_lease_private.document_chunks where document_id=doc_id);
+    assert (select is_ready and byte_size=bytes_ and sha256=digest_ from public.rr_lease_documents where id=doc_id);
+    assert (select count(*)=1 from rr_lease_private.pod_mail_outbox where document_id=doc_id);
+  end loop;
+end $$;
+rollback to savepoint before_multi_chunk;
 do $$
 declare
   original bytea:=pg_temp.proof('Reference only');

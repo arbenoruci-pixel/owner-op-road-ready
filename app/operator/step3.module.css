@@ -175,3 +175,24 @@
 .driverShell .panel > summary::after { content:'⌄'; color:var(--muted); }
 .driverShell .panel[open] > summary::after { transform:rotate(180deg); }
 .driverShell { border-radius: 0; }
+
+.podError { margin: 0; color: var(--bad); scroll-margin-block: 65px calc(var(--nav-height, 0px) + 16px); }
+.podReceipt {
+  position: fixed;
+  z-index: 5;
+  inset-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
+  bottom: calc(var(--nav-height, env(safe-area-inset-bottom, 0px)) + 12px);
+  margin-inline: auto;
+  width: fit-content;
+  max-width: min(36rem, calc(100% - 24px));
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--valid);
+  border-radius: 10px;
+  box-shadow: 0 3px 16px #0005;
+}
+.podReceipt div { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.podReceipt small { color: var(--muted); }

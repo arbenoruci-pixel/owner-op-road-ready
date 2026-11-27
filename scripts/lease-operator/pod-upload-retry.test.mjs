@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {podUploadMessage, sendReservedPod} from '../../app/operator/podUpload.js';
+import {confirmedPodMessage, podUploadMessage, sendReservedPod} from '../../app/operator/podUpload.js';
 import {operatorHandler} from '../../lib/rr-lease/operator-api.js';
 
 test('an expired uncommitted reservation is renewed once with the same selected file', async () => {
@@ -47,4 +47,21 @@ test('the POD HTTP endpoint identifies expired reservations without returning in
   }));
   assert.equal(response.status, 409);
   assert.deepEqual(await response.json(), {error:'pod_upload_expired'});
+});
+
+
+test('a returned original on the assigned load is required before showing a POD receipt', () => {
+  const loadId = crypto.randomUUID();
+  const documentId = crypto.randomUUID();
+  assert.throws(() => confirmedPodMessage({loadId, review_status:'PENDING'}, loadId), /operator_request_failed/);
+  assert.throws(() => confirmedPodMessage({loadId, documentId}, crypto.randomUUID()), /operator_request_failed/);
+  for (const [review_status, message] of [
+    ['PENDING', 'POD received'],
+    ['APPROVED', 'POD received'],
+    ['CORRECTION_REVIEW', 'Additional document received'],
+    ['ALREADY_FILED', 'POD already filed'],
+  ]) {
+    assert.equal(confirmedPodMessage({loadId, documentId, review_status}, loadId), message);
+  }
+  assert.throws(() => confirmedPodMessage({loadId, documentId, review_status:'REJECTED'}, loadId), /corrected document/);
 });

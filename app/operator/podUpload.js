@@ -27,3 +27,16 @@ const uploadMessages = {
 export function podUploadMessage(error) {
   return uploadMessages[error?.message] || error?.message || 'Upload failed. Try again.';
 }
+
+
+export function confirmedPodMessage(result, assignedLoadId) {
+  if (!result?.documentId || !result.loadId || (assignedLoadId && result.loadId !== assignedLoadId)) {
+    throw Error('operator_request_failed');
+  }
+  switch (result.review_status) {
+    case 'REJECTED': throw Error('This exact original was rejected. Upload a corrected document.');
+    case 'ALREADY_FILED': return 'POD already filed';
+    case 'CORRECTION_REVIEW': return 'Additional document received';
+    default: return 'POD received';
+  }
+}

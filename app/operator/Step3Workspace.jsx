@@ -2,7 +2,7 @@
 import React,{useEffect,useState,useRef} from 'react';
 import {flushSync} from 'react-dom';
 import {trackPodUpload} from './operatorUpdate.js';
-import {podUploadMessage, sendReservedPod} from './podUpload.js';
+import {confirmedPodMessage, podUploadMessage, sendReservedPod} from './podUpload.js';
 import PilotRateconReview, {PdfDialog} from './PilotRateconReview.jsx';
 import {usePortalClient} from './PortalSession.jsx';
 import {allRows,rows,loadOriginal,appointment,loadFields} from './portalData.js';
@@ -70,10 +70,17 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
   const chooseButton = useRef(null);
   const scannerPending = useRef(false);
   const scanButton = useRef(null);
-  const selection = useRef(null);
+  const submitButton = useRef(null);
+  const errorBox = useRef(null);
   const viewButton = useRef(null);
   const intent = useRef(null);
   const lock = useRef(false);
+
+  useEffect(() => {
+    if (!error || !errorBox.current) return;
+    errorBox.current.focus({preventScroll:true});
+    errorBox.current.scrollIntoView({block:'nearest'});
+  }, [error]);
 
   function selectFile(next) {
     if (!podFileTypes.includes(next.type) || next.size < 1 || next.size > 3 * 1024 * 1024) {
@@ -83,6 +90,12 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
     intent.current = null;
     setError('');
     setSent(false);
+    requestAnimationFrame(() => {
+      const button = submitButton.current;
+      if (!button) return;
+      button.focus({preventScroll:true});
+      button.scrollIntoView({block:'nearest'});
+    });
   }
 
   async function openScanner() {
@@ -149,13 +162,11 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
             'X-File-Name':encodeURIComponent(file.name),
           })
         : sendReservedPod(intent.current, uploadOriginal));
-      if (result.review_status === 'REJECTED') {
-        throw Error('This exact original was rejected. Upload a corrected document.');
-      }
+      const message = confirmedPodMessage(result, loadId);
       setSent(true);
       setFile(null);
       intent.current = null;
-      done?.();
+      done({message, loadNumber:loadNumber || number.trim(), fileName:file.name});
     } catch (err) {
       setError(podUploadMessage(err));
     } finally {
@@ -171,11 +182,6 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
         <label>Broker<input required disabled={busy} maxLength={200} value={broker} onChange={e => setBroker(e.target.value)}/></label>
         <label>Load number<input required disabled={busy} maxLength={120} value={number} onChange={e => setNumber(e.target.value)}/></label>
       </>}
-      <div className={css.podSources}>
-        {canScan && <button type="button" className={file ? undefined : css.primary} ref={scanButton} aria-haspopup="dialog"
-          disabled={busy || opening} onClick={openScanner}>{opening ? 'Opening scanner…' : 'Scan POD'}</button>}
-        <button type="button" ref={chooseButton} disabled={busy || opening} onClick={() => fileInput.current.click()}>Choose file</button>
-      </div>
       <input ref={fileInput} type="file" hidden accept={podFileTypes.join(',')} aria-label="Choose signed POD file"
         onChange={e => {
           const next = e.target.files?.[0];
@@ -185,18 +191,23 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
           catch (err) { setSent(false); setError(err.message); }
         }}/>
       {file ? <>
-        <div ref={selection} tabIndex={-1} role="status" className={css.podSelection}>
-          <small>Ready to upload</small><strong>{file.name}</strong>
+        <div role="status" className={css.podSelection}>
+          <small>{busy ? 'Uploading POD' : 'Ready to upload'}</small><strong>{file.name}</strong>
           {loadId && <small>{brokerName} · Load #{loadNumber}</small>}
         </div>
-        {file.type === 'application/pdf' && <button type="button" ref={viewButton} aria-haspopup="dialog"
-          disabled={busy || opening} onClick={() => setViewing(true)}>View PDF</button>}
-        <button className={css.primary} type="submit" disabled={busy || opening}>
+        {error && <p ref={errorBox} tabIndex={-1} role="alert" className={css.podError}>{error}</p>}
+        <button ref={submitButton} className={css.primary} type="submit" disabled={busy || opening}>
           {busy ? 'Uploading…' : 'Upload POD'}
         </button>
+        {file.type === 'application/pdf' && <button type="button" ref={viewButton} aria-haspopup="dialog"
+          disabled={busy || opening} onClick={() => setViewing(true)}>View PDF</button>}
       </> : <small>PDF, JPEG, PNG or WebP · Up to 3 MiB</small>}
-      {sent && <p role="status">{addendum ? 'Additional document received · pending office review' : 'POD received · pending office review'}</p>}
-      {error && <p role="alert">{error}</p>}
+      <div className={css.podSources}>
+        {canScan && <button type="button" className={file ? undefined : css.primary} ref={scanButton} aria-haspopup="dialog"
+          disabled={busy || opening} onClick={openScanner}>{opening ? 'Opening scanner…' : 'Scan POD'}</button>}
+        <button type="button" ref={chooseButton} disabled={busy || opening} onClick={() => fileInput.current.click()}>Choose file</button>
+      </div>
+      {!file && error && <p ref={errorBox} tabIndex={-1} role="alert" className={css.podError}>{error}</p>}
     </form>
     {viewing && file && <PdfDialog heading="Signed POD" cachedBlob={file} onClose={() => {
       setViewing(false);
@@ -204,10 +215,11 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false}) {
     }}/>}
     {Scanner && <Scanner loadLabel={loadNumber || number.trim()} onChooseFile={chooseOriginalFromScanner} onCancel={() => closeScanner(scanButton)} onReady={reviewedFile => {
       selectFile(reviewedFile);
-      closeScanner(selection);
+      setScanner(null);
     }}/>}
   </>;
   if (!loadId) return content;
+  if (file) return <div className={css.uploadControl}>{content}</div>;
   return <details className={css.uploadControl}>
     <summary onClick={openAssignedUpload}>{addendum ? 'Add corrected POD' : 'Upload POD'}</summary>
     {content}
@@ -222,7 +234,8 @@ function LoadDetails({load,pods,driverView,refresh,done,acceptsAddendum,initialO
  const ratecon = docs.value?.find(d => d.kind === 'ratecon' && d.is_current && d.mime_type === 'application/pdf');
  const [review,setReview] = useState(null);
  const cacheReview = React.useCallback(result => setReview({...result,id:ratecon?.id}), [ratecon?.id]);
- const status = load.load_type==='TONU'?'TONU · cancelled':approved?'POD approved':rejected?'POD rejected':pending?'POD review':load.status.replaceAll('_',' ');
+ const podStatus = pending ? 'POD received · pending office review' : approved ? 'POD approved' : rejected ? 'POD rejected' : '';
+ const status = load.load_type==='TONU'?'TONU · cancelled':load.status.replaceAll('_',' ');
  const pod = (acceptsAddendum || (load.load_type!=='TONU' && ['assigned','picked_up','delivered'].includes(load.status) && load.billing_channel==='FIRSTLINE_FACTORED'))
    && <PodUpload loadId={load.id} loadNumber={load.load_number} brokerName={load.broker_name} addendum={acceptsAddendum} done={done}/>;
  const more = <>
@@ -238,7 +251,7 @@ function LoadDetails({load,pods,driverView,refresh,done,acceptsAddendum,initialO
      {acceptance?.issue}
      {pod}
    </>;
-   return <LoadCard load={load} status={acceptance?.status || status} controls={controls} initialOpen={initialOpen} gross={money(load.gross_cents)}>
+   return <LoadCard load={load} status={acceptance?.status || status} podStatus={podStatus} controls={controls} initialOpen={initialOpen} gross={money(load.gross_cents)}>
      {acceptance?.broker}{more}
    </LoadCard>;
  }}</RateconDriverTest>;
@@ -326,6 +339,7 @@ export default function Step3Workspace({operator,session,operators,workspacePick
    return ()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',dismiss)};
  },[driverView]);
  const [noticeTarget,setNoticeTarget]=useState(null);
+ const [receipt,setReceipt]=useState(null);
  const reload=()=>setRefresh(n=>n+1);
  function selectTab(key){
    clearPodLoad();
@@ -363,7 +377,11 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  {company&&<button className={css.companySwitch} type="button" aria-pressed={tab==='company'} onClick={()=>{clearPodLoad();setTab('company')}}>Company control</button>}
  </>}
  <div className={css.content}>{!driverView&&<div className={css.bar}><small>{tab==='company'?'Private carrier controls':operator.company_name}</small><button type="button" onClick={reload}>Refresh</button></div>}
- {tab==='load'&&<Loads operator={operator} driverView={driverView} refresh={refresh} done={reload}/>}
+ {receipt && <aside className={css.podReceipt} aria-label="POD upload receipt">
+   <div role="status"><strong>{receipt.message}</strong><small>Load #{receipt.loadNumber} · {receipt.fileName}</small></div>
+   <button type="button" aria-label="Dismiss upload receipt" onClick={() => setReceipt(null)}>Close</button>
+ </aside>}
+ {tab==='load'&&<Loads operator={operator} driverView={driverView} refresh={refresh} done={received=>{setReceipt(received);reload()}}/>}
  {tab==='pay'&&(own?<OwnPay refresh={refresh}/>:<DriverPay operator={operator} refresh={refresh}/>)}
  {tab==='docs'&&<><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/><OperatorWallet operatorId={operator.id} refresh={refresh}/></>}
  {tab==='truck'&&<TruckTools operator={operator} refresh={refresh} done={reload}/>}
