@@ -32,6 +32,7 @@ function sampleTable(name) {
   return query;
 }
 const previewClient={
+  podUploadsReadOnly:true,
   from:sampleTable,
   auth:{getSession:async()=>denied,getUser:async()=>denied},
   async rpc(name,args={}){

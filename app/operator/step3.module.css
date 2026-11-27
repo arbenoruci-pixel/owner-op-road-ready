@@ -155,6 +155,12 @@
 .shell .profileMenu p { color:var(--fg); }
 .uploadControl > summary { background:var(--btn); color:var(--accent); border-color:var(--accent); }
 .uploadControl .form { padding:10px 0 2px; }
+.podSources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 115px), 1fr));
+  gap: 8px;
+}
+.podSelection { min-width: 0; padding-left: 10px; border-left: 2px solid var(--accent); overflow-wrap: anywhere; }
 .shell .panel > summary::after { content:'⌄'; color:var(--muted); }
 .shell .panel[open] > summary::after { transform:rotate(180deg); }
 .shell summary { cursor:pointer; }
