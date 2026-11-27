@@ -42,7 +42,7 @@
     }
   },
   "installCommand": "npm ci --no-audit --no-fund --prefer-online --registry=https://registry.npmjs.org/",
-  "buildCommand": "node scripts/build-v110.mjs",
+  "buildCommand": "RR_POD_TEST_PROJECT_REF=qlyxwrcmjeikdpnzipnx RR_POD_TEST_PUBLISHABLE_KEY=sb_publishable_qiuiOJLUb4EvQl_c1PpfFQ_5phPgy-q node scripts/build-v110.mjs",
   "outputDirectory": ".next",
   "headers": [
     {

@@ -1,11 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-const project = 'https://ghwkcgczuwctzxsxmqzx.supabase.co';
-const publicKey = 'sb_publishable_YP8uKzWiV-l-ZiJhy9smbQ_hmbEPBrb';
+export const podTestProject = process.env.NEXT_PUBLIC_RR_POD_TEST_PROJECT_REF || '';
+const project = podTestProject ? 'https://' + podTestProject + '.supabase.co' : 'https://ghwkcgczuwctzxsxmqzx.supabase.co';
+const publicKey = process.env.NEXT_PUBLIC_RR_POD_TEST_PUBLISHABLE_KEY || 'sb_publishable_YP8uKzWiV-l-ZiJhy9smbQ_hmbEPBrb';
 
 async function operatorFetch(input, init) {
   const url = new URL(typeof input === 'string' ? input : input.url || input.href);
   if (url.origin === project && url.pathname === '/auth/v1/otp' && init?.method === 'POST') {
+    if (podTestProject) return Response.json({message: 'Use the password for the staging account.'}, {status: 403});
     const { email, code_challenge } = JSON.parse(init.body);
     // The SDK keeps the PKCE verifier on this browser. The invitation service only receives its challenge.
     return fetch(project + '/functions/v1/rr-lease-login', {
@@ -24,7 +26,7 @@ export function operatorClient() {
   if (!portalClient) {
     portalClient = createClient(project, publicKey, {
       global: { fetch: operatorFetch },
-      auth: { storageKey: 'road-ready-leased-operator-v1', flowType: 'pkce' },
+      auth: { storageKey: podTestProject ? 'rr-pod-test-' + podTestProject : 'road-ready-leased-operator-v1', flowType: 'pkce' },
     });
   }
   return portalClient;

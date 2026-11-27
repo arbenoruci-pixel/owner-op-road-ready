@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { allRows, appointment, loadFields, loadOriginal, operatorClient, rows, usd } from './portalData.js';
+import { allRows, appointment, loadFields, loadOriginal, operatorClient, podTestProject, rows, usd } from './portalData.js';
 import { PortalSession, usePortalClient } from './PortalSession.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
 import Step3Workspace from './Step3Workspace.jsx';
@@ -37,7 +37,7 @@ const docLabels = {
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [withPassword, setWithPassword] = useState(false);
+  const [withPassword, setWithPassword] = useState(Boolean(podTestProject));
   const [linkRequested, setLinkRequested] = useState(false);
   const [code, setCode] = useState('');
   const [message, setMessage] = useState('');
@@ -83,6 +83,7 @@ function Login() {
       <div className={styles.cover}>
         <h1>My loads &amp; pay</h1>
       </div>
+      {podTestProject && <p>Staging · Sign in with the test account.</p>}
       <form className={styles.form} onSubmit={submit}>
         <label>
           Operator email
@@ -135,7 +136,7 @@ function Login() {
                   ? 'Resend sign-in link'
                   : 'Email me a sign-in link'}
         </button>
-        <button
+        {!podTestProject && <button
           type="button"
           className={styles.link}
           onClick={() => {
@@ -146,7 +147,7 @@ function Login() {
           }}
         >
           {withPassword ? 'Use a sign-in link' : 'Use my password'}
-        </button>
+        </button>}
         {message && <p role="status">{message}</p>}
       </form>
     </section>
