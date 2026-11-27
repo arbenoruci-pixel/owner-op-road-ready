@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePortalClient } from './PortalSession.jsx';
 import { needsHomeScreen, pushAvailable, syncLoadAlerts, unsubscribeLoadAlerts } from './loadAlerts.js';
 
-export default function DriverLoadAlerts({ operatorId, onRefresh }) {
+export default function DriverLoadAlerts({ operatorId, onRefresh, noticeTarget }) {
   const client = usePortalClient();
   const refresh = useRef(onRefresh);
   refresh.current = onRefresh;
@@ -68,9 +69,10 @@ export default function DriverLoadAlerts({ operatorId, onRefresh }) {
     finally { setBusy(false); }
   }
 
+  const noticeRegion = <div role="status" aria-live="polite">{notice && <strong>{notice}</strong>}</div>;
   return <div>
     <button type="button" aria-pressed={enabled} disabled={busy} onClick={toggle}>{enabled ? 'Turn off load alerts' : 'Enable load alerts'}</button>
     {help && <p role="status">{help}</p>}
-    <div role="status" aria-live="polite">{notice && <strong>{notice}</strong>}</div>
+    {noticeTarget ? createPortal(noticeRegion, noticeTarget) : noticeRegion}
   </div>;
 }

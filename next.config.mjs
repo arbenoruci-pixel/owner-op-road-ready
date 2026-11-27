@@ -65,6 +65,10 @@ const nextConfig = {
         headers: noStoreHeaders,
       },
       {
+        source: '/operator/manifest.webmanifest',
+        headers: noStoreHeaders,
+      },
+      {
         source: '/sw.js',
         headers: [
           ...noStoreHeaders,

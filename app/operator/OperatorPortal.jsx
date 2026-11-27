@@ -85,7 +85,7 @@ function Login() {
       <div className={styles.cover}>
         <h1>My loads &amp; pay</h1>
       </div>
-      <form className={styles.form} onSubmit={submit}>
+      <form className={styles.form} onSubmit={submit} data-operator-update-pending={Boolean(busy || linkRequested || email || password || code)}>
         <label>
           Operator email
           <input
@@ -716,7 +716,7 @@ function Workspace({ operator, userId }) {
   );
 }
 
-function Membership({ session, carrierEntry, returningFromEmail }) {
+function Membership({ session, carrierEntry, returningFromEmail, onSignOut }) {
   const client = usePortalClient();
   const [operators, setOperators] = useState(null);
   const [selected, setSelected] = useState('');
@@ -774,9 +774,8 @@ function Membership({ session, carrierEntry, returningFromEmail }) {
       </section>
     );
   const operator = operators.find((o) => o.id === selected);
-  return (
-    <>
-      {operators.length > 1 && (
+  const driver = !carrierEntry && operator?.workspace_kind === 'leased' && operator.driver_user_id === session.user.id;
+  const workspacePicker = operators.length > 1 && (
         <label className={styles.select}>
           Workspace
           <select value={selected} onChange={(e) => setSelected(e.target.value)}>
@@ -787,11 +786,14 @@ function Membership({ session, carrierEntry, returningFromEmail }) {
             ))}
           </select>
         </label>
-      )}
+      );
+  return (
+    <>
+      {!driver && workspacePicker}
       {carrierEntry && operator && operator.workspace_kind === 'leased' && operator.driver_user_id === session.user.id && <DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={() => window.dispatchEvent(new Event('rr-driver-load-assigned'))} />}
       {operator && (carrierEntry
         ? <Workspace key={operator.id} operator={operator} userId={session.user.id} />
-        : <Step3Workspace key={operator.id} operator={operator} session={session} operators={operators} />)}
+        : <Step3Workspace key={operator.id} operator={operator} session={session} operators={operators} workspacePicker={workspacePicker} onSignOut={onSignOut} />)}
     </>
   );
 }
@@ -841,7 +843,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
           Opening Road Ready…
         </p>
       ) : auth.session ? (
-        <Membership key={auth.session.user.id} session={auth.session} carrierEntry={carrierEntry} returningFromEmail={returningFromEmail.current} />
+        <Membership key={auth.session.user.id} session={auth.session} carrierEntry={carrierEntry} returningFromEmail={returningFromEmail.current} onSignOut={signOut} />
       ) : carrierEntry ? (
         <section className={styles.notice}><h1>Carrier workspace</h1><p><a href="/">Sign in to your RoadReady account</a></p></section>
       ) : (

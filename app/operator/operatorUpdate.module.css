@@ -1,0 +1,19 @@
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  padding: .6rem 1rem;
+  color: #fff;
+  background: #102a38;
+  font: 500 .9rem/1.4 system-ui, sans-serif;
+}
+.notice button {
+  border: 1px solid currentColor;
+  border-radius: .35rem;
+  padding: .4rem .75rem;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+.notice button:disabled { opacity: .6; }

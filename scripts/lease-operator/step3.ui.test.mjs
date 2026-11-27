@@ -43,6 +43,15 @@ test('installed driver entry uses the four-tab workspace and keeps carrier acces
   const root = new URL('../../', import.meta.url);
   const read = (path) => readFile(new URL(path, root), 'utf8');
   const manifest = JSON.parse(await read('public/operator/manifest.webmanifest'));
+  const layout = await import('../../app/operator/layout.jsx');
+  assert.equal(layout.metadata.manifest, '/operator/manifest.webmanifest');
+  assert.equal(layout.metadata.appleWebApp.title, 'My Loads');
+  for (const page of ['page.jsx', 'confirm/page.jsx', 'carrier/page.jsx']) {
+    const {metadata} = await import('../../app/operator/' + page);
+    assert.equal(metadata.manifest ?? layout.metadata.manifest, layout.metadata.manifest);
+    assert.equal((metadata.appleWebApp ?? layout.metadata.appleWebApp).title, 'My Loads');
+  }
+  assert.equal(manifest.id, '/operator');
   assert.equal(manifest.start_url, '/operator');
   const driverPage = await read('app/operator/page.jsx');
   assert.match(driverPage, /return <OperatorPortal\s*\/>/);
