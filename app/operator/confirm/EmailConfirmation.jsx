@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { operatorClient } from '../portalData.js';
+import { takePodInvoice } from '../podLoginIntent.js';
 import styles from '../operator.module.css';
 
 export default function EmailConfirmation() {
@@ -38,7 +39,8 @@ export default function EmailConfirmation() {
         setMessage('This link or code could not be verified. Use your newest Road Ready email.');
         return;
       }
-      window.location.replace('/operator');
+      const loadId = takePodInvoice(data.session.user.email);
+      window.location.replace(loadId ? '/operator?podInvoice=' + loadId : '/operator');
     } catch {
       setMessage('Could not reach Road Ready. Check your connection and try again.');
     } finally {

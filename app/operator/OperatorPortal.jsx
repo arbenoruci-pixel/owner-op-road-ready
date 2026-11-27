@@ -5,6 +5,7 @@ import { allRows, appointment, loadFields, loadOriginal, operatorClient, rows, u
 import { PortalSession, usePortalClient } from './PortalSession.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
 import Step3Workspace from './Step3Workspace.jsx';
+import { rememberPodInvoice, takePodInvoice } from './podLoginIntent.js';
 import { unsubscribeLoadAlerts } from './loadAlerts.js';
 import OperatorWallet, { WalletProof } from './OperatorWallet.jsx';
 import OwnerEarnings from './OwnerEarnings.jsx';
@@ -61,6 +62,7 @@ function Login() {
           });
       if (error) throw error;
       if (!withPassword) {
+        rememberPodInvoice(email);
         setLinkRequested(true);
         setMessage(
           'If this email is registered with dispatch, open the sign-in link in this browser. If the email includes a code, enter it below.'
@@ -714,7 +716,7 @@ function Workspace({ operator, userId }) {
   );
 }
 
-function Membership({ session, carrierEntry }) {
+function Membership({ session, carrierEntry, returningFromEmail }) {
   const client = usePortalClient();
   const [operators, setOperators] = useState(null);
   const [selected, setSelected] = useState('');
@@ -733,8 +735,16 @@ function Membership({ session, carrierEntry }) {
       if (carrierEntry) membership = membership.eq('carrier_user_id', session.user.id);
       const list = await rows(membership.order('company_name').order('id'));
       if (active) {
-        setOperators(list);
         const own = list.find((o) => o.workspace_kind === 'carrier' && o.carrier_user_id === session.user.id);
+        if (own && returningFromEmail) {
+          const url = new URL(window.location.href);
+          const loadId = takePodInvoice(session.user.email);
+          if (loadId && !url.searchParams.has('podInvoice')) {
+            url.searchParams.set('podInvoice', loadId);
+            window.history.replaceState(window.history.state, '', url);
+          }
+        }
+        setOperators(list);
         setSelected((id) => (list.some((o) => o.id === id) ? id : own?.id || list[0]?.id || ''));
       }
     }
@@ -744,7 +754,7 @@ function Membership({ session, carrierEntry }) {
     return () => {
       active = false;
     };
-  }, [client, carrierEntry, session.user.id, retry]);
+  }, [client, carrierEntry, returningFromEmail, session.user.id, session.user.email, retry]);
   if (error || !operators?.length)
     return (
       <section className={styles.notice}>
@@ -789,7 +799,10 @@ function Membership({ session, carrierEntry }) {
 export default function OperatorPortal({ client, carrierEntry = false }) {
   const [auth, setAuth] = useState({ ready: false, session: null });
   const [signoutError, setSignoutError] = useState(false);
+  const returningFromEmail = useRef(false);
   useEffect(() => {
+    // The PKCE client removes the code from the URL as it completes sign-in.
+    if (!carrierEntry && new URLSearchParams(window.location.search).has('code')) returningFromEmail.current = true;
     const {
       data: { subscription },
     } = (client || operatorClient()).auth.onAuthStateChange((_event, session) => {
@@ -797,7 +810,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
       setSignoutError(false);
     });
     return () => subscription.unsubscribe();
-  }, [client]);
+  }, [client, carrierEntry]);
   async function signOut() {
     await unsubscribeLoadAlerts(client || operatorClient()).catch(() => {});
     const { error } = await operatorClient().auth.signOut({ scope: 'local' });
@@ -828,7 +841,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
           Opening Road Ready…
         </p>
       ) : auth.session ? (
-        <Membership key={auth.session.user.id} session={auth.session} carrierEntry={carrierEntry} />
+        <Membership key={auth.session.user.id} session={auth.session} carrierEntry={carrierEntry} returningFromEmail={returningFromEmail.current} />
       ) : carrierEntry ? (
         <section className={styles.notice}><h1>Carrier workspace</h1><p><a href="/">Sign in to your RoadReady account</a></p></section>
       ) : (
