@@ -7,6 +7,7 @@ import {parseUSDCents,settlementDisplay} from '../../lib/rr-lease/intake-contrac
 import OperatorWallet,{WalletProof} from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
+import TrainingLoadCard, {trainingCardLoadId} from './TrainingLoadCard.jsx';
 import RateconDriverTest from './RateconDriverTest.jsx';
 import DotOffline from './Step3Dot.jsx';
 import TruckTools from './Step3Truck.jsx';
@@ -68,15 +69,20 @@ function Stop({label,address,at,zone,reference}){
 function LoadDetails({load,pods,driverView,refresh,done}){
  const c=usePortalClient(),docs=useRead(()=>rows(c.from('rr_lease_documents').select(docFields).eq('load_id',load.id).eq('is_ready',true).order('is_current',{ascending:false}).order('id')),[c,load.id,refresh]);
  const pending=pods.some(x=>x.review_status==='PENDING'),approved=pods.some(x=>x.review_status==='APPROVED'&&x.document_id===load.final_pod_id),rejected=!approved&&!pending&&pods.some(x=>x.review_status==='REJECTED');
- return <details className={css.panel}><summary><span><strong>{load.load_number}</strong><small>{load.broker_name} · {load.status.replaceAll('_',' ')}</small></span><span className={load.load_type==='TONU'||approved?css.green:rejected?css.red:css.yellow}>{load.load_type==='TONU'?'TONU · cancelled':approved?'POD approved':rejected?'POD rejected':pending?'POD review':'Awaiting documents'}</span></summary><div className={css.detail}>
- <div className={css.grid}><Stop label="Pickup" address={load.pickup_address} at={load.pickup_at} zone={load.pickup_timezone} reference={load.pickup_number}/><Stop label="Delivery" address={load.delivery_address} at={load.delivery_at} zone={load.delivery_timezone} reference={load.delivery_number}/></div>
+ const pilot = driverView && load.id === trainingCardLoadId && load.status === 'assigned';
+ const more = <>
  <h3>Broker rules</h3><dl className={css.pairs}>{['tracking','detention','layover','lumper','podDeadline'].map(k=><div key={k}><dt>{k==='podDeadline'?'POD deadline':k}</dt><dd>{load.broker_rules?.[k]||'Not confirmed'}</dd></div>)}</dl>
  {load.reefer_instructions&&<p>{load.reefer_instructions}</p>}{load.steps?.map((s,i)=><p key={i}><strong>{s.title}</strong> · {s.detail}</p>)}
- <p>Recorded gross: {money(load.gross_cents)} · {load.payment_deadline?'Payment deadline '+formatDay(load.payment_deadline):'Payment deadline pending'}</p>
- {driverView && <RateconDriverTest load={load} refresh={refresh}/>}
+ <p>{!pilot && <>Recorded gross: {money(load.gross_cents)} · </>}{load.payment_deadline?'Payment deadline '+formatDay(load.payment_deadline):'Payment deadline pending'}</p>
+ {driverView && !pilot && <RateconDriverTest load={load} refresh={refresh}/>}
  <ReadState state={docs}>{ds=><div className={css.stack}>{ds.map(d=><OriginalLink key={d.id} id={d.id} label={d.kind==='ratecon'?'View Rate Con PDF':d.kind+' · '+d.file_name}/>)}</div>}</ReadState>
  {pods.filter(x=>x.review_status==='REJECTED').map(x=><p className={css.red} key={x.document_id}>Rejected: {x.rejection_reason}</p>)}
  {load.load_type!=='TONU'&&['assigned','picked_up','delivered'].includes(load.status)&&load.billing_channel==='FIRSTLINE_FACTORED'&&<PodUpload loadId={load.id} done={done}/>}
+ </>;
+ if (pilot) return <TrainingLoadCard load={load} refresh={refresh} gross={money(load.gross_cents)}><div className={css.detail}>{more}</div></TrainingLoadCard>;
+ return <details className={css.panel}><summary><span><strong>{load.load_number}</strong><small>{load.broker_name} · {load.status.replaceAll('_',' ')}</small></span><span className={load.load_type==='TONU'||approved?css.green:rejected?css.red:css.yellow}>{load.load_type==='TONU'?'TONU · cancelled':approved?'POD approved':rejected?'POD rejected':pending?'POD review':'Awaiting documents'}</span></summary><div className={css.detail}>
+ <div className={css.grid}><Stop label="Pickup" address={load.pickup_address} at={load.pickup_at} zone={load.pickup_timezone} reference={load.pickup_number}/><Stop label="Delivery" address={load.delivery_address} at={load.delivery_at} zone={load.delivery_timezone} reference={load.delivery_number}/></div>
+ {more}
  </div></details>;
 }
 function Loads({operator,driverView,refresh,done}){
