@@ -13,10 +13,20 @@ export function printedDate(text) {
   return Number.isFinite(day.valueOf()) && day.toISOString().slice(0,10) === iso ? iso : '';
 }
 
+const otcOrder = /^OTC Order\s*#\s*(\d{2,6})[ -]+(\d{4,12})\s*$/i;
+
+function printedOtcOrders(lines) {
+  return lines.filter(line => line.confidence == null || line.confidence >= 85)
+    .map(line => otcOrder.exec(line.text.trim())).filter(Boolean)
+    .map(match => 'OTC Order #' + match[1] + ' ' + match[2]);
+}
+
 function truckServiceBrand(lines) {
   return lines.some(line => {
     if (!/^\W*TA\s+TRUCK\s*SERVICE\b/i.test(line.text)) return false;
-    return line.confidence == null || line.confidence >= 75;
+    // Location and phone text can lower the OCR score of the entire row.
+    // The separately printed OTC form heading corroborates the exact brand.
+    return line.confidence == null || line.confidence >= 75 || printedOtcOrders(lines).length > 0;
   });
 }
 
@@ -51,10 +61,14 @@ function otcWrittenDate(observation, lines) {
 
 export function maintenanceHeader(pages) {
   let detectedBrand = '';
-  const dates = new Set(), invoiceNumbers = new Map(), vendors = new Map();
+  const dates = new Set(), invoiceNumbers = new Map(), orderReferences = new Set(), vendors = new Map();
   for (const observation of pages.flatMap(receiptObservations)) {
     const lines = sourceLines(observation);
-    if (truckServiceBrand(lines.slice(0,30))) detectedBrand = 'TA Truck Service';
+    const top = lines.slice(0,30);
+    if (truckServiceBrand(top)) {
+      detectedBrand = 'TA Truck Service';
+      for (const order of printedOtcOrders(top)) orderReferences.add(order);
+    }
     for (const {text, confidence} of lines) {
       if (confidence != null && confidence < 75) continue;
       const row = text.trim();
@@ -70,5 +84,5 @@ export function maintenanceHeader(pages) {
     if (confirmedDate) dates.add(confirmedDate);
   }
   return {vendor:vendors.size === 1 ? [...vendors.values()][0] : detectedBrand, date:dates.size === 1 ? [...dates][0] : '',
-    conflictingDates:dates.size > 1, invoiceNumbers:[...invoiceNumbers.values()]};
+    conflictingDates:dates.size > 1, orderReferences:[...orderReferences], invoiceNumbers:[...invoiceNumbers.values()]};
 }

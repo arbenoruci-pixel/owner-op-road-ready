@@ -76,3 +76,11 @@ test('foreign and mixed currencies withhold the USD total even when the document
     assert.equal(result.totalCents,null);
   }
 });
+
+test('a tax matching the entire total conflicts with a positive parts subtotal', () => {
+  const receipt = parse(['Service invoice', 'Subtotal: 58.00','Tax: 62.11','Total: 62.11']);
+  assert.equal(receipt.taxCents,null);
+  assert.equal(receipt.printedTotalCents,6211);
+  assert.equal(receipt.totalCents,null);
+  assert.equal(parse(['Service invoice','Subtotal: 58.00','Tax: 4.11','Total: 62.11']).taxCents,411);
+});

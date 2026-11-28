@@ -3,7 +3,7 @@ import React from 'react';
 import {maintenanceDraft,newReceiptLine,reviewMaintenance} from './maintenanceReview.js';
 import css from './maintenance.module.css';
 
-export default function MaintenanceEditor({draft,setDraft,file,originalUrl,reading,onSkip,busy,duplicate,matched,onSubmit,onBack,onChooseLoad,onChooseReceipt,error}) {
+export default function MaintenanceEditor({draft,setDraft,file,originalUrl,reading,progress,onSkip,busy,duplicate,matched,onSubmit,onBack,onChooseLoad,onChooseReceipt,onRetake,error}) {
   const update = (key, value) => setDraft(prev => ({...prev, [key]:value,
     totalConfirmed:key === 'totalConfirmed' ? value : key === 'amount' ? false : prev.totalConfirmed}));
   const review = reviewMaintenance(draft);
@@ -37,14 +37,24 @@ export default function MaintenanceEditor({draft,setDraft,file,originalUrl,readi
         ? <img className={css.preview} src={originalUrl} alt="Original service receipt"/>
         : <object className={css.pdfPreview} type="application/pdf" data={originalUrl} aria-label="Original receipt PDF"/>}
         <a href={originalUrl} target="_blank" rel="noreferrer">Open original</a></div>}</details>}
-    {reading && <div className={css.box}><p role="status">Reading receipt…</p>
+    {reading && <div className={css.box}><p role="status">{progress?.label || 'Reading receipt…'}</p>
+      {progress && <progress aria-label="Receipt reading progress" max="1" value={progress.fraction}/>}
       <button type="button" onClick={onSkip}>Enter details manually</button></div>}
     {draft.issues.length > 0 && <div className={css.notice} role="status">{draft.issues.map((issue,i) => <p key={i}>{issue}</p>)}</div>}
+    {file && !reading && !draft.amount && (draft.issues.length > 0 || error) && <div className={css.actions}>
+      {onRetake && <button type="button" disabled={busy} onClick={onRetake}>Retake receipt</button>}
+      <button type="button" disabled={busy} onClick={onChooseReceipt}>Choose another file</button>
+    </div>}
     <form onSubmit={e => {e.preventDefault(); if (canSave) onSubmit(e.currentTarget,review.details);}}>
       <fieldset disabled={busy || reading} className={css.fields}>
         <div className={css.box}><h3>Service details</h3><div className={css.grid}>
           {input('vendor','Shop / vendor',{maxLength:160})}{input('date','Service date',{type:'date',required:true})}
-          {input('invoiceNumber','Invoice / receipt number',{maxLength:100})}
+          {file && knownCost && input('amount','Invoice total ($)',{inputMode:'decimal',required:true})}
+          {file && knownCost && !draft.amount && draft.suggestedAmount && <div className={css.wide}>
+            <p>The total is faint. Compare this reading with the original.</p>
+            <button type="button" onClick={()=>update('amount',draft.suggestedAmount)}>Use ${draft.suggestedAmount} from scan</button>
+          </div>}
+          {input('invoiceNumber','Invoice / order reference',{maxLength:100})}
           <label>Equipment<select name="assetType" value={draft.assetType} onChange={e=>update('assetType',e.target.value)}><option value="unknown">Type unspecified</option><option value="truck">Truck</option><option value="trailer">Trailer</option></select></label>
           {input('unit','Unit number',{maxLength:80})}
           <label>Record type<select name="category" value={draft.category} onChange={e=>update('category',e.target.value)}>
@@ -68,7 +78,7 @@ export default function MaintenanceEditor({draft,setDraft,file,originalUrl,readi
             <button type="button" onClick={()=>setDraft(prev=>({...prev,lines:[...prev.lines,newReceiptLine()]}))}>Add line</button>
             <div className={css.grid}>{input('subtotal','Printed subtotal ($)',{inputMode:'decimal'})}
               {input('tax','Printed tax ($)',{inputMode:'decimal'})}</div></div>}
-          {knownCost && <div className={css.fields}>{input('amount','Invoice total ($)',{inputMode:'decimal',required:true})}
+          {knownCost && <div className={css.fields}>{!file && input('amount','Invoice total ($)',{inputMode:'decimal',required:true})}
             {(!itemized || draft.requiresSourceCheck) && <label className={css.checkbox}><input type="checkbox" checked={draft.totalConfirmed} onChange={e=>update('totalConfirmed',e.target.checked)}/>{itemized ? 'I checked the items and total against the original.' : 'I checked this invoice total.'}</label>}
             <label>Payment source<select name="payer" value={draft.payer} onChange={e=>update('payer',e.target.value)}>
               <option value="unknown">Unconfirmed</option><option value="driver">Driver funds</option><option value="carrier">Carrier funds</option></select></label>

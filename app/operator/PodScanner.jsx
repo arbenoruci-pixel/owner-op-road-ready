@@ -7,14 +7,18 @@ import {scannerEngineV3} from '../../source/src/modules/scan/v3/ScannerEngineV3.
 import {finalizePodCrop, preparePodCrop, processPodPage} from './podPageClient.js';
 import {MAX_PHOTO_PAGES, PHOTO_ACCEPT, normalizeScanFile, validateSelection} from '../../scripts/v110328/scanIntake.js';
 import {buildPodScanPdf} from './podScanPdf.js';
-import {rememberReceiptPhotos} from './maintenanceReceiptPhotos.js';
+import {rememberReceiptPhotos,rememberReceiptPhotoSource} from './maintenanceReceiptPhotos.js';
 import {uploadReviewedPod} from './podUpload.js';
 import css from './podScanner.module.css';
 
 export async function prepareReceiptImage(file) {
-  const {result} = await processPodPage(file, 'photo-intake');
-  return result.metadata.captureManifest.boundary.needsReview ? file : result.displayFile;
+  const {result,corners,rotation} = await processPodPage(file, 'photo-intake');
+  if (result.metadata.captureManifest.boundary.needsReview) return file;
+  rememberReceiptPhotoSource(result.displayFile, {original:file,corners,rotation,allowFull:true});
+  return result.displayFile;
 }
+
+export {receiptSourcePixels} from './podPageRenderer.js';
 
 function ScanIcon({name}) {
   const paths = {
@@ -192,7 +196,10 @@ export default function PodScanner({onCancel, onUpload, onChooseFile, loadLabel,
         reviewedPdf, pages, () => buildPodScanPdf(pages, loadLabel, purpose),
         file => {
           if (!mounted.current) return;
-          if (receipt) rememberReceiptPhotos(file, pages.map(page => page.preview));
+          if (receipt) rememberReceiptPhotos(file, pages.map(page => {
+            rememberReceiptPhotoSource(page.preview,page);
+            return page.preview;
+          }));
           return onUpload(file);
         },
       ));

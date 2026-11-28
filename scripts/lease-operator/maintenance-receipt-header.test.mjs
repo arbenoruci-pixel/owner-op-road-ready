@@ -31,7 +31,7 @@ test('TA order form requires independently corroborated written date, payment da
   const receipt = parse(words);
   assert.equal(receipt.vendor,'TA Truck Service');
   assert.equal(receipt.date,'2026-05-17');
-  assert.equal(receipt.invoiceNumber,'');
+  assert.equal(receipt.invoiceNumber,'OTC Order #808 111111');
   assert.equal(parse(words.slice(1)).date,'');
   assert.equal(parse(words.slice(2)).date,'');
   const withZip = dateWords => read({text:'Invoice'}, {lines,imageSize:{width:900,height:1150},
@@ -39,4 +39,24 @@ test('TA order form requires independently corroborated written date, payment da
   assert.equal(withZip(words.slice(1)).date, '2026-05-17');
   assert.equal(withZip(words.slice(2)).date, '');
   assert.equal(parse([...words.slice(0,2),{...words[2],text:'05/18/26'},words[3]]).date,'');
+});
+
+test('printed OTC references retain their role and require the matching truck service form', () => {
+  const text = 'TA TRUCKSERVICE ANYTOWN\nOTC Order #808 111111';
+  assert.equal(read({text}, {text:'Invoice #: DEMO-32'}).invoiceNumber,'DEMO-32');
+  assert.equal(read({text:'Other Repair Shop\nOTC Order #808 111111'}).invoiceNumber,'');
+  assert.equal(read({text:text.replace('OTC Order','Purchase order')}).invoiceNumber,'');
+  const conflict = read({text}, {text:text.replace('111111','222222')});
+  assert.equal(conflict.multipleInvoices,true);
+  assert.equal(conflict.invoiceNumber,'');
+});
+test('two identical low-confidence date cells and a disputed high-confidence payment date leave service date for review', () => {
+  const lines = [{text:'Invoice',confidence:98},{text:'OTC Order #100 222222',confidence:95},
+    {text:'TA Truck Service',confidence:97}];
+  const form = (day, written, paid) => ({lines,imageSize:{width:900,height:1150},
+    words:[word('Written',282,220,42),word('77000',107,245,52),word(day,292,246,81,written),
+      word(day,661,243,77,paid),word('19:08',783,241,45)]});
+  const weak = form('05/18/26',41,52), higherPaymentOnly = form('05/17/26',62,92);
+  assert.equal(read({text:'Invoice'},weak,higherPaymentOnly).date,'');
+  assert.equal(read({text:'Invoice'},form('05/17/26',96,96)).date,'2026-05-17');
 });

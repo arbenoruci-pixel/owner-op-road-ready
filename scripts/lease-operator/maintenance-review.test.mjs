@@ -3,11 +3,11 @@ import test from 'node:test';
 import {parseMaintenanceReceipt} from '../../app/operator/maintenanceReceiptFields.js';
 import {maintenanceDraft, reviewMaintenance, localServiceDate} from '../../app/operator/maintenanceReview.js';
 
-test('one printed part can supply the editable service description',()=>{
+test('printed parts can supply the editable service description',()=>{
   const lines = [{description:'Coiled air line',amountCents:2500}];
   assert.equal(maintenanceDraft({lines},true).description,'Coiled air line');
   assert.equal(maintenanceDraft({lines,description:'Replaced supply line'},true).description,'Replaced supply line');
-  assert.equal(maintenanceDraft({lines:[...lines,...lines]},true).description,'');
+  assert.equal(maintenanceDraft({lines:[...lines,...lines,{description:'Shop supplies'}]},true).description,'Coiled air line, Shop supplies');
 });
 
 test('an observed $80 invoice with $30 of lines shows its $50 difference and requires deliberate correction',()=>{
@@ -47,4 +47,14 @@ test('matching quantities, signed discounts and rounded fractional prices are ex
   assert.equal(reviewMaintenance(draft).details.assetType,'trailer');assert.equal(reviewMaintenance(draft).details.totalCents,20000);
   draft.lines[0].amount='170';assert.match(reviewMaintenance(draft).message,/Quantity × unit price/);
   draft.lines[0].amount='176';draft.paid='-1';assert.match(reviewMaintenance(draft).message,/amount paid/);
+});
+
+test('a faint total stays a suggestion and requires a source check before saving', () => {
+  const draft = maintenanceDraft({suggestedTotalCents:8950},true);
+  assert.equal(draft.amount,'');
+  assert.equal(draft.suggestedAmount,'89.50');
+  assert.equal(draft.requiresSourceCheck,true);
+  for (const disqualifier of [{multipleInvoices:true},{foreignCurrency:true},{printedTotalCents:8950}]) {
+    assert.equal(maintenanceDraft({suggestedTotalCents:8950,...disqualifier},true).suggestedAmount,'');
+  }
 });

@@ -13,20 +13,23 @@ export function newReceiptLine(line = {}) {
 }
 
 export function maintenanceDraft(receipt, hasOriginal = false) {
+  const parts = [...new Set((receipt?.lines || []).map(line => line.description?.trim()).filter(Boolean))];
   const foreign = Boolean(receipt?.foreignCurrency);
   const usdField = value => foreign ? '' : moneyText(value);
   const assetType = ['truck','trailer'].includes(receipt?.assetType) ? receipt.assetType : (/^(truck|trailer)\b/i.exec(receipt?.unit || '')?.[1].toLowerCase() || 'unknown');
   return {
     documentKind:receipt?.documentKind || null,
     assetType, category:'PM', date:receipt?.date || (hasOriginal ? '' : localServiceDate()), unit:receipt?.unit || '',
-    description:receipt?.description || (receipt?.lines?.length === 1 ? receipt.lines[0].description : '') || '',
+    description:receipt?.description || parts.join(', ').slice(0,600),
     odometer:receipt?.odometer?.toString() ?? '',
     nextOdometer:'', nextDate:'', vendor:receipt?.vendor || '', invoiceNumber:receipt?.invoiceNumber || '',
     mode:foreign ? 'service_only' : (receipt?.lines?.length ? 'itemized' : 'total_only'), lines:foreign ? [] : (receipt?.lines || []).map(newReceiptLine),
     subtotal:usdField(receipt?.subtotalCents), tax:usdField(receipt?.taxCents), amount:usdField(receipt?.printedTotalCents ?? receipt?.totalCents),
+    suggestedAmount:!foreign && !receipt?.multipleInvoices && receipt?.printedTotalCents == null && receipt?.totalCents == null
+      ? moneyText(receipt?.suggestedTotalCents) : '',
     payer:'unknown', paid:usdField(receipt?.paidCents), balance:usdField(receipt?.balanceDueCents), totalConfirmed:false,
     issues:receipt?.issues || [], multipleInvoices:Boolean(receipt?.multipleInvoices), foreignCurrency:receipt?.foreignCurrency ? (receipt.currency || 'foreign currency') : '',
-    requiresSourceCheck:Boolean(receipt?.partialRead || (receipt && receipt.totalCents == null && (receipt.printedTotalCents != null || receipt.issues?.length)))
+    requiresSourceCheck:Boolean(receipt?.partialRead || receipt?.suggestedTotalCents != null || (receipt && receipt.totalCents == null && (receipt.printedTotalCents != null || receipt.issues?.length)))
   };
 }
 

@@ -84,3 +84,17 @@ export async function preparePodCrop(file, rotation, corners, suggestedCorners) 
     corners: editableCorners, detection: {corners: editableCorners},
   };
 }
+
+// Re-read faint ink from the original exposure within the exact page the
+// driver accepted. Rotated and manually adjusted crops use the same geometry.
+export async function receiptSourcePixels({original,rotation,corners,needsReview}) {
+  if (needsReview) return original;
+  const raw = await decodeImageFileV3(original, {maxDimension:scannerEngineV3.maxFinalInputDimension});
+  const oriented = rotate(raw,rotation);
+  const page = warpPerspectiveV10934(oriented, preserveCornerOrderV3(corners), {
+    maxDimension:scannerEngineV3.maxOutputDimension, maxUpscale:1,
+    snapToStandard:true, snapTolerance:.095, usLetterBias:true, trimRatio:0,
+    bicubicMaxPixels:6200000,
+  });
+  return imageDataToFileV3(page,'receipt-source.png');
+}

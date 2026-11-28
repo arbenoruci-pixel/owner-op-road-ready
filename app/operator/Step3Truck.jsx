@@ -15,6 +15,7 @@ export default function TruckTools({operator,refresh,done,onChooseLoad}) {
   const state=useRead(()=>listMaintenanceReceipts(client,operator.id),[client,operator.id,refresh]);
   const [draft,setDraft]=useState(null),[file,setFile]=useState(null),[url,setUrl]=useState(null);
   const [Scanner,setScanner]=useState(null),[opening,setOpening]=useState(false),[reading,setReading]=useState(false);
+  const [progress,setProgress]=useState(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[duplicate,setDuplicate]=useState(null);
   const fileInput=useRef(null),request=useRef(null),read=useRef(null),lock=useRef(false),mounted=useRef(false);
   const canScan=process.env.NEXT_PUBLIC_OPERATOR_POD_SCANNER!=='false';
@@ -31,11 +32,13 @@ export default function TruckTools({operator,refresh,done,onChooseLoad}) {
     if(!fileTypes.includes(next.type)||!next.size||next.size>3*1024*1024) {
       throw Error('Choose a PDF, JPEG or PNG original up to 3 MiB.');
     }
-    clear();setMessage('');setFile(next);setDraft(maintenanceDraft(null,true));
+    clear();setMessage('');setProgress(null);setFile(next);setDraft(maintenanceDraft(null,true));
     const control=new AbortController();read.current=control;setReading(true);
     try {
       const {readMaintenanceReceipt}=await import('./maintenanceReceiptReader.js');
-      const result=await readMaintenanceReceipt(next,{signal:control.signal});
+      const result=await readMaintenanceReceipt(next,{signal:control.signal,onProgress:(fraction,label)=>{
+        if(!control.signal.aborted)setProgress(prev=>({label,fraction:Math.max(prev?.fraction || 0,fraction)}));
+      }});
       if(!control.signal.aborted)setDraft(maintenanceDraft(result,true));
     } catch(e) {
       if(!control.signal.aborted)setError(e.message||'The receipt could not be read. Enter its details below.');
@@ -71,8 +74,8 @@ export default function TruckTools({operator,refresh,done,onChooseLoad}) {
       const next=e.target.files?.[0];e.target.value='';void selectFile(next).catch(err=>setError(err.message));
     }}/>
     {draft ? <MaintenanceEditor draft={draft} setDraft={updater=>{setDuplicate(null);setError('');setDraft(updater);}} file={file}
-      originalUrl={url} reading={reading} onSkip={()=>{read.current?.abort();read.current=null;setReading(false);}}
-      onChooseLoad={onChooseLoad} onChooseReceipt={()=>fileInput.current?.click()}
+      originalUrl={url} reading={reading} progress={progress} onSkip={()=>{read.current?.abort();read.current=null;setReading(false);}}
+      onChooseLoad={onChooseLoad} onRetake={canScan ? openScan : undefined} onChooseReceipt={()=>fileInput.current?.click()}
       busy={busy} duplicate={duplicate} matched={matched&&<ServiceRecord record={matched} client={client}/>} onSubmit={save} onBack={clear} error={error}/>
       : <div className={css.page}><header><h2>Truck maintenance</h2></header>
         {message && <p role="status" className={css.match}>{message}</p>}

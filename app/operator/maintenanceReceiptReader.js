@@ -1,7 +1,11 @@
 import {nativePdfLayout} from '../../packages/smart-reader-core/src/pdfLayout.js';
 import {maintenanceItemRegion, suppressItemGrid} from './maintenanceReceiptItems.js';
 import {includesFreightPage} from './maintenanceReceiptEvidence.js';
-import {getReceiptPhotos} from './maintenanceReceiptPhotos.js';
+import {readSkewedThermalReceipt} from './thermalReceipt.js';
+import {readSmallPrintHeader} from './maintenanceHeaderRegion.js';
+import {readSmallPrintTotal,readRuledTax} from './maintenanceSmallPrint.js';
+import {readExportedReceiptPhotos} from './exportedReceiptPhotos.js';
+import {getReceiptPhotoSource,getReceiptPhotos} from './maintenanceReceiptPhotos.js';
 
 const maxPages = 8;
 
@@ -63,26 +67,42 @@ async function readPhoto(file, {signal, progress}) {
   const hasClearTotal = lines.some(row => row.confidence >= 80 && /^(?:(?:invoice|grand)\s+)?total\s*[:$ ]*\d[\d,]*\.\d{2}\s*$/i.test(row.text));
   // A sparse pass separates prices, quantities and the final total on grid
   // forms. Reuse the primary result for clearly readable simple receipts.
-  if (!hasClearTotal && !includesFreightPage([page])) {
+  if (includesFreightPage([page])) return page;
+  const {parseMaintenanceReceipt} = await import('./maintenanceReceiptFields.js');
+  const initial = hasClearTotal && parseMaintenanceReceipt([page]);
+  if (!initial || !initial.vendor || !initial.date || initial.totalCents == null) {
     try {
       const pixels = await scaleForReading(file);
       signal?.throwIfAborted();
       const sparse = await recognizeDocumentText(pixels,{signal,pageSegMode:'11',returnLayout:true,onProgress:value => progress(.40+value*.45)});
       if (sparse?.text?.trim()) {
-        if (!primary.text.trim()) return {...sparse,source:'ocr'};
-        page.supplemental = [sparse];
+        if (!primary.text.trim()) Object.assign(page,sparse);
+        else page.supplemental = [sparse];
         const area = maintenanceItemRegion(page);
         if (area && sparse.imageSize) {
           const crop = await scaleForReading(file, area);
           const itemRead = await recognizeDocumentText(crop,{signal,pageSegMode:'6',returnLayout:true,onProgress:value => progress(.85+value*.15)});
-          if (itemRead?.imageSize && itemRead.words?.length) page.supplemental.push(positionItemRead(itemRead,area,sparse.imageSize));
+          if (itemRead?.imageSize && itemRead.words?.length) (page.supplemental ||= []).push(positionItemRead(itemRead,area,sparse.imageSize));
         }
       }
     } catch {
       signal?.throwIfAborted();
     }
   }
-  if (!primary.text.trim()) throw new Error('No readable text');
+  if (!includesFreightPage([page])) {
+    try { await readSmallPrintHeader(file,page,recognizeDocumentText,{signal}); }
+    catch { signal?.throwIfAborted(); }
+    await readSkewedThermalReceipt(file,page,recognizeDocumentText,{signal,progress});
+    if (!page.supplemental?.some(read => read.region === 'thermal')) {
+      try {
+        const receipt = parseMaintenanceReceipt([page]);
+        if (receipt.printedTotalCents == null) await readSmallPrintTotal(file,page,recognizeDocumentText,{signal});
+        await readRuledTax(file,page,receipt.printedTotalCents == null ? parseMaintenanceReceipt([page]) : receipt,
+          recognizeDocumentText,{signal});
+      } catch { signal?.throwIfAborted(); }
+    }
+  }
+  if (!page.text?.trim()) throw new Error('No readable text');
   return page;
 }
 
@@ -97,6 +117,46 @@ function nativeRows(parts) {
   return rows;
 }
 
+async function readReviewedPhoto(photo, options) {
+  const source = getReceiptPhotoSource(photo);
+  let page;
+  try { page = await readPhoto(photo,options); }
+  catch (error) { options.signal?.throwIfAborted(); if (!source) throw error; }
+  if (!page) {
+    const {receiptSourcePixels} = await import('roadready-pod-scanner');
+    return readPhoto(await receiptSourcePixels(source),options);
+  }
+  if (!source || includesFreightPage([page])) return page;
+  const {parseMaintenanceReceipt} = await import('./maintenanceReceiptFields.js');
+  const first = parseMaintenanceReceipt([page]);
+  if (first.totalCents != null && first.vendor && first.date) return page;
+  try {
+    const {receiptSourcePixels} = await import('roadready-pod-scanner');
+    const raw = await receiptSourcePixels(source);
+    options.signal?.throwIfAborted();
+    if (!raw || raw === photo) return page;
+    const alternative = await readPhoto(raw,options);
+    if (includesFreightPage([alternative])) return alternative;
+    if (source.allowFull && parseMaintenanceReceipt([alternative]).totalCents == null) {
+      const {recognizeDocumentText} = await import('../../scripts/v110383/webOcr.js');
+      const rawExposure = {...alternative,supplemental:(alternative.supplemental || []).filter(r=>r.region!=='thermal')};
+      await readSkewedThermalReceipt(source.original,rawExposure,recognizeDocumentText,options);
+      if (parseMaintenanceReceipt([rawExposure]).totalCents != null) Object.assign(alternative,rawExposure);
+    }
+    const alternateResult = parseMaintenanceReceipt([alternative]);
+    const score = r => Number(r.totalCents != null)*3 + Number(Boolean(r.vendor)) +
+      Number(Boolean(r.date)) + Number(Boolean(r.lines.length));
+    const [best,other] = score(alternateResult)>score(first) ? [alternative,page] : [page,alternative];
+    const suggestions = [...new Set([page.suggestedTotalCents,alternative.suggestedTotalCents].filter(Number.isSafeInteger))];
+    if ([first.printedTotalCents,alternateResult.printedTotalCents].some(value=>Number.isSafeInteger(value) && value!==suggestions[0])) suggestions.length = 0;
+    return {...best,suggestedTotalCents:suggestions.length===1 ? suggestions[0] : null,
+      supplemental:[...(best.supplemental || []),other,...(other.supplemental || [])]};
+  } catch {
+    options.signal?.throwIfAborted();
+    return page;
+  }
+}
+
 async function reviewImageFile(file, options) {
   // The file picker may contain a raw camera image. Analyze the same page
   // geometry as the scanner, while retaining the driver's original upload.
@@ -106,7 +166,7 @@ async function reviewImageFile(file, options) {
     options.signal?.throwIfAborted();
     photo = await prepareReceiptImage(file);
   } catch { options.signal?.throwIfAborted(); }
-  return readPhoto(photo,options);
+  return readReviewedPhoto(photo,options);
 }
 
 async function readPdfPage(page, options) {
@@ -155,13 +215,13 @@ async function openPdf(file) {
 export async function readMaintenanceReceipt(file, {signal, onProgress = () => {}} = {}) {
   if (!file?.size) throw new Error('Select a receipt first.');
   signal?.throwIfAborted();
-  const photos = getReceiptPhotos(file);
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  const photos = getReceiptPhotos(file) || (isPdf ? await readExportedReceiptPhotos(file) : null);
   const pages = [];
   const issues = [];
   let pdf, loading;
   const cancel = () => { loading?.destroy().catch(() => {}); };
   try {
-    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
     if (!photos && isPdf) {
       onProgress(0, 'Opening receipt PDF…');
       loading = await openPdf(file);
@@ -182,7 +242,7 @@ export async function readMaintenanceReceipt(file, {signal, onProgress = () => {
       try {
         const options = {signal, progress};
         if (pdf) page = await pdf.getPage(i + 1);
-        const result = page ? await readPdfPage(page, options) : photos ? await readPhoto(photos[i], options) : await reviewImageFile(file,options);
+        const result = page ? await readPdfPage(page, options) : photos ? await readReviewedPhoto(photos[i], options) : await reviewImageFile(file,options);
         pages.push({...result, number:i + 1});
         if (result.incomplete) issues.push(`Only some text on page ${i + 1} could be read. Check the original.`);
       } catch {
@@ -193,6 +253,12 @@ export async function readMaintenanceReceipt(file, {signal, onProgress = () => {
     signal?.throwIfAborted();
     const {parseMaintenanceReceipt} = await import('./maintenanceReceiptFields.js');
     const receipt = parseMaintenanceReceipt(pages);
+    const candidate = pages.length === 1 && pages[0].suggestedTotalCents;
+    if (Number.isSafeInteger(candidate) && receipt.printedTotalCents == null &&
+        !issues.length && !receipt.partialRead && !receipt.foreignCurrency && !receipt.multipleInvoices &&
+        receipt.issues.every(message=>message.startsWith('No single printed invoice total'))) {
+      receipt.suggestedTotalCents = candidate;
+    }
     if (issues.length) { receipt.partialRead = true; receipt.totalCents = null; }
     receipt.issues = [...issues, ...receipt.issues];
     onProgress(1, 'Receipt ready for review');
