@@ -28,9 +28,19 @@ replace(sync,guard,`   const pendingDays=(await db.sync_meta.get(pendingDaysKey(
 `+guard);
 replace(sync,'    merge.records={...merge.records};merge.conflicts=merge.conflicts.filter', '    reviewedDays=Object.fromEntries(merge.conflicts.map(c=>[c.key,choices[c.key]]));\n    merge.records={...merge.records};merge.conflicts=merge.conflicts.filter');
 replace(sync,"    const receipt=await checked(revision?cloudClient().rpc('road_ready_account_patch_v1'","    if(receiving)await acknowledgeHandoff(handoff.generation);\n    const receipt=await checked(revision?cloudClient().rpc('road_ready_account_patch_v1'");
-replace(sync,'   tabBase=nextBase;', '   tabBase=nextBase;\n   await acknowledgeDays(db,uid,pendingDays,rawPhoneRecords,local.encoded,payload.records,reviewedDays);');
+replace(sync,"   if(changed)await accountStep('Receiving saved records'", "   local.confirmDays=()=>acknowledgeDays(db,uid,pendingDays,rawPhoneRecords,local.encoded,payload.records,reviewedDays);\n   if(changed)await accountStep('Receiving saved records'");
+replace(sync,"   await db.sync_meta.put({key:BASE_KEY,value:{...base,uid,records:base.records||records},updated_at:now});",
+"   await local.confirmDays();\n   await db.sync_meta.put({key:BASE_KEY,value:{...base,uid,records:base.records||records},updated_at:now});");
+replace(sync,'   tabBase=nextBase;', '   tabBase=nextBase;\n   if(!changed)await local.confirmDays();');
 replace(sync,'return {conflicts:merge.conflicts,canOpenLocal,blocked:receiving};',
 'return {conflicts:merge.conflicts,canOpenLocal:canOpenLocal || (receiving && bound===uid && meaningful),blocked:receiving};');
 
 replace(sync,'records:mergeScope(remote?.payload?.records||{},merge.records,scope)};let revision=',
 'records:mergeScope(remote?.payload?.records||{},omitNewEmptyDays(merge.records,remoteRecords,pendingDays),scope)};let revision=');
+
+replace(sync,'if(choices&&conflictReview&&((', 'if(choices&&conflictReview?.generation===writer.generation&&((');
+replace(sync,'conflictReview={local:local.encoded,remote:remote?.payload?.records,scope};',
+'conflictReview={local:local.encoded,remote:remote?.payload?.records,scope,generation:writer.generation};');
+const gate='source/src/modules/cloud/AccountSyncGateV110455.jsx';
+replace(gate,'if(result.canOpenLocal===true)setReady(true); return;',
+'if(result.canOpenLocal===true)setReady(true); if(result.blocked)setReview(true); return;');
