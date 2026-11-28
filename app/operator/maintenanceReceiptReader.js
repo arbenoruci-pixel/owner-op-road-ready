@@ -93,16 +93,20 @@ async function readPhoto(file, {signal, progress}) {
     try { await readSmallPrintHeader(file,page,recognizeDocumentText,{signal}); }
     catch { signal?.throwIfAborted(); }
     await readSkewedThermalReceipt(file,page,recognizeDocumentText,{signal,progress});
-    if (!page.supplemental?.some(read => read.region === 'thermal')) {
-      try {
-        const receipt = parseMaintenanceReceipt([page]);
-        if (receipt.printedTotalCents == null) await readSmallPrintTotal(file,page,recognizeDocumentText,{signal});
-        await readRuledTax(file,page,receipt.printedTotalCents == null ? parseMaintenanceReceipt([page]) : receipt,
-          recognizeDocumentText,{signal});
-      } catch { signal?.throwIfAborted(); }
-    }
+    try {
+      let receipt = parseMaintenanceReceipt([page]);
+      if (receipt.printedTotalCents == null && !receipt.conflictFields?.includes('totalCents')) {
+        await readSmallPrintTotal(file,page,recognizeDocumentText,{signal});
+        receipt = parseMaintenanceReceipt([page]);
+      }
+      if (!receipt.conflictFields?.includes('taxCents')) {
+        await readRuledTax(file,page,receipt,recognizeDocumentText,{signal});
+      }
+    } catch { signal?.throwIfAborted(); }
   }
-  if (!page.text?.trim()) throw new Error('No readable text');
+  if (!page.text?.trim() && !page.lines?.length && !page.supplemental?.some(read => read.text?.trim() || read.lines?.length)) {
+    throw new Error('No readable text');
+  }
   return page;
 }
 
@@ -139,9 +143,8 @@ async function readReviewedPhoto(photo, options) {
     if (includesFreightPage([alternative])) return alternative;
     if (source.allowFull && parseMaintenanceReceipt([alternative]).totalCents == null) {
       const {recognizeDocumentText} = await import('../../scripts/v110383/webOcr.js');
-      const rawExposure = {...alternative,supplemental:(alternative.supplemental || []).filter(r=>r.region!=='thermal')};
-      await readSkewedThermalReceipt(source.original,rawExposure,recognizeDocumentText,options);
-      if (parseMaintenanceReceipt([rawExposure]).totalCents != null) Object.assign(alternative,rawExposure);
+      // Keep new observations even when they identify only one field.
+      await readSkewedThermalReceipt(source.original,alternative,recognizeDocumentText,options);
     }
     const alternateResult = parseMaintenanceReceipt([alternative]);
     const score = r => Number(r.totalCents != null)*3 + Number(Boolean(r.vendor)) +
@@ -216,7 +219,8 @@ export async function readMaintenanceReceipt(file, {signal, onProgress = () => {
   if (!file?.size) throw new Error('Select a receipt first.');
   signal?.throwIfAborted();
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
-  const photos = getReceiptPhotos(file) || (isPdf ? await readExportedReceiptPhotos(file) : null);
+  const scannerPhotos = getReceiptPhotos(file);
+  const photos = scannerPhotos || (isPdf ? await readExportedReceiptPhotos(file) : null);
   const pages = [];
   const issues = [];
   let pdf, loading;
@@ -256,11 +260,20 @@ export async function readMaintenanceReceipt(file, {signal, onProgress = () => {
     const candidate = pages.length === 1 && pages[0].suggestedTotalCents;
     if (Number.isSafeInteger(candidate) && receipt.printedTotalCents == null &&
         !issues.length && !receipt.partialRead && !receipt.foreignCurrency && !receipt.multipleInvoices &&
-        receipt.issues.every(message=>message.startsWith('No single printed invoice total'))) {
+        !receipt.conflictFields?.includes('totalCents')) {
       receipt.suggestedTotalCents = candidate;
     }
     if (issues.length) { receipt.partialRead = true; receipt.totalCents = null; }
     receipt.issues = [...issues, ...receipt.issues];
+    // The review shows counts and stages only. Receipt text and identifiers
+    // stay out of diagnostics, storage and network requests.
+    const observations = pages.flatMap(page => [page,...(page.supplemental || [])]);
+    receipt.scanDetails = {
+      source:scannerPhotos ? 'Scanner' : photos ? 'Saved scan PDF' : isPdf ? 'PDF' : 'Photo',
+      pagesRead:pages.length, pagesTotal:count, observations:observations.length,
+      rectified:observations.some(read => read.region === 'thermal' || read.region === 'thermal-partial'),
+      native:pages.some(page => page.source === 'native-pdf'),
+    };
     onProgress(1, 'Receipt ready for review');
     return receipt;
   } catch (error) {

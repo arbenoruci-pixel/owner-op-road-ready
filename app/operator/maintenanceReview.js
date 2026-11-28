@@ -19,6 +19,7 @@ export function maintenanceDraft(receipt, hasOriginal = false) {
   const assetType = ['truck','trailer'].includes(receipt?.assetType) ? receipt.assetType : (/^(truck|trailer)\b/i.exec(receipt?.unit || '')?.[1].toLowerCase() || 'unknown');
   return {
     documentKind:receipt?.documentKind || null,
+    scanDetails:receipt?.scanDetails, conflictFields:receipt?.conflictFields || [], edits:{}, pasteNote:'',
     assetType, category:'PM', date:receipt?.date || (hasOriginal ? '' : localServiceDate()), unit:receipt?.unit || '',
     description:receipt?.description || parts.join(', ').slice(0,600),
     odometer:receipt?.odometer?.toString() ?? '',
@@ -29,8 +30,56 @@ export function maintenanceDraft(receipt, hasOriginal = false) {
       ? moneyText(receipt?.suggestedTotalCents) : '',
     payer:'unknown', paid:usdField(receipt?.paidCents), balance:usdField(receipt?.balanceDueCents), totalConfirmed:false,
     issues:receipt?.issues || [], multipleInvoices:Boolean(receipt?.multipleInvoices), foreignCurrency:receipt?.foreignCurrency ? (receipt.currency || 'foreign currency') : '',
-    requiresSourceCheck:Boolean(receipt?.partialRead || receipt?.suggestedTotalCents != null || (receipt && receipt.totalCents == null && (receipt.printedTotalCents != null || receipt.issues?.length)))
+    requiresSourceCheck:Boolean(receipt?.partialRead || receipt?.conflictFields?.some(key => ['taxCents','totalCents','subtotalCents','paidCents','balanceDueCents','lines'].includes(key)) || receipt?.suggestedTotalCents != null || (receipt && receipt.totalCents == null && (receipt.printedTotalCents != null || receipt.issues?.length)))
   };
+}
+
+const copiedFields = {
+  vendor:'vendor', date:'date', invoiceNumber:'invoiceNumber', description:'description',
+  unit:'unit', odometer:'odometer', amount:'totalCents', subtotal:'subtotalCents', tax:'taxCents',
+};
+const identity = value => value.trim().toUpperCase().replace(/\s+/g,' ');
+
+export function fillFromReceiptText(draft, receipt) {
+  const copied = maintenanceDraft(receipt,true);
+  if (receipt.multipleInvoices || draft.multipleInvoices || receipt.documentKind === 'bill_of_lading' ||
+      receipt.foreignCurrency || draft.foreignCurrency) {
+    return {...draft,pasteNote:'Use text from one maintenance receipt in the same currency.'};
+  }
+  const sameReference = draft.invoiceNumber && copied.invoiceNumber &&
+    identity(draft.invoiceNumber) === identity(copied.invoiceNumber);
+  if ((draft.vendor && copied.vendor && !sameReference && identity(draft.vendor) !== identity(copied.vendor)) ||
+      ['invoiceNumber','date'].some(key =>
+    draft[key] && copied[key] && identity(draft[key]) !== identity(copied[key]))) {
+    return {...draft,pasteNote:'The receipt details differ. Copy the text from the attached receipt.'};
+  }
+  const next = {...draft};
+  const conflictingAmount = draft.amount && copied.amount && Number(draft.amount) !== Number(copied.amount);
+  const allowAmounts = !receipt.partialRead && !conflictingAmount && draft.mode !== 'service_only';
+  const conflicts = new Set([...draft.conflictFields,...copied.conflictFields]);
+  const includeItems = !draft.lines.length && copied.lines.length > 0 && !draft.edits.lines &&
+    !draft.edits.mode && allowAmounts && !conflicts.has('lines');
+  let count = 0;
+  for (const [key,role] of Object.entries(copiedFields)) {
+    if (draft[key] || draft.edits[key] || conflicts.has(role) || !copied[key]) continue;
+    if (['amount','tax','subtotal'].includes(key) && !allowAmounts) continue;
+    if (['tax','subtotal'].includes(key) && draft.mode !== 'itemized' && !includeItems) continue;
+    next[key] = copied[key];
+    count++;
+  }
+  if (includeItems) {
+    next.lines = copied.lines;
+    next.mode = 'itemized';
+    count++;
+  }
+  if (count) {
+    next.requiresSourceCheck = true;
+    next.totalConfirmed = false;
+    next.pasteNote = 'Filled empty fields from the pasted text. Check them against the original.';
+  } else {
+    next.pasteNote = 'No additional fields could be filled from this text.';
+  }
+  return next;
 }
 
 function amount(text, label, signed = false) {

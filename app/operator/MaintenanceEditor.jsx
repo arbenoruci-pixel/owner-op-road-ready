@@ -1,10 +1,11 @@
 'use client';
 import React from 'react';
 import {maintenanceDraft,newReceiptLine,reviewMaintenance} from './maintenanceReview.js';
+import ReceiptTextRecovery from './ReceiptTextRecovery.jsx';
 import css from './maintenance.module.css';
 
 export default function MaintenanceEditor({draft,setDraft,file,originalUrl,reading,progress,onSkip,busy,duplicate,matched,onSubmit,onBack,onChooseLoad,onChooseReceipt,onRetake,error}) {
-  const update = (key, value) => setDraft(prev => ({...prev, [key]:value,
+  const update = (key, value) => setDraft(prev => ({...prev, [key]:value, edits:{...prev.edits,[key]:true},
     totalConfirmed:key === 'totalConfirmed' ? value : key === 'amount' ? false : prev.totalConfirmed}));
   const review = reviewMaintenance(draft);
   const canSave = !reading && !busy && !review.message && draft.description.trim() && draft.date;
@@ -12,9 +13,9 @@ export default function MaintenanceEditor({draft,setDraft,file,originalUrl,readi
   const knownCost = draft.mode !== 'service_only';
   const input = (name, label, props = {}) => <label>{label}<input name={name} {...props}
     value={draft[name]} onChange={e => update(name, e.target.value)}/></label>;
-  const setLine = (key, field, value) => setDraft(prev => ({...prev, totalConfirmed:false,
+  const setLine = (key, field, value) => setDraft(prev => ({...prev, edits:{...prev.edits,lines:true}, totalConfirmed:false,
     lines:prev.lines.map(line => line.key === key ? {...line, [field]:value} : line)}));
-  const setMode = value => setDraft(prev => ({...prev, mode:value, totalConfirmed:false,
+  const setMode = value => setDraft(prev => ({...prev, mode:value, edits:{...prev.edits,mode:true}, totalConfirmed:false,
     lines:value === 'itemized' && !prev.lines.length ? [newReceiptLine()] : prev.lines}));
   if (file && draft.documentKind === 'bill_of_lading') return <div className={css.page}>
     <button type="button" className={css.back} onClick={onBack}>‹ Truck</button>
@@ -41,6 +42,9 @@ export default function MaintenanceEditor({draft,setDraft,file,originalUrl,readi
       {progress && <progress aria-label="Receipt reading progress" max="1" value={progress.fraction}/>}
       <button type="button" onClick={onSkip}>Enter details manually</button></div>}
     {draft.issues.length > 0 && <div className={css.notice} role="status">{draft.issues.map((issue,i) => <p key={i}>{issue}</p>)}</div>}
+    {file && !reading && !busy && !draft.multipleInvoices && !draft.foreignCurrency &&
+      (draft.issues.length > 0 || error || !draft.amount || !draft.date || !draft.vendor || !draft.invoiceNumber || draft.pasteNote) &&
+      <ReceiptTextRecovery key={originalUrl || file.name} draft={draft} setDraft={setDraft}/>}
     {file && !reading && !draft.amount && (draft.issues.length > 0 || error) && <div className={css.actions}>
       {onRetake && <button type="button" disabled={busy} onClick={onRetake}>Retake receipt</button>}
       <button type="button" disabled={busy} onClick={onChooseReceipt}>Choose another file</button>
@@ -70,7 +74,7 @@ export default function MaintenanceEditor({draft,setDraft,file,originalUrl,readi
           <option value="service_only">Service only · no cost recorded</option></select></label>
           {itemized && <div className={css.lines}><h4>Parts, labor and other charges</h4>
             {draft.lines.map((line,index)=><div key={line.key} className={css.line}>
-              <div className={css.lineHead}><strong>Line {index+1}</strong><button type="button" onClick={()=>setDraft(prev=>({...prev,totalConfirmed:false,lines:prev.lines.filter(x=>x.key!==line.key)}))} aria-label={'Remove line '+(index+1)}>Remove</button></div>
+              <div className={css.lineHead}><strong>Line {index+1}</strong><button type="button" onClick={()=>setDraft(prev=>({...prev,edits:{...prev.edits,lines:true},totalConfirmed:false,lines:prev.lines.filter(x=>x.key!==line.key)}))} aria-label={'Remove line '+(index+1)}>Remove</button></div>
               <label>Description<input aria-label={'Line '+(index+1)+' description'} maxLength={180} value={line.description} onChange={e=>setLine(line.key,'description',e.target.value)}/></label>
               <div className={css.lineNums}>{[['quantity','Qty'],['unitPrice','Unit price ($)'],['amount','Line total ($)']].map(([field,label])=>
                 <label key={field}>{label}<input aria-label={'Line '+(index+1)+' '+label} inputMode="decimal" value={line[field]} onChange={e=>setLine(line.key,field,e.target.value)}/></label>)}</div>
