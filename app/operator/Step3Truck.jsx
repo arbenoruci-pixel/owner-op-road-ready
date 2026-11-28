@@ -9,6 +9,7 @@ import {chicagoDay} from './financials.js';
 import {maintenanceDraft} from './maintenanceReview.js';
 import MaintenanceEditor from './MaintenanceEditor.jsx';
 import MaintenanceHistory,{ServiceRecord} from './MaintenanceHistory.jsx';
+import MaintenanceOverview,{MaintenanceIcon} from './MaintenanceOverview.jsx';
 import ScanReceiptTotal from './ScanReceiptTotal.jsx';
 import css from './maintenance.module.css';
 
@@ -133,17 +134,25 @@ export default function TruckTools({operator,refresh,done,onChooseLoad,onScanSta
       onChooseLoad={()=>{clear();onChooseLoad(file);}} onChooseFile={()=>fileInput.current?.click()} matched={matched}/>
       : draft ? <MaintenanceEditor draft={draft} setDraft={updater=>{setManualDuplicate(null);setError('');setDraft(updater);}}
         busy={busy} duplicate={manualDuplicate} matched={matched} onSubmit={saveManual} onBack={clear} error={error}/>
-      : <div className={css.page}><header><h2>Truck maintenance</h2></header>
-        {scan?.phase==='saved' && <div className={css.box}><strong role="status">{scan.message}</strong>
-          {scan.saved?.totalSource==='reader' && Number.isSafeInteger(scan.saved.totalCents) && <button type="button" onClick={()=>
-            showScan({...scan,phase:'confirm',editing:true,amountText:editableAmount(scan.saved.totalCents),reason:undefined})}>Edit total</button>}
-          {url&&<a href={url} target="_blank" rel="noreferrer">View original receipt</a>}</div>}
-        {message && <p role="status" className={css.match}>{message}</p>}
-        <div className={css.actions}>
-          {canScan&&<button type="button" className={css.primary} disabled={opening} onClick={openScan}>{opening?'Opening camera…':'Scan receipt'}</button>}
-          <button type="button" onClick={()=>fileInput.current?.click()}>Choose file</button>
-          <button type="button" onClick={startManual}>Manual entry</button>
+      : <div className={css.dashboard}><header><h2>Truck maintenance</h2></header>
+        <MaintenanceOverview records={state.value} loadError={state.error} client={client}/>
+        <div className={css.captureBar}>
+          {canScan && <button type="button" className={css.scanButton} disabled={opening} onClick={openScan}>
+            <MaintenanceIcon name="scan"/>{opening?'Opening camera…':'Scan receipt'}
+          </button>}
+          <div className={css.captureOptions}>
+            <button type="button" onClick={()=>fileInput.current?.click()}><MaintenanceIcon name="file"/>Choose file</button>
+            <button type="button" onClick={startManual}><MaintenanceIcon name="edit"/>Manual entry</button>
+          </div>
         </div>
+        {(scan?.phase==='saved' || message) && <div className={css.savedNote}>
+          <span role="status"><MaintenanceIcon name="check"/>{scan?.message || message}</span>
+          {scan?.phase==='saved' && <div className={css.savedActions}>
+            {url && <a aria-label="View original receipt" href={url} target="_blank" rel="noreferrer">View receipt</a>}
+            {scan.saved?.totalSource==='reader' && Number.isSafeInteger(scan.saved.totalCents) && <button type="button" onClick={()=>
+              showScan({...scan,phase:'confirm',editing:true,amountText:editableAmount(scan.saved.totalCents),reason:undefined})}>Edit total</button>}
+          </div>}
+        </div>}
         {error&&<p role="alert">{error}</p>}
         <ReadState state={state}>{records=><MaintenanceHistory records={records} client={client}/>}</ReadState></div>}
     {Scanner&&<Scanner purpose="maintenance" onCancel={()=>setScanner(null)}

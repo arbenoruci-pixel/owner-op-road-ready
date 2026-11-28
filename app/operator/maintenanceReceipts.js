@@ -67,6 +67,8 @@ export async function correctScannedReceiptTotal(client, operatorId, recordId, e
   return data;
 }
 
-export function listMaintenanceReceipts(client, operatorId) {
-  return allRows(() => client.rpc('rr_lease_maintenance_receipt_history', { p_operator_id: operatorId }));
+export async function listMaintenanceReceipts(client, operatorId) {
+  const rows = await allRows(() => client.rpc('rr_lease_maintenance_receipt_history', { p_operator_id: operatorId }));
+  // A newly saved receipt can shift the boundary between two history pages.
+  return Array.from(new Map(rows.map(record => [record.id, record])).values());
 }

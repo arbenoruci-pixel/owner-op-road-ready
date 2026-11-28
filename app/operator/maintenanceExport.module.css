@@ -1,0 +1,19 @@
+.panel {
+  display:grid; gap:.75rem; min-width:0; padding:1rem;
+  color:var(--fg); background:var(--surface); border:1px solid var(--line); border-radius:14px;
+}
+.top,.actions { display:flex; flex-wrap:wrap; align-items:center; gap:.625rem; }
+.top { justify-content:space-between; }
+.top h3 { margin:0; font-size:1.05rem; }
+.panel p { margin:0; color:var(--muted); overflow-wrap:anywhere; }
+.panel .error { color:var(--warn); }
+.panel .close,.panel .secondary,.panel .download {
+  box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center;
+  width:auto; min-height:44px; border-radius:9px; padding:.5rem .9rem;
+  font-weight:650; font-size:.94rem; line-height:1.3;
+}
+.panel .close { margin:-.25rem 0; background:transparent; color:var(--accent); border:0; }
+.panel .secondary { background:var(--surface-inset,var(--bg)); border:1px solid var(--line); color:var(--fg); justify-self:start; }
+.panel .download { color:var(--on-primary,#fff); background:var(--primary,#285fe8); text-decoration:none; }
+.picker { display:grid; gap:.35rem; }
+.picker select { width:100%; min-height:44px; }
