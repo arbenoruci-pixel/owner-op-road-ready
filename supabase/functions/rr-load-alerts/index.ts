@@ -14,14 +14,22 @@ async function rpc(name: string, args: object = {}) {
   return body ? JSON.parse(body) : null;
 }
 
-function requestFor(endpoint: string, keys: object, vapid: {publicKey:string; privateKey:string}, loadId: string) {
+type PushMessage = {loadId:string} | {noticeId:string; operatorId:string};
+type PushJob = {job:number; token:string; load_id:string|null; notice_id:string|null; operator_id:string; endpoint:string; p256dh:string; auth_key:string};
+
+function requestFor(endpoint: string, keys: object, vapid: {publicKey:string; privateKey:string}, payload: PushMessage) {
   const url = new URL(endpoint);
   if (url.protocol !== 'https:' || url.port || url.username || url.password ||
       !/^(fcm\.googleapis\.com|([a-z0-9-]+\.)*push\.apple\.com|([a-z0-9-]+\.)*push\.services\.mozilla\.com|([a-z0-9-]+\.)+notify\.windows\.com)$/.test(url.hostname)) {
     throw new Error('Unsupported push service');
   }
-  return webpush.generateRequestDetails({endpoint, keys}, JSON.stringify({loadId}), {
-    TTL: 3600, urgency: 'high', topic: loadId.replaceAll('-', ''),
+  const notice = 'noticeId' in payload;
+  // Provider topics are limited to 32 URL-safe characters. Load topics retain their existing hex encoding.
+  const hex = (notice ? payload.noticeId : payload.loadId).replaceAll('-', '');
+  const topic = notice ? 'n_'+btoa(String.fromCharCode(...hex.match(/../g)!.map(byte=>parseInt(byte,16))))
+    .replaceAll('+','-').replaceAll('/','_').replaceAll('=','') : hex;
+  return webpush.generateRequestDetails({endpoint, keys}, JSON.stringify(payload), {
+    TTL: notice ? 86400 : 3600, urgency: notice ? 'normal' : 'high', topic,
     vapidDetails: {subject: sender, publicKey: vapid.publicKey, privateKey: vapid.privateKey},
   });
 }
@@ -35,15 +43,16 @@ Deno.serve(async req => {
     const payload = await req.json();
     if (payload.verify === true) {
       const testKey = webpush.generateVAPIDKeys().publicKey;
-      const details = requestFor('https://web.push.apple.com/diagnostic', {p256dh: testKey, auth: 'AAAAAAAAAAAAAAAAAAAAAA'}, vapid, crypto.randomUUID());
+      const details = requestFor('https://web.push.apple.com/diagnostic', {p256dh: testKey, auth: 'AAAAAAAAAAAAAAAAAAAAAA'}, vapid, {loadId:crypto.randomUUID()});
       if (!details.body?.length || !details.headers.Authorization) throw new Error('Web Push signing check failed');
     }
-    const jobs = await rpc('rr_load_push_claim');
+    const jobs = await rpc('rr_driver_push_claim');
     let accepted = 0;
-    await Promise.all(jobs.map(async (job: {job:number; token:string; load_id:string; endpoint:string; p256dh:string; auth_key:string}) => {
+    await Promise.all(jobs.map(async (job: PushJob) => {
       let status = 0;
       try {
-        const details = requestFor(job.endpoint, {p256dh:job.p256dh, auth:job.auth_key}, vapid, job.load_id);
+        const alert: PushMessage = job.notice_id ? {noticeId:job.notice_id, operatorId:job.operator_id} : {loadId:job.load_id!};
+        const details = requestFor(job.endpoint, {p256dh:job.p256dh, auth:job.auth_key}, vapid, alert);
         const result = await fetch(details.endpoint, {method:'POST', headers:details.headers,
           body:details.body, redirect:'error', signal:AbortSignal.timeout(12000)});
         status = result.status;
@@ -54,7 +63,7 @@ Deno.serve(async req => {
     }));
     return Response.json({claimed:jobs.length, accepted, signingChecked:payload.verify === true});
   } catch (error) {
-    console.error('Load alert worker:', error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, '[endpoint]') : 'failed');
+    console.error('Driver alert worker:', error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, '[endpoint]') : 'failed');
     return new Response('Worker request failed', {status:503});
   }
 });

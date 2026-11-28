@@ -7,7 +7,8 @@ import DriverLoadAlerts from './DriverLoadAlerts.jsx';
 import DriverNotices from './DriverNotices.jsx';
 import Step3Workspace from './Step3Workspace.jsx';
 import { rememberPodInvoice, takePodInvoice } from './podLoginIntent.js';
-import { unsubscribeLoadAlerts } from './loadAlerts.js';
+import {noticeDestination,noticeFromUrl,rememberNoticeForEmail,takeNoticeForEmail} from './noticeLaunch.js';
+import { forgetDriverPhoneAlerts } from './loadAlerts.js';
 import OperatorWallet, { WalletProof } from './OperatorWallet.jsx';
 import OwnerEarnings from './OwnerEarnings.jsx';
 import LegacyHistory from './LegacyHistory.jsx';
@@ -63,7 +64,10 @@ function Login({ carrier = false, client }) {
           });
       if (error) throw error;
       if (!withPassword) {
-        if (!carrier) rememberPodInvoice(email);
+        if (!carrier) {
+          rememberPodInvoice(email);
+          rememberNoticeForEmail(email);
+        }
         setLinkRequested(true);
         setMessage(
           'If this email is registered with dispatch, open the sign-in link in this browser. If the email includes a code, enter it below.'
@@ -718,24 +722,37 @@ function Workspace({ operator, userId }) {
   );
 }
 
+function clearNoticeLink(target) {
+  if (!target) return;
+  const url = new URL(window.location.href);
+  const linked = noticeFromUrl(url);
+  if (linked?.noticeId !== target.noticeId || linked.operatorId !== target.operatorId) return;
+  url.searchParams.delete('notice');
+  url.searchParams.delete('noticeOperator');
+  window.history.replaceState(window.history.state, '', url);
+}
+
+function OpeningWorkspace() {
+  return <p className={styles.opening} role="status">Opening your workspace…</p>;
+}
+
 function Membership({ session, carrierEntry, returningFromEmail, onSignOut }) {
   const client = usePortalClient();
   const [operators, setOperators] = useState(null);
   const [selected, setSelected] = useState('');
+  const [openNotice, setOpenNotice] = useState(null);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
     async function resolve() {
       setError(false);
-      if (!carrierEntry) {
-        const { error: claimError } = await client.rpc('rr_lease_claim_membership');
-        if (claimError) throw claimError;
-      }
-      let membership = client.from('rr_lease_operators')
-        .select('id,company_name,driver_name,pay_weekday,carrier_user_id,driver_user_id,workspace_kind');
-      if (carrierEntry) membership = membership.eq('carrier_user_id', session.user.id);
-      const list = await rows(membership.order('company_name').order('id'));
+      const membership = carrierEntry
+        ? client.from('rr_lease_operators')
+            .select('id,company_name,driver_name,pay_weekday,carrier_user_id,driver_user_id,workspace_kind')
+            .eq('carrier_user_id', session.user.id).order('company_name').order('id')
+        : client.rpc('rr_lease_open_driver_workspace');
+      const list = await rows(membership);
       if (active) {
         const own = list.find((o) => o.workspace_kind === 'carrier' && o.carrier_user_id === session.user.id);
         if (own && returningFromEmail) {
@@ -746,8 +763,13 @@ function Membership({ session, carrierEntry, returningFromEmail, onSignOut }) {
             window.history.replaceState(window.history.state, '', url);
           }
         }
+        const url = new URL(window.location.href);
+        const pending = !carrierEntry && takeNoticeForEmail(session.user.email);
+        const link = !carrierEntry && (noticeFromUrl(url) || (!url.searchParams.has('podInvoice') && pending));
+        const target = link && list.find(o => o.id === link.operatorId);
+        if (target) setOpenNotice(link);
         setOperators(list);
-        setSelected((id) => (list.some((o) => o.id === id) ? id : own?.id || list[0]?.id || ''));
+        setSelected((id) => (list.some((o) => o.id === id) ? id : target?.id || own?.id || list[0]?.id || ''));
       }
     }
     resolve().catch(() => {
@@ -757,6 +779,37 @@ function Membership({ session, carrierEntry, returningFromEmail, onSignOut }) {
       active = false;
     };
   }, [client, carrierEntry, returningFromEmail, session.user.id, session.user.email, retry]);
+  useEffect(() => {
+    if (carrierEntry || !operators?.length) return;
+    const isAccessible = target => target && operators.some(o => o.id === target.operatorId);
+    function onMessage(event) {
+      if (event.data?.type !== 'RR_DRIVER_NOTICE_OPEN') return;
+      const target = noticeDestination(event.data.noticeId, event.data.operatorId);
+      if (!isAccessible(target)) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set('notice', target.noticeId);
+      url.searchParams.set('noticeOperator', target.operatorId);
+      window.history.replaceState(window.history.state, '', url);
+      setOpenNotice(target);
+      event.ports?.[0]?.postMessage({handled:true});
+    }
+    function onHistory() {
+      const target = noticeFromUrl(new URL(window.location.href));
+      setOpenNotice(isAccessible(target) ? target : null);
+    }
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    window.addEventListener('popstate', onHistory);
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', onMessage);
+      window.removeEventListener('popstate', onHistory);
+    };
+  }, [carrierEntry, operators]);
+
+  function dismissNotice() {
+    clearNoticeLink(openNotice);
+    setOpenNotice(null);
+  }
+  if (!carrierEntry && !error && operators === null) return <OpeningWorkspace />;
   if (error || !operators?.length)
     return (
       <section className={styles.notice}>
@@ -780,7 +833,7 @@ function Membership({ session, carrierEntry, returningFromEmail, onSignOut }) {
   const workspacePicker = operators.length > 1 && (
         <label className={styles.select}>
           Workspace
-          <select value={selected} onChange={(e) => setSelected(e.target.value)}>
+          <select value={selected} onChange={(e) => { dismissNotice(); setSelected(e.target.value); }}>
             {operators.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.company_name} · {o.driver_name}
@@ -795,7 +848,8 @@ function Membership({ session, carrierEntry, returningFromEmail, onSignOut }) {
       {carrierEntry && operator && operator.workspace_kind === 'leased' && operator.driver_user_id === session.user.id && <DriverLoadAlerts key={operator.id} operatorId={operator.id} onRefresh={() => window.dispatchEvent(new Event('rr-driver-load-assigned'))} />}
       {operator && (carrierEntry
         ? <Workspace key={operator.id} operator={operator} userId={session.user.id} />
-        : <Step3Workspace key={operator.id} operator={operator} session={session} operators={operators} workspacePicker={workspacePicker} onSignOut={onSignOut} />)}
+        : <Step3Workspace key={operator.id} operator={operator} session={session} operators={operators} workspacePicker={workspacePicker} onSignOut={onSignOut}
+            openNotice={openNotice} onNoticeOpened={clearNoticeLink} onDismissNotice={dismissNotice} />)}
     </>
   );
 }
@@ -817,16 +871,16 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
   }, [client, carrierEntry]);
   async function signOut() {
     const portalClient = client || operatorClient();
-    if (!carrierEntry) await unsubscribeLoadAlerts(portalClient).catch(() => {});
+    await forgetDriverPhoneAlerts(portalClient).catch(() => {});
     const { error } = await portalClient.auth.signOut({ scope: 'local' });
     setSignoutError(Boolean(error));
   }
   return (
     <PortalSession.Provider value={client || null}><main className={styles.page}>
-      <header className={styles.header}>
+      <header className={carrierEntry ? styles.header : styles.header+' '+styles.driverHeader}>
         <div className={styles.wrap}>
           <span className={styles.brand}>
-            <i aria-hidden="true" /> Road Ready
+            <i aria-hidden="true" />{carrierEntry ? 'Road Ready' : 'RoadReady'}
           </span>
           {carrierEntry && <a className={styles.back} href="/">Back to RoadReady</a>}
           {auth.session && (
@@ -842,9 +896,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
         </p>
       )}
       {!auth.ready ? (
-        <p role="status" className={styles.notice}>
-          Opening Road Ready…
-        </p>
+        carrierEntry ? <p role="status" className={styles.notice}>Opening Road Ready…</p> : <OpeningWorkspace />
       ) : auth.session ? (
         <Membership key={auth.session.user.id} session={auth.session} carrierEntry={carrierEntry} returningFromEmail={returningFromEmail.current} onSignOut={signOut} />
       ) : carrierEntry ? (

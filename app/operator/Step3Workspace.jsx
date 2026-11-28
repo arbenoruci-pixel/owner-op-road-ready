@@ -316,7 +316,7 @@ const driverTabs = [
   {key:'truck', label:'TRUCK', icon:<><path d="M2 6h12v10H8m-4 0H2V6m12 3h4l4 5v3h-2m-4 0h-2"/><circle cx="6" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></>},
 ];
 
-export default function Step3Workspace({operator,session,operators,workspacePicker,onSignOut}){
+export default function Step3Workspace({operator,session,operators,workspacePicker,onSignOut,openNotice,onNoticeOpened,onDismissNotice}){
  const [tab,setTab]=useState('load'),[refresh,setRefresh]=useState(0),[dark,setDark]=useState(true);
  const own=operator.workspace_kind==='carrier'&&operator.carrier_user_id===session.user.id;
  const company=operators.some(o=>o.workspace_kind==='carrier'&&o.carrier_user_id===session.user.id);
@@ -358,6 +358,10 @@ export default function Step3Workspace({operator,session,operators,workspacePick
    setTab(key);
    window.scrollTo(0,0);
  }
+ const noticeWorkspace = openNotice && operators.find(o=>o.id===openNotice.operatorId);
+ const ownerInbox = own && tab!=='company';
+ const workspaceFeedTarget = (driverView || ownerInbox) && noticeWorkspace?.id===operator.id;
+ const carrierFeedTarget = !workspaceFeedTarget && tab==='company' && company && noticeWorkspace?.workspace_kind==='carrier' && noticeWorkspace.carrier_user_id===session.user.id;
  const driverNavigation = <>
  <header className={css.topRow}>
    <h1 className={css.wordmark}>RoadReady</h1>
@@ -380,7 +384,7 @@ export default function Step3Workspace({operator,session,operators,workspacePick
    </button>)}
  </nav>
  <div ref={setNoticeTarget} />
- <DriverNotices key={operator.id} operatorId={operator.id}/>
+ <DriverNotices key={operator.id} operatorId={operator.id} openNotice={workspaceFeedTarget ? openNotice : null} onNoticeOpened={onNoticeOpened}/>
  </>;
 
  return <section className={driverView ? css.shell+' '+css.driverShell : css.shell} data-driver-portal={driverView || undefined} data-operator-update-pending={transportFile ? 'true' : undefined} data-operator-passive-view={Boolean((own || driverView) && (tab === 'load' || tab === 'pay'))} data-theme={dark?'dark':'light'}>
@@ -389,6 +393,12 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  <nav className={css.tabs} aria-label="Operator tabs" data-operator-navigation>{[['load','LOAD'],['pay','PAY'],['docs','DOCS'],['truck','TRUCK']].map(([key,label])=><button key={key} aria-pressed={tab===key} type="button" onClick={()=>{clearPodLoad();setTab(key)}}>{label}</button>)}</nav>
  {company&&<button className={css.companySwitch} type="button" aria-pressed={tab==='company'} onClick={()=>{clearPodLoad();setTab('company')}}>Company control</button>}
  </>}
+ {ownerInbox && <DriverNotices key={operator.id} operatorId={operator.id} publish
+   openNotice={workspaceFeedTarget ? openNotice : null} onNoticeOpened={onNoticeOpened}/>}
+ {noticeWorkspace && !workspaceFeedTarget && !carrierFeedTarget && <aside className={css.targetedNotice} aria-label={'Notice for '+noticeWorkspace.company_name}>
+   <div><strong>{noticeWorkspace.company_name}</strong><button type="button" onClick={onDismissNotice}>Close notice</button></div>
+   <DriverNotices key={noticeWorkspace.id} operatorId={noticeWorkspace.id} openNotice={openNotice} onNoticeOpened={onNoticeOpened}/>
+ </aside>}
  <div className={css.content}>{!driverView&&<div className={css.bar}><small>{tab==='company'?'Private carrier controls':operator.company_name}</small><button type="button" onClick={reload}>Refresh</button></div>}
  {receipt && <aside className={css.podReceipt} aria-label="POD upload receipt">
    <div role="status"><strong>{receipt.message}</strong><small>Load #{receipt.loadNumber} · {receipt.fileName}</small></div>
@@ -408,6 +418,7 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  </aside>}
  {(tab==='truck'||truckScan)&&<div hidden={tab!=='truck'}><TruckTools operator={operator} refresh={refresh} done={reload} onScanStatus={setTruckScan}
    onChooseLoad={file=>{setTransportFile(file);selectTab('load')}}/></div>}
- {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload} podLoadId={podLoadId} onClearPodLoad={clearPodLoad}/>}
+ {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload} podLoadId={podLoadId} onClearPodLoad={clearPodLoad}
+   openNotice={carrierFeedTarget ? openNotice : null} onNoticeOpened={onNoticeOpened}/>}
  </div></section>;
 }

@@ -1,5 +1,5 @@
 const scope = '/operator';
-const workerPath = '/operator-load-alerts-sw.js';
+const workerPath = '/operator-load-alerts-sw.js?v=notices1';
 
 export function pushAvailable() {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -23,50 +23,77 @@ async function call(client, name, args = {}) {
   return data;
 }
 
-export async function syncLoadAlerts(client, operatorId, enable = false) {
-  if (!pushAvailable()) return false;
-  if (enable && Notification.permission !== 'granted') {
-    if (await Notification.requestPermission() !== 'granted') return false;
+async function currentSubscription() {
+  const registration = await ownRegistration();
+  return registration?.pushManager?.getSubscription();
+}
+
+export async function readPhoneAlertSettings(client, operatorId) {
+  if (pushAvailable() && Notification.permission === 'granted') {
+    const subscription = await currentSubscription();
+    if (subscription) {
+      const data = await call(client,'rr_driver_push_preferences',{p_operator:operatorId,p_endpoint:subscription.endpoint});
+      if (typeof data?.loads !== 'boolean' || typeof data?.notices !== 'boolean') throw new Error('Phone alert settings are unavailable.');
+      return data;
+    }
   }
-  if (Notification.permission !== 'granted') return false;
-  let registration = await ownRegistration();
-  if (!registration && !enable) return false;
-  if (!registration) registration = await navigator.serviceWorker.register(workerPath, { scope, updateViaCache: 'none' });
-  if (!registration.active) {
-    const worker = registration.installing || registration.waiting;
-    if (!worker) throw new Error('Please reopen the app and try again.');
-    await new Promise((resolve, reject) => {
-      const finish = () => { clearTimeout(timer); worker.removeEventListener('statechange', check); };
-      const check = () => {
-        if (worker.state === 'activated') { finish(); resolve(); }
-        if (worker.state === 'redundant') { finish(); reject(new Error('Try enabling alerts again.')); }
-      };
-      const timer = setTimeout(() => { finish(); reject(new Error('Please reopen the app and try again.')); }, 15000);
-      worker.addEventListener('statechange', check);
-      check();
-    });
-  }
+  return {loads:false,notices:false};
+}
+
+async function registrationForAlerts() {
+  // Ensure an installed legacy worker cannot label a new driver notice as an assigned load.
+  const registration = await navigator.serviceWorker.register(workerPath, {scope,updateViaCache:'none'});
+  const scriptURL = new URL(workerPath, location.origin).href;
+  const worker = [registration.installing,registration.waiting,registration.active].find(candidate => candidate?.scriptURL === scriptURL);
+  if (!worker) throw new Error('Reopen My Loads and try enabling alerts again.');
+  await new Promise((resolve,reject) => {
+    const finish = (error) => {
+      clearTimeout(timer);
+      worker.removeEventListener('statechange',check);
+      if (error) reject(error); else resolve();
+    };
+    const check = () => {
+      if (registration.active?.scriptURL === scriptURL && registration.active.state === 'activated') finish();
+      else if (worker.state === 'redundant') finish(new Error('Try enabling alerts again.'));
+    };
+    const timer = setTimeout(() => finish(new Error('Reopen My Loads and try enabling alerts again.')),15000);
+    worker.addEventListener('statechange',check);
+    check();
+  });
+  return registration;
+}
+
+export async function enablePhoneAlerts(client, operatorId, channel) {
+  // Keep the permission prompt within the driver's tap, before any asynchronous lookup.
+  if (Notification.permission !== 'granted' && await Notification.requestPermission() !== 'granted') return false;
+  const registration = await registrationForAlerts();
   let subscription = await registration.pushManager.getSubscription();
-  if (!subscription && !enable) return false;
   if (!subscription) {
-    const key = await call(client, 'rr_load_push_public_key');
-    if (!key) throw new Error('Load alerts are still starting. Try again shortly.');
-    const raw = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, ch => ch.charCodeAt(0)),
-    });
+    const key = await call(client,'rr_load_push_public_key');
+    if (!key) throw new Error('Phone alerts are still starting. Try again shortly.');
+    const raw = atob(key.replace(/-/g,'+').replace(/_/g,'/'));
+    subscription = await registration.pushManager.subscribe({userVisibleOnly:true,
+      applicationServerKey:Uint8Array.from(raw, ch => ch.charCodeAt(0))});
   }
-  await call(client, 'rr_load_push_subscribe', { p_operator: operatorId, p_subscription: subscription.toJSON() });
+  const rpc = channel === 'notices' ? 'rr_driver_notice_push_subscribe' : 'rr_load_push_subscribe';
+  await call(client,rpc,{p_operator:operatorId,p_subscription:subscription.toJSON()});
   return true;
 }
 
-export async function unsubscribeLoadAlerts(client) {
-  const registration = await ownRegistration();
-  const subscription = await registration?.pushManager?.getSubscription();
+export async function disablePhoneAlerts(client, operatorId, channel) {
+  const subscription = await currentSubscription();
   if (!subscription) return;
-  try {
-    await call(client, 'rr_load_push_unsubscribe', { p_endpoint: subscription.endpoint });
-  } finally {
-    await subscription.unsubscribe();
+  const args = {p_endpoint:subscription.endpoint};
+  if (channel === 'notices') {
+    await call(client,'rr_driver_notice_push_unsubscribe',{p_operator:operatorId,...args});
+  } else {
+    await call(client,'rr_load_push_unsubscribe',args);
   }
+}
+
+export async function forgetDriverPhoneAlerts(client) {
+  const subscription = await currentSubscription();
+  if (!subscription) return;
+  const mayRemove = await call(client,'rr_driver_push_forget_device',{p_endpoint:subscription.endpoint});
+  if (mayRemove === true) await subscription.unsubscribe();
 }

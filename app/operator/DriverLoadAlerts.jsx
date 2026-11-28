@@ -2,15 +2,98 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePortalClient } from './PortalSession.jsx';
-import { needsHomeScreen, pushAvailable, syncLoadAlerts, unsubscribeLoadAlerts } from './loadAlerts.js';
+import { needsHomeScreen, pushAvailable, readPhoneAlertSettings, enablePhoneAlerts, disablePhoneAlerts } from './loadAlerts.js';
+
+export function DriverPhoneAlertSettings({operatorId,noticeOnly=false}) {
+  const client = usePortalClient();
+  const [settings,setSettings] = useState(null);
+  const [busy,setBusy] = useState(false);
+  const [help,setHelp] = useState('');
+  const pending = useRef(false);
+  const revision = useRef(0);
+  const refresh = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    pending.current = false;
+    setBusy(false);setSettings(null);setHelp('');
+    const read = async () => {
+      if (!mounted || pending.current || document.visibilityState === 'hidden') return;
+      const current = ++revision.current;
+      try {
+        const next = await readPhoneAlertSettings(client,operatorId);
+        if (mounted && current === revision.current) {setSettings(next);setHelp('');}
+      } catch {
+        if (mounted && current === revision.current) {
+          setSettings(null);
+          setHelp('Could not load your phone alert settings.');
+        }
+      }
+    };
+    refresh.current = read;
+    void read();
+    window.addEventListener('focus',read);
+    document.addEventListener('visibilitychange',read);
+    window.addEventListener('rr-phone-alerts-changed',read);
+    return () => {
+      mounted = false;
+      revision.current++;
+      refresh.current = null;
+      window.removeEventListener('focus',read);
+      document.removeEventListener('visibilitychange',read);
+      window.removeEventListener('rr-phone-alerts-changed',read);
+    };
+  },[client,operatorId]);
+
+  async function toggle(channel) {
+    if (pending.current || !settings) return;
+    setHelp('');
+    if (needsHomeScreen()) {
+      setHelp('In Safari, tap Share → Add to Home Screen. Open My Loads from that icon to enable phone alerts.');
+      return;
+    }
+    if (!pushAvailable()) {
+      setHelp('Open My Loads as an installed app on a device that supports phone notifications.');
+      return;
+    }
+    const current = ++revision.current;
+    pending.current = true;setBusy(true);
+    try {
+      const turningOn = !settings[channel];
+      if (turningOn) {
+        if (!await enablePhoneAlerts(client,operatorId,channel)) {
+          if (revision.current === current) setHelp('Allow My Loads notifications in your device settings, then try again.');
+          return;
+        }
+      } else await disablePhoneAlerts(client,operatorId,channel);
+      if (revision.current === current) {
+        setSettings(previous=>({...previous,[channel]:turningOn}));
+        window.dispatchEvent(new Event('rr-phone-alerts-changed'));
+      }
+    } catch (e) {
+      if (revision.current === current) setHelp(e.message || 'Could not change phone alerts. Please try again.');
+    } finally {
+      if (revision.current === current) {pending.current = false;setBusy(false);}
+    }
+  }
+
+  const channels = noticeOnly ? ['notices'] : ['loads','notices'];
+  return <div style={{display:'grid',gap:8}}>
+    {channels.map(channel=>{
+      const enabled = settings?.[channel] === true;
+      const text = channel === 'notices' ? 'notice alerts' : 'load alerts';
+      return <button key={channel} type="button" disabled={busy || !settings} aria-pressed={enabled}
+        onClick={()=>toggle(channel)}>{enabled ? 'Turn off '+text : 'Enable '+text}</button>;
+    })}
+    {help && <p role="status">{help}</p>}
+    {help && !settings && <button type="button" onClick={()=>refresh.current?.()}>Retry phone alert settings</button>}
+  </div>;
+}
 
 export default function DriverLoadAlerts({ operatorId, onRefresh, noticeTarget }) {
   const client = usePortalClient();
   const refresh = useRef(onRefresh);
   refresh.current = onRefresh;
-  const [enabled, setEnabled] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [help, setHelp] = useState('');
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
@@ -18,7 +101,6 @@ export default function DriverLoadAlerts({ operatorId, onRefresh, noticeTarget }
     let checking = false;
     let known;
     let clearNotice;
-    syncLoadAlerts(client, operatorId).then(value => { if (mounted) setEnabled(value); }).catch(() => {});
     async function check() {
       if (!mounted || checking || document.visibilityState !== 'visible') return;
       checking = true;
@@ -53,26 +135,9 @@ export default function DriverLoadAlerts({ operatorId, onRefresh, noticeTarget }
     };
   }, [client, operatorId]);
 
-  async function toggle() {
-    setHelp('');
-    if (needsHomeScreen()) { setHelp('In Safari, tap Share → Add to Home Screen. Open My Loads from that icon and enable alerts.'); return; }
-    if (!pushAvailable()) { setHelp('This browser supports alerts while My Loads is open. For phone alerts, open the installed app on a supported device.'); return; }
-    setBusy(true);
-    try {
-      if (enabled) { await unsubscribeLoadAlerts(client); setEnabled(false); }
-      else {
-        const ok = await syncLoadAlerts(client, operatorId, true);
-        setEnabled(ok);
-        if (!ok) setHelp('Allow notifications for My Loads in your device settings, then try again.');
-      }
-    } catch (error) { setHelp(error.message || 'Could not change load alerts. Please try again.'); }
-    finally { setBusy(false); }
-  }
-
   const noticeRegion = <div role="status" aria-live="polite">{notice && <strong>{notice}</strong>}</div>;
   return <div>
-    <button type="button" aria-pressed={enabled} disabled={busy} onClick={toggle}>{enabled ? 'Turn off load alerts' : 'Enable load alerts'}</button>
-    {help && <p role="status">{help}</p>}
+    <DriverPhoneAlertSettings operatorId={operatorId}/>
     {noticeTarget ? createPortal(noticeRegion, noticeTarget) : noticeRegion}
   </div>;
 }

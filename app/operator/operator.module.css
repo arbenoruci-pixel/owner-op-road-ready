@@ -451,3 +451,24 @@
 .page:has([data-driver-portal][data-theme='dark']) { background: #1a2129; }
 .page:has([data-driver-portal][data-theme='light']) { background: #f0f3f7; }
 .page [data-driver-portal] :is(button, summary, input, select, a, textarea):focus-visible { outline-color: var(--accent); }
+
+/* Keep the installed driver's first paint aligned with the verified workspace. */
+.page:has(> .opening) { background:#1a2129; color:#f7f8fa; color-scheme:dark; }
+.driverHeader { padding:0; background:#0a0d14; color:#f7f8fa; border-bottom:1px solid #333b45; }
+.driverHeader .wrap {
+  width:min(100%,880px);
+  padding:calc(env(safe-area-inset-top, 0px) + 4px) max(14px,env(safe-area-inset-right, 0px)) 4px max(14px,env(safe-area-inset-left, 0px));
+}
+.driverHeader .brand { min-height:44px; gap:9px; line-height:1; font-size:1.25rem; font-weight:750; letter-spacing:-.045em; }
+.driverHeader .brand i { width:16px; height:15px; clip-path:none;
+  background:linear-gradient(105deg,transparent 14%,#285fe8 15% 44%,transparent 45% 55%,#285fe8 56% 85%,transparent 86%); }
+.page:has(> .opening) > .driverHeader button { display:none; }
+.page .opening {
+  display:flex; align-items:center; gap:10px; max-width:880px; margin:0 auto;
+  padding:18px max(14px,env(safe-area-inset-right, 0px)) 18px max(14px,env(safe-area-inset-left, 0px));
+  color:#bdc6d2; font-size:.95rem;
+}
+.opening::before { content:''; width:16px; height:16px; border:2px solid #465464; border-top-color:#85acff;
+  border-radius:50%; animation:workspaceOpening 1s linear infinite; }
+@keyframes workspaceOpening { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .opening::before { animation:none; } }

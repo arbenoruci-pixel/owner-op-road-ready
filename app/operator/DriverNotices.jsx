@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import { usePortalClient } from './PortalSession.jsx';
+import { DriverPhoneAlertSettings } from './DriverLoadAlerts.jsx';
 import css from './driverNotices.module.css';
 
 function PublishNotice({ workspaceId, onPublished }) {
@@ -59,41 +60,110 @@ function PublishNotice({ workspaceId, onPublished }) {
   </details>;
 }
 
-export default function DriverNotices({operatorId, publish = false}) {
+const pageSize = 20;
+const noticeIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+const noticeDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',year:'numeric'});
+
+export default function DriverNotices({operatorId, publish = false, openNotice:requestedNotice, onNoticeOpened}) {
   const client = usePortalClient();
+  const inbox = useRef(null), previousTop = useRef(null), lastFocused = useRef(null), resolved = useRef(null);
   const [page, setPage] = useState(0);
   const [refresh, setRefresh] = useState(0);
+  const [target, setTarget] = useState(null);
   const [feed, setFeed] = useState(null);
   const [error, setError] = useState('');
   const [reading, setReading] = useState('');
   const [readError, setReadError] = useState('');
+  const [alert, setAlert] = useState(null);
   const reload = () => setRefresh(n => n + 1);
 
-  useEffect(() => {
-    const visible = () => { if (document.visibilityState === 'visible') reload(); };
-    document.addEventListener('visibilitychange', visible);
-    window.addEventListener('online', visible);
-    return () => {
-      document.removeEventListener('visibilitychange', visible);
-      window.removeEventListener('online', visible);
-    };
-  }, []);
+  function openNotice(id, request = null) {
+    if (!noticeIdPattern.test(id || '')) return;
+    if (inbox.current) inbox.current.open = true;
+    setAlert(null);
+    setTarget({id, request});
+  }
 
   useEffect(() => {
-    let active = true;
-    async function load() {
-      setError('');
-      try {
-        const {data, error} = await client.rpc('rr_driver_notices', {p_operator:operatorId, p_page:page});
-        if (error || !Array.isArray(data?.items)) throw Error();
-        if (active) setFeed({...data, page});
-      } catch {
-        if (active) setError('Could not refresh driver notices.');
-      }
+    if (requestedNotice?.operatorId === operatorId) openNotice(requestedNotice.noticeId, requestedNotice);
+  }, [requestedNotice, operatorId]);
+
+  useEffect(() => {
+    function refreshVisible() { if (document.visibilityState === 'visible') reload(); }
+    function message(event) {
+      const data = event.data;
+      if (data?.type === 'RR_DRIVER_NOTICE' && (!data.operatorId || data.operatorId === operatorId)) refreshVisible();
     }
-    void load();
-    return () => { active = false; };
-  }, [client, operatorId, page, refresh]);
+    const interval = window.setInterval(refreshVisible, 60_000);
+    window.addEventListener('online', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    navigator.serviceWorker?.addEventListener('message', message);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('online', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
+      navigator.serviceWorker?.removeEventListener('message', message);
+    };
+  }, [operatorId]);
+
+  useEffect(() => {
+    const control = new AbortController();
+    async function getPage(number) {
+      const {data, error} = await client.rpc('rr_driver_notices',{p_operator:operatorId,p_page:number}).abortSignal(control.signal);
+      if (error || !Array.isArray(data?.items)) throw Error();
+      return data;
+    }
+    async function load() {
+      const first = await getPage(0);
+      if (control.signal.aborted) return;
+      const top = first.items[0];
+      const prior = previousTop.current;
+      const latestUnread = first.items.find(item => !item.is_read && prior &&
+        (!prior.id || item.published_at > prior.date || (item.published_at === prior.date && item.id > prior.id)));
+      if (latestUnread && !target && !inbox.current?.open) setAlert(latestUnread);
+      else setAlert(current=>first.items.some(item=>item.id === current?.id && !item.is_read) ? current : null);
+      previousTop.current = {id:top?.id, date:top?.published_at};
+      let selected = Math.min(page, Math.max(0, Math.ceil(first.total / pageSize) - 1));
+      let result = first;
+      if (target) {
+        selected = 0;
+        // A saved notification can refer to an older page. The same membership-
+        // scoped inbox supplies its content, including whether this user read it.
+        const cached = resolved.current;
+        if (cached?.target === target && cached.topId === top?.id) {
+          selected = cached.page;
+          if (selected) result = await getPage(selected);
+        } else {
+          while (!result.items.some(item => item.id === target.id) && (selected+1)*pageSize < first.total) {
+            result = await getPage(++selected);
+          }
+          if (control.signal.aborted) return;
+          if (!result.items.some(item => item.id === target.id)) {selected = 0; result = first;}
+          resolved.current = {target, topId:top?.id, page:selected};
+        }
+      } else if (selected) result = await getPage(selected);
+      if (control.signal.aborted) return;
+      setFeed({first, result, selected, target, requestedPage:page});
+      setError('');
+    }
+    void load().catch(()=>{if (!control.signal.aborted) setError('Could not refresh driver notices.');});
+    return () => control.abort();
+  }, [client, operatorId, page, refresh, target]);
+
+  const linked = target && feed?.target === target && feed.result.items.find(item => item.id === target.id);
+  useEffect(() => {
+    if (!target || feed?.target !== target || lastFocused.current === target) return;
+    lastFocused.current = target;
+    const element = linked ? inbox.current?.querySelector('[data-notice="'+linked.id+'"]') : inbox.current?.querySelector('[data-notice-unavailable]');
+    element?.focus();
+    if (target.request) onNoticeOpened?.(target.request);
+  }, [linked, feed, target, onNoticeOpened]);
+
+  useEffect(() => {
+    if (!alert) return;
+    const timer = window.setTimeout(()=>setAlert(null), 18_000);
+    return () => window.clearTimeout(timer);
+  }, [alert]);
 
   async function markRead(id) {
     setReadError('');
@@ -101,38 +171,66 @@ export default function DriverNotices({operatorId, publish = false}) {
     try {
       const {error} = await client.rpc('rr_driver_notice_read', {p_operator:operatorId, p_notice:id});
       if (error) throw error;
+      setAlert(current => current?.id === id ? null : current);
+      setFeed(current=>{
+        if (!current) return current;
+        const mark = list=>({...list, unread:Math.max(0,list.unread-1), items:list.items.map(item=>item.id === id ? {...item,is_read:true} : item)});
+        return {...current,first:mark(current.first), result:mark(current.result)};
+      });
       reload();
     } catch {
       setReadError('Could not mark the notice as read. Please try again.');
-    } finally {
-      setReading('');
-    }
+    } finally { setReading(''); }
   }
 
-  const display = feed?.page === page ? feed : null;
-  return <details className={css.inbox} onToggle={e => { if (e.currentTarget.open) reload(); }}>
-    <summary>
-      <span>Driver notices</span>
-      {feed?.unread > 0 && <strong aria-live="polite">{feed.unread} unread</strong>}
-    </summary>
-    <div className={css.body}>
-      {publish && <PublishNotice workspaceId={operatorId} onPublished={() => { setPage(0); reload(); }}/>}
-      {error && <div role="alert">{error} <button type="button" onClick={reload}>Retry</button></div>}
-      {readError && <p role="alert">{readError}</p>}
-      {!display && !error && <p role="status">Loading notices…</p>}
-      {display?.total === 0 && <p>No driver notices yet.</p>}
-      {display?.items.map(item => <article key={item.id} className={css.item} aria-label={item.title}>
-        <header><h3>{item.title}</h3><small>{new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',year:'numeric'}).format(new Date(item.published_at))}</small></header>
-        <p>{item.message}</p>
-        {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">View source</a>}
-        {item.is_read ? <small>Read</small> : <button type="button" onClick={() => markRead(item.id)} disabled={Boolean(reading)}>
-          {reading === item.id ? 'Saving…' : 'Mark as read'}
-        </button>}
-      </article>)}
-      {display && display.total > 20 && <nav aria-label="Notice pages">
-        <button type="button" disabled={page === 0} onClick={() => setPage(n => n-1)}>Newer</button>
-        <button type="button" disabled={(page+1)*20 >= display.total} onClick={() => setPage(n => n+1)}>Older</button>
-      </nav>}
-    </div>
-  </details>;
+  function choosePage(number) {
+    setTarget(null);
+    setPage(number);
+    setReadError('');
+    reload();
+  }
+  const display = feed?.target === target && feed?.requestedPage === page ? feed : null;
+  const unread = feed?.first.unread || 0;
+  const preview = unread ? feed.first.items.find(item=>!item.is_read) : null;
+  return <>
+    <details className={css.inbox} ref={inbox} data-unread={unread > 0 || undefined}
+      onToggle={e=>{
+        if (e.currentTarget.open) {setAlert(null);reload();}
+        else {setPage(0);setTarget(null);}
+      }}>
+      <summary>
+        <span>Driver notices</span>
+        {unread > 0 && <strong className={css.badge}>{unread} unread</strong>}
+        {preview && <span className={css.preview}>{preview.title}</span>}
+      </summary>
+      <div className={css.body}>
+        {publish && <><DriverPhoneAlertSettings operatorId={operatorId} noticeOnly/>
+          <PublishNotice workspaceId={operatorId} onPublished={() => choosePage(0)}/></>}
+        {error && <div role="alert">{error} <button type="button" onClick={reload}>Retry</button></div>}
+        {readError && <p role="alert">{readError}</p>}
+        {!display && !error && <p role="status">Loading notices…</p>}
+        {target && display && !linked && <p role="status" tabIndex={-1} data-notice-unavailable>This notice is unavailable in this workspace.</p>}
+        {display?.result.total === 0 && <p>No driver notices yet.</p>}
+        {display?.result.items.map(item => <article key={item.id} className={css.item} data-notice={item.id}
+          tabIndex={-1} aria-label={item.title}>
+          <header><h3>{item.title}</h3><small>{noticeDate.format(new Date(item.published_at))}</small></header>
+          <p>{item.message}</p>
+          {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">View source</a>}
+          {item.is_read ? <small>Read</small> : <button type="button" onClick={() => markRead(item.id)} disabled={Boolean(reading)}>
+            {reading === item.id ? 'Saving…' : 'Mark as read'}
+          </button>}
+        </article>)}
+        {display && display.result.total > pageSize && <nav aria-label="Notice pages">
+          <button type="button" disabled={display.selected === 0} onClick={() => choosePage(display.selected-1)}>Newer</button>
+          <button type="button" disabled={(display.selected+1)*pageSize >= display.result.total} onClick={() => choosePage(display.selected+1)}>Older</button>
+        </nav>}
+        {!publish && <small>Manage phone alerts in Profile.</small>}
+      </div>
+    </details>
+    {alert && <aside className={css.alert} aria-label="New driver notice">
+      <div role="status"><small>New driver notice</small><strong>{alert.title}</strong></div>
+      <button type="button" onClick={()=>openNotice(alert.id)}>Open</button>
+      <button type="button" aria-label="Dismiss alert" onClick={()=>setAlert(null)}>×</button>
+    </aside>}
+  </>;
 }

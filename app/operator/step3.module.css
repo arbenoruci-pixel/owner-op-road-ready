@@ -198,3 +198,6 @@
 .podReceipt small { color: var(--muted); }
 
 .podSubmit { display: grid; gap: 8px; }
+
+.targetedNotice { margin-block:10px; }
+.targetedNotice > div:first-child { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-block:6px; }
