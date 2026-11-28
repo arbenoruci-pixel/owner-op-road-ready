@@ -45,3 +45,8 @@
 
 .preview { display:block; width:100%; height:auto; max-height:70dvh; object-fit:contain; }
 .pdfPreview { display:block; width:100%; min-width:0; height:clamp(260px,55dvh,580px); border:0; }
+
+.totalLabel { display:grid; gap:8px; }
+.root .totalInput { font-size:1.8rem; font-weight:650; font-variant-numeric:tabular-nums; }
+.receiptLink { display:inline-flex; align-items:center; justify-self:start; min-height:44px; }
+.readProgress { width:100%; }

@@ -3,7 +3,7 @@ import {maintenanceHeader, printedDate} from './maintenanceReceiptHeader.js';
 import {pageMoneyEvidence, moneyRole, splitPrice} from './maintenanceReceiptMoney.js';
 import {thermalReceiptPage} from './thermalReceipt.js';
 import {maintenanceTableItems} from './maintenanceReceiptItems.js';
-import {includesFreightPage, receiptCurrency} from './maintenanceReceiptEvidence.js';
+import {includesFreightPage, receiptCurrency, hasUSMerchantAddress} from './maintenanceReceiptEvidence.js';
 
 const money = String.raw`(?:\(\s*\$?\s*\d[\d,]*\.\d{2}\s*\)|-?\s*\$?\s*\d[\d,]*\.\d{2}-?)`;
 const amountAtEnd = new RegExp('(' + money + ')\\s*(?:USD)?$', 'i');
@@ -110,6 +110,9 @@ export function parseMaintenanceReceipt(originalPages) {
   const currency = receiptCurrency(originalPages);
   result.currency = currency.currency;
   result.foreignCurrency = currency.foreignCurrency;
+  result.usdContext = currency.currency === 'USD' || hasUSMerchantAddress(originalPages[0]);
+  result.currencyNeedsConfirmation = currency.credibleUncertainty || (currency.requiresReview && !result.usdContext);
+  result.incompleteSource = clipped || records.length !== originalPages.length;
   if (currency.foreignCurrency) issues.add('A foreign or mixed currency appears on this receipt. Check the currency before recording a USD cost.');
   else if (currency.requiresReview) {
     result.partialRead = true;
@@ -117,6 +120,8 @@ export function parseMaintenanceReceipt(originalPages) {
   }
   const amounts = new Map(Object.keys(moneyNames).map(key => [key,new Set()]));
   const faintRoles = new Set();
+  const finalReadings = new Set(), strongFinals = new Set();
+  let pagesWithFinal = 0;
   let weakItems = false, inconsistentMoney = false;
   let incompleteTax = false;
   for (const page of records) {
@@ -149,6 +154,9 @@ export function parseMaintenanceReceipt(originalPages) {
     const evidence = pageMoneyEvidence(originalPages[page.inputIndex]);
     for (const [key,values] of evidence.amounts) for (const value of values) amounts.get(key).add(value);
     for (const key of evidence.faint) faintRoles.add(key);
+    for (const cents of evidence.finalReadings) finalReadings.add(cents);
+    for (const cents of evidence.strongFinals) strongFinals.add(cents);
+    if (evidence.finalReadings.size) pagesWithFinal++;
     if (evidence.taxConflict) conflicts.add('taxCents');
     incompleteTax ||= evidence.taxIncomplete;
   }
@@ -169,6 +177,10 @@ export function parseMaintenanceReceipt(originalPages) {
   }
   const {subtotalCents, taxCents, totalCents, paidCents, balanceDueCents} = result;
   result.printedTotalCents = totalCents;
+  result.competingFinal = finalReadings.size > 1;
+  // Repeated totals on two pages can represent separate receipts for the same price.
+  result.strongFinal = strongFinals.has(totalCents) && pagesWithFinal === 1;
+  if (totalCents == null && finalReadings.size === 1) result.weakFinalCents = [...finalReadings][0];
   if (pages.some(page => page.thermal) && subtotalCents != null && totalCents != null && taxCents == null && subtotalCents !== totalCents) {
     inconsistentMoney = true;
     issues.add('The printed total differs from the subtotal. Check the receipt for taxes or other charges.');

@@ -65,8 +65,33 @@ function currencyWordConfidence(row, pageWords, token) {
   return scores.length ? Math.min(...scores) : row.confidence;
 }
 
+// Only the shop's letterhead can establish the market of an unqualified $.
+// In particular, an American bill-to address is common on foreign invoices.
+const stateCode = '(?:AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)';
+const shopCity = new RegExp(String.raw`\b[A-Z][A-Z.'-]{1,}(?:[ \t]+[A-Z][A-Z.'-]{1,}){0,4},?[ \t]+${stateCode}\b[., ]*(?:\d{5}(?:-\d{4})?\b|(?:\d{0,5}[ (]*)\(\d{3}\)\s*\d{3}[- ]\d{4}\b)`, 'i');
+const customerSection = /\b(?:bill(?:ed)? to|sold to|ship(?:ped)? to|remit(?:tance)? to|mail payments to|customer(?: name| address| information)?|company name|driver['’]?s name|cardholder)\b/i;
+const tableStart = /\b(?:item description|amount tendered|subtotal|qty\s+price|unit price|balance due)\b/i;
+
+export function hasUSMerchantAddress(page) {
+  if (!page) return false;
+  return receiptObservations(page).some(read => {
+    // A detail crop can begin in the customer's address or in the footer.
+    if (read.region && !['page','full-page','sparse','thermal','printed-merchant'].includes(read.region)) return false;
+    for (const row of sourceLines(read).slice(0,22)) {
+      if (read.imageSize?.height && row.top > read.imageSize.height * .45) break;
+      const text = String(row.text || '');
+      const boundary = text.search(customerSection);
+      const letterhead = boundary < 0 ? text : text.slice(0,boundary);
+      if (tableStart.test(letterhead)) break;
+      if ((row.confidence == null || row.confidence >= 75) && shopCity.test(letterhead)) return true;
+      if (boundary >= 0) break;
+    }
+    return false;
+  });
+}
+
 export function receiptCurrency(pages) {
-  const confirmed = new Set(), uncertain = new Set();
+  const confirmed = new Set(), uncertain = new Set(), ambiguous = new Set();
   for (const page of pages.flatMap(receiptObservations)) {
     for (const row of sourceLines(page)) {
       const text = String(row.text).slice(0,1000);
@@ -76,7 +101,14 @@ export function receiptCurrency(pages) {
         const code = symbols[token] || token;
         const score = currencyWordConfidence(row, page.words, token);
         if (score == null || score >= 75) confirmed.add(code);
-        else if (code !== 'USD') uncertain.add(code);
+        else if (code !== 'USD') {
+          uncertain.add(code);
+          // A very faint standalone glyph inside an OCR row that merged
+          // several ledger columns has no reliable monetary association.
+          const flattened = (text.match(/\d[\d,]*\.\d{2}\b/g) || []).length > 1;
+          const columnNoise = score < 50 && flattened && /^[€£¥₹]$/.test(token) && !currencyWords.test(text);
+          if (!columnNoise) ambiguous.add(code);
+        }
       }
     }
   }
@@ -84,5 +116,6 @@ export function receiptCurrency(pages) {
     currency: confirmed.size === 1 ? [...confirmed][0] : null,
     foreignCurrency: [...confirmed].some(code => code !== 'USD'),
     requiresReview: [...uncertain].some(code => !confirmed.has(code)),
+    credibleUncertainty: [...ambiguous].some(code => !confirmed.has(code)),
   };
 }

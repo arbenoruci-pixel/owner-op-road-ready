@@ -350,6 +350,7 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  const [noticeTarget,setNoticeTarget]=useState(null);
  const [receipt,setReceipt]=useState(null);
  const [transportFile,setTransportFile]=useState(null);
+ const [truckScan,setTruckScan]=useState(null);
  const reload=()=>setRefresh(n=>n+1);
  function selectTab(key){
    clearPodLoad();
@@ -399,7 +400,14 @@ export default function Step3Workspace({operator,session,operators,workspacePick
    <OperatorWallet operatorId={operator.id} refresh={refresh} portal/>
    <DotOffline operator={operator} userId={session.user.id} refresh={refresh} walletShown/>
  </> : <><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/><OperatorWallet operatorId={operator.id} refresh={refresh}/></>)}
- {tab==='truck'&&<TruckTools operator={operator} refresh={refresh} done={reload} onChooseLoad={file=>{setTransportFile(file);selectTab('load')}}/>}
+ {tab!=='truck' && truckScan && <aside className={css.podReceipt} aria-label="Maintenance receipt">
+   <div role="status">{truckScan.phase==='saved' ? truckScan.message : truckScan.phase==='reading' ? 'Reading receipt…' :
+     truckScan.phase==='saving' ? 'Saving receipt…' : 'Maintenance receipt needs your attention.'}</div>
+   <button type="button" onClick={()=>selectTab('truck')}>View receipt</button>
+   {truckScan.phase==='saved'&&<button type="button" onClick={()=>setTruckScan(null)}>Dismiss</button>}
+ </aside>}
+ {(tab==='truck'||truckScan)&&<div hidden={tab!=='truck'}><TruckTools operator={operator} refresh={refresh} done={reload} onScanStatus={setTruckScan}
+   onChooseLoad={file=>{setTransportFile(file);selectTab('load')}}/></div>}
  {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload} podLoadId={podLoadId} onClearPodLoad={clearPodLoad}/>}
  </div></section>;
 }

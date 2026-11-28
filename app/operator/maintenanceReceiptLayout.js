@@ -90,6 +90,8 @@ function amountCandidates(observation) {
       if (token==='total' && stop.test(label(row[at]))) continue;
       if (token==='balance' && ['due','owed'].includes(label(row[at]))) at++;
       if (token==='total' && prefix==='sub') role='subtotalCents';
+      // A nearby noun qualifies this total (e.g. merchandise total or line total).
+      if (role==='totalCents' && prefix && !qualified.has(prefix)) continue;
       if (restrictedRole && role !== restrictedRole) continue;
       const caption = token === 'tax' ? printedTaxCaption(row,i) : null;
       if (token === 'tax' && !caption) continue;
@@ -135,6 +137,10 @@ export function receiptLayoutAmounts(page, {includeLocations = false} = {}) {
     const {role,key,taxLabel} = evidence[0];
     const entry = taxLabel ? {role,token:key,taxLabel} : {role,token:key};
     if (includeLocations) {
+      // Automatic expense entry uses a stronger threshold than an editable suggestion.
+      entry.strongFinal = role === 'totalCents' && (anchors.some(e =>
+        e.labelConfidence >= 85 && e.valueConfidence >= 85) ||
+        new Set(strong.filter(e => e.valueConfidence >= 80).map(e => e.read)).size >= 2);
       entry.locations = anchors.filter(e => Number.isFinite(e.top) && e.height > 0 && Number.isFinite(e.height))
         .map(({read,top,height}) => ({read,top,height}));
     }

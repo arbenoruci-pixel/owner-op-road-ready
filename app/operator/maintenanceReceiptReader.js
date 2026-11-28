@@ -1,6 +1,7 @@
 import {nativePdfLayout} from '../../packages/smart-reader-core/src/pdfLayout.js';
 import {maintenanceItemRegion, suppressItemGrid} from './maintenanceReceiptItems.js';
 import {includesFreightPage} from './maintenanceReceiptEvidence.js';
+import {scanTotalDecision} from './maintenanceScanTotal.js';
 import {readSkewedThermalReceipt} from './thermalReceipt.js';
 import {readSmallPrintHeader} from './maintenanceHeaderRegion.js';
 import {readSmallPrintTotal,readRuledTax} from './maintenanceSmallPrint.js';
@@ -58,7 +59,7 @@ function positionItemRead(read, area, imageSize) {
   return {...read,region:'items',imageSize,words:read.words.map(position),lines:read.lines.map(position)};
 }
 
-async function readPhoto(file, {signal, progress}) {
+async function readPhoto(file, {signal, progress, focusTotal}) {
   const {recognizeDocumentText} = await import('../../scripts/v110383/webOcr.js');
   const read = await recognizeDocumentText(file, {signal, onProgress:value => progress(value*.40), pageSegMode:'6', returnLayout:true});
   const primary = read || {text:'',lines:[],words:[]};
@@ -69,8 +70,9 @@ async function readPhoto(file, {signal, progress}) {
   // forms. Reuse the primary result for clearly readable simple receipts.
   if (includesFreightPage([page])) return page;
   const {parseMaintenanceReceipt} = await import('./maintenanceReceiptFields.js');
-  const initial = hasClearTotal && parseMaintenanceReceipt([page]);
-  if (!initial || !initial.vendor || !initial.date || initial.totalCents == null) {
+  const initial = (hasClearTotal || focusTotal) && parseMaintenanceReceipt([page]);
+  if (focusTotal && scanTotalDecision(initial).status !== 'confirm') return page;
+  if (focusTotal || !initial || !initial.vendor || !initial.date || initial.totalCents == null) {
     try {
       const pixels = await scaleForReading(file);
       signal?.throwIfAborted();
@@ -78,7 +80,7 @@ async function readPhoto(file, {signal, progress}) {
       if (sparse?.text?.trim()) {
         if (!primary.text.trim()) Object.assign(page,sparse);
         else page.supplemental = [sparse];
-        const area = maintenanceItemRegion(page);
+        const area = !focusTotal && maintenanceItemRegion(page);
         if (area && sparse.imageSize) {
           const crop = await scaleForReading(file, area);
           const itemRead = await recognizeDocumentText(crop,{signal,pageSegMode:'6',returnLayout:true,onProgress:value => progress(.85+value*.15)});
@@ -90,16 +92,24 @@ async function readPhoto(file, {signal, progress}) {
     }
   }
   if (!includesFreightPage([page])) {
+    if (focusTotal && scanTotalDecision(parseMaintenanceReceipt([page])).status !== 'confirm') return page;
     try { await readSmallPrintHeader(file,page,recognizeDocumentText,{signal}); }
     catch { signal?.throwIfAborted(); }
+    if (focusTotal) {
+      const receipt = parseMaintenanceReceipt([page]);
+      // With a reliable amount already in hand, another footer pass cannot
+      // settle an uncertain currency. Let the driver confirm on one screen.
+      if (receipt.strongFinal || scanTotalDecision(receipt).status !== 'confirm') return page;
+    }
     await readSkewedThermalReceipt(file,page,recognizeDocumentText,{signal,progress});
     try {
       let receipt = parseMaintenanceReceipt([page]);
-      if (receipt.printedTotalCents == null && !receipt.conflictFields?.includes('totalCents')) {
+      if ((receipt.printedTotalCents == null || (focusTotal && !receipt.strongFinal)) &&
+          !receipt.conflictFields?.includes('totalCents')) {
         await readSmallPrintTotal(file,page,recognizeDocumentText,{signal});
         receipt = parseMaintenanceReceipt([page]);
       }
-      if (!receipt.conflictFields?.includes('taxCents')) {
+      if (!focusTotal && !receipt.conflictFields?.includes('taxCents')) {
         await readRuledTax(file,page,receipt,recognizeDocumentText,{signal});
       }
     } catch { signal?.throwIfAborted(); }
@@ -133,7 +143,8 @@ async function readReviewedPhoto(photo, options) {
   if (!source || includesFreightPage([page])) return page;
   const {parseMaintenanceReceipt} = await import('./maintenanceReceiptFields.js');
   const first = parseMaintenanceReceipt([page]);
-  if (first.totalCents != null && first.vendor && first.date) return page;
+  if (options.focusTotal ? first.strongFinal || scanTotalDecision(first).status !== 'confirm'
+    : first.totalCents != null && first.vendor && first.date) return page;
   try {
     const {receiptSourcePixels} = await import('roadready-pod-scanner');
     const raw = await receiptSourcePixels(source);
@@ -141,7 +152,9 @@ async function readReviewedPhoto(photo, options) {
     if (!raw || raw === photo) return page;
     const alternative = await readPhoto(raw,options);
     if (includesFreightPage([alternative])) return alternative;
-    if (source.allowFull && parseMaintenanceReceipt([alternative]).totalCents == null) {
+    const alternate = parseMaintenanceReceipt([alternative]);
+    if (source.allowFull && (options.focusTotal ? !alternate.strongFinal && scanTotalDecision(alternate).status === 'confirm'
+      : alternate.totalCents == null)) {
       const {recognizeDocumentText} = await import('../../scripts/v110383/webOcr.js');
       // Keep new observations even when they identify only one field.
       await readSkewedThermalReceipt(source.original,alternative,recognizeDocumentText,options);
@@ -181,7 +194,10 @@ async function readPdfPage(page, options) {
   // A scan can have a native text overlay containing only a page number,
   // header or watermark. Read the printed page when that layer lacks detail.
   if (text.length >= 35 && rows.length >= 3 && /\d[\d,]*\.\d{2}\b/.test(text)) {
-    return {...native,text};
+    if (!options.focusTotal) return {...native,text};
+    const {parseMaintenanceReceipt} = await import('./maintenanceReceiptFields.js');
+    const parsed = parseMaintenanceReceipt([{...native,text}]);
+    if (parsed.strongFinal || scanTotalDecision(parsed).status !== 'confirm') return {...native,text};
   }
   const canvas = document.createElement('canvas');
   const raster = page.getViewport({scale:Math.min(4, 2400 / Math.max(viewport.width, viewport.height))});
@@ -196,7 +212,11 @@ async function readPdfPage(page, options) {
     await render.promise;
     const image = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     if (!image) throw new Error('Could not read image');
-    return await readPhoto(image, options);
+    const scanned = await readPhoto(image, options);
+    if (!options.focusTotal || !text.trim()) return scanned;
+    // Coordinates are self-contained in each observation. Keep native
+    // evidence even when the final amount was only visible in an image.
+    return {...scanned,supplemental:[...(scanned.supplemental || []),{...native,text}]};
   } catch (error) {
     options.signal?.throwIfAborted();
     if (text.trim()) return {...native,text,incomplete:true};
@@ -215,7 +235,7 @@ async function openPdf(file) {
   return pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()), isEvalSupported:false, useSystemFonts:true});
 }
 
-export async function readMaintenanceReceipt(file, {signal, onProgress = () => {}} = {}) {
+export async function readMaintenanceReceipt(file, {signal, onProgress = () => {}, focusTotal = false} = {}) {
   if (!file?.size) throw new Error('Select a receipt first.');
   signal?.throwIfAborted();
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
@@ -244,7 +264,7 @@ export async function readMaintenanceReceipt(file, {signal, onProgress = () => {
       progress(0);
       let page;
       try {
-        const options = {signal, progress};
+        const options = {signal, progress, focusTotal};
         if (pdf) page = await pdf.getPage(i + 1);
         const result = page ? await readPdfPage(page, options) : photos ? await readReviewedPhoto(photos[i], options) : await reviewImageFile(file,options);
         pages.push({...result, number:i + 1});
@@ -263,7 +283,7 @@ export async function readMaintenanceReceipt(file, {signal, onProgress = () => {
         !receipt.conflictFields?.includes('totalCents')) {
       receipt.suggestedTotalCents = candidate;
     }
-    if (issues.length) { receipt.partialRead = true; receipt.totalCents = null; }
+    if (issues.length) { receipt.incompleteSource = true; receipt.partialRead = true; receipt.totalCents = null; }
     receipt.issues = [...issues, ...receipt.issues];
     // The review shows counts and stages only. Receipt text and identifiers
     // stay out of diagnostics, storage and network requests.

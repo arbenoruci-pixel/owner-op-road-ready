@@ -17,6 +17,11 @@ function dateLabel(value) {
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 }
 
+function receiptDate(record) {
+  const label = dateLabel(record.record_date);
+  return record.receipt?.dateSource === 'recorded' ? 'Recorded ' + label : label;
+}
+
 function SavedOriginal({record,client}) {
   const [url,setUrl]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const mounted=useRef(false);
@@ -50,7 +55,7 @@ export function ServiceRecord({record:r,client,open}) {
   const receipt=r.receipt;
   return <details className={css.record} open={open}><summary>
     <span><strong>{r.description || categories[r.expense_category] || 'Maintenance'}</strong>
-      <small>{[r.vendor,dateLabel(r.record_date),assetLabel(r)].filter(Boolean).join(' · ')}</small></span>
+      <small>{[r.vendor,receiptDate(r),assetLabel(r)].filter(Boolean).join(' · ')}</small></span>
     <span aria-hidden="true" className={css.chevron}>⌄</span></summary>
     <div className={css.recordBody}><p>{[categories[r.expense_category]||r.expense_category,r.odometer!=null&&mileage(r.odometer)].filter(Boolean).join(' · ')}</p>
       {r.next_service_odometer!=null && <p>Next PM at {mileage(r.next_service_odometer)}</p>}
@@ -63,7 +68,8 @@ export function ServiceRecord({record:r,client,open}) {
       {r.amount_cents!=null && <dl className={css.amounts}>
         {receipt?.subtotalCents!=null&&<div><dt>Subtotal</dt><dd>{money(receipt.subtotalCents)}</dd></div>}
         {receipt?.taxCents!=null&&<div><dt>Tax</dt><dd>{money(receipt.taxCents)}</dd></div>}
-        <div><dt>{receipt ? 'Invoice total' : 'Recorded cost'}</dt><dd>{money(r.amount_cents)}</dd></div>
+        <div><dt>{receipt ? 'Invoice total' : 'Recorded cost'}
+          {receipt?.totalSource && <small>{receipt.totalSource === 'reader' ? 'Read from receipt' : 'Confirmed by driver'}</small>}</dt><dd>{money(r.amount_cents)}</dd></div>
         {receipt?.paidCents!=null&&<div><dt>Amount paid</dt><dd>{money(receipt.paidCents)}</dd></div>}
         {receipt?.balanceDueCents!=null&&<div><dt>Balance due</dt><dd>{money(receipt.balanceDueCents)}</dd></div>}
         {receipt&&<div><dt>Payment source</dt><dd>{{driver:'Driver funds',carrier:'Carrier funds'}[receipt.payer]||'Unconfirmed'}</dd></div>}
@@ -93,6 +99,6 @@ export default function MaintenanceHistory({records,client}) {
         : <p>No maintenance records yet.</p>}</section>
     <section><details className={css.record}><summary><strong>Expense register</strong><span className={css.chevron} aria-hidden="true">⌄</span></summary>
       <div className={css.recordBody}>{costs.length ? <dl className={css.amounts}>{costs.map(r=>
-        <div key={r.id}><dt>{r.vendor||r.description}<small>{dateLabel(r.record_date)}{assetLabel(r)?' · '+assetLabel(r):''}</small></dt><dd>{money(r.amount_cents)}</dd></div>)}</dl>
+        <div key={r.id}><dt>{r.vendor||r.description}<small>{receiptDate(r)}{assetLabel(r)?' · '+assetLabel(r):''}</small></dt><dd>{money(r.amount_cents)}</dd></div>)}</dl>
         : <p>No service costs recorded.</p>}</div></details></section></>;
 }

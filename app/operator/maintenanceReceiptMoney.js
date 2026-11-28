@@ -114,6 +114,7 @@ export function pageMoneyEvidence(page) {
   const amounts = new Map();
   const taxes = new Map();
   const traces = [];
+  const finalReadings = new Set(), strongFinals = new Set();
   const missingTax = new Set();
   const faint = new Set();
   const collect = (map,key,value) => {
@@ -128,7 +129,7 @@ export function pageMoneyEvidence(page) {
   for (const read of reads) {
     for (const row of sourceLines(read)) {
       const text = String(row.text || '').slice(0,1000).trim();
-      const price = splitPrice(text.replace(/\s+USD$/i,''));
+      const price = splitPrice(text.replace(/\s+USD$/i,'').replace(/\b(?:USD\s*|US\$)(?=\s*\$?\s*\d)/i,''));
       if (!price) {
         const named = taxName(text.replace(/[\s:|?]+$/g,''));
         if (named && reliable(row)) missingTax.add(named);
@@ -139,6 +140,11 @@ export function pageMoneyEvidence(page) {
       if ((read.region === 'small-total' || read.region === 'thermal-total') && role !== 'totalCents') continue;
       if (read.region === 'small-tax' && role !== 'taxCents') continue;
       const confidence = moneyConfidence(row,price,read,reads);
+      if (role === 'totalCents') {
+        finalReadings.add(price.cents);
+        if (confidence >= 85 || confidence == null && read.source === 'native-pdf' ||
+            read.region === 'thermal-total' || read.region === 'small-total') strongFinals.add(price.cents);
+      }
       const named = role === 'taxCents' && taxName(price.label);
       if (confidence != null && confidence < 75) {
         faint.add(role);
@@ -148,9 +154,13 @@ export function pageMoneyEvidence(page) {
     }
   }
   if (reads.length) {
-    for (const {role,token,taxLabel,locations} of receiptLayoutAmounts(page,{includeLocations:true})) {
+    for (const {role,token,taxLabel,locations,strongFinal} of receiptLayoutAmounts(page,{includeLocations:true})) {
       const value = splitPrice(token);
       if (!value || value.label) continue;
+      if (role === 'totalCents') {
+        finalReadings.add(value.cents);
+        if (strongFinal) strongFinals.add(value.cents);
+      }
       if (role === 'taxCents') {
         const named = taxName(taxLabel || 'TAX');
         if (named) for (const pos of locations) collectTax(named,value.cents,pos.read,pos);
@@ -187,5 +197,5 @@ export function pageMoneyEvidence(page) {
   } else if (taxes.size) tax = bareAmount == null || bareAmount === 0 ? sum : bareAmount;
   const taxIncomplete = missingTax.size > 0;
   if (!taxConflict && !taxIncomplete && Number.isSafeInteger(tax)) collect(amounts,'taxCents',tax);
-  return {amounts,faint,taxConflict,taxIncomplete};
+  return {amounts,faint,taxConflict,taxIncomplete,finalReadings,strongFinals};
 }
