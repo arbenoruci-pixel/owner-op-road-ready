@@ -3,6 +3,13 @@ import test from 'node:test';
 import {parseMaintenanceReceipt} from '../../app/operator/maintenanceReceiptFields.js';
 import {maintenanceDraft, reviewMaintenance, localServiceDate} from '../../app/operator/maintenanceReview.js';
 
+test('one printed part can supply the editable service description',()=>{
+  const lines = [{description:'Coiled air line',amountCents:2500}];
+  assert.equal(maintenanceDraft({lines},true).description,'Coiled air line');
+  assert.equal(maintenanceDraft({lines,description:'Replaced supply line'},true).description,'Replaced supply line');
+  assert.equal(maintenanceDraft({lines:[...lines,...lines]},true).description,'');
+});
+
 test('an observed $80 invoice with $30 of lines shows its $50 difference and requires deliberate correction',()=>{
   const read=parseMaintenanceReceipt([{text:['Truck: 228','Description Qty Unit Price Amount','Filter 1 10.00 10.00','Labor 1 20.00 20.00','TOTAL: 80.00'].join('\n')}]);
   const draft=maintenanceDraft(read,true);

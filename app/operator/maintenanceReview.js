@@ -17,8 +17,10 @@ export function maintenanceDraft(receipt, hasOriginal = false) {
   const usdField = value => foreign ? '' : moneyText(value);
   const assetType = ['truck','trailer'].includes(receipt?.assetType) ? receipt.assetType : (/^(truck|trailer)\b/i.exec(receipt?.unit || '')?.[1].toLowerCase() || 'unknown');
   return {
+    documentKind:receipt?.documentKind || null,
     assetType, category:'PM', date:receipt?.date || (hasOriginal ? '' : localServiceDate()), unit:receipt?.unit || '',
-    description:receipt?.description || '', odometer:receipt?.odometer?.toString() ?? '',
+    description:receipt?.description || (receipt?.lines?.length === 1 ? receipt.lines[0].description : '') || '',
+    odometer:receipt?.odometer?.toString() ?? '',
     nextOdometer:'', nextDate:'', vendor:receipt?.vendor || '', invoiceNumber:receipt?.invoiceNumber || '',
     mode:foreign ? 'service_only' : (receipt?.lines?.length ? 'itemized' : 'total_only'), lines:foreign ? [] : (receipt?.lines || []).map(newReceiptLine),
     subtotal:usdField(receipt?.subtotalCents), tax:usdField(receipt?.taxCents), amount:usdField(receipt?.printedTotalCents ?? receipt?.totalCents),
@@ -58,6 +60,7 @@ function receiptLine(line, index) {
 
 export function reviewMaintenance(draft) {
   try {
+    if (draft.documentKind === 'bill_of_lading') throw Error('Choose a maintenance receipt to record a service.');
     if (draft.foreignCurrency && draft.mode !== 'service_only') throw Error('This receipt is in '+draft.foreignCurrency+'. Choose an original showing the USD charges.');
     if (draft.multipleInvoices) throw Error('Choose one invoice per service record.');
     const serviceOnly = draft.mode === 'service_only', itemized = draft.mode === 'itemized';

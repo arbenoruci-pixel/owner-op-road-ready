@@ -151,3 +151,35 @@ test('POD review-only resolution exception rejects low light, blur, small text e
   assert.equal(needsSmallPrintReview({detection:{...detection,corners:[{x:0,y:.1},...detection.corners.slice(1)]},quality}),false);
   assert.equal(needsSmallPrintReview({detection,quality:{...quality,issues:[...quality.issues,'Hold steady — text looks blurred']}}),false);
 });
+
+test('portal extends a printed rule only to a verified end of both paper sides', async () => {
+  const {recoverPageBoundary} = await import('../../app/operator/podPageBoundary.js');
+  const width = 320, height = 430, data = new Uint8ClampedArray(width*height*4);
+  const image = {width, height, data};
+  const rejectedCorners = [[.17,.10],[.81,.10],[.81,.39],[.17,.39]].map(([x,y]) => ({x,y}));
+  const detection = {method:'internal-rule-rejected-v110428', metrics:{
+    rejectedCorners, rejectedConfidence:.90, continuation:[0,.2,.94,0],
+  }};
+  const full = {review:true, reason:'detected', corners:FULL_FRAME};
+  function draw({sideContinues = false} = {}) {
+    for (let y=0; y<height; y++) for (let x=0; x<width; x++) {
+      const sheet = x >= width*.17 && x <= width*.81 && y >= height*.1 && y <= height*.76;
+      let rgb = sheet ? [176,175,174] : [158,154,137];
+      if (y > height*.4 && y < height*.76 && x < width*.17) rgb = [67,81,68];
+      if (sideContinues && y > height*.76 && x > width*.81) rgb = [58,75,64];
+      data.set([...rgb,255], (y*width+x)*4);
+    }
+  }
+  draw();
+  const recovered = recoverPageBoundary(image,detection,full,null);
+  assert.equal(recovered.review,false);
+  assert.ok(recovered.corners[2].y > .76 && recovered.corners[2].y < .8);
+  assert.equal(recoverPageBoundary(image,detection,{...full,reason:'capture-file-mismatch'},{detection:{}}).review,true);
+  assert.equal(recoverPageBoundary(image,detection,full,{detection:{found:true}}).review,true);
+  assert.equal(recoverPageBoundary(image,{...detection, metrics:{...detection.metrics,continuation:[.75,.2,1,0]}},full,null),full);
+  draw({sideContinues:true});
+  assert.equal(recoverPageBoundary(image,detection,full,null),full);
+  // A weak edge or similarly colored table on both sides must also stay whole.
+  data.fill(178);
+  assert.equal(recoverPageBoundary(image,detection,full,null),full);
+});

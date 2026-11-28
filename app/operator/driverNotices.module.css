@@ -1,0 +1,31 @@
+.inbox {
+  margin: 0 0 12px;
+  background: var(--surface, Canvas);
+  color: var(--fg, CanvasText);
+  border: 1px solid var(--line, GrayText);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.inbox > summary, .composer > summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  min-height: 44px;
+  box-sizing: border-box;
+  font-weight: 650;
+}
+.inbox > summary strong {
+  margin-inline-start: 12px;
+  color: var(--accent, LinkText);
+  font-size: .85em;
+}
+.body, .form, .form label, .item { display: grid; gap: 8px; }
+.body { padding: 0 14px 14px; }
+.item, .composer { border-top: 1px solid var(--line, GrayText); padding-top: 12px; }
+.item h3, .item p, .body p { margin: 0; }
+.item p { white-space: pre-line; }
+.item button, .item a, .form button { justify-self: start; }
+.body button, .form input, .form textarea { min-height: 44px; font: inherit; }
+.body nav { display: flex; gap: 8px; }
+.composer > summary { padding-left: 0; }
+.form input, .form textarea { box-sizing: border-box; width: 100%; padding: 8px; }
+.form textarea { min-height: 82px; }

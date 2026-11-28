@@ -1,5 +1,6 @@
 'use client';
 import React,{useState,useRef} from 'react';
+import DriverNotices from './DriverNotices.jsx';
 import CarrierPodInvoiceInbox from './PodInvoiceDrafts.jsx';
 import {usePortalClient} from './PortalSession.jsx';
 import {allRows,rows} from './portalData.js';
@@ -70,6 +71,7 @@ function ReportUpload({kind,done}){const c=usePortalClient(),[file,setFile]=useS
 export default function CarrierControl({operators,refresh,done,podLoadId,onClearPodLoad}){const c=usePortalClient(),[week,setWeek]=useState(()=>currentWeek());
  const state=useRead(async()=>{const ids=operators.map(o=>o.id);const [inbox,reports,work,proofs,loads]=await Promise.all([api(c,'intake/review'),api(c,'imports/review'),rpc(c,'rr_lease_step3_worklist'),rpc(c,'rr_lease_step3_firstline_proofs'),allRows(()=>c.from('rr_lease_loads').select('id,operator_id,broker_name,load_number,status,billing_channel,ledger_mode,final_pod_id,gross_cents,settlement_id,actual_delivery_date,load_type').in('operator_id',ids).order('id'))]);return {inbox,reports,work,proofs,loads}},[c,refresh,operators.map(o=>o.id).join(',')]);
  return <div className={css.stack}><h2>Company control · private</h2>
+ {operators.filter(o=>o.workspace_kind==='carrier').map(o=><DriverNotices key={o.id} operatorId={o.id} publish/>)}
  <CarrierPodInvoiceInbox key={podLoadId || 'all'} refresh={refresh} done={done} loadId={podLoadId} onClear={onClearPodLoad}
    renderReview={p=><PhonePodDecision p={p} done={done}/>}/>
  <label>Monday week start<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label><CompanyNumbers week={week} refresh={refresh}/><h2>Import reports</h2><ReportUpload kind="amazon" done={done}/><ReportUpload kind="firstline" done={done}/>

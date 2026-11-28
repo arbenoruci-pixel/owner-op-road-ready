@@ -1,4 +1,8 @@
 import {readDocument} from '../../packages/smart-reader-core/src/index.js';
+import {maintenanceHeader, printedDate} from './maintenanceReceiptHeader.js';
+import {receiptLayoutAmounts} from './maintenanceReceiptLayout.js';
+import {maintenanceTableItems} from './maintenanceReceiptItems.js';
+import {includesFreightPage, receiptCurrency} from './maintenanceReceiptEvidence.js';
 
 const money = String.raw`(?:\(\s*\$?\s*\d[\d,]*\.\d{2}\s*\)|-?\s*\$?\s*\d[\d,]*\.\d{2}-?)`;
 const amountAtEnd = new RegExp('(' + money + ')\\s*(?:USD)?$', 'i');
@@ -18,14 +22,6 @@ function cents(token) {
   if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)\.\d{2}$/.test(value)) return null;
   const number = Number(value.replace(/[,.]/g, ''));
   return Number.isSafeInteger(number) ? (negative ? -number : number) : null;
-}
-
-function dateValue(raw) {
-  const m = /\b(?:(20\d\d)-(\d{1,2})-(\d{1,2})|(\d{1,2})[/-](\d{1,2})[/-](20\d\d))\b/.exec(raw || '');
-  if (!m) return '';
-  const date = [m[1] || m[6], (m[2] || m[4]).padStart(2,'0'), (m[3] || m[5]).padStart(2,'0')].join('-');
-  const day = new Date(date + 'T12:00:00Z');
-  return Number.isFinite(day.valueOf()) && day.toISOString().slice(0,10) === date ? date : '';
 }
 
 function onlyValue(values) {
@@ -63,30 +59,30 @@ export function parseMaintenanceReceipt(pages) {
   let clipped = false;
   for (const [index, page] of pages.entries()) {
     const source = page.lines?.length ? page.lines : (page.text || '').split(/\r?\n/).map(text => ({text}));
-    if (source.length > 450 || source.some(row => row.text?.length > 1000)) clipped = true;
+    if (source.length > 450 || source.some(row => row.text?.length > 1000) ||
+        [page,...(page.supplemental || [])].some(read => read.words?.length > 4000 || read.lines?.length > 450)) clipped = true;
     const lines = source.slice(0,450).map(row => ({
       text:String(row.text || '').slice(0,1000).replace(/\s+/g,' ').trim(),
       confidence:Number.isFinite(row.confidence) ? Math.min(1, row.confidence / 100) : null,
     })).filter(row => row.text);
-    if (lines.length) records.push({id:'page-' + (page.number || index + 1), observations:[{source:page.source || 'text', lines}]});
+    if (lines.length) records.push({inputIndex:index,id:'page-' + (page.number || index + 1), observations:[{source:page.source || 'text', lines}]});
   }
   const result = {vendor:'', date:'', unit:'', assetType:'unknown', odometer:null, invoiceNumber:'', description:'', lines:[], subtotalCents:null,
     taxCents:null, totalCents:null, paidCents:null, balanceDueCents:null, printedTotalCents:null,itemizedCents:null,differenceCents:null,currency:null,foreignCurrency:false,partialRead:false,
     multipleInvoices:false, issues:[], pagesRead:records.length};
   if (!records.length) return {...result,issues:['No readable receipt details were found. Enter the details from the original.']};
-  const docs = readDocument({documentId:'maintenance-receipt',pages:records}).documents;
   const rows = records.flatMap(page => page.observations[0].lines);
   const reliable = rows.filter(row => row.confidence == null || row.confidence >= .75).map(row => row.text);
+  if (includesFreightPage(pages)) return {...result, documentKind:'bill_of_lading',
+    issues:['This looks like a freight document. Choose a maintenance receipt or attach this page to its load.']};
+  const docs = readDocument({documentId:'maintenance-receipt',pages:records}).documents;
   const values = regex => reliable.map(row => regex.exec(row)?.[1]?.trim()).filter(Boolean);
   const field = key => onlyValue(docs.map(doc => doc.fields[key]).filter(f => f?.status === 'supported').map(f => f.value));
-  const invoiceIds = [
-    ...values(/^(?:(?:repair|service|sales)\s+)?invoice\s*(?:number\b|no\b\.?|id\b|#|:)\s*[:#-]?\s*([A-Z\d][A-Z\d./_-]*)\b/i),
-    ...values(/^(?:repair|service|sales)\s+invoice\s+((?=[A-Z\d./_-]*\d)[A-Z\d][A-Z\d./_-]*)\s*$/i),
-  ];
-  const refs = [...new Set(invoiceIds.map(id => id.toUpperCase()))];
-  result.multipleInvoices = refs.length > 1;
-  result.invoiceNumber = onlyValue(invoiceIds) || (!refs.length ? field('invoiceNumber') : '') || '';
-  result.vendor = onlyValue(values(/^(?:vendor|merchant|shop name|service provider)\s*[:#-]\s*(.+)$/i)) || field('vendor') || field('merchant') || '';
+  const header = maintenanceHeader(pages);
+  const invoiceIds = header.invoiceNumbers;
+  result.multipleInvoices = invoiceIds.length > 1;
+  result.invoiceNumber = onlyValue(invoiceIds) || (!invoiceIds.length ? field('invoiceNumber') : '') || '';
+  result.vendor = header.vendor || field('vendor') || field('merchant') || '';
   if (!result.vendor) {
     const header = reliable.slice(0,4).filter(row => /^[\p{L}][\p{L}\d &.'’-]{2,70}$/u.test(row) && /\b(?:repair|truck|tire|auto|service|parts|garage|diesel|motors)\b/i.test(row) && !/\b(?:invoice|receipt|order|date|description|service performed)\b/i.test(row));
     result.vendor = onlyValue(header) || '';
@@ -99,24 +95,24 @@ export function parseMaintenanceReceipt(pages) {
   result.unit = onlyValue(values(/^(?:unit|truck|trailer|vehicle)(?:\s*(?:number|no\.?|id|#))?(?:\s*[:#-]\s*|\s+)((?=[A-Z\d-]*\d)[A-Z\d][A-Z\d-]*)\b/i)) || field('unitNumber') || '';
   const seenAsset = reliable.map(row => /^(truck|trailer)(?:\s*(?:number|no\.?|id|#))?(?:\s*[:#-]\s*|\s+)((?=[A-Z\d-]*\d)[A-Z\d][A-Z\d-]*)\b/i.exec(row)).filter(m => m && m[2] === result.unit);
   result.assetType = onlyValue(seenAsset.map(m => m[1].toLowerCase())) || 'unknown';
-  result.date = onlyValue(values(/^(?:(?:invoice|service|receipt|transaction)\s+)?date\s*[:#-]?\s*(.+)$/i).map(dateValue)) || dateValue(field('date'));
+  result.date = header.date || (!header.conflictingDates ? printedDate(field('date') || '') : '');
   const odo = onlyValue(values(/^(?:odometer|mileage)\s*[:#-]?\s*([0-9][0-9,]*)\b/i)) || field('odometer');
   if (odo && /^\d{1,8}$/.test(String(odo).replaceAll(',',''))) result.odometer = Number(String(odo).replaceAll(',',''));
   result.description = onlyValue(values(/^(?:work performed|service performed|repair description|service description)\s*:\s*(.+)$/i)) || '';
 
-  const currencyTokens = new Set();
-  for (const row of rows) {
-    for (const match of row.text.matchAll(/\b(USD|CAD|EUR|GBP|AUD|MXN|CHF|NZD|JPY|INR|BRL)\b|(?:CA|C|US|AU|A|NZ|MX)\$|[€£¥₹]/gi)) {
-      const token = match[0].toUpperCase();
-      currencyTokens.add(({ 'C$':'CAD','CA$':'CAD','US$':'USD','A$':'AUD','AU$':'AUD','NZ$':'NZD','MX$':'MXN','€':'EUR','£':'GBP','¥':'JPY','₹':'INR' })[token] || token);
-    }
+  const currency = receiptCurrency(pages);
+  result.currency = currency.currency;
+  result.foreignCurrency = currency.foreignCurrency;
+  if (currency.foreignCurrency) issues.add('A foreign or mixed currency appears on this receipt. Check the currency before recording a USD cost.');
+  else if (currency.requiresReview) {
+    result.partialRead = true;
+    issues.add('The currency beside a printed amount is unclear. Verify it on the original before recording a USD cost.');
   }
-  result.currency = onlyValue([...currencyTokens]);
-  result.foreignCurrency = [...currencyTokens].some(code => code !== 'USD');
-  if (result.foreignCurrency) issues.add('A foreign or mixed currency appears on this receipt. Check the currency before recording a USD cost.');
   const amounts = new Map(labeledMoney.map(([key]) => [key,[]]));
+  const faintRoles = new Set();
   let mismatched = false, weakMoney = false;
   for (const page of records) {
+    const firstItem = result.lines.length;
     let inGrid = false, afterSubtotal = false;
     for (const row of page.observations[0].lines) {
       if (gridHeader.test(row.text) && !amountAtEnd.test(row.text)) { inGrid = true; afterSubtotal = false; continue; }
@@ -126,7 +122,7 @@ export function parseMaintenanceReceipt(pages) {
         // A label such as "TOTAL LABOR" is a section summary, not invoice total.
         const value = amountAtEnd.exec(rest);
         if (!value || !/^(?:\s*[:=$|–-]?\s*(?:\d+(?:\.\d+)?\s*%)?\s*[:=$|–-]?\s*)$/.test(rest.slice(0,value.index))) continue;
-        if (row.confidence != null && row.confidence < .75) { weakMoney = true; continue; }
+        if (row.confidence != null && row.confidence < .75) { faintRoles.add(role[0]); continue; }
         const n = cents(value[1]);
         if (n != null) amounts.get(role[0]).push(n);
         inGrid = false;
@@ -134,6 +130,9 @@ export function parseMaintenanceReceipt(pages) {
         continue;
       }
       if (afterSubtotal || /^(?:parts|labor|services?)\s+total\b/i.test(row.text)) continue;
+      // A block read often flattens an entire footer. A line that starts
+      // with Labor or Parts and also contains a financial summary is not an item.
+      if (/\b(?:taxable|non-taxable|amount tendered|change returned|grand total)\b/i.test(row.text) && /\b(?:total|discount|tax)\b/i.test(row.text)) continue;
       const item = itemFromRow(row.text, inGrid);
       if (!item) continue;
       if (row.confidence != null && row.confidence < .75) { weakMoney = true; continue; }
@@ -143,11 +142,18 @@ export function parseMaintenanceReceipt(pages) {
       }
       result.lines.push(item);
     }
+    const input = pages[page.inputIndex];
+    if (firstItem === result.lines.length) result.lines.push(...maintenanceTableItems(input));
+    for (const {role,token} of receiptLayoutAmounts(input)) {
+      const n = cents(token);
+      if (n != null) amounts.get(role).push(n);
+    }
   }
   for (const [key, observed] of amounts) {
     result[key] = onlyValue(observed);
     if (new Set(observed).size > 1) { mismatched = true; issues.add('Different printed amounts share the same label. Confirm the figures on the original.'); }
   }
+  weakMoney ||= [...faintRoles].some(key => result[key] == null);
   const {subtotalCents, taxCents, totalCents, paidCents, balanceDueCents} = result;
   result.printedTotalCents = totalCents;
   if (subtotalCents != null && taxCents != null && totalCents != null && subtotalCents + taxCents !== totalCents) {
@@ -167,7 +173,7 @@ export function parseMaintenanceReceipt(pages) {
   if (weakMoney) issues.add('Some printed amounts were too faint to read confidently. Check them on the original.');
   if (clipped) { result.partialRead = true; issues.add('This receipt exceeds the reading limit. Review the full original.'); }
   if (result.multipleInvoices) issues.add('More than one invoice number was found. Attach each invoice separately.');
-  if (mismatched || result.multipleInvoices || result.foreignCurrency || weakMoney || clipped) result.totalCents = null;
+  if (mismatched || result.multipleInvoices || result.foreignCurrency || weakMoney || result.partialRead) result.totalCents = null;
   if (totalCents == null && !mismatched) issues.add('No single printed invoice total was found. Check the original before entering an amount.');
   result.issues = [...issues];
   return result;

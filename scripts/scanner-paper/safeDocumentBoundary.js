@@ -93,5 +93,10 @@ export function detectSafeDocumentBoundary(image,options={}) {
     const corners=selected.corners.map(p=>({x:clamp(p.x+(p.x-cx)*.008),y:clamp(p.y+(p.y-cy)*.008)}));
     return {...selected,corners,found:true,method:detection.method,metrics:{...detection.metrics,...selected.metrics,continuation,completePageGuard:true},...(options.debug?{candidates:debugCandidates||detection.candidates}:{})};
   }
-  return full('internal-rule-rejected-v110428',{continuation:paperContinuation(image,detection.corners,{shadows:true})});
+  return full('internal-rule-rejected-v110428',{
+    continuation:paperContinuation(image,detection.corners,{shadows:true}),
+    // Keep the rejected geometry only as evidence for the portal's bounded
+    // outer-edge search. It must never be used as an automatic crop itself.
+    rejectedCorners:detection.corners, rejectedConfidence:detection.confidence,
+  });
 }

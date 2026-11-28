@@ -1,19 +1,92 @@
 import {nativePdfLayout} from '../../packages/smart-reader-core/src/pdfLayout.js';
+import {maintenanceItemRegion, suppressItemGrid} from './maintenanceReceiptItems.js';
+import {includesFreightPage} from './maintenanceReceiptEvidence.js';
 import {getReceiptPhotos} from './maintenanceReceiptPhotos.js';
 
 const maxPages = 8;
 
-async function readPhoto(file, {signal, progress}) {
-  const {recognizeDocumentText} = await import('../../scripts/v110383/webOcr.js');
-  const read = await recognizeDocumentText(file, {signal, onProgress:progress, pageSegMode:'6', returnLayout:true});
-  if (!read?.text?.trim()) throw new Error('No readable text');
-  // Tesseract sometimes omits the TSV grid for a readable image.
-  const lines = read.lines?.length ? read.lines : read.text.split(/\r?\n/).map(text => ({text, confidence:100 * read.confidence}));
-  return {text:read.text, lines, source:'ocr'};
+// Upsample small print only for the local OCR retry. The saved image stays
+// untouched and the transient canvas is bounded on older phones.
+async function scaleForReading(file, region) {
+  const url = URL.createObjectURL(file);
+  const canvas = document.createElement('canvas');
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const area = region || {left:0,top:0,width:1,height:1};
+    const left = Math.floor(image.naturalWidth*area.left);
+    const top = Math.floor(image.naturalHeight*area.top);
+    const width = Math.min(image.naturalWidth-left, Math.ceil(image.naturalWidth*area.width));
+    const height = Math.min(image.naturalHeight-top, Math.ceil(image.naturalHeight*area.height));
+    const scale = Math.min(region ? 4 : 2.3, (region ? 4000 : 3200)/Math.max(width,height),
+      Math.sqrt((region ? 2400000 : 6000000)/(width*height)));
+    canvas.width = Math.max(1, Math.round(width*scale));
+    canvas.height = Math.max(1, Math.round(height*scale));
+    const context = canvas.getContext('2d',{alpha:false});
+    context.fillStyle = 'white';
+    context.fillRect(0,0,canvas.width,canvas.height);
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(image, left, top, width, height, 0, 0, canvas.width, canvas.height);
+    if (region) {
+      const itemPixels = context.getImageData(0,0,canvas.width,canvas.height);
+      suppressItemGrid(itemPixels);
+      context.putImageData(itemPixels,0,0);
+    }
+    const pixels = await new Promise(resolve => canvas.toBlob(resolve,'image/png'));
+    if (!pixels) throw new Error('Photo pixels unavailable');
+    return pixels;
+  } finally {
+    URL.revokeObjectURL(url);
+    canvas.width = canvas.height = 1;
+  }
 }
 
-function nativeRows(content, viewport) {
-  const parts = nativePdfLayout(content, viewport);
+function positionItemRead(read, area, imageSize) {
+  const scaleX = imageSize.width*area.width/read.imageSize.width;
+  const scaleY = imageSize.height*area.height/read.imageSize.height;
+  const position = word => {
+    const left = area.left*imageSize.width + word.left*scaleX;
+    const top = area.top*imageSize.height + word.top*scaleY;
+    const width = word.width*scaleX, height = word.height*scaleY;
+    return {...word,left,top,width,height,right:left+width,bottom:top+height};
+  };
+  return {...read,region:'items',imageSize,words:read.words.map(position),lines:read.lines.map(position)};
+}
+
+async function readPhoto(file, {signal, progress}) {
+  const {recognizeDocumentText} = await import('../../scripts/v110383/webOcr.js');
+  const read = await recognizeDocumentText(file, {signal, onProgress:value => progress(value*.40), pageSegMode:'6', returnLayout:true});
+  const primary = read || {text:'',lines:[],words:[]};
+  const lines = primary.lines?.length ? primary.lines : primary.text.split(/\r?\n/).map(text => ({text, confidence:100 * primary.confidence}));
+  const page = {...primary,lines,source:'ocr'};
+  const hasClearTotal = lines.some(row => row.confidence >= 80 && /^(?:(?:invoice|grand)\s+)?total\s*[:$ ]*\d[\d,]*\.\d{2}\s*$/i.test(row.text));
+  // A sparse pass separates prices, quantities and the final total on grid
+  // forms. Reuse the primary result for clearly readable simple receipts.
+  if (!hasClearTotal && !includesFreightPage([page])) {
+    try {
+      const pixels = await scaleForReading(file);
+      signal?.throwIfAborted();
+      const sparse = await recognizeDocumentText(pixels,{signal,pageSegMode:'11',returnLayout:true,onProgress:value => progress(.40+value*.45)});
+      if (sparse?.text?.trim()) {
+        if (!primary.text.trim()) return {...sparse,source:'ocr'};
+        page.supplemental = [sparse];
+        const area = maintenanceItemRegion(page);
+        if (area && sparse.imageSize) {
+          const crop = await scaleForReading(file, area);
+          const itemRead = await recognizeDocumentText(crop,{signal,pageSegMode:'6',returnLayout:true,onProgress:value => progress(.85+value*.15)});
+          if (itemRead?.imageSize && itemRead.words?.length) page.supplemental.push(positionItemRead(itemRead,area,sparse.imageSize));
+        }
+      }
+    } catch {
+      signal?.throwIfAborted();
+    }
+  }
+  if (!primary.text.trim()) throw new Error('No readable text');
+  return page;
+}
+
+function nativeRows(parts) {
   const rows = [];
   for (const item of parts) {
     const last = rows.at(-1);
@@ -24,14 +97,28 @@ function nativeRows(content, viewport) {
   return rows;
 }
 
+async function reviewImageFile(file, options) {
+  // The file picker may contain a raw camera image. Analyze the same page
+  // geometry as the scanner, while retaining the driver's original upload.
+  let photo = file;
+  try {
+    const {prepareReceiptImage} = await import('roadready-pod-scanner');
+    options.signal?.throwIfAborted();
+    photo = await prepareReceiptImage(file);
+  } catch { options.signal?.throwIfAborted(); }
+  return readPhoto(photo,options);
+}
+
 async function readPdfPage(page, options) {
   const viewport = page.getViewport({scale:1});
-  const rows = nativeRows(await page.getTextContent(), viewport);
+  const words = nativePdfLayout(await page.getTextContent(), viewport);
+  const rows = nativeRows(words);
+  const native = {lines:rows,words,imageSize:{width:viewport.width,height:viewport.height},source:'native-pdf'};
   const text = rows.map(row => row.text).join('\n');
   // A scan can have a native text overlay containing only a page number,
   // header or watermark. Read the printed page when that layer lacks detail.
   if (text.length >= 35 && rows.length >= 3 && /\d[\d,]*\.\d{2}\b/.test(text)) {
-    return {text, lines:rows, source:'native-pdf'};
+    return {...native,text};
   }
   const canvas = document.createElement('canvas');
   const raster = page.getViewport({scale:Math.min(4, 2400 / Math.max(viewport.width, viewport.height))});
@@ -49,7 +136,7 @@ async function readPdfPage(page, options) {
     return await readPhoto(image, options);
   } catch (error) {
     options.signal?.throwIfAborted();
-    if (text.trim()) return {text, lines:rows, source:'native-pdf', incomplete:true};
+    if (text.trim()) return {...native,text,incomplete:true};
     throw error;
   } finally {
     options.signal?.removeEventListener('abort', stop);
@@ -95,7 +182,7 @@ export async function readMaintenanceReceipt(file, {signal, onProgress = () => {
       try {
         const options = {signal, progress};
         if (pdf) page = await pdf.getPage(i + 1);
-        const result = page ? await readPdfPage(page, options) : await readPhoto(photos?.[i] || file, options);
+        const result = page ? await readPdfPage(page, options) : photos ? await readPhoto(photos[i], options) : await reviewImageFile(file,options);
         pages.push({...result, number:i + 1});
         if (result.incomplete) issues.push(`Only some text on page ${i + 1} could be read. Check the original.`);
       } catch {

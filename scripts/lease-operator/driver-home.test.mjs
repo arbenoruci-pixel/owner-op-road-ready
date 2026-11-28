@@ -30,6 +30,18 @@ test('driver settings share one profile while the office keeps its existing cont
   assert.doesNotMatch(workspace('office'), /<summary>Profile<\/summary>|data-driver-portal/);
 });
 
+test('signed-in drivers can open the inbox and only dispatch gets the publishing form', async () => {
+  const driver = workspace('driver');
+  assert.match(driver, /Driver notices/);
+  assert.doesNotMatch(driver, /Publish to fleet drivers/);
+  const {default: CarrierControl} = await import('../../app/operator/Step3Carrier.jsx');
+  const own = {...operator, id:'office-workspace', workspace_kind:'carrier', driver_user_id:null};
+  const office = renderToStaticMarkup(React.createElement(PortalSession.Provider, {value:{}},
+    React.createElement(CarrierControl, {operators:[own,operator], done(){}})));
+  assert.match(office, /Publish to fleet drivers/);
+  assert.equal((office.match(/Write a driver notice/g) || []).length, 1);
+});
+
 test('load card puts actual stops and assigned POD controls ahead of broker copy and gross', () => {
   function card(id) {
     const load = {

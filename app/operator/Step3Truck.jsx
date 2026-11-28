@@ -10,7 +10,7 @@ import MaintenanceHistory,{ServiceRecord} from './MaintenanceHistory.jsx';
 import css from './maintenance.module.css';
 
 const fileTypes=['application/pdf','image/jpeg','image/png'];
-export default function TruckTools({operator,refresh,done}) {
+export default function TruckTools({operator,refresh,done,onChooseLoad}) {
   const client=usePortalClient();
   const state=useRead(()=>listMaintenanceReceipts(client,operator.id),[client,operator.id,refresh]);
   const [draft,setDraft]=useState(null),[file,setFile]=useState(null),[url,setUrl]=useState(null);
@@ -72,6 +72,7 @@ export default function TruckTools({operator,refresh,done}) {
     }}/>
     {draft ? <MaintenanceEditor draft={draft} setDraft={updater=>{setDuplicate(null);setError('');setDraft(updater);}} file={file}
       originalUrl={url} reading={reading} onSkip={()=>{read.current?.abort();read.current=null;setReading(false);}}
+      onChooseLoad={onChooseLoad} onChooseReceipt={()=>fileInput.current?.click()}
       busy={busy} duplicate={duplicate} matched={matched&&<ServiceRecord record={matched} client={client}/>} onSubmit={save} onBack={clear} error={error}/>
       : <div className={css.page}><header><h2>Truck maintenance</h2></header>
         {message && <p role="status" className={css.match}>{message}</p>}

@@ -11,6 +11,7 @@ import DriverPay, {OwnPay} from './DriverPay.jsx';
 import OperatorWallet from './OperatorWallet.jsx';
 import CarrierControl from './Step3Carrier.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
+import DriverNotices from './DriverNotices.jsx';
 import DriverPassword from './DriverPassword.jsx';
 import LoadCard from './TrainingLoadCard.jsx';
 import RateconDriverTest from './RateconDriverTest.jsx';
@@ -55,7 +56,7 @@ export function OriginalLink({id,operatorId,wallet=false,label='Open original'})
 }
 const podFileTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-function PodUpload({loadId, loadNumber, brokerName, done, addendum=false, needsCorrection=false}) {
+function PodUpload({loadId, loadNumber, brokerName, done, addendum=false, needsCorrection=false, transportFile, onFilePicked}) {
   const client = usePortalClient();
   const canScan = process.env.NEXT_PUBLIC_OPERATOR_POD_SCANNER !== 'false';
   const [file, setFile] = useState(null);
@@ -121,7 +122,7 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false, needsC
 
   function openAssignedUpload(event) {
     const disclosure = event.currentTarget.parentElement;
-    if (disclosure.open || file || !canScan) return;
+    if (disclosure.open || file || transportFile || !canScan) return;
     event.preventDefault();
     disclosure.open = true;
     void openScanner();
@@ -218,6 +219,10 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false, needsC
         {file.type === 'application/pdf' && <button type="button" ref={viewButton} aria-haspopup="dialog"
           disabled={busy || opening} onClick={() => setViewing(true)}>View PDF</button>}
       </> : <small>PDF, JPEG, PNG or WebP · Up to 3 MiB</small>}
+      {!file && transportFile && loadId && <button type="button" className={css.primary} onClick={()=>{
+        try { selectFile(transportFile); onFilePicked(); }
+        catch (err) { setError(err.message); }
+      }}>Use scanned BOL for load #{loadNumber}</button>}
       <div className={css.podSources}>
         {canScan && <button type="button" className={file ? undefined : css.primary} ref={scanButton} aria-haspopup="dialog"
           disabled={busy || opening} onClick={openScanner}>{opening ? 'Opening scanner…' : 'Scan POD'}</button>}
@@ -241,7 +246,7 @@ function PodUpload({loadId, loadNumber, brokerName, done, addendum=false, needsC
 function Stop({label,address,at,zone,reference}){
  return <section className={css.stop}><small>{label}</small><strong>{address||'Address pending'}</strong><p>{appointment(at,zone)||'Appointment pending'}</p>{reference&&<p>Reference: {reference}</p>}{address&&<a target="_blank" rel="noreferrer" href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(address)}>Open in Google Maps</a>}</section>;
 }
-function LoadDetails({load,pods,driverView,refresh,done,acceptsAddendum,initialOpen}){
+function LoadDetails({load,pods,driverView,refresh,done,acceptsAddendum,initialOpen,transportFile,onFilePicked}){
  const c=usePortalClient(),docs=useRead(()=>rows(c.from('rr_lease_documents').select(docFields).eq('load_id',load.id).eq('is_ready',true).order('is_current',{ascending:false}).order('id')),[c,load.id,refresh]);
  const pending=pods.some(x=>x.review_status==='PENDING'),approved=pods.some(x=>x.review_status==='APPROVED'&&x.document_id===load.final_pod_id),rejected=!approved&&!pending&&pods.some(x=>x.review_status==='REJECTED');
  const ratecon = docs.value?.find(d => d.kind === 'ratecon' && d.is_current && d.mime_type === 'application/pdf');
@@ -250,7 +255,7 @@ function LoadDetails({load,pods,driverView,refresh,done,acceptsAddendum,initialO
  const podStatus = pending || approved ? 'POD received' : rejected ? 'POD needs correction' : '';
  const status = load.load_type==='TONU'?'TONU · cancelled':load.status.replaceAll('_',' ');
  const pod = (acceptsAddendum || (load.load_type!=='TONU' && ['assigned','picked_up','delivered'].includes(load.status) && load.billing_channel==='FIRSTLINE_FACTORED'))
-   && <PodUpload loadId={load.id} loadNumber={load.load_number} brokerName={load.broker_name} needsCorrection={rejected} addendum={acceptsAddendum} done={done}/>;
+   && <PodUpload loadId={load.id} loadNumber={load.load_number} brokerName={load.broker_name} needsCorrection={rejected} addendum={acceptsAddendum} done={done} transportFile={transportFile} onFilePicked={onFilePicked}/>;
  const more = <>
  <h3>Broker rules</h3><dl className={css.pairs}>{['tracking','detention','layover','lumper','podDeadline'].map(k=><div key={k}><dt>{k==='podDeadline'?'POD deadline':k}</dt><dd>{load.broker_rules?.[k]||'Not confirmed'}</dd></div>)}</dl>
  {load.reefer_instructions&&<p>{load.reefer_instructions}</p>}{load.steps?.map((s,i)=><p key={i}><strong>{s.title}</strong> · {s.detail}</p>)}
@@ -273,7 +278,7 @@ function LoadDetails({load,pods,driverView,refresh,done,acceptsAddendum,initialO
  {more}{pod}
  </div></details>;
 }
-function Loads({operator,driverView,refresh,done}){
+function Loads({operator,driverView,refresh,done,transportFile,onFilePicked}){
  const c=usePortalClient(),state=useRead(async()=>{const [loads,pods]=await Promise.all([allRows(()=>c.from('rr_lease_loads').select(loadFields+',billing_channel,broker_rules,final_pod_id,ledger_mode,cancelled_at,load_type,tonu_confirmation_id').eq('operator_id',operator.id).order('updated_at',{ascending:false}).order('id')),rpc(c,'rr_lease_step3_pod_status',{p_operator_id:operator.id})]);return {loads,pods}},[c,operator.id,refresh],{keepWhileRefreshing:true});
  const corrections = useRead(async () => {
    const {data, error} = await c.rpc('rr_lease_pod_correction_loads', {p_operator_id:operator.id});
@@ -283,11 +288,16 @@ function Loads({operator,driverView,refresh,done}){
  }, [c,operator.id,refresh], {keepWhileRefreshing:true});
  const [week,setWeek]=useState(()=>currentWeek());
  const unassignedUpload = <details className={css.panel}><summary>Add POD without a load</summary><div className={css.detail}><PodUpload done={done}/></div></details>;
- return <div className={css.stack}>{!driverView && unassignedUpload}
+ return <div className={css.stack}>
+ {transportFile && <aside className={css.podReceipt} data-operator-update-pending="true">
+   <div role="status"><strong>Choose the load for this BOL</strong><small>Open Add POD on the matching load to use your scan.</small></div>
+   <button type="button" onClick={onFilePicked}>Dismiss scan</button>
+ </aside>}
+ {!driverView && unassignedUpload}
  <ReadState state={state}>{({loads,pods})=>{
  const active=loads.filter(l=>['staging','assigned','picked_up'].includes(l.status));
  const history=loads.filter(l=>!active.includes(l)&&(((l.actual_delivery_date||l.cancelled_at?.slice(0,10))>=''+week&&(l.actual_delivery_date||l.cancelled_at?.slice(0,10))<moveDay(week,7))||(!l.actual_delivery_date&&pods.some(p=>p.load_id===l.id&&p.review_status==='REJECTED'))));
- const card=l=><LoadDetails initialOpen={l.id===active[0]?.id} acceptsAddendum={corrections.value?.includes(l.id) || false} key={l.id} load={l} pods={pods.filter(p=>p.load_id===l.id)} driverView={driverView} refresh={refresh} done={done}/>;
+ const card=l=><LoadDetails initialOpen={l.id===active[0]?.id} acceptsAddendum={corrections.value?.includes(l.id) || false} key={l.id} load={l} transportFile={transportFile} onFilePicked={onFilePicked} pods={pods.filter(p=>p.load_id===l.id)} driverView={driverView} refresh={refresh} done={done}/>;
  const historyWeek=<label>Week<input type="date" value={week} onChange={e=>{if(e.target.value)setWeek(weekStart(e.target.value))}}/></label>;
  const previous=<>{corrections.error&&<p role="alert">{corrections.error}</p>}{history.length?history.map(card):<p>No completed loads in this week.</p>}</>;
  return <><h2>Active loads</h2>{active.length?active.map(card):<p>No assigned loads.</p>}
@@ -339,6 +349,7 @@ export default function Step3Workspace({operator,session,operators,workspacePick
  },[driverView]);
  const [noticeTarget,setNoticeTarget]=useState(null);
  const [receipt,setReceipt]=useState(null);
+ const [transportFile,setTransportFile]=useState(null);
  const reload=()=>setRefresh(n=>n+1);
  function selectTab(key){
    clearPodLoad();
@@ -368,9 +379,10 @@ export default function Step3Workspace({operator,session,operators,workspacePick
    </button>)}
  </nav>
  <div ref={setNoticeTarget} />
+ <DriverNotices key={operator.id} operatorId={operator.id}/>
  </>;
 
- return <section className={driverView ? css.shell+' '+css.driverShell : css.shell} data-driver-portal={driverView || undefined} data-operator-passive-view={Boolean((own || driverView) && (tab === 'load' || tab === 'pay'))} data-theme={dark?'dark':'light'}>
+ return <section className={driverView ? css.shell+' '+css.driverShell : css.shell} data-driver-portal={driverView || undefined} data-operator-update-pending={transportFile ? 'true' : undefined} data-operator-passive-view={Boolean((own || driverView) && (tab === 'load' || tab === 'pay'))} data-theme={dark?'dark':'light'}>
  {driverView ? driverNavigation : <>
  <header className={css.hero}><div><small>{operator.driver_name}</small><h1>{operator.company_name}</h1></div><button type="button" aria-pressed={dark} onClick={()=>setDark(v=>!v)}>{dark?'Light mode':'Dark mode'}</button></header>
  <nav className={css.tabs} aria-label="Operator tabs" data-operator-navigation>{[['load','LOAD'],['pay','PAY'],['docs','DOCS'],['truck','TRUCK']].map(([key,label])=><button key={key} aria-pressed={tab===key} type="button" onClick={()=>{clearPodLoad();setTab(key)}}>{label}</button>)}</nav>
@@ -381,13 +393,13 @@ export default function Step3Workspace({operator,session,operators,workspacePick
    <div role="status"><strong>{receipt.message}</strong><small>Load #{receipt.loadNumber} · {receipt.fileName}</small></div>
    <button type="button" aria-label="Dismiss upload receipt" onClick={() => setReceipt(null)}>Close</button>
  </aside>}
- {tab==='load'&&<Loads operator={operator} driverView={driverView} refresh={refresh} done={received=>{setReceipt(received);reload()}}/>}
+ {tab==='load'&&<Loads transportFile={transportFile} onFilePicked={()=>setTransportFile(null)} operator={operator} driverView={driverView} refresh={refresh} done={received=>{setReceipt(received);reload()}}/>}
  {tab==='pay'&&(own?<OwnPay refresh={refresh}/>:<DriverPay operator={operator} refresh={refresh}/>)}
  {tab==='docs' && (driverView ? <>
    <OperatorWallet operatorId={operator.id} refresh={refresh} portal/>
    <DotOffline operator={operator} userId={session.user.id} refresh={refresh} walletShown/>
  </> : <><DotOffline operator={operator} userId={session.user.id} refresh={refresh}/><OperatorWallet operatorId={operator.id} refresh={refresh}/></>)}
- {tab==='truck'&&<TruckTools operator={operator} refresh={refresh} done={reload}/>}
+ {tab==='truck'&&<TruckTools operator={operator} refresh={refresh} done={reload} onChooseLoad={file=>{setTransportFile(file);selectTab('load')}}/>}
  {tab==='company'&&company&&<CarrierControl operators={operators.filter(o=>o.carrier_user_id===session.user.id)} refresh={refresh} done={reload} podLoadId={podLoadId} onClearPodLoad={clearPodLoad}/>}
  </div></section>;
 }

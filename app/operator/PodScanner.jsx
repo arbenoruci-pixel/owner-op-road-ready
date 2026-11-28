@@ -11,6 +11,11 @@ import {rememberReceiptPhotos} from './maintenanceReceiptPhotos.js';
 import {uploadReviewedPod} from './podUpload.js';
 import css from './podScanner.module.css';
 
+export async function prepareReceiptImage(file) {
+  const {result} = await processPodPage(file, 'photo-intake');
+  return result.metadata.captureManifest.boundary.needsReview ? file : result.displayFile;
+}
+
 function ScanIcon({name}) {
   const paths = {
     camera: <><path d="M3 7h4l1.8-3h6.4L17 7h4v13H3z"/><circle cx="12" cy="13" r="3.4"/></>,

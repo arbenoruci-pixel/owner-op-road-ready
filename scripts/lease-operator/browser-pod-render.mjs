@@ -28,6 +28,7 @@ try {
   await page.goto('http://127.0.0.1:' + server.address().port);
   const results = await page.evaluate(async () => {
     const {processDocumentClient} = await import('/source/src/modules/scan/v3/processDocumentClientV110330.js');
+    const {decodeImageFileV3, imageDataToFileV3} = await import('/source/src/modules/scan/v3/imageUtilsV3.js');
     const {scannerEngineV3} = await import('/source/src/modules/scan/v3/ScannerEngineV3.js');
     const {processPodPage, preparePodCrop, finalizePodCrop} = await import('/app/operator/podPageClient.js');
     const hash = async file => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))).join(',');
@@ -67,7 +68,10 @@ try {
     const before = await scannerEngineV3.finalize(session, manual, {preserveOrientation:true});
     const after = await finalizePodCrop(session, manual);
     const uncertain = await processPodPage(file, 'camera', {version:1, file:{name:'different.jpg'}});
+    const sourcePixels = await decodeImageFileV3(file, {maxDimension:scannerEngineV3.maxFinalInputDimension});
+    const unfiltered = await imageDataToFileV3(sourcePixels, 'reference.jpg', .985);
     return {
+      fallbackKeepsExposure:await hash(uncertain.result.displayFile) === await hash(unfiltered),
       sameEditorPixels, cropOpenMs:{generic:genericOpenMs,pod:podOpenMs},
       sameCorners:JSON.stringify(fresh.corners) === JSON.stringify(old.corners),
       samePixels:await hash(fresh.result.displayFile) === await hash(old.result.displayFile),
@@ -79,7 +83,7 @@ try {
       colorJpegBytes:fresh.result.displayFile.size, times,
     };
   });
-  for (const key of ['sameEditorPixels','sameCorners','samePixels','sameSize','manualMatches','safeFallback','untouched']) assert.equal(results[key], true, key);
+  for (const key of ['sameEditorPixels','sameCorners','samePixels','sameSize','manualMatches','safeFallback','fallbackKeepsExposure','untouched']) assert.equal(results[key], true, key);
   assert.equal(results.extraOcr, false);
   console.log(JSON.stringify(results));
 } finally {

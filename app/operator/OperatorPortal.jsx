@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { allRows, appointment, loadFields, loadOriginal, operatorClient, rows, usd } from './portalData.js';
 import { PortalSession, usePortalClient } from './PortalSession.jsx';
 import DriverLoadAlerts from './DriverLoadAlerts.jsx';
+import DriverNotices from './DriverNotices.jsx';
 import Step3Workspace from './Step3Workspace.jsx';
 import { rememberPodInvoice, takePodInvoice } from './podLoginIntent.js';
 import { unsubscribeLoadAlerts } from './loadAlerts.js';
@@ -660,6 +661,7 @@ function Workspace({ operator, userId }) {
             <button key={key} type="button" aria-pressed={tab === key} onClick={() => switchTo(key)}>{name}</button>
           ))}
         </nav>
+        {ownWorkspace && <DriverNotices key={operator.id} operatorId={operator.id} publish/>}
         <div className={styles.sectionHeading}>
           <h2>
             {headings[tab]}

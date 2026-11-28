@@ -1,9 +1,9 @@
 'use client';
 import React from 'react';
-import {newReceiptLine,reviewMaintenance} from './maintenanceReview.js';
+import {maintenanceDraft,newReceiptLine,reviewMaintenance} from './maintenanceReview.js';
 import css from './maintenance.module.css';
 
-export default function MaintenanceEditor({draft,setDraft,file,originalUrl,reading,onSkip,busy,duplicate,matched,onSubmit,onBack,error}) {
+export default function MaintenanceEditor({draft,setDraft,file,originalUrl,reading,onSkip,busy,duplicate,matched,onSubmit,onBack,onChooseLoad,onChooseReceipt,error}) {
   const update = (key, value) => setDraft(prev => ({...prev, [key]:value,
     totalConfirmed:key === 'totalConfirmed' ? value : key === 'amount' ? false : prev.totalConfirmed}));
   const review = reviewMaintenance(draft);
@@ -16,6 +16,19 @@ export default function MaintenanceEditor({draft,setDraft,file,originalUrl,readi
     lines:prev.lines.map(line => line.key === key ? {...line, [field]:value} : line)}));
   const setMode = value => setDraft(prev => ({...prev, mode:value, totalConfirmed:false,
     lines:value === 'itemized' && !prev.lines.length ? [newReceiptLine()] : prev.lines}));
+  if (file && draft.documentKind === 'bill_of_lading') return <div className={css.page}>
+    <button type="button" className={css.back} onClick={onBack}>‹ Truck</button>
+    <header><h2>Bill of lading detected</h2></header>
+    <p>If this is a signed delivery document, choose its load to review it for POD upload.</p>
+    {originalUrl && <div className={css.original}>
+      <a href={originalUrl} target="_blank" rel="noreferrer">View scan</a>
+      <a href={originalUrl} download={file.name}>Save a copy</a>
+    </div>}
+    <button type="button" className={css.primary} onClick={()=>onChooseLoad(file)}>Choose load</button>
+    <button type="button" onClick={onChooseReceipt}>Choose another receipt</button>
+    <button type="button" onClick={()=>setDraft(maintenanceDraft(null,true))}>This is a service receipt · enter manually</button>
+    {error && <p role="alert">{error}</p>}
+  </div>;
   return <div className={css.page}>
     <button type="button" className={css.back} disabled={busy} onClick={onBack}>‹ Truck</button>
     <header><h2>{file ? 'Review receipt' : 'Manual service'}</h2></header>
