@@ -33,7 +33,7 @@ async function setup(){
   cloudClient:()=>cloud,cloudSession:()=>getSession(),getOwnerOpDb:()=>db,flushAppSnapshots:async()=>{},structuredClone,crypto:{randomUUID:()=> 'test-device'},atob,btoa,AbortController,Date:ClockDate,
   CustomEvent:class{constructor(type,options){this.type=type;this.detail=options?.detail;}},setTimeout:(fn,ms)=>timer(fn,ms),clearTimeout:key=>timers.delete(key),setInterval:(fn,ms)=>timer(fn,ms,true),clearInterval:key=>timers.delete(key)};
  window.__rrAccountState=()=>({eventsByDay:{'2026-10-28':[{id:'retained-original',status:'SB'}]}});
- vm.createContext(context);vm.runInContext(clientCode+'\nglobalThis.api={verifyDeviceSession,invalidateDeviceSession,deviceSessionStatus,assertActiveDevice,acknowledgeHandoff,HANDOFF_KEY};',context);
+ vm.createContext(context);vm.runInContext(clientCode+'\nglobalThis.api={verifyDeviceSession,invalidateDeviceSession,deviceSessionStatus,assertActiveDevice,acknowledgeHandoff,transferLogbookToDevice,HANDOFF_KEY};',context);
  vm.runInContext(gateCode+'\nglobalThis.Gate=DeviceSessionGate;',context);
  const render=()=>{cursor=0;tree=context.Gate({children:{type:'button',props:{children:'Edit log'}}});mounted=true;return tree;};
  const flush=async()=>{for(let n=0;n<25;n++)await Promise.resolve();render();};
@@ -159,4 +159,18 @@ test('failed persistence keeps the gate locked and retains the unfinished receiv
  table.put=async()=>{throw Error('Device storage full');};f.rpc(()=>({data:{active:true,generation:5,receive:false}}));await f.advance(4000);
  assert.equal(f.locked(),true);assert.equal(f.meta.get(f.api.HANDOFF_KEY),saved);assert.match(f.message(),/Device storage full/);
  table.put=put;await f.retry();await f.flush();assert.equal(f.locked(),false);assert.equal(f.meta.get(f.api.HANDOFF_KEY).value.generation,5);f.cleanup();
+});
+
+test('office sign-in can stay in documents while only explicit transfer requests a new writer',async()=>{
+ const f=await setup();
+ f.rpc((name,args)=>({data:name==='road_ready_transfer_logbook_v1'
+   ?{active:true,generation:5,receive:true}:{active:false,generation:4,transferRequired:true}}));
+ await f.advance(4000);
+ assert.equal(f.signouts.length,0);assert.equal(f.locked(),true);
+ assert.match(f.message(),/Open carrier workspace/);assert.match(f.message(),/Move logbook to this device/);
+ assert.equal(f.calls.filter(call=>call.name==='road_ready_transfer_logbook_v1').length,0);
+ await assert.rejects(f.api.transferLogbookToDevice({sid:'stale-session',generation:4}),/sign-in changed/);
+ await f.api.transferLogbookToDevice({sid:'test-session',generation:4});
+ assert.equal(f.calls.at(-1).name,'road_ready_transfer_logbook_v1');assert.equal(f.calls.at(-1).args.p_generation,4);
+ f.cleanup();
 });

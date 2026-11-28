@@ -4,10 +4,12 @@ import {CURRENT_APP_VERSION} from '../../core/update/appUpdate.js';
 import {cloudClient,cloudSession} from '../../../../lib/owner-op-cloud/client.js';
 import {getOwnerOpDb} from '../../../../lib/local-db/dexie.js';
 import {flushAppSnapshots} from '../../../../lib/local-db/appState.js';
-import {DEVICE_EVENT,verifyDeviceSession,invalidateDeviceSession,sessionId} from '../../../../lib/owner-op-cloud/deviceSessionV110463.js';
+import {DEVICE_EVENT,verifyDeviceSession,invalidateDeviceSession,sessionId,transferLogbookToDevice} from '../../../../lib/owner-op-cloud/deviceSessionV110463.js';
 
 export default function DeviceSessionGate({children}){
  const [opened,setOpened]=useState(false),[allowed,setAllowed]=useState(false),[message,setMessage]=useState('Checking this device…');
+ const [offer,setOffer]=useState(null);
+ const [moving,setMoving]=useState(false);
  const [checking,setChecking]=useState(true),[retryAction,setRetryAction]=useState(null);
  useEffect(()=>{
   let disposed=false,running=false,revoked=false,recheck=false,epoch=0;
@@ -29,8 +31,10 @@ export default function DeviceSessionGate({children}){
    if(disposed||revoked||!foreground())return;
    if(running){recheck=true;return;}
    running=true;recheck=false;const started=epoch;setChecking(true);setMessage('Checking the current device connection…');
-   try{await verifyDeviceSession();if(!disposed&&!revoked&&started===epoch&&navigator.onLine&&foreground()){setOpened(true);setAllowed(true);}}
-   catch(e){if(e.deviceRevoked)await retire(e.sid);else if(started===epoch&&!e.deviceCheckInterrupted)lock(e.message||'Reconnect to verify the active device.');}
+   try{await verifyDeviceSession();if(!disposed&&!revoked&&started===epoch&&navigator.onLine&&foreground()){setOffer(null);setOpened(true);setAllowed(true);}}
+   catch(e){if(e.transferOffer && !disposed && started===epoch){setOffer(e.transferOffer);lock(e.message);}
+    else if(e.deviceRevoked){setOffer(null);await retire(e.sid);}
+    else if(started===epoch&&!e.deviceCheckInterrupted)lock(e.message||'Reconnect to verify the active device.');}
    finally{
     running=false;if(!disposed)setChecking(false);
     if(recheck&&!disposed&&!revoked&&navigator.onLine&&foreground())void run();
@@ -49,6 +53,16 @@ export default function DeviceSessionGate({children}){
   void run();const timer=setInterval(()=>{if(!running&&foreground()&&navigator.onLine)void run();},4000);
   return()=>{disposed=true;clearInterval(timer);invalidateDeviceSession();window.removeEventListener(DEVICE_EVENT,observed);window.removeEventListener('offline',offline);window.removeEventListener('online',retry);window.removeEventListener('pageshow',visible);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visible);};
  },[]);
+ async function moveHere(){
+  if(moving || !offer || !window.confirm('Move the driver logbook to this device? First sync the previous phone if available. Unsent entries stay there. Moving will end its active logbook session.'))return;
+  setMoving(true);
+  try{await transferLogbookToDevice(offer);setOffer(null);retryAction?.();}
+  catch(error){setMessage(error.message);retryAction?.();}
+  finally{setMoving(false);}
+ }
  const blockLockedEvent=event=>{if(!allowed){event.preventDefault();event.stopPropagation();}};
- return <>{opened?<div ref={node=>{if(node){if(!allowed&&node.contains(document.activeElement))document.activeElement?.blur?.();node.inert=!allowed;}}} aria-hidden={!allowed||undefined} onClickCapture={blockLockedEvent} onKeyDownCapture={blockLockedEvent} onKeyUpCapture={blockLockedEvent} onSubmitCapture={blockLockedEvent}>{children}</div>:null}{!allowed?<main role="alert" aria-busy={checking} style={{position:'fixed',inset:0,zIndex:2147483647,background:'#f4f7fb',color:'#172b46',padding:28,fontFamily:'system-ui',display:'grid',placeContent:'center'}}><section style={{maxWidth:480}}><h1>{checking?'Checking your connection':'Connection needs attention'}</h1><p>{message}</p><button type="button" onClick={()=>retryAction?.()} disabled={checking||!retryAction} style={{padding:'14px 20px',borderRadius:14,fontSize:17,fontWeight:700}}>Retry connection</button><p style={{fontSize:14}}>Your saved work stays on this device. Reconnection is checked automatically while this app is open.</p><small>Road Ready {CURRENT_APP_VERSION}</small></section></main>:null}</>;
+ return <>{opened?<div ref={node=>{if(node){if(!allowed&&node.contains(document.activeElement))document.activeElement?.blur?.();node.inert=!allowed;}}} aria-hidden={!allowed||undefined} onClickCapture={blockLockedEvent} onKeyDownCapture={blockLockedEvent} onKeyUpCapture={blockLockedEvent} onSubmitCapture={blockLockedEvent}>{children}</div>:null}{!allowed?<main role="alert" aria-busy={checking} style={{position:'fixed',inset:0,zIndex:2147483647,background:'#f4f7fb',color:'#172b46',padding:28,fontFamily:'system-ui',display:'grid',placeContent:'center'}}><section style={{maxWidth:480}}>{offer ? <><h1>Logbook is on another device</h1>
+ <p>Open the carrier workspace for loads and documents. Your driver can keep logging on the current phone.</p>
+ <p><a href="/operator/carrier">Open carrier workspace</a></p>
+ <button type="button" disabled={moving} onClick={moveHere}>Move logbook to this device</button></> : <><h1>{checking?'Checking your connection':'Connection needs attention'}</h1><p>{message}</p><button type="button" onClick={()=>retryAction?.()} disabled={checking||!retryAction} style={{padding:'14px 20px',borderRadius:14,fontSize:17,fontWeight:700}}>Retry connection</button><p style={{fontSize:14}}>Your saved work stays on this device. Reconnection is checked automatically while this app is open.</p></>}<small>Road Ready {CURRENT_APP_VERSION}</small></section></main>:null}</>;
 }

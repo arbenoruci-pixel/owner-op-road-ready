@@ -83,6 +83,7 @@ function AuthPanel({ mode, setMode, email, setEmail, password, setPassword, busy
           {mode === 'signin' ? <button type="button" className="owner-auth-link" onClick={() => { setMode('recover'); setPassword(''); }}>Forgot password?</button> : null}
           {recovery ? <button type="button" className="owner-auth-secondary" onClick={() => setMode('signin')}>Back to sign in</button> : null}
         </form>
+        {mode === 'signin' && <a href="/operator/carrier" className="owner-auth-link">Open carrier workspace</a>}
         <small>{recovery ? 'The reset link does not approve a new account. Existing Owner Operator approval still applies.' : 'New accounts require email confirmation and manual Owner Operator approval before any truck data can be opened.'}</small>
       </section>
     </main>
@@ -355,7 +356,7 @@ export default function AuthGate({ children }) {
   async function signOut() {
     setAccountOpen(false);
     clearApproval(session?.user);
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({scope:'local'});
     setSession(null);
     setStage('signed_out');
   }

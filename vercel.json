@@ -3,6 +3,7 @@
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
+      "fix/driver-logbook-device-handoff": false,
       "fix/dot-single-logbook-review": false,
       "fix/dot-wizard-wallet": false,
       "fix/dot-package-confirmation": false,

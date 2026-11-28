@@ -189,6 +189,7 @@ steps.push('live-duty/install.mjs','live-duty/release.mjs');
 steps.push('recruiting/server.test.mjs','recruiting/release.mjs');
 steps.push('editor-duration/release.mjs');
 steps.push('lease-operator/install-apple-metadata.mjs');
+steps.push('logbook-handoff/install.mjs','logbook-handoff/regression.test.mjs','logbook-handoff/release.mjs');
 const runAnchor="function run(command,args=[]){const result=spawnSync(command,args,{stdio:'inherit',shell:false});";
 if(original.split(runAnchor).length!==2)throw new Error('Legacy build runner anchor changed');
 const program=original.replace(runAnchor,"function run(command,args=[]){if(args[0])syncLegacyReleaseAssertions(args[0]);const result=spawnSync(command,args,{stdio:'inherit',shell:false});if(result.status!==0)console.error('Build checkpoint failed:',args[0]||command,'status',result.status,'signal',result.signal);")
