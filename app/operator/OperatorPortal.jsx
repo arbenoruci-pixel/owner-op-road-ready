@@ -35,10 +35,10 @@ const docLabels = {
   supporting: 'Supporting document',
 };
 
-function Login() {
+function Login({ carrier = false, client }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [withPassword, setWithPassword] = useState(false);
+  const [withPassword, setWithPassword] = useState(carrier);
   const [linkRequested, setLinkRequested] = useState(false);
   const [code, setCode] = useState('');
   const [message, setMessage] = useState('');
@@ -48,7 +48,7 @@ function Login() {
     setBusy(true);
     setMessage('');
     try {
-      const auth = operatorClient().auth;
+      const auth = (client || operatorClient()).auth;
       if (!withPassword && linkRequested && code) {
         const { error } = await auth.verifyOtp({ email: email.trim(), token: code.trim(), type: 'email' });
         if (error) throw error;
@@ -58,11 +58,11 @@ function Login() {
         ? await auth.signInWithPassword({ email: email.trim(), password })
         : await auth.signInWithOtp({
             email: email.trim(),
-            options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + '/operator' },
+            options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + (carrier ? '/operator/carrier' : '/operator') },
           });
       if (error) throw error;
       if (!withPassword) {
-        rememberPodInvoice(email);
+        if (!carrier) rememberPodInvoice(email);
         setLinkRequested(true);
         setMessage(
           'If this email is registered with dispatch, open the sign-in link in this browser. If the email includes a code, enter it below.'
@@ -83,11 +83,11 @@ function Login() {
   return (
     <section className={styles.signin}>
       <div className={styles.cover}>
-        <h1>My loads &amp; pay</h1>
+        <h1>{carrier ? 'Carrier workspace' : 'My loads & pay'}</h1>
       </div>
       <form className={styles.form} onSubmit={submit} data-operator-update-pending={Boolean(busy || linkRequested || email || password || code)}>
         <label>
-          Operator email
+          {carrier ? 'Carrier email' : 'Operator email'}
           <input
             type="email"
             required
@@ -814,8 +814,9 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
     return () => subscription.unsubscribe();
   }, [client, carrierEntry]);
   async function signOut() {
-    await unsubscribeLoadAlerts(client || operatorClient()).catch(() => {});
-    const { error } = await operatorClient().auth.signOut({ scope: 'local' });
+    const portalClient = client || operatorClient();
+    if (!carrierEntry) await unsubscribeLoadAlerts(portalClient).catch(() => {});
+    const { error } = await portalClient.auth.signOut({ scope: 'local' });
     setSignoutError(Boolean(error));
   }
   return (
@@ -826,7 +827,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
             <i aria-hidden="true" /> Road Ready
           </span>
           {carrierEntry && <a className={styles.back} href="/">Back to RoadReady</a>}
-          {!carrierEntry && auth.session && (
+          {auth.session && (
             <button type="button" onClick={signOut}>
               Sign out
             </button>
@@ -845,7 +846,7 @@ export default function OperatorPortal({ client, carrierEntry = false }) {
       ) : auth.session ? (
         <Membership key={auth.session.user.id} session={auth.session} carrierEntry={carrierEntry} returningFromEmail={returningFromEmail.current} onSignOut={signOut} />
       ) : carrierEntry ? (
-        <section className={styles.notice}><h1>Carrier workspace</h1><p><a href="/">Sign in to your RoadReady account</a></p></section>
+        <Login carrier client={client} />
       ) : (
         <Login />
       )}

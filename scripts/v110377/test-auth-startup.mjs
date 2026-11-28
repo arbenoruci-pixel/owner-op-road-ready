@@ -78,7 +78,7 @@ await test('sign out still clears approval before dropping the session',()=>{
   const end=source.indexOf('\n  if (stage ===',start);
   const block=source.slice(start,end);
   assert.match(block,/clearApproval\(session\?\.user\)/);
-  assert.match(block,/supabase\.auth\.signOut\(\)/);
+  assert.match(block,/supabase\.auth\.signOut\(\{\s*scope:\s*'local'\s*\}\)/);
   assert.match(block,/setStage\('signed_out'\)/);
 });
 

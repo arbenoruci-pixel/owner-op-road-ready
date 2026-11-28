@@ -69,6 +69,10 @@ export function verifyDeviceSession(){
    }
    connected();if(takeover)localStorage.removeItem(REQUEST);
   }
+  if(!data.active && data.transferRequired && Number.isSafeInteger(data.generation)){
+   current=null;
+   throw Object.assign(Error('Your logbook is on another device.'),{transferOffer:{sid,generation:data.generation}});
+  }
   current={...data,uid:session.user.id,sid,checkedAt:Date.now()};
   window.dispatchEvent(new CustomEvent(DEVICE_EVENT,{detail:current}));
   if(!data.active)throw Object.assign(Error('This account was opened on another device. Sign in again to use this one. Your local work is retained.'),{deviceRevoked:true,sid});
@@ -86,4 +90,16 @@ export async function acknowledgeHandoff(generation){
  const job={controller:new AbortController()};
  const {data,error}=await checkedWait(cloudClient().rpc('road_ready_ack_device_v1',{p_device:deviceId(),p_generation:generation}),job,30000,'Device handoff confirmation');
  if(error)throw error;if(!data?.active)throw Object.assign(Error('This account was opened on another device.'),{deviceRevoked:true});
+}
+
+export async function transferLogbookToDevice(offer){
+ const job={controller:new AbortController()};
+ const session=await checkedWait(cloudSession(),job,10000,'Secure session check');
+ if(!offer || sessionId(session)!==offer.sid)throw Error('Your sign-in changed. Check the device again.');
+ const {data,error}=await checkedWait(cloudClient().rpc('road_ready_transfer_logbook_v1',{
+  p_device:deviceId(),p_generation:offer.generation,
+ }),job,30000,'Logbook transfer');
+ if(error)throw error;
+ if(!data?.active)throw Error('The active device changed. Check again before transferring.');
+ invalidateDeviceSession();
 }

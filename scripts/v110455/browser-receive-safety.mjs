@@ -6,6 +6,7 @@ import {chromium} from 'playwright';
 
 // Real IndexedDB/Dexie and production sync/export modules; all cloud I/O is synthetic.
 const modules = new Map([
+ ['/lib/local-db/test-durable-snapshot.js','lib/local-db/appState.js'],
  ['/lib/owner-op-cloud/accountSyncV110455.js', 'lib/owner-op-cloud/accountSyncV110455.js'],
  ['/lib/owner-op-cloud/accountCoreV110455.js', 'lib/owner-op-cloud/accountCoreV110455.js'],
  ['/lib/owner-op-cloud/accountFilesV110455.js', 'lib/owner-op-cloud/accountFilesV110455.js'],
@@ -91,6 +92,53 @@ try{
   assert.equal(result.opened.loadInfo.loadNo,'latest-ipad');assert.equal(result.backup.state.loadInfo.loadNo,'old-phone');
   assert.equal(result.ack,2);assert.equal(result.oldText,'unsent phone original');assert.equal(result.newText,'saved iPad original');
   assert.equal(result.pending.records,false);assert.equal(result.pending.archive,false);
+ });
+ await scenario('offline day and its upload queue survive a page restart together',async page=>{
+   const ids=await page.evaluate(async()=>{
+     const f=window.fixture;
+     localStorage.setItem('owner-op-account-data-owner-v1',f.uid);
+     const snapshots=await import('/lib/local-db/test-durable-snapshot.js');
+     const date='2026-10-07',event={id:'unsent',status:'ON',startMin:500,endMin:510};
+     await snapshots.saveAppSnapshot(f.key,{eventsByDay:{[date]:[event]}});
+     return {db:f.db.name,uid:f.uid,date,key:f.key};
+   });
+   await page.reload();
+   const evidence=await page.evaluate(async ids=>{
+     const {default:Dexie}=await import('dexie');
+     const db=new Dexie(ids.db);await db.open();
+     const saved=await db.table('app_snapshots').get(ids.key);
+     const pending=await db.table('sync_meta').get('driver-logbook-pending-v1:'+ids.uid);
+     const day=JSON.stringify(['day','driver_primary',ids.date]);db.close();
+     return [saved.state.eventsByDay[ids.date][0].id,pending.value[day].day.eventsByDay[0].id];
+   },ids);
+   assert.deepEqual(evidence,['unsent','unsent']);
+ });
+ for(const choice of ['local','remote'])await scenario('review incomplete transferred day and keep '+choice,async page=>{
+   const result=await page.evaluate(async choice=>{
+     const f=window.fixture,day='2026-10-07',record=JSON.stringify(['day','driver_primary',day]);
+     const state={...f.state,eventsByDay:{[day]:[{id:'fuel',status:'ON',startMin:900,endMin:910}]}};
+     await f.db.app_snapshots.put({key:f.key,state});
+     localStorage.setItem('owner-op-account-data-owner-v1',f.uid);
+     const remote={...state,eventsByDay:{[day]:[]}};
+     f.workspace={revision:25,payload:{format:f.core.FORMAT,records:f.core.recordsFrom({state:remote})}};
+     await f.db.sync_meta.put({key:'road-ready-device-handoff-v1',value:{uid:f.uid,generation:2,records:true,archive:true}});
+     const patches=[];
+     f.cloud.rpc=async(name,args)=>{
+       if(name!=='road_ready_account_patch_v1'||f.ack!==2||args.p_expected!==25)throw Error('Unexpected or premature upload');
+       patches.push(args.p_patch);
+       Object.assign(f.workspace.payload.records,args.p_patch);
+       return {data:{revision:++f.workspace.revision}};
+     };
+     const blocked=await f.sync.syncAccount({initial:true,scope:'records'});
+     const before=(await f.db.app_snapshots.get(f.key)).state.eventsByDay[day];
+     const firstAck=f.ack??null;
+     const outcome=await f.sync.syncAccount({scope:'records',choices:{[record]:choice}});
+     return {blocked,before,firstAck,outcome,patches,ack:f.ack,events:(await f.db.app_snapshots.get(f.key)).state.eventsByDay[day]};
+   },choice);
+   assert.ok(result.blocked.conflicts?.length);assert.equal(result.before[0].id,'fuel');
+   assert.equal(result.firstAck,null);assert.equal(result.outcome.error,undefined);assert.equal(result.ack,2);
+   assert.equal(result.events.length,choice==='local'?1:0);
+   assert.equal(result.patches.length,choice==='local'?1:0);
  });
  await scenario('automatic conflict resolution stops when its recovery journal cannot be saved',async page=>{
   const result=await page.evaluate(async()=>{
